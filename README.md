@@ -1,6 +1,10 @@
-# Backmesh, Firebase for LLM APIs
+<p align="center">
+  <img src="https://backmesh.com/img/logo.png" width="80"/>
+</p>
 
-Backmesh is Typescript backend hosted on Cloudflare Workers that lets you securely call LLM APIs from your mobile or web app without spinning up a new backend. Simply call Backmesh directly instead of the LLM API with the user's JWT from the app's authentication provider e.g. Supabase or Firebase Authentication. Backmesh will act as a proxy to the LLM APIs and apply configurable rate limits per user to prevent abuse (e.g. no more than 5 OpenAI API calls per hour per user). For more details, see the [security documentation](https://backmesh.com/docs/security).
+<h1 align="center">Backmesh, Firebase for LLM APIs</h1>
+
+Backmesh is throughly tested Typescript proxy backend hosted on Cloudflare Workers that lets you securely call LLM APIs from your mobile or web app using any LLM SDK. Supply the Backmesh URL and the authenticated user's JWT to the LLM SDK instead of the LLM API url and private key. Backmesh will authenticate the request and use your LLM private API key to proxy to the LLM APIs with configurable rate limits per user to prevent abuse (e.g. no more than 5 OpenAI API calls per hour per user). For more details, see the [security documentation](https://backmesh.com/docs/security).
 
 ```dart
 // Auth Provider: Firebase
@@ -19,10 +23,11 @@ OpenAI.apiKey = await FirebaseAuth.instance.currentUser
 await OpenAI.instance.chat(...)
 ```
 
-## Get started
 
-Backmesh can be deployed to your own Cloudflare account. Check out the pricing and [usage limits](https://developers.cloudflare.com/workers/platform/limits/) for the different Cloudflare worker plans or use our [hosted SaaS](https://app.backmesh.com) with [pricing plans](https://backmesh.com/pricing/) starting at $8 per month.
+## ⚡️ Try out Backmesh
 
-## Contribute
+Get started with Backmesh using our documentation. Visit [backmesh.com/docs](https://backmesh.com/docs)
+
+## 🚀 Contribute
 
 To contribute, visit [Contributing.md](./CONTRIBUTING.md)
