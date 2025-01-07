@@ -1,0 +1,90 @@
+name: Cloudflare Worker
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install wrangler
+        run: npm install
+
+      - name: Setup environment variables
+        run: |
+          touch .dev.vars
+          chmod 0600 .dev.vars
+          cat > .dev.vars << EOL
+          TEST_USER_PASS=${{ secrets.TEST_USER_PASS }}
+          TEST_USER_GEMINI_API_KEY=${{ secrets.TEST_USER_GEMINI_API_KEY }}
+          TEST_USER_OPENAI_API_KEY=${{ secrets.TEST_USER_OPENAI_API_KEY }}
+          TEST_USER_ANTHROPIC_API_KEY=${{ secrets.TEST_USER_ANTHROPIC_API_KEY }}
+          # supabase vars
+          SUPABASE_TEST_USER_URL=${{ vars.SUPABASE_TEST_USER_URL }}
+          SUPABASE_TEST_USER_KEY=${{ vars.SUPABASE_TEST_USER_KEY }}
+          SUPABASE_TEST_USER_USER_EMAIL=${{ vars.SUPABASE_TEST_USER_USER_EMAIL }}
+          SUPABASE_TEST_USER_USER_ID=${{ vars.SUPABASE_TEST_USER_USER_ID }}
+          # firebase vars
+          BACKMESH_FIREBASE_KEY=${{ vars.BACKMESH_FIREBASE_KEY }}
+          FIREBASE_TEST_USER_APP_ID=${{ vars.FIREBASE_TEST_USER_APP_ID }}
+          FIREBASE_TEST_USER_ID=${{ vars.FIREBASE_TEST_USER_ID }}
+          FIREBASE_TEST_USER_EMAIL=${{ vars.FIREBASE_TEST_USER_EMAIL }}
+          FIREBASE_TEST_USER_KEY=${{ vars.FIREBASE_TEST_USER_KEY }}
+          # firebase vars, users of test user
+          FIREBASE_TEST_USER_USER_1_EMAIL=${{ vars.FIREBASE_TEST_USER_USER_1_EMAIL }}
+          FIREBASE_TEST_USER_USER_1_ID=${{ vars.FIREBASE_TEST_USER_USER_1_ID }}
+          FIREBASE_TEST_USER_USER_2_EMAIL=${{ vars.FIREBASE_TEST_USER_USER_2_EMAIL }}
+          FIREBASE_TEST_USER_USER_2_ID=${{ vars.FIREBASE_TEST_USER_USER_2_ID }}
+          EOL
+
+      - name: Run tests
+        run: npx vitest run
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install wrangler
+        run: npm install
+
+      - name: Update wrangler.toml
+        run: |
+          rm -f wrangler.toml
+          cat > wrangler.toml << 'EOF'
+          name = "edge"
+          main = "src/index.ts"
+          compatibility_date = "2024-07-25"
+          compatibility_flags = ["nodejs_compat"]
+
+          routes = [
+            { pattern = "edge.backmesh.com", custom_domain = true }
+          ]
+
+          [[kv_namespaces]]
+          binding = "BACKMESH_KV"
+          id = "${{ vars.BACKMESH_KV_ID }}"
+
+          [observability]
+          enabled = true
+
+          [placement]
+          mode = "smart"
+
+          [vars]
+          BACKMESH_FIREBASE_KEY = "${{ vars.BACKMESH_FIREBASE_KEY }}"
+          EOF
+
+      - name: Deploy to Cloudflare
+        run: npx wrangler deploy
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

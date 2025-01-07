@@ -1,0 +1,9 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "backmesh"
+main = "src/index.ts"
+compatibility_date = "2024-07-25"
+compatibility_flags = [ "nodejs_compat" ]
+
+[[kv_namespaces]]
+binding = "BACKMESH_KV"
+id = "placeholder"
