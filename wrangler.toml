@@ -3,6 +3,7 @@ name = "backmesh"
 main = "src/index.ts"
 compatibility_date = "2024-07-25"
 compatibility_flags = [ "nodejs_compat" ]
+upload_source_maps = true
 
 [[kv_namespaces]]
 binding = "BACKMESH_KV"
