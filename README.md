@@ -12,7 +12,7 @@ With Backmesh, you can securely call LLM APIs directly from your mobile or web a
 
 - *Authenticated Proxy:* Verifies requests using the supplied JWT so only your users have access to the LLM API via the Backmesh proxy.
 - *Rate limits per user:* Prevents abuse with configurable, per-user rate limits (e.g. max 5 OpenAI API calls per user per hour).
-- *Resource access control:* Sensitive API resources like [Files](https://platform.openai.com/docs/api-reference/files) and Threads are protected so only the users that create them can continue to access them.
+- *Resource access control:* Sensitive API resources like [Files](https://platform.openai.com/docs/api-reference/files) and [Threads](https://platform.openai.com/docs/api-reference/threads) are protected so only the users that create them can continue to access them.
 
 For more details, see the [security documentation](https://backmesh.com/docs/security).
 
