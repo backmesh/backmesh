@@ -557,40 +557,54 @@ export default {
 		return kvUid === endUserId;
 	},
 
-	// sliding window rate limiting per user
+	// Sliding window rate limiting per user with retry logic
 	async rateLimit(
 		env: Env,
 		backmeshUid: string,
 		apiProxy: ApiProxy,
 		endUserId: string,
+		retryCount = 0,
 	): Promise<boolean> {
-		const now = Math.floor(Date.now() / 1000);
+		const maxRetries = 2; // Maximum number of retries
+		const now = Math.floor(Date.now() / 1000); // Current timestamp in seconds
 		const rateLimitWindow = getRateLimitUnitInSecs(apiProxy.rateLimitUnit);
 		const windowStart = Math.floor(now / rateLimitWindow) * rateLimitWindow;
 
-		// Get the current count for this user + proxy from KV, if any
-		const rateLimitKey = `${getRateLimitKey(
-			backmeshUid,
-			apiProxy.id,
-			endUserId,
-			windowStart,
-		)}`;
-		const requestCount = await env.BACKMESH_KV.get(rateLimitKey);
-		let count = requestCount ? parseInt(requestCount, 10) : 0;
+		// Generate the KV key for this user and window
+		const rateLimitKey = `${getRateLimitKey(backmeshUid, apiProxy.id, endUserId, windowStart)}`;
 
+		// Get the current count from KV
+		const value = await env.BACKMESH_KV.get(rateLimitKey);
+		let count = value ? parseInt(value) : 0;
+
+		// Check if the rate limit exceeded
 		if (count >= apiProxy.rateLimit) {
-			// Exceeded the rate limit
-			return true;
+			return true; // Rate limit exceeded
 		}
 
-		// Increment the request count
+		// Increment the count
 		count += 1;
 
-		// Store the updated count back to KV with an expiration time (equal to the window duration)
-		await env.BACKMESH_KV.put(rateLimitKey, count.toString(), {
-			expirationTtl: rateLimitWindow,
-		});
-
-		return false;
-	},
+		// Try to update KV
+		try {
+			await env.BACKMESH_KV.put(rateLimitKey, count.toString(), {
+				expirationTtl: rateLimitWindow, // Set expiration to the window duration
+			});
+			return false; // Rate limit not exceeded
+		} catch (err: any) {
+			// Only catch 429s
+			if (!err.message.includes('429')) {
+				throw err;
+			}
+			// Handle write contention or other errors
+			if (retryCount < maxRetries) {
+				const backoffTime = Math.random() * Math.pow(2, retryCount) * 100; // Exponential backoff in ms
+				await new Promise((resolve) => setTimeout(resolve, backoffTime));
+				return this.rateLimit(env, backmeshUid, apiProxy, endUserId, retryCount + 1); // Retry recursively
+			} else {
+				// Retries exhausted; fail gracefully
+				throw new Error(`Failed to update rate limit after ${retryCount} retries`);
+			}
+		}
+	}
 };
