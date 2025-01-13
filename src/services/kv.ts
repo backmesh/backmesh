@@ -575,10 +575,8 @@ export default {
 			endUserId,
 			windowStart,
 		)}`;
-		const value = await env.BACKMESH_KV.get(rateLimitKey);
-		const parsedValue = value ? value.split(':') : [];
-		let count = parsedValue[0] ? parseInt(parsedValue[0]) : 0;
-		const lastTimestamp = parsedValue[1] ? parseInt(parsedValue[1]) : 0;
+		const requestCount = await env.BACKMESH_KV.get(rateLimitKey);
+		let count = requestCount ? parseInt(requestCount, 10) : 0;
 
 		if (count >= apiProxy.rateLimit) {
 			// Exceeded the rate limit
@@ -588,14 +586,8 @@ export default {
 		// Increment the request count
 		count += 1;
 
-		if ((now - lastTimestamp) < 1) {
-			// Wait until 1 second has passed since the last put operation
-			const waitTime = 1000 - (now - lastTimestamp) * 1000; // in milliseconds
-			await new Promise(resolve => setTimeout(resolve, waitTime));
-		}
-
 		// Store the updated count back to KV with an expiration time (equal to the window duration)
-		await env.BACKMESH_KV.put(rateLimitKey, `${count.toString()}:${now}`, {
+		await env.BACKMESH_KV.put(rateLimitKey, count.toString(), {
 			expirationTtl: rateLimitWindow,
 		});
 
