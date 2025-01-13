@@ -565,7 +565,7 @@ export default {
 		endUserId: string,
 		retryCount = 0,
 	): Promise<boolean> {
-		const maxRetries = 2; // Maximum number of retries
+		const maxRetries = 3; // Maximum number of retries
 		const now = Math.floor(Date.now() / 1000); // Current timestamp in seconds
 		const rateLimitWindow = getRateLimitUnitInSecs(apiProxy.rateLimitUnit);
 		const windowStart = Math.floor(now / rateLimitWindow) * rateLimitWindow;
@@ -603,7 +603,8 @@ export default {
 				return this.rateLimit(env, backmeshUid, apiProxy, endUserId, retryCount + 1); // Retry recursively
 			} else {
 				// Retries exhausted; fail gracefully
-				throw new Error(`Failed to update rate limit after ${retryCount} retries`);
+				console.error(`Failed to update rate limit after ${retryCount} retries`);
+				return false;
 			}
 		}
 	}
