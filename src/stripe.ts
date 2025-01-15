@@ -1,6 +1,6 @@
 import Stripe from 'stripe';
 
-import kv from './services/kv';
+import kv, { PlanType } from './services/kv';
 
 export default {
 	async fetch(request: Request, env: Env) {
@@ -32,7 +32,7 @@ export default {
 							throw new Error("Missing customer");
 						}
 						const customerId = typeof session.customer === 'string' ? session.customer : session.customer.id;
-						await kv.newPlan(env, session.client_reference_id, customerId);
+						await kv.newPlan(env, session.client_reference_id, {customerId, type: PlanType.Starter});
 						break;
 					default:
 							break

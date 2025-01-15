@@ -12,7 +12,7 @@ export enum AuthProviderType {
 	SUPABASE = 'Supabase',
 }
 
-export enum ApiProxySchemaVersion {
+export enum SchemaVersion {
 	V1 = 'V1',
 }
 
@@ -36,6 +36,33 @@ function getRateLimitUnitInSecs(unit: RateLimitUnit): number {
 		default:
 			throw new Error('Invalid RateLimitUnit');
 	}
+}
+
+export enum PlanType {
+	Starter = 'Starter',
+	Pro = 'Pro',
+}
+
+export type Plan = {
+	customerId: string;
+	type: PlanType;
+	schemaVersion: SchemaVersion;
+};
+
+function assertPlan(obj: any): obj is Plan {
+	if (!obj.schemaVersion) {
+		obj.schemaVersion = SchemaVersion.V1;
+	}
+	if (typeof obj !== 'object' || obj === null) {
+		return false;
+	}
+	if (typeof obj.customerId !== 'string') {
+		return false;
+	}
+	if (!Object.values(PlanType).includes(obj.type)) {
+		return false;
+	}
+	return true;
 }
 
 export type ProxyExchange = {
@@ -94,7 +121,7 @@ export type ApiProxy = {
 	authType: AuthProviderType;
 	apiUrl: string;
 	apiPrivateKey: string;
-	schemaVersion: ApiProxySchemaVersion;
+	schemaVersion: SchemaVersion;
 	proxyUrl: string;
 	apiReqHeader: string;
 	rateLimitUnit: RateLimitUnit;
@@ -105,7 +132,7 @@ export type ApiProxy = {
 // Type guard to check if an object is of type ApiProxy at runtime
 function assertApiProxy(obj: any): obj is ApiProxy {
 	if (!obj.schemaVersion) {
-		obj.schemaVersion = ApiProxySchemaVersion.V1;
+		obj.schemaVersion = SchemaVersion.V1;
 	}
 
 	if (typeof obj !== 'object' || obj === null) {
@@ -135,7 +162,7 @@ function assertApiProxy(obj: any): obj is ApiProxy {
 	if (!Object.values(AuthProviderType).includes(obj.authType)) {
 		throw new TypeError('authType is not valid');
 	}
-	if (!Object.values(ApiProxySchemaVersion).includes(obj.schemaVersion)) {
+	if (!Object.values(SchemaVersion).includes(obj.schemaVersion)) {
 		throw new TypeError('schemaVersion is not valid');
 	}
 	if (!Object.values(RateLimitUnit).includes(obj.rateLimitUnit)) {
@@ -564,10 +591,11 @@ export default {
 	async newPlan(
 		env: Env,
 		backmeshUid: string,
-		customerId: string
+		value: any,
 	) {
 		const key = getPlansKey(backmeshUid);
-		await env.BACKMESH_KV.put(key, customerId);
+		assertPlan(value);
+		await create<Plan>(env, key, value);
 	},
 
 	async getPlan(
@@ -575,7 +603,7 @@ export default {
 		backmeshUid: string,
 	) {
 		const key = getPlansKey(backmeshUid);
-		return env.BACKMESH_KV.get(key);
+		return get<Plan>(env, key);
 	},
 
 	// Sliding window rate limiting per user with retry logic
