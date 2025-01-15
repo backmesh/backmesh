@@ -26,9 +26,6 @@ jobs:
           TEST_USER_GEMINI_API_KEY=${{ secrets.TEST_USER_GEMINI_API_KEY }}
           TEST_USER_OPENAI_API_KEY=${{ secrets.TEST_USER_OPENAI_API_KEY }}
           TEST_USER_ANTHROPIC_API_KEY=${{ secrets.TEST_USER_ANTHROPIC_API_KEY }}
-          # stripe vars
-          STRIPE_KEY=${{ secrets.STRIPE_KEY }}
-          STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
           # supabase vars
           SUPABASE_TEST_USER_URL=${{ vars.SUPABASE_TEST_USER_URL }}
           SUPABASE_TEST_USER_KEY=${{ vars.SUPABASE_TEST_USER_KEY }}
@@ -88,6 +85,11 @@ jobs:
           [vars]
           BACKMESH_FIREBASE_KEY = "${{ vars.BACKMESH_FIREBASE_KEY }}"
           EOF
+
+      - name: Append additional stripe environment variables
+        run: |
+          echo "STRIPE_KEY=${{ secrets.STRIPE_KEY }}" >> .dev.vars
+          echo "STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}" >> .dev.vars
 
       - name: Deploy to Cloudflare
         run: npx wrangler deploy
