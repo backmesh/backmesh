@@ -39,7 +39,7 @@ export default {
 		// return 402, payment required, if billing is enabled and user has not paid
 		if (env.STRIPE_KEY) {
 			const plan = await kv.getPlan(env, backmeshUid);
-			if (plan === null) return new Response('Subscription required', { status: 402 });
+			if (plan === null) return new Response(`Subscription required https://buy.stripe.com/8wM8zmcSB5u8f5K4gg?client_reference_id=${backmeshUid}`, { status: 402 });
 		}
 		const proxyId = parts.at(3);
 		const isSummary = parts.at(4) === 'summary';
