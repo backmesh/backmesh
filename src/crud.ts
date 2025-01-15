@@ -36,6 +36,11 @@ export default {
 		if (jwtUid !== backmeshUid) {
 			return new Response('Invalid token', { status: 401 });
 		}
+		// return 402, payment required, if billing is enabled and user has not paid
+		if (env.STRIPE_KEY) {
+			const plan = await kv.getPlan(env, backmeshUid);
+			if (plan === null) return new Response('Subscription required', { status: 402 });
+		}
 		const proxyId = parts.at(3);
 		const isSummary = parts.at(4) === 'summary';
 		switch (request.method) {

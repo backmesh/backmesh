@@ -8,6 +8,8 @@ interface Env {
 	TEST_USER_OPENAI_API_KEY: string;
 	TEST_USER_ANTHROPIC_API_KEY: string;
 	PASSWORD: string;
+	STRIPE_KEY: string;
+	STRIPE_WEBHOOK_SECRET: string;
 	SUPABASE_TEST_USER_KEY: string;
 	SUPABASE_TEST_USER_URL: string;
 	SUPABASE_TEST_USER_USER_ID: string;

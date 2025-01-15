@@ -1,5 +1,6 @@
 import crud from './crud';
 import proxy from './proxy';
+import stripe from './stripe';
 
 // Reference: https://developers.cloudflare.com/workers/examples/cors-header-proxy
 // https://stackoverflow.com/questions/66486610/how-to-set-cors-in-cloudflare-workers
@@ -51,6 +52,8 @@ export default {
 		let resp;
 		if (path.startsWith('/v1/crud')) {
 			resp = await crud.fetch(request, env);
+		} else if (path.startsWith('/v1/stripe')) {
+			resp = await stripe.fetch(request, env);
 		} else if (path.startsWith('/v1/proxy')) {
 			const proxyReq = await proxy.validate(request, env);
 			const start = performance.now();
