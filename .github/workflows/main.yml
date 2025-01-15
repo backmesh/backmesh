@@ -86,11 +86,6 @@ jobs:
           BACKMESH_FIREBASE_KEY = "${{ vars.BACKMESH_FIREBASE_KEY }}"
           EOF
 
-      - name: Append additional stripe environment variables
-        run: |
-          echo "STRIPE_KEY=${{ secrets.STRIPE_KEY }}" >> .dev.vars
-          echo "STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}" >> .dev.vars
-
       - name: Deploy to Cloudflare
         run: npx wrangler deploy
         env:
