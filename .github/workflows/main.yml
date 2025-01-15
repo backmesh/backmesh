@@ -14,7 +14,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
         with:
-          ref: ${{ github.event.ref || 'refs/heads/main' }}
+          ref: ${{ github.ref }}
 
       - name: Install wrangler
         run: npm install
