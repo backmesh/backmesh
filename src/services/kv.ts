@@ -300,6 +300,10 @@ function getProxiesKey(backmeshUid: string) {
 	return `proxies/${backmeshUid}/`;
 }
 
+function getPlansKey(backmeshUid: string) {
+	return `plans/${backmeshUid}/`;
+}
+
 function getRateLimitKey(
 	backmeshUid: string,
 	proxyId: string,
@@ -555,6 +559,23 @@ export default {
 		const key = getPrivateResourceKey(backmeshUid, proxyId, resourceId);
 		const kvUid = await env.BACKMESH_KV.get(key);
 		return kvUid === endUserId;
+	},
+
+	async newPlan(
+		env: Env,
+		backmeshUid: string,
+		customerId: string
+	) {
+		const key = getPlansKey(backmeshUid);
+		await env.BACKMESH_KV.put(key, customerId);
+	},
+
+	async getPlan(
+		env: Env,
+		backmeshUid: string,
+	) {
+		const key = getPlansKey(backmeshUid);
+		return env.BACKMESH_KV.get(key);
 	},
 
 	// Sliding window rate limiting per user with retry logic

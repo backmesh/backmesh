@@ -67,3 +67,9 @@ Cloudflare KV is the main data store. Resources have unique alphanumeric names s
 `resources/${backmeshUid}/${proxyId}[]`
 
 - `resources/${backmeshUid}/${proxyId}/${resource.id}`
+
+### Plan
+
+`plans/[]`
+
+- `plans/${backmeshUid}`
