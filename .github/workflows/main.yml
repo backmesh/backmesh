@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.ref || 'refs/heads/main' }}
 
       - name: Install wrangler
         run: npm install
