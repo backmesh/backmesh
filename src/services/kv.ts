@@ -328,7 +328,7 @@ function getProxiesKey(backmeshUid: string) {
 }
 
 function getPlansKey(backmeshUid: string) {
-	return `plans/${backmeshUid}/`;
+	return `plans/${backmeshUid}`;
 }
 
 function getRateLimitKey(
@@ -603,7 +603,12 @@ export default {
 		backmeshUid: string,
 	) {
 		const key = getPlansKey(backmeshUid);
-		return get<Plan>(env, key);
+		try {
+			return await get<Plan>(env, key);
+		} catch (error) {
+			console.error(error)
+			return null;
+		}
 	},
 
 	// Sliding window rate limiting per user with retry logic
