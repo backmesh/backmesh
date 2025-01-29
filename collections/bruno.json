@@ -28,7 +28,7 @@
             "params": [],
             "body": {
               "mode": "json",
-              "json": "{\n  \"model\": \"{{OPENAI_MODEL}}\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a helpful assistant.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Write a haiku that explains the concept of recursion.\"\n    }\n  ]\n}",
+              "json": "{\n  \"model\": \"{{OPENAI_MODEL}}\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a helpful assistant.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Tell me a joke.\"\n    }\n  ]\n}",
               "formUrlEncoded": [],
               "multipartForm": []
             },
@@ -298,23 +298,21 @@
           "name": "GEMINI",
           "seq": 2,
           "request": {
-            "url": "{{PROXY_URL}}/{{GEMINI_ENDPOINT}}?key={{GEMINI_API_KEY}}",
+            "url": "{{PROXY_URL}}/{{GEMINI_ENDPOINT}}",
             "method": "POST",
             "headers": [
               {
                 "name": "Content-Type",
                 "value": "application/json",
                 "enabled": true
-              }
-            ],
-            "params": [
+              },
               {
-                "name": "key",
+                "name": "x-goog-api-key",
                 "value": "{{GEMINI_API_KEY}}",
-                "type": "query",
                 "enabled": true
               }
             ],
+            "params": [],
             "body": {
               "mode": "json",
               "json": "{\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"Tell me a joke\"\n        }\n      ]\n    }\n  ]\n}",
@@ -470,7 +468,7 @@
           "name": "Create proxy Firebase-Anthropic",
           "seq": 1,
           "request": {
-            "url": "{{BASE_URL}}/{{CRUD_ENDPOINT}}/{{BACKMESH_UID}}",
+            "url": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/{{BACKMESH_UID}}",
             "method": "POST",
             "headers": [
               {
@@ -487,7 +485,7 @@
             "params": [],
             "body": {
               "mode": "json",
-              "json": "{\n  \"id\": null,\n  \"proxyUrl\": null,\n  \"authType\": \"Firebase\",\n  \"authAppId\": \"<firebase app id>\",\n  \"authPublicKey\": \"<firebase key>\",\n  \"apiUrl\": \"https://api.anthropic.com\",\n  \"apiPrivateKey\": \"<Anthropic api key>\",\n  \"apiReqHeader\": \"x-api-key\",\n  \"rateLimit\": 10,\n  \"rateLimitUnit\": \"minute\"\n}",
+              "json": "{\n  \"id\": null,\n  \"proxyUrl\": null,\n  \"authType\": \"Firebase\",\n  \"authAppId\": \"{{FIREBASE_APP_ID}}\",\n  \"authPublicKey\": \"{{FIREBASE_API_KEY}}\",\n  \"apiUrl\": \"https://api.anthropic.com\",\n  \"apiReqHeader\": \"x-api-key\",\n  \"apiPrivateKey\": \"{{ANTHROPIC_API_KEY}}\",\n  \"rateLimit\": 10,\n  \"rateLimitUnit\": \"minute\"\n}",
               "formUrlEncoded": [],
               "multipartForm": []
             },
@@ -502,6 +500,162 @@
                 },
                 {
                   "name": "JWT",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "FIREBASE_API_KEY",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "FIREBASE_APP_ID",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "ANTHROPIC_API_KEY",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                }
+              ]
+            },
+            "assertions": [],
+            "tests": "",
+            "docs": "",
+            "auth": {
+              "mode": "none"
+            }
+          }
+        },
+        {
+          "type": "http",
+          "name": "Create proxy Firebase-Openai",
+          "seq": 2,
+          "request": {
+            "url": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/{{BACKMESH_UID}}",
+            "method": "POST",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json",
+                "enabled": true
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer {{JWT}}",
+                "enabled": true
+              }
+            ],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"id\": null,\n  \"proxyUrl\": null,\n  \"authType\": \"Firebase\",\n  \"authAppId\": \"{{FIREBASE_APP_ID}}\",\n  \"authPublicKey\": \"{{FIREBASE_API_KEY}}\",\n  \"apiUrl\": \"https://api.openai.com\",\n  \"apiReqHeader\": \"Authorization\",\n  \"apiPrivateKey\": \"{{OPENAI_API_KEY}}\",\n  \"rateLimit\": 10,\n  \"rateLimitUnit\": \"minute\"\n}",
+              "formUrlEncoded": [],
+              "multipartForm": []
+            },
+            "script": {},
+            "vars": {
+              "req": [
+                {
+                  "name": "BACKMESH_UID",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "JWT",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "FIREBASE_API_KEY",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "FIREBASE_APP_ID",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "OPENAI_API_KEY",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                }
+              ]
+            },
+            "assertions": [],
+            "tests": "",
+            "docs": "",
+            "auth": {
+              "mode": "none"
+            }
+          }
+        },
+        {
+          "type": "http",
+          "name": "Create proxy Firebase-Gemini",
+          "seq": 3,
+          "request": {
+            "url": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/{{BACKMESH_UID}}",
+            "method": "POST",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json",
+                "enabled": true
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer {{JWT}}",
+                "enabled": true
+              }
+            ],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"id\": null,\n  \"proxyUrl\": null,\n  \"authType\": \"Firebase\",\n  \"authAppId\": \"{{FIREBASE_APP_ID}}\",\n  \"authPublicKey\": \"{{FIREBASE_API_KEY}}\",\n  \"apiUrl\": \"https://generativelanguage.googleapis.com\",\n  \"apiReqHeader\": \"x-goog-api-key\",\n  \"apiPrivateKey\": \"{{GEMINI_API_KEY}}\",\n  \"rateLimit\": 10,\n  \"rateLimitUnit\": \"minute\"\n}",
+              "formUrlEncoded": [],
+              "multipartForm": []
+            },
+            "script": {},
+            "vars": {
+              "req": [
+                {
+                  "name": "BACKMESH_UID",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "JWT",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "FIREBASE_API_KEY",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "FIREBASE_APP_ID",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "GEMINI_API_KEY",
                   "value": "",
                   "enabled": true,
                   "local": false
