@@ -49,7 +49,7 @@ export default {
 					return new Response('No body in request', { status: 400 });
 				}
 				return handleRequest(async () =>
-					kv.newApiProxy(env, backmeshUid, await request.json()),
+					kv.newApiProxy(env, requestUrl.origin, backmeshUid, await request.json()),
 				);
 
 			case 'PUT':
