@@ -482,10 +482,10 @@ export default {
 		}
 		return Object.values(summaries);
 	},
-	async newApiProxy(env: Env, backmeshUid: string, value: any): Promise<ApiProxy> {
+	async newApiProxy(env: Env, origin: string, backmeshUid: string, value: any): Promise<ApiProxy> {
 		const id = generateId();
 		value.id = id;
-		value.proxyUrl = `https://edge.backmesh.com/v1/proxy/${backmeshUid}/${id}`;
+		value.proxyUrl = `${origin}/v1/proxy/${backmeshUid}/${id}`;
 		if (!isValidStr(value.apiPrivateKey)) {
 			throw new TypeError('apiPrivateKey is not a valid string');
 		}
