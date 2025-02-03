@@ -1,0 +1,628 @@
+{
+	"info": {
+		"_postman_id": "192fccd1-cafe-48f6-8b8e-d316dbf4cf60",
+		"name": "Backmesh",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "247062"
+	},
+	"item": [
+		{
+			"name": "LLM APIs",
+			"item": [
+				{
+					"name": "OPENAI",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "default"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{OPENAI_API_KEY}}",
+								"type": "default"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"model\": \"{{OPENAI_MODEL}}\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a helpful assistant.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Tell me a joke.\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{OPENAI_URL}}/{{OPENAI_ENDPOINT}}",
+							"host": [
+								"{{OPENAI_URL}}"
+							],
+							"path": [
+								"{{OPENAI_ENDPOINT}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "ANTHROPIC",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "default"
+							},
+							{
+								"key": "x-api-key",
+								"value": "{{ANTHROPIC_API_KEY}}",
+								"type": "default"
+							},
+							{
+								"key": "anthropic-version",
+								"value": "2023-06-01",
+								"type": "default"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"model\": \"{{ANTHROPIC_MODEL}}\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Hello, world\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{ANTHROPIC_URL}}/{{ANTHROPIC_ENDPOINT}}",
+							"host": [
+								"{{ANTHROPIC_URL}}"
+							],
+							"path": [
+								"{{ANTHROPIC_ENDPOINT}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GEMINI",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "default"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"Tell me a joke\"\n        }\n      ]\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{GEMINI_URL}}/{{GEMINI_ENDPOINT}}?key={{GEMINI_API_KEY}}",
+							"host": [
+								"{{GEMINI_URL}}"
+							],
+							"path": [
+								"{{GEMINI_ENDPOINT}}"
+							],
+							"query": [
+								{
+									"key": "key",
+									"value": "{{GEMINI_API_KEY}}"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Proxy",
+			"item": [
+				{
+					"name": "OPENAI",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "default"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{JWT}}",
+								"type": "default"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"model\": \"{{OPENAI_MODEL}}\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"tell me a joke\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PROXY_URL}}/{{OPENAI_ENDPOINT}}",
+							"host": [
+								"{{PROXY_URL}}"
+							],
+							"path": [
+								"{{OPENAI_ENDPOINT}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "ANTHROPIC",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "default"
+							},
+							{
+								"key": "anthropic-version",
+								"value": "2023-06-01",
+								"type": "default"
+							},
+							{
+								"key": "x-api-key",
+								"value": "{{JWT}}",
+								"type": "default"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"model\": \"{{ANTHROPIC_MODEL}}\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Hello, world\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PROXY_URL}}/{{ANTHROPIC_ENDPOINT}}",
+							"host": [
+								"{{PROXY_URL}}"
+							],
+							"path": [
+								"{{ANTHROPIC_ENDPOINT}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GEMINI",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "default"
+							},
+							{
+								"key": "x-goog-api-key",
+								"value": "{{GEMINI_API_KEY}}",
+								"type": "default"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"Tell me a joke\"\n        }\n      ]\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PROXY_URL}}/{{GEMINI_ENDPOINT}}",
+							"host": [
+								"{{PROXY_URL}}"
+							],
+							"path": [
+								"{{GEMINI_ENDPOINT}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Firebase Auth",
+			"item": [
+				{
+					"name": "Generate token",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "default"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"returnSecureToken\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={{FIREBASE_API_KEY}}",
+							"protocol": "https",
+							"host": [
+								"identitytoolkit",
+								"googleapis",
+								"com"
+							],
+							"path": [
+								"v1",
+								"accounts:signUp"
+							],
+							"query": [
+								{
+									"key": "key",
+									"value": "{{FIREBASE_API_KEY}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get token uid",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "default"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"idToken\": \"{{TOKEN}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://identitytoolkit.googleapis.com/v1/accounts:lookup?key={{FIREBASE_API_KEY}}",
+							"protocol": "https",
+							"host": [
+								"identitytoolkit",
+								"googleapis",
+								"com"
+							],
+							"path": [
+								"v1",
+								"accounts:lookup"
+							],
+							"query": [
+								{
+									"key": "key",
+									"value": "{{FIREBASE_API_KEY}}"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Proxy CRUD",
+			"item": [
+				{
+					"name": "Create proxy Firebase-Anthropic",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "default"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{JWT}}",
+								"type": "default"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"id\": null,\n  \"proxyUrl\": null,\n  \"authType\": \"Firebase\",\n  \"authAppId\": \"{{FIREBASE_APP_ID}}\",\n  \"authPublicKey\": \"{{FIREBASE_API_KEY}}\",\n  \"apiUrl\": \"https://api.anthropic.com\",\n  \"apiReqHeader\": \"x-api-key\",\n  \"apiPrivateKey\": \"{{ANTHROPIC_API_KEY}}\",\n  \"rateLimit\": 10,\n  \"rateLimitUnit\": \"minute\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/{{BACKMESH_UID}}",
+							"protocol": "https",
+							"host": [
+								"backmesh",
+								"backmesh",
+								"workers",
+								"dev"
+							],
+							"path": [
+								"{{CRUD_ENDPOINT}}",
+								"{{BACKMESH_UID}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create proxy Firebase-Openai",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "default"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{JWT}}",
+								"type": "default"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"id\": null,\n  \"proxyUrl\": null,\n  \"authType\": \"Firebase\",\n  \"authAppId\": \"{{FIREBASE_APP_ID}}\",\n  \"authPublicKey\": \"{{FIREBASE_API_KEY}}\",\n  \"apiUrl\": \"https://api.openai.com\",\n  \"apiReqHeader\": \"Authorization\",\n  \"apiPrivateKey\": \"{{OPENAI_API_KEY}}\",\n  \"rateLimit\": 10,\n  \"rateLimitUnit\": \"minute\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/{{BACKMESH_UID}}",
+							"protocol": "https",
+							"host": [
+								"backmesh",
+								"backmesh",
+								"workers",
+								"dev"
+							],
+							"path": [
+								"{{CRUD_ENDPOINT}}",
+								"{{BACKMESH_UID}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create proxy Firebase-Gemini",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "default"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{JWT}}",
+								"type": "default"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"id\": null,\n  \"proxyUrl\": null,\n  \"authType\": \"Firebase\",\n  \"authAppId\": \"{{FIREBASE_APP_ID}}\",\n  \"authPublicKey\": \"{{FIREBASE_API_KEY}}\",\n  \"apiUrl\": \"https://generativelanguage.googleapis.com\",\n  \"apiReqHeader\": \"x-goog-api-key\",\n  \"apiPrivateKey\": \"{{GEMINI_API_KEY}}\",\n  \"rateLimit\": 10,\n  \"rateLimitUnit\": \"minute\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/{{BACKMESH_UID}}",
+							"protocol": "https",
+							"host": [
+								"backmesh",
+								"backmesh",
+								"workers",
+								"dev"
+							],
+							"path": [
+								"{{CRUD_ENDPOINT}}",
+								"{{BACKMESH_UID}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "OPENAI_URL",
+			"value": "https://api.openai.com",
+			"type": "default"
+		},
+		{
+			"key": "OPENAI_ENDPOINT",
+			"value": "v1/chat/completions",
+			"type": "default"
+		},
+		{
+			"key": "OPENAI_API_KEY",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "OPENAI_MODEL",
+			"value": "gpt-4o-mini",
+			"type": "default"
+		},
+		{
+			"key": "ANTHROPIC_URL",
+			"value": "https://api.anthropic.com",
+			"type": "default"
+		},
+		{
+			"key": "ANTHROPIC_ENDPOINT",
+			"value": "v1/messages",
+			"type": "default"
+		},
+		{
+			"key": "ANTHROPIC_API_KEY",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "ANTHROPIC_MODEL",
+			"value": "claude-3-5-sonnet-20241022",
+			"type": "default"
+		},
+		{
+			"key": "GEMINI_URL",
+			"value": "https://generativelanguage.googleapis.com",
+			"type": "default"
+		},
+		{
+			"key": "GEMINI_ENDPOINT",
+			"value": "v1beta/models/gemini-1.5-flash:generateContent",
+			"type": "default"
+		},
+		{
+			"key": "GEMINI_API_KEY",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "PROXY_URL",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "JWT",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "FIREBASE_API_KEY",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "TOKEN",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "CRUD_ENDPOINT",
+			"value": "v1/crud",
+			"type": "default"
+		},
+		{
+			"key": "BACKMESH_UID",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "FIREBASE_APP_ID",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "BASE_URL",
+			"value": "https://edge.backmesh.com",
+			"type": "string"
+		},
+		{
+			"key": "ENDPOINT",
+			"value": "v1/proxy",
+			"type": "string"
+		}
+	]
+}

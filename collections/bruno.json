@@ -1,0 +1,749 @@
+{
+  "name": "Backmesh",
+  "version": "1",
+  "items": [
+    {
+      "type": "folder",
+      "name": "LLM APIs",
+      "items": [
+        {
+          "type": "http",
+          "name": "OPENAI",
+          "seq": 1,
+          "request": {
+            "url": "{{OPENAI_URL}}/{{OPENAI_ENDPOINT}}",
+            "method": "POST",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json",
+                "enabled": true
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer {{OPENAI_API_KEY}}",
+                "enabled": true
+              }
+            ],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"model\": \"{{OPENAI_MODEL}}\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a helpful assistant.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Tell me a joke.\"\n    }\n  ]\n}",
+              "formUrlEncoded": [],
+              "multipartForm": []
+            },
+            "script": {},
+            "vars": {
+              "req": [
+                {
+                  "name": "OPENAI_URL",
+                  "value": "https://api.openai.com",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "OPENAI_API_KEY",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                }
+              ]
+            },
+            "assertions": [],
+            "tests": "",
+            "docs": "",
+            "auth": {
+              "mode": "none"
+            }
+          }
+        },
+        {
+          "type": "http",
+          "name": "ANTHROPIC",
+          "seq": 3,
+          "request": {
+            "url": "{{ANTHROPIC_URL}}/{{ANTHROPIC_ENDPOINT}}",
+            "method": "POST",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json",
+                "enabled": true
+              },
+              {
+                "name": "x-api-key",
+                "value": "{{ANTHROPIC_API_KEY}}",
+                "enabled": true
+              },
+              {
+                "name": "anthropic-version",
+                "value": "2023-06-01",
+                "enabled": true
+              }
+            ],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"model\": \"{{ANTHROPIC_MODEL}}\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Hello, world\"\n    }\n  ]\n}",
+              "formUrlEncoded": [],
+              "multipartForm": []
+            },
+            "script": {},
+            "vars": {
+              "req": [
+                {
+                  "name": "ANTHROPIC_URL",
+                  "value": "https://api.anthropic.com",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "ANTHROPIC_API_KEY",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                }
+              ]
+            },
+            "assertions": [],
+            "tests": "",
+            "docs": "",
+            "auth": {
+              "mode": "none"
+            }
+          }
+        },
+        {
+          "type": "http",
+          "name": "GEMINI",
+          "seq": 2,
+          "request": {
+            "url": "{{GEMINI_URL}}/{{GEMINI_ENDPOINT}}?key={{GEMINI_API_KEY}}",
+            "method": "POST",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json",
+                "enabled": true
+              }
+            ],
+            "params": [
+              {
+                "name": "key",
+                "value": "{{GEMINI_API_KEY}}",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"Tell me a joke\"\n        }\n      ]\n    }\n  ]\n}",
+              "formUrlEncoded": [],
+              "multipartForm": []
+            },
+            "script": {},
+            "vars": {
+              "req": [
+                {
+                  "name": "GEMINI_URL",
+                  "value": "https://generativelanguage.googleapis.com",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "GEMINI_API_KEY",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                }
+              ]
+            },
+            "assertions": [],
+            "tests": "",
+            "docs": "",
+            "auth": {
+              "mode": "none"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "Proxy",
+      "items": [
+        {
+          "type": "http",
+          "name": "OPENAI",
+          "seq": 1,
+          "request": {
+            "url": "{{PROXY_URL}}/{{OPENAI_ENDPOINT}}",
+            "method": "POST",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json",
+                "enabled": true
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer {{JWT}}",
+                "enabled": true
+              }
+            ],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"model\": \"{{OPENAI_MODEL}}\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"tell me a joke\"\n    }\n  ]\n}",
+              "formUrlEncoded": [],
+              "multipartForm": [
+                {
+                  "type": "text",
+                  "name": "",
+                  "value": "",
+                  "enabled": true
+                }
+              ]
+            },
+            "script": {},
+            "vars": {
+              "req": [
+                {
+                  "name": "PROXY_URL",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "JWT",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                }
+              ]
+            },
+            "assertions": [],
+            "tests": "",
+            "docs": "",
+            "auth": {
+              "mode": "none"
+            }
+          }
+        },
+        {
+          "type": "http",
+          "name": "ANTHROPIC",
+          "seq": 3,
+          "request": {
+            "url": "{{PROXY_URL}}/{{ANTHROPIC_ENDPOINT}}",
+            "method": "POST",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json",
+                "enabled": true
+              },
+              {
+                "name": "anthropic-version",
+                "value": "2023-06-01",
+                "enabled": true
+              },
+              {
+                "name": "x-api-key",
+                "value": "{{JWT}}",
+                "enabled": true
+              }
+            ],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"model\": \"{{ANTHROPIC_MODEL}}\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Hello, world\"\n    }\n  ]\n}",
+              "formUrlEncoded": [],
+              "multipartForm": [
+                {
+                  "type": "text",
+                  "name": "",
+                  "value": "",
+                  "enabled": true
+                }
+              ]
+            },
+            "script": {},
+            "vars": {
+              "req": [
+                {
+                  "name": "PROXY_URL",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "JWT",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                }
+              ]
+            },
+            "assertions": [],
+            "tests": "",
+            "docs": "",
+            "auth": {
+              "mode": "none"
+            }
+          }
+        },
+        {
+          "type": "http",
+          "name": "GEMINI",
+          "seq": 2,
+          "request": {
+            "url": "{{PROXY_URL}}/{{GEMINI_ENDPOINT}}",
+            "method": "POST",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json",
+                "enabled": true
+              },
+              {
+                "name": "x-goog-api-key",
+                "value": "{{GEMINI_API_KEY}}",
+                "enabled": true
+              }
+            ],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"Tell me a joke\"\n        }\n      ]\n    }\n  ]\n}",
+              "formUrlEncoded": [],
+              "multipartForm": [
+                {
+                  "type": "text",
+                  "name": "",
+                  "value": "",
+                  "enabled": true
+                }
+              ]
+            },
+            "script": {},
+            "vars": {
+              "req": [
+                {
+                  "name": "PROXY_URL",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "GEMINI_API_KEY",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                }
+              ]
+            },
+            "assertions": [],
+            "tests": "",
+            "docs": "",
+            "auth": {
+              "mode": "none"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "Firebase Auth",
+      "items": [
+        {
+          "type": "http",
+          "name": "Generate token",
+          "seq": 1,
+          "request": {
+            "url": "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={{FIREBASE_API_KEY}}",
+            "method": "POST",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json",
+                "enabled": true
+              }
+            ],
+            "params": [
+              {
+                "name": "key",
+                "value": "{{FIREBASE_API_KEY}}",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"returnSecureToken\": true\n}",
+              "formUrlEncoded": [],
+              "multipartForm": []
+            },
+            "script": {},
+            "vars": {
+              "req": [
+                {
+                  "name": "FIREBASE_API_KEY",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                }
+              ]
+            },
+            "assertions": [],
+            "tests": "",
+            "docs": "",
+            "auth": {
+              "mode": "none"
+            }
+          }
+        },
+        {
+          "type": "http",
+          "name": "Get token uid",
+          "seq": 2,
+          "request": {
+            "url": "https://identitytoolkit.googleapis.com/v1/accounts:lookup?key={{FIREBASE_API_KEY}}",
+            "method": "POST",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json",
+                "enabled": true
+              }
+            ],
+            "params": [
+              {
+                "name": "key",
+                "value": "{{FIREBASE_API_KEY}}",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"idToken\": \"{{TOKEN}}\"\n}",
+              "formUrlEncoded": [],
+              "multipartForm": []
+            },
+            "script": {},
+            "vars": {
+              "req": [
+                {
+                  "name": "TOKEN",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "FIREBASE_API_KEY",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                }
+              ]
+            },
+            "assertions": [],
+            "tests": "",
+            "docs": "",
+            "auth": {
+              "mode": "none"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "name": "Proxy CRUD",
+      "items": [
+        {
+          "type": "http",
+          "name": "Create proxy Firebase-Anthropic",
+          "seq": 1,
+          "request": {
+            "url": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/{{BACKMESH_UID}}",
+            "method": "POST",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json",
+                "enabled": true
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer {{JWT}}",
+                "enabled": true
+              }
+            ],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"id\": null,\n  \"proxyUrl\": null,\n  \"authType\": \"Firebase\",\n  \"authAppId\": \"{{FIREBASE_APP_ID}}\",\n  \"authPublicKey\": \"{{FIREBASE_API_KEY}}\",\n  \"apiUrl\": \"https://api.anthropic.com\",\n  \"apiReqHeader\": \"x-api-key\",\n  \"apiPrivateKey\": \"{{ANTHROPIC_API_KEY}}\",\n  \"rateLimit\": 10,\n  \"rateLimitUnit\": \"minute\"\n}",
+              "formUrlEncoded": [],
+              "multipartForm": []
+            },
+            "script": {},
+            "vars": {
+              "req": [
+                {
+                  "name": "BACKMESH_UID",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "JWT",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "FIREBASE_API_KEY",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "FIREBASE_APP_ID",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "ANTHROPIC_API_KEY",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                }
+              ]
+            },
+            "assertions": [],
+            "tests": "",
+            "docs": "",
+            "auth": {
+              "mode": "none"
+            }
+          }
+        },
+        {
+          "type": "http",
+          "name": "Create proxy Firebase-Openai",
+          "seq": 2,
+          "request": {
+            "url": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/{{BACKMESH_UID}}",
+            "method": "POST",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json",
+                "enabled": true
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer {{JWT}}",
+                "enabled": true
+              }
+            ],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"id\": null,\n  \"proxyUrl\": null,\n  \"authType\": \"Firebase\",\n  \"authAppId\": \"{{FIREBASE_APP_ID}}\",\n  \"authPublicKey\": \"{{FIREBASE_API_KEY}}\",\n  \"apiUrl\": \"https://api.openai.com\",\n  \"apiReqHeader\": \"Authorization\",\n  \"apiPrivateKey\": \"{{OPENAI_API_KEY}}\",\n  \"rateLimit\": 10,\n  \"rateLimitUnit\": \"minute\"\n}",
+              "formUrlEncoded": [],
+              "multipartForm": []
+            },
+            "script": {},
+            "vars": {
+              "req": [
+                {
+                  "name": "BACKMESH_UID",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "JWT",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "FIREBASE_API_KEY",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "FIREBASE_APP_ID",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "OPENAI_API_KEY",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                }
+              ]
+            },
+            "assertions": [],
+            "tests": "",
+            "docs": "",
+            "auth": {
+              "mode": "none"
+            }
+          }
+        },
+        {
+          "type": "http",
+          "name": "Create proxy Firebase-Gemini",
+          "seq": 3,
+          "request": {
+            "url": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/{{BACKMESH_UID}}",
+            "method": "POST",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "application/json",
+                "enabled": true
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer {{JWT}}",
+                "enabled": true
+              }
+            ],
+            "params": [],
+            "body": {
+              "mode": "json",
+              "json": "{\n  \"id\": null,\n  \"proxyUrl\": null,\n  \"authType\": \"Firebase\",\n  \"authAppId\": \"{{FIREBASE_APP_ID}}\",\n  \"authPublicKey\": \"{{FIREBASE_API_KEY}}\",\n  \"apiUrl\": \"https://generativelanguage.googleapis.com\",\n  \"apiReqHeader\": \"x-goog-api-key\",\n  \"apiPrivateKey\": \"{{GEMINI_API_KEY}}\",\n  \"rateLimit\": 10,\n  \"rateLimitUnit\": \"minute\"\n}",
+              "formUrlEncoded": [],
+              "multipartForm": []
+            },
+            "script": {},
+            "vars": {
+              "req": [
+                {
+                  "name": "BACKMESH_UID",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "JWT",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "FIREBASE_API_KEY",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "FIREBASE_APP_ID",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                },
+                {
+                  "name": "GEMINI_API_KEY",
+                  "value": "",
+                  "enabled": true,
+                  "local": false
+                }
+              ]
+            },
+            "assertions": [],
+            "tests": "",
+            "docs": "",
+            "auth": {
+              "mode": "none"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "activeEnvironmentUid": "oUKAg1R30T79au97BpOZ9",
+  "environments": [
+    {
+      "variables": [
+        {
+          "name": "BASE_URL",
+          "value": "https://edge.backmesh.com",
+          "enabled": true,
+          "secret": false,
+          "type": "text"
+        },
+        {
+          "name": "ENDPOINT",
+          "value": "v1/proxy",
+          "enabled": true,
+          "secret": false,
+          "type": "text"
+        },
+        {
+          "name": "OPENAI_ENDPOINT",
+          "value": "v1/chat/completions",
+          "enabled": true,
+          "secret": false,
+          "type": "text"
+        },
+        {
+          "name": "OPENAI_MODEL",
+          "value": "gpt-4o-mini",
+          "enabled": true,
+          "secret": false,
+          "type": "text"
+        },
+        {
+          "name": "GEMINI_ENDPOINT",
+          "value": "v1beta/models/gemini-1.5-flash:generateContent",
+          "enabled": true,
+          "secret": false,
+          "type": "text"
+        },
+        {
+          "name": "ANTHROPIC_ENDPOINT",
+          "value": "v1/messages",
+          "enabled": true,
+          "secret": false,
+          "type": "text"
+        },
+        {
+          "name": "ANTHROPIC_MODEL",
+          "value": "claude-3-5-sonnet-20241022",
+          "enabled": true,
+          "secret": false,
+          "type": "text"
+        },
+        {
+          "name": "CRUD_ENDPOINT",
+          "value": "v1/crud",
+          "enabled": true,
+          "secret": false,
+          "type": "text"
+        }
+      ],
+      "name": "backmesh"
+    }
+  ],
+  "brunoConfig": {
+    "version": "1",
+    "name": "Backmesh",
+    "type": "collection",
+    "ignore": [
+      "node_modules",
+      ".git"
+    ]
+  }
+}
