@@ -10,7 +10,7 @@ export default {
 		try {
 			const signature = request.headers.get('stripe-signature') ?? '';
 			if (!signature) {
-					return new Response("", {
+					return new Response('', {
 						status: 400,
 					});
 			}
