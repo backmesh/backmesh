@@ -37,7 +37,7 @@ export default {
 			return new Response('Invalid token', { status: 401 });
 		}
 		// return 402, payment required, if billing is enabled and user has not paid
-		if (env.STRIPE_KEY && request.method !== 'GET') {
+		if (env.STRIPE_KEY) {
 			const plan = await kv.getPlan(env, backmeshUid);
 			if (plan === null) return new Response(`Subscription required https://buy.stripe.com/8wM8zmcSB5u8f5K4gg?client_reference_id=${backmeshUid}`, { status: 402 });
 		}
