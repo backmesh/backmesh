@@ -33,6 +33,38 @@ export default {
 						}
 						const customerId = typeof session.customer === 'string' ? session.customer : session.customer.id;
 						await kv.newPlan(env, session.client_reference_id, {customerId, type: PlanType.Starter});
+
+						// Get the plan ID from the session line items
+						const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
+						const productId = lineItems.data[0]?.price?.product;
+						if (!productId) {
+							throw new Error("Missing product ID");
+						}
+						// Set custom claims in Firebase Auth
+						const firebaseApiUrl = `https://identitytoolkit.googleapis.com/v1/accounts:update?key=${env.BACKMESH_FIREBASE_KEY}`;
+						const customClaims = {
+							[`${session.id}`]: {
+								date: new Date().toISOString(),
+								subscriptionId: session.subscription,
+								customerId: customerId,
+								productIds: lineItems.data.map(l => l?.price?.product),
+							},
+						};
+						const response = await fetch(firebaseApiUrl, {
+							method: 'POST',
+							headers: {
+								'Content-Type': 'application/json',
+							},
+							body: JSON.stringify({
+								localId: session.client_reference_id,
+								customAttributes: JSON.stringify(customClaims)
+							})
+						});
+
+						if (!response.ok) {
+							console.error(`Failed to set custom claims: ${await response.text()}`);
+						}
+
 						break;
 					default:
 							break
