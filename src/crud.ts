@@ -36,17 +36,11 @@ export default {
 		if (jwtUid !== backmeshUid) {
 			return new Response('Invalid token', { status: 401 });
 		}
-		console.log('DEBUG 1: Before payment check', {
-			method: request.method,
-			hasStripeKey: !!env.STRIPE_KEY,
-			condition: env.STRIPE_KEY && request.method !== 'GET',
-			uid: jwtUid,
-		});
+
 		// return 402, payment required, if billing is enabled and user has not paid
+		// TODO remove this as frontend should handle this
 		if (env.STRIPE_KEY && request.method !== 'GET') {
-			console.log('DEBUG 2: Inside payment check');
 			const plan = await kv.getPlan(env, backmeshUid);
-			console.log('DEBUG 3: Plan check', { plan });
 			if (plan === null) return new Response(`Subscription required https://buy.stripe.com/8wM8zmcSB5u8f5K4gg?client_reference_id=${backmeshUid}`, { status: 402 });
 		}
 		const proxyId = parts.at(3);
