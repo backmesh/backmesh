@@ -69,8 +69,7 @@ jobs:
           upload_source_maps = true
 
           routes = [
-            { pattern = "edge.backmesh.com", custom_domain = true },
-            { pattern = "jwtproxy.backmesh.com", custom_domain = true }
+            { pattern = "edge.backmesh.com", custom_domain = true }
           ]
 
           [[kv_namespaces]]
