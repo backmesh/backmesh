@@ -1,8 +1,8 @@
 import Stripe from 'stripe';
 
-import kv, { PlanType } from './services/kv';
 import { AdminAuthApiClient, ServiceAccountCredential } from 'firebase-auth-cloudflare-workers';
 
+// TODO remove cancelled subscriptions to save space?
 async function saveUserClaims(serviceAccount: string, authUserId: string, subscription: Stripe.Subscription) {
 	const credential = new ServiceAccountCredential(serviceAccount);
 	const auth = AdminAuthApiClient.getOrInitialize(
@@ -22,9 +22,10 @@ async function saveUserClaims(serviceAccount: string, authUserId: string, subscr
 	/*
 	{
 		'stripe_subs': {
+			// we need the sub id to be able to update it on subsequent webhooks
 			'sub_1QuhibIz61apsROqSAQ1LoSU': {
 				'status': 'trialing',
-				'prods': ['1xprod_RaNeaDpniWdiK4'
+				'prods': ['1xprod_RaNeaDpniWdiK4']
 			}
 		}
 	}
@@ -54,14 +55,13 @@ export default {
 				env.STRIPE_WEBHOOK_SECRET
 			);
 
-			let session, subscription, customerId, authUserId;
+			let session, subscription, authUserId;
 			console.log(event.type);
 			switch(event.type) {
 				// case 'customer.subscription.created':
 				case 'customer.subscription.updated':
 				case 'customer.subscription.deleted':
 					subscription = event.data.object;
-					// customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
 					authUserId = subscription.metadata.auth_user_id;
 					await saveUserClaims(env.BACKMESH_FIREBASE_SERVICE_ACCOUNT, authUserId, subscription);
 					break;
@@ -78,10 +78,9 @@ export default {
 						throw new Error("Missing subscription");
 					}
 					authUserId = session.client_reference_id;
-					// customerId = typeof session.customer === 'string' ? session.customer : session.customer.id;
 					subscription = typeof session.subscription === 'string' ? await stripe.subscriptions.retrieve(session.subscription) : session.subscription;
 					await saveUserClaims(env.BACKMESH_FIREBASE_SERVICE_ACCOUNT, authUserId, subscription!);
-					// set auth user id in metadata to use in webhooks later on
+					// set auth user id in metadata to use in subsequent webhooks
 					// https://docs.stripe.com/api/metadata
 					await stripe.subscriptions.update(
 						subscription.id,
@@ -91,11 +90,9 @@ export default {
 							},
 						}
 					);
-					// TODO remove
-					await kv.newPlan(env, authUserId, {customerId, type: PlanType.Starter});
 					break;
 				default:
-						break
+					break
 			}
 			return new Response("", {
 				status: 200,

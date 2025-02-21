@@ -37,12 +37,6 @@ export default {
 			return new Response('Invalid token', { status: 401 });
 		}
 
-		// return 402, payment required, if billing is enabled and user has not paid
-		// TODO remove this as frontend should handle this
-		if (env.STRIPE_KEY && request.method !== 'GET') {
-			const plan = await kv.getPlan(env, backmeshUid);
-			if (plan === null) return new Response(`Subscription required https://buy.stripe.com/8wM8zmcSB5u8f5K4gg?client_reference_id=${backmeshUid}`, { status: 402 });
-		}
 		const proxyId = parts.at(3);
 		const isSummary = parts.at(4) === 'summary';
 		switch (request.method) {
