@@ -1,6 +1,6 @@
 import auth, { AuthHeader } from './services/auth';
 import kv, { ApiProxy } from './services/kv';
-import posthog from './services/posthog';
+import posthog from './services/gateways/posthog';
 
 export class InvalidProxyRequest {
 	endUserId?: string;
@@ -129,7 +129,7 @@ export default {
 					status: 401,
 				}),
 			});
-		const endUserId = await auth.getUidFromJwt(authHeader.extractedJwt, apiProxy);
+		const endUserId = await auth.getUid(authHeader.extractedJwt, apiProxy);
 		if (endUserId === null)
 			return new InvalidProxyRequest({
 				request,
