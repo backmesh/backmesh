@@ -46,23 +46,23 @@ export default {
   },
 
   Admin: {
-    async getClaims(serviceAccount: string, authUserId: string) {
+    async getClaims(serviceAccount: string, uid: string) {
       const credential = new ServiceAccountCredential(serviceAccount);
       const auth = AdminAuthApiClient.getOrInitialize(
         credential.projectId,
         credential
       );
-      const userRecord = await auth.getAccountInfoByUid(authUserId);
+      const userRecord = await auth.getAccountInfoByUid(uid);
       return userRecord.customClaims;
     },
   
-    async setClaims(serviceAccount: string, authUserId: string, claims: object) {
+    async setClaims(serviceAccount: string, uid: string, claims: object) {
       const credential = new ServiceAccountCredential(serviceAccount);
       const auth = AdminAuthApiClient.getOrInitialize(
         credential.projectId,
         credential
       );
-      await auth.setCustomUserClaims(authUserId, claims);
+      await auth.setCustomUserClaims(uid, claims);
     }
   }
 
