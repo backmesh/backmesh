@@ -56,13 +56,13 @@ export default {
       return userRecord.customClaims;
     },
   
-    async setClaims(serviceAccount: string, authUserId: string, claim: object) {
+    async setClaims(serviceAccount: string, authUserId: string, claims: object) {
       const credential = new ServiceAccountCredential(serviceAccount);
       const auth = AdminAuthApiClient.getOrInitialize(
         credential.projectId,
         credential
       );
-      await auth.setCustomUserClaims(authUserId, claim);
+      await auth.setCustomUserClaims(authUserId, claims);
     }
   }
 
