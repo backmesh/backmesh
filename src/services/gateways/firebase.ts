@@ -1,6 +1,7 @@
 import { identitytoolkit_v3 } from '@googleapis/identitytoolkit';
 import { AdminAuthApiClient, ServiceAccountCredential } from 'firebase-auth-cloudflare-workers';
 
+// https://github.com/firebase/firebase-admin-node/blob/master/src/auth/auth-api-request.ts
 async function getAccountInfo(
 	token: string,
 	publicFirebaseKey: string,
@@ -63,7 +64,39 @@ export default {
         credential
       );
       await auth.setCustomUserClaims(uid, claims);
-    }
-  }
+    },
 
+    async getUsersWithClaims(serviceAccount: string) {
+      const credential = new ServiceAccountCredential(serviceAccount);
+      const jwt = (await credential.getAccessToken()).access_token;
+      const allUsers = [];
+      let nextPageToken: string | undefined;
+      do {
+        const url = new URL(`https://identitytoolkit.googleapis.com/v1/projects/${credential.projectId}/accounts:batchGet`);
+        if (nextPageToken) {
+          url.searchParams.append('nextPageToken', nextPageToken);
+        }
+        url.searchParams.append('maxResults', '1000'); // Maximum allowed value
+
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${jwt}`,
+          },
+        });
+
+        if (!response.ok) {
+          const error = await response.text();
+          throw new Error(`Failed to fetch users: ${response.statusText} - ${error}`);
+        }
+
+        const data: identitytoolkit_v3.Schema$DownloadAccountResponse = await response.json();
+        if (data.users) {
+          allUsers.push(...data.users);
+        }
+        nextPageToken = data.nextPageToken ?? undefined;
+      } while (nextPageToken);
+      return allUsers.filter(user => user.customAttributes);
+    },
+  }
 }
