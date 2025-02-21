@@ -856,6 +856,11 @@ fill-range@^7.1.1:
   dependencies:
     to-regex-range "^5.0.1"
 
+firebase-auth-cloudflare-workers@^2.0.6:
+  version "2.0.6"
+  resolved "https://registry.yarnpkg.com/firebase-auth-cloudflare-workers/-/firebase-auth-cloudflare-workers-2.0.6.tgz#a212441eb2df656e090f41ee91edbf6525e5a329"
+  integrity sha512-KYfI3eM3/gDxEIGgN6lVUDhDruKnnRDaCMlN8HR5kRg7SppFTmktlrjxXHoTEEbkEC7yH721gyZ+ZUm8Z+675A==
+
 fsevents@~2.3.2, fsevents@~2.3.3:
   version "2.3.3"
   resolved "https://registry.npmjs.org/fsevents/-/fsevents-2.3.3.tgz"
