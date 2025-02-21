@@ -1,4 +1,4 @@
-import { InvalidProxyRequest, ProxyRequest, ProxyResponse } from '../proxy';
+import { InvalidProxyRequest, ProxyRequest, ProxyResponse } from '../../proxy';
 
 async function captureEvent(name: string, properties: any) {
 	const payload = {

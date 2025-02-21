@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
-import { supabaseUidFromJwt } from '../src/services/auth';
+import Supabase from '../src/services/gateways/supabase';
 
 const supabaseUrl = env.SUPABASE_TEST_USER_URL;
 const supabaseKey = env.SUPABASE_TEST_USER_KEY;
@@ -40,7 +40,7 @@ describe('supabase', () => {
 			env.TEST_USER_PASS,
 		);
 
-		const uid = await supabaseUidFromJwt(testUserJwt, supabaseKey, supabaseUrl);
+		const uid = await Supabase.getUid(testUserJwt, supabaseKey, supabaseUrl);
 		expect(uid).toMatch(testUserId);
 	});
 });

@@ -12,10 +12,12 @@
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.4.5",
 		"@cloudflare/workers-types": "^4.20240729.0",
+		"@googleapis/identitytoolkit": "^11.0.0",
 		"@types/stripe": "^8.0.416",
 		"typescript": "^5.5.2",
 		"vitest": "1.5.0",
-		"wrangler": "^3.69.1"
+		"wrangler": "^3.69.1",
+		"@supabase/supabase-js": "^2.48.1"
 	},
 	"dependencies": {
 		"firebase-auth-cloudflare-workers": "^2.0.6",

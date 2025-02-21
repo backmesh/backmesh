@@ -1,7 +1,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 
-import { firebaseUidFromJwt } from '../src/services/auth';
+import Firebase from '../src/services/gateways/firebase';
 import {
 	ApiProxy,
 	AuthProviderType,
@@ -53,7 +53,7 @@ const testUserJwt = await getTokenFromFirebaseKey(
 
 describe('Firebase Authentication UID <=> JWT Mapper', () => {
 	it('properly auth user to get jwt and the use that jwt to get uid', async () => {
-		const uid = await firebaseUidFromJwt(testUserJwt, backmeshFirebaseKey);
+		const uid = await Firebase.getUid(testUserJwt, backmeshFirebaseKey);
 		expect(uid).toMatch(testUserId);
 	});
 });

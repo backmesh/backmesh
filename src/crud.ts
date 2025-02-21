@@ -1,5 +1,7 @@
 import auth from './services/auth';
+import Firebase from './services/gateways/firebase';
 import kv from './services/kv';
+import Subscription from './services/subscription';
 
 async function handleRequest(callback: () => Promise<any>): Promise<Response> {
 	try {
@@ -21,7 +23,7 @@ export default {
 			return new Response('Missing or invalid Authorization header', {
 				status: 401,
 			});
-		const jwtUid = await auth.firebaseUidFromJwt(
+		const jwtUid = await Firebase.getUid(
 			authHeader.extractedJwt,
 			env.BACKMESH_FIREBASE_KEY,
 		);
@@ -36,7 +38,14 @@ export default {
 		if (jwtUid !== backmeshUid) {
 			return new Response('Invalid token', { status: 401 });
 		}
-
+		// return 402, payment required, if billing is enabled and user has not paid
+		if (env.STRIPE_KEY && request.method !== 'GET') {
+			const claims = await Firebase.getClaims(authHeader.extractedJwt, env.BACKMESH_FIREBASE_KEY);
+			const isValid = Subscription.hasValidSubscription(claims);
+			if (!isValid) {
+				return new Response('Subscription required', { status: 402 });
+			}
+		}
 		const proxyId = parts.at(3);
 		const isSummary = parts.at(4) === 'summary';
 		switch (request.method) {
