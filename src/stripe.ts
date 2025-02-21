@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 import kv, { PlanType } from './services/kv';
 import { AdminAuthApiClient, ServiceAccountCredential } from 'firebase-auth-cloudflare-workers';
 
-async function saveUserClaims(serviceAccount: string, authUserId: string, customerId: string, subscription: Stripe.Subscription) {
+async function saveUserClaims(serviceAccount: string, authUserId: string, subscription: Stripe.Subscription) {
 	const credential = new ServiceAccountCredential(serviceAccount);
 	const auth = AdminAuthApiClient.getOrInitialize(
 		credential.projectId,
@@ -11,18 +11,27 @@ async function saveUserClaims(serviceAccount: string, authUserId: string, custom
 	);
 	const userRecord = await auth.getAccountInfoByUid(authUserId);
 	const existingClaims = userRecord.customClaims || {};
-	// TODO remove
-	delete existingClaims.stripeSessions;
-	delete existingClaims.stripeSubscriptions;
-	delete existingClaims.stripeCustomerId;
+	const products = subscription.items.data.map(item => `${item.quantity}x${item.price.product}`);
 	// Merge new claims with existing ones
-	const subscriptions = existingClaims.stripeSubscriptions || {};
-	// https://docs.stripe.com/api/subscriptions/object#subscription_object-status
-	subscriptions[subscription.id] = subscription.status;
+	const stripe_subs = existingClaims.stripe_subs || {};
+	stripe_subs[subscription.id] = {
+		// https://docs.stripe.com/api/subscriptions/object#subscription_object-status
+		status: subscription.status,
+		prods: products
+	};
+	/*
+	{
+		'stripe_subs': {
+			'sub_1QuhibIz61apsROqSAQ1LoSU': {
+				'status': 'trialing',
+				'prods': ['1xprod_RaNeaDpniWdiK4'
+			}
+		}
+	}
+	*/
 	await auth.setCustomUserClaims(authUserId, {
 		...existingClaims,
-		stripe_subscriptions: subscriptions,
-		stripe_customer_id: customerId,
+		stripe_subs,
 	});
 }
 
@@ -52,9 +61,9 @@ export default {
 				case 'customer.subscription.updated':
 				case 'customer.subscription.deleted':
 					subscription = event.data.object;
-					customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
+					// customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
 					authUserId = subscription.metadata.auth_user_id;
-					await saveUserClaims(env.BACKMESH_FIREBASE_SERVICE_ACCOUNT, authUserId, customerId, subscription);
+					await saveUserClaims(env.BACKMESH_FIREBASE_SERVICE_ACCOUNT, authUserId, subscription);
 					break;
 
 				case 'checkout.session.completed':
@@ -69,9 +78,9 @@ export default {
 						throw new Error("Missing subscription");
 					}
 					authUserId = session.client_reference_id;
-					customerId = typeof session.customer === 'string' ? session.customer : session.customer.id;
+					// customerId = typeof session.customer === 'string' ? session.customer : session.customer.id;
 					subscription = typeof session.subscription === 'string' ? await stripe.subscriptions.retrieve(session.subscription) : session.subscription;
-					await saveUserClaims(env.BACKMESH_FIREBASE_SERVICE_ACCOUNT, authUserId, customerId, subscription!);
+					await saveUserClaims(env.BACKMESH_FIREBASE_SERVICE_ACCOUNT, authUserId, subscription!);
 					// set auth user id in metadata to use in webhooks later on
 					// https://docs.stripe.com/api/metadata
 					await stripe.subscriptions.update(
