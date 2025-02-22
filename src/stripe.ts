@@ -4,9 +4,6 @@ import Subscription from './services/subscription';
 
 export default {
 	async fetch(request: Request, env: Env) {
-		const stripe = new Stripe(env.STRIPE_KEY, {
-			httpClient: Stripe.createFetchHttpClient()
-		});
 		try {
 			const signature = request.headers.get('stripe-signature') ?? '';
 			if (!signature) {
@@ -15,10 +12,23 @@ export default {
 				});
 			}
 			const body = await request.text();
+
+			// parametrize
+			// const requestUrl = new URL(request.url);
+			// const parts = requestUrl.pathname.split('/').filter((part) => part);
+			// const backmeshUid = parts.at(2);
+			// /v1/stripe/${backmeshUid}
+			const stripeKey = env.STRIPE_KEY;
+			const serviceAccount = env.BACKMESH_FIREBASE_SERVICE_ACCOUNT;
+			const stripeWebhookSecret = env.STRIPE_WEBHOOK_SECRET;
+
+			const stripe = new Stripe(stripeKey, {
+				httpClient: Stripe.createFetchHttpClient()
+			});
 			const event = await stripe.webhooks.constructEventAsync(
 				body,
 				signature,
-				env.STRIPE_WEBHOOK_SECRET
+				stripeWebhookSecret
 			);
 
 			let session, subscription, authUserId, existingClaims, updatedClaims;
@@ -29,9 +39,9 @@ export default {
 				case 'customer.subscription.deleted':
 					subscription = event.data.object;
 					authUserId = subscription.metadata.auth_user_id;
-					existingClaims = await Firebase.Admin.getClaims(env.BACKMESH_FIREBASE_SERVICE_ACCOUNT, authUserId);
+					existingClaims = await Firebase.Admin.getClaims(serviceAccount, authUserId);
 					updatedClaims = Subscription.updateClaims(existingClaims!, subscription);
-					await Firebase.Admin.setClaims(env.BACKMESH_FIREBASE_SERVICE_ACCOUNT, authUserId, updatedClaims);
+					await Firebase.Admin.setClaims(serviceAccount, authUserId, updatedClaims);
 					break;
 
 				case 'checkout.session.completed':
@@ -47,9 +57,9 @@ export default {
 					}
 					authUserId = session.client_reference_id;
 					subscription = typeof session.subscription === 'string' ? await stripe.subscriptions.retrieve(session.subscription) : session.subscription;
-					existingClaims = await Firebase.Admin.getClaims(env.BACKMESH_FIREBASE_SERVICE_ACCOUNT, authUserId);
+					existingClaims = await Firebase.Admin.getClaims(serviceAccount, authUserId);
 					updatedClaims = Subscription.updateClaims(existingClaims!, subscription);
-					await Firebase.Admin.setClaims(env.BACKMESH_FIREBASE_SERVICE_ACCOUNT, authUserId, updatedClaims);
+					await Firebase.Admin.setClaims(serviceAccount, authUserId, updatedClaims);
 					// set auth user id in metadata to use in subsequent webhooks
 					// https://docs.stripe.com/api/metadata
 					await stripe.subscriptions.update(

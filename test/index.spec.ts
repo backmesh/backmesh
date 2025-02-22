@@ -140,7 +140,7 @@ describe('Bad proxy requests', () => {
 let response, proxyId, reqHeader: string;
 describe('Firebase + Gemini API Proxy Failed Creations', () => {
 	it('fails to create proxy with no token', async () => {
-		response = await SELF.fetch('https://example.com/v1/crud/backmeshUid', {
+		response = await SELF.fetch('https://example.com/v1/crud/proxy/backmeshUid', {
 			method: 'POST',
 			headers: {
 				Authorization: 'asdfsdf',
@@ -150,7 +150,7 @@ describe('Firebase + Gemini API Proxy Failed Creations', () => {
 		expect(response.status).toBe(401);
 	});
 	it('fails to create proxy with invalid token', async () => {
-		response = await SELF.fetch('https://example.com/v1/crud/backmeshUid', {
+		response = await SELF.fetch('https://example.com/v1/crud/proxy/backmeshUid', {
 			method: 'POST',
 			headers: {
 				Authorization: 'asdfsdf',
@@ -160,7 +160,7 @@ describe('Firebase + Gemini API Proxy Failed Creations', () => {
 		expect(response.status).toBe(401);
 	});
 	it('fails to create proxy with invalid header field', async () => {
-		response = await SELF.fetch('https://example.com/v1/crud/', {
+		response = await SELF.fetch('https://example.com/v1/crud/proxy/', {
 			method: 'POST',
 			headers: {
 				Authorizationnnnnn: testUserJwt,
@@ -170,7 +170,7 @@ describe('Firebase + Gemini API Proxy Failed Creations', () => {
 		expect(response.status).toBe(401);
 	});
 	it('fails to create proxy with invalid path', async () => {
-		response = await SELF.fetch('https://example.com/v1/crud/', {
+		response = await SELF.fetch('https://example.com/v1/crud/proxy/', {
 			method: 'POST',
 			headers: {
 				Authorization: testUserJwt,
@@ -180,7 +180,7 @@ describe('Firebase + Gemini API Proxy Failed Creations', () => {
 		expect(response.status).toBe(401);
 	});
 	it('fails to create proxy with invalid uid', async () => {
-		response = await SELF.fetch('https://example.com/v1/crud/backmeshUid', {
+		response = await SELF.fetch('https://example.com/v1/crud/proxy/backmeshUid', {
 			method: 'POST',
 			headers: {
 				Authorization: testUserJwt,
@@ -190,7 +190,7 @@ describe('Firebase + Gemini API Proxy Failed Creations', () => {
 		expect(response.status).toBe(401);
 	});
 	it('fails to create a proxy without private key', async () => {
-		response = await SELF.fetch(`https://example.com/v1/crud/${testUserId}`, {
+		response = await SELF.fetch(`https://example.com/v1/crud/proxy/${testUserId}`, {
 			method: 'POST',
 			headers: {
 				Authorization: testUserJwt,
@@ -204,7 +204,7 @@ describe('Firebase + Gemini API Proxy Failed Creations', () => {
 describe('Firebase + OpenAI API Proxy: user access control for files', () => {
 	let fileId1stUser: string, fileId2ndUser: string;
 	beforeAll(async () => {
-		response = await SELF.fetch(`https://example.com/v1/crud/${testUserId}`, {
+		response = await SELF.fetch(`https://example.com/v1/crud/proxy/${testUserId}`, {
 			method: 'POST',
 			headers: {
 				Authorization: testUserJwt,
@@ -484,7 +484,7 @@ describe('Firebase + Gemini API Proxy user access control for files', () => {
 	let fileId1stUser: string, fileId2ndUser: string;
 	beforeAll(async () => {
 		// create proxy
-		response = await SELF.fetch(`https://example.com/v1/crud/${testUserId}`, {
+		response = await SELF.fetch(`https://example.com/v1/crud/proxy/${testUserId}`, {
 			method: 'POST',
 			headers: {
 				Authorization: testUserJwt,
@@ -760,7 +760,7 @@ describe('Firebase + Gemini API Proxy user access control for files', () => {
 describe('Firebase + Gemini Proxy: completion + summary', async () => {
 	beforeAll(async () => {
 		// create proxy
-		response = await SELF.fetch(`https://example.com/v1/crud/${testUserId}`, {
+		response = await SELF.fetch(`https://example.com/v1/crud/proxy/${testUserId}`, {
 			method: 'POST',
 			headers: {
 				Authorization: testUserJwt,
@@ -778,7 +778,7 @@ describe('Firebase + Gemini Proxy: completion + summary', async () => {
 
 	it('empty summary', async () => {
 		response = await SELF.fetch(
-			`https://example.com/v1/crud/${testUserId}/${proxyId!}/summary`,
+			`https://example.com/v1/crud/proxy/${testUserId}/${proxyId!}/summary`,
 			{
 				method: 'GET',
 				headers: {
@@ -820,7 +820,7 @@ describe('Firebase + Gemini Proxy: completion + summary', async () => {
 
 		// one user in summary
 		response = await SELF.fetch(
-			`https://example.com/v1/crud/${testUserId}/${proxyId!}/summary`,
+			`https://example.com/v1/crud/proxy/${testUserId}/${proxyId!}/summary`,
 			{
 				method: 'GET',
 				headers: {
@@ -846,7 +846,7 @@ describe('Firebase + Gemini Proxy: completion + summary', async () => {
 describe('Firebase + OpenAI Proxy: completion + summary', async () => {
 	beforeAll(async () => {
 		// create proxy
-		response = await SELF.fetch(`https://example.com/v1/crud/${testUserId}`, {
+		response = await SELF.fetch(`https://example.com/v1/crud/proxy/${testUserId}`, {
 			method: 'POST',
 			headers: {
 				Authorization: testUserJwt,
@@ -864,7 +864,7 @@ describe('Firebase + OpenAI Proxy: completion + summary', async () => {
 
 	it('empty summary', async () => {
 		response = await SELF.fetch(
-			`https://example.com/v1/crud/${testUserId}/${proxyId!}/summary`,
+			`https://example.com/v1/crud/proxy/${testUserId}/${proxyId!}/summary`,
 			{
 				method: 'GET',
 				headers: {
@@ -907,7 +907,7 @@ describe('Firebase + OpenAI Proxy: completion + summary', async () => {
 
 		// one user in summary
 		response = await SELF.fetch(
-			`https://example.com/v1/crud/${testUserId}/${proxyId!}/summary`,
+			`https://example.com/v1/crud/proxy/${testUserId}/${proxyId!}/summary`,
 			{
 				method: 'GET',
 				headers: {
@@ -934,7 +934,7 @@ describe('Firebase + OpenAI Proxy: user access control for threads', async () =>
 	let threadId1stUser: string, threadId2ndUser: string;
 	beforeAll(async () => {
 		// create proxy
-		response = await SELF.fetch(`https://example.com/v1/crud/${testUserId}`, {
+		response = await SELF.fetch(`https://example.com/v1/crud/proxy/${testUserId}`, {
 			method: 'POST',
 			headers: {
 				Authorization: testUserJwt,
@@ -1132,7 +1132,7 @@ describe('Firebase + OpenAI Proxy: user access control for threads', async () =>
 		expect(response.status).toBe(200);
 	});
 	it('avoid key collision when listing proxies', async () => {
-		response = await SELF.fetch(`https://example.com/v1/crud/${testUserId}`, {
+		response = await SELF.fetch(`https://example.com/v1/crud/proxy/${testUserId}`, {
 			method: 'GET',
 			headers: {
 				Authorization: testUserJwt,
@@ -1144,7 +1144,7 @@ describe('Firebase + OpenAI Proxy: user access control for threads', async () =>
 
 describe('Firebase + Gemini API Proxy Rate Limit', () => {
 	beforeAll(async () => {
-		response = await SELF.fetch(`https://example.com/v1/crud/${testUserId}`, {
+		response = await SELF.fetch(`https://example.com/v1/crud/proxy/${testUserId}`, {
 			method: 'POST',
 			headers: {
 				Authorization: testUserJwt,
@@ -1162,7 +1162,7 @@ describe('Firebase + Gemini API Proxy Rate Limit', () => {
 
 	afterAll(async () => {
 		response = await SELF.fetch(
-			`https://example.com/v1/crud/${testUserId}/${proxyId!}`,
+			`https://example.com/v1/crud/proxy/${testUserId}/${proxyId!}`,
 			{
 				method: 'DELETE',
 				headers: {
@@ -1274,7 +1274,7 @@ describe('Firebase + Gemini API Proxy Rate Limit', () => {
 	});
 
 	it('delete without proxy id fails', async () => {
-		response = await SELF.fetch(`https://example.com/v1/crud/${testUserId}`, {
+		response = await SELF.fetch(`https://example.com/v1/crud/proxy/${testUserId}`, {
 			method: 'DELETE',
 			headers: {
 				Authorization: testUserJwt,
@@ -1284,7 +1284,7 @@ describe('Firebase + Gemini API Proxy Rate Limit', () => {
 	});
 
 	it('avoid key collision when listing proxies', async () => {
-		response = await SELF.fetch(`https://example.com/v1/crud/${testUserId}`, {
+		response = await SELF.fetch(`https://example.com/v1/crud/proxy/${testUserId}`, {
 			method: 'GET',
 			headers: {
 				Authorization: testUserJwt,
@@ -1306,7 +1306,7 @@ describe('Firebase + Anthropic API Proxy Completion usage', () => {
 		prompt: '\n\nHuman: Hello, Claude\n\nAssistant:',
 	});
 	beforeAll(async () => {
-		response = await SELF.fetch(`https://example.com/v1/crud/${testUserId}`, {
+		response = await SELF.fetch(`https://example.com/v1/crud/proxy/${testUserId}`, {
 			method: 'POST',
 			headers: {
 				Authorization: testUserJwt,
@@ -1324,7 +1324,7 @@ describe('Firebase + Anthropic API Proxy Completion usage', () => {
 
 	afterAll(async () => {
 		response = await SELF.fetch(
-			`https://example.com/v1/crud/${testUserId}/${proxyId!}`,
+			`https://example.com/v1/crud/proxy/${testUserId}/${proxyId!}`,
 			{
 				method: 'DELETE',
 				headers: {
@@ -1337,7 +1337,7 @@ describe('Firebase + Anthropic API Proxy Completion usage', () => {
 
 	it('empty summary', async () => {
 		response = await SELF.fetch(
-			`https://example.com/v1/crud/${testUserId}/${proxyId!}/summary`,
+			`https://example.com/v1/crud/proxy/${testUserId}/${proxyId!}/summary`,
 			{
 				method: 'GET',
 				headers: {
@@ -1368,7 +1368,7 @@ describe('Firebase + Anthropic API Proxy Completion usage', () => {
 
 		// one user in summary
 		response = await SELF.fetch(
-			`https://example.com/v1/crud/${testUserId}/${proxyId!}/summary`,
+			`https://example.com/v1/crud/proxy/${testUserId}/${proxyId!}/summary`,
 			{
 				method: 'GET',
 				headers: {
