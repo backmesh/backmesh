@@ -27,7 +27,7 @@ export default {
 				stripeWebhookSecret = env.STRIPE_WEBHOOK_SECRET;
 			}	else if (backmeshUid !== null && stripeId !== null) {
 				const stripeWebhook = await kv.getAdminStripeWebhook(env, backmeshUid!, stripeId!);
-				stripeKey = stripeWebhook.apiKey;
+				stripeKey = stripeWebhook.apiPrivateKey;
 				serviceAccount = stripeWebhook.serviceAccount;
 				stripeWebhookSecret = stripeWebhook.webhookSecret;
 			} else {

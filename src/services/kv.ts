@@ -90,7 +90,7 @@ function assertEndUserAnalyticsSummary(obj: any): obj is EndUserAnalyticsSummary
 export type StripeWebhook = {
 	id: string;
 	webhookSecret: string;
-	apiKey: string;
+	apiPrivateKey: string;
 	serviceAccount: string;
 	webhookUrl: string;
 };
@@ -106,8 +106,8 @@ function assertStripeWebhook(obj: any): obj is StripeWebhook {
 	if (typeof obj.webhookSecret !== 'string') {
 		throw new TypeError('webhookSecret is not a string');
 	}
-	if (typeof obj.apiKey !== 'string') {
-		throw new TypeError('apiKey is not a string');
+	if (typeof obj.apiPrivateKey !== 'string') {
+		throw new TypeError('apiPrivateKey is not a string');
 	}
 	if (typeof obj.serviceAccount !== 'string') {
 		throw new TypeError('serviceAccount is not a string');
@@ -116,19 +116,17 @@ function assertStripeWebhook(obj: any): obj is StripeWebhook {
 		throw new TypeError('webhookUrl is not a string');
 	}
 	
-	// Validate that serviceAccount is a valid JSON object
-	try {
-		const parsed = JSON.parse(obj.serviceAccount);
-		if (typeof parsed !== 'object' || parsed === null) {
-			throw new TypeError('serviceAccount must be a valid JSON object');
-		}
-	} catch (e) {
-		throw new TypeError('serviceAccount must be a valid JSON string');
-	}
-	
 	return true;
 }
 
+function isValidJson(str: string) {
+	try {
+		JSON.parse(str);
+		return true;
+	} catch (e) {
+		return false;
+	}
+}
 // TODO use URLs to validate here or in front
 export type ApiProxy = {
 	id: string;
@@ -509,14 +507,17 @@ export default {
 		value.id = id;
 		value.webhookUrl = `${origin}/v1/stripe/${backmeshUid}/${id}`;
 		assertStripeWebhook(value);
+		if (!isValidJson(value.serviceAccount)) {
+			throw new TypeError('serviceAccount must be a valid JSON string');
+		}
 		value.webhookSecret = await encrypt(value.webhookSecret, env.PASSWORD);
 		value.serviceAccount = await encrypt(value.serviceAccount, env.PASSWORD);
-		value.apiKey = await encrypt(value.apiKey, env.PASSWORD);
+		value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
 		await create<StripeWebhook>(env, getStripeWebhookKey(backmeshUid, id), value);
 		// do not return secrets
 		value.webhookSecret = '';
 		value.serviceAccount = '';
-		value.apiKey = '';
+		value.apiPrivateKey = '';
 		return value;
 	},
 
@@ -529,14 +530,14 @@ export default {
 		if (isValidStr(value.serviceAccount)) {
 			value.serviceAccount = await encrypt(value.serviceAccount, env.PASSWORD);
 		}
-		if (isValidStr(value.apiKey)) {
-			value.apiKey = await encrypt(value.apiKey, env.PASSWORD);
+		if (isValidStr(value.apiPrivateKey)) {
+			value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
 		}
 		await edit<StripeWebhook>(env, getStripeWebhookKey(backmeshUid, id), value, ['id', 'webhookUrl']);
 		// do not return secrets
 		value.webhookSecret = '';
 		value.serviceAccount = '';
-		value.apiKey = '';
+		value.apiPrivateKey = '';
 		return value;
 	},
 
@@ -555,7 +556,7 @@ export default {
 			// Clear sensitive data before returning
 			webhook.webhookSecret = '';
 			webhook.serviceAccount = '';
-			webhook.apiKey = '';
+			webhook.apiPrivateKey = '';
 			return webhook;
 		});
 

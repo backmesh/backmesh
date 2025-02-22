@@ -20,7 +20,7 @@ describe('Stripe Webhook CRUD Operations', () => {
 
 	const validWebhookInit = {
 		webhookSecret: 'whsec_test_secret',
-		apiKey: 'sk_test_key',
+		apiPrivateKey: 'sk_test_key',
 		serviceAccount: JSON.stringify({
 			type: 'service_account',
 			project_id: 'test-project',
@@ -44,7 +44,7 @@ describe('Stripe Webhook CRUD Operations', () => {
 		expect(webhook.webhookUrl).toBeDefined();
 		expect(webhook.webhookUrl).toBe(`https://example.com/v1/stripe/${testUserId}/${webhook.id}`);
 		expect(webhook.webhookSecret).toBe('');
-		expect(webhook.apiKey).toBe('');
+		expect(webhook.apiPrivateKey).toBe('');
 		expect(webhook.serviceAccount).toBe('');
 		webhookId = webhook.id;
 		webhookUrl = webhook.webhookUrl;
@@ -85,7 +85,7 @@ describe('Stripe Webhook CRUD Operations', () => {
 		expect(webhook.id).toBeDefined();
 		expect(webhook.webhookUrl).toBe(`https://example.com/v1/stripe/${testUserId}/${webhook.id}`);
 		expect(webhook.webhookSecret).toBe('');
-		expect(webhook.apiKey).toBe('');
+		expect(webhook.apiPrivateKey).toBe('');
 		expect(webhook.serviceAccount).toBe('');
 	});
 
@@ -96,7 +96,6 @@ describe('Stripe Webhook CRUD Operations', () => {
 				Authorization: testUserJwt,
 			},
 		});
-		console.log(response);
 		expect(response.status).toBe(200);
 		const webhooks = await response.json() as StripeWebhook[];
 		expect(webhooks.length).toBe(1);
@@ -109,9 +108,10 @@ describe('Stripe Webhook CRUD Operations', () => {
 
 	it('successfully updates a webhook', async () => {
 		const updatedWebhook = {
-			id: webhookId, // Include ID in update
 			...validWebhookInit,
-			webhookSecret: 'whsec_updated_secret'
+			id: webhookId, // Include ID in update
+			webhookUrl,
+			webhookSecret: 'whsec_updated_secret',
 		};
 
 		response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}/${webhookId}`, {
@@ -124,7 +124,7 @@ describe('Stripe Webhook CRUD Operations', () => {
 		expect(response.status).toBe(200);
 		const webhook = await response.json() as StripeWebhook;
 		expect(webhook.webhookSecret).toBe('');
-		expect(webhook.apiKey).toBe('');
+		expect(webhook.apiPrivateKey).toBe('');
 		expect(webhook.serviceAccount).toBe('');
 		expect(webhook.webhookUrl).toBe(webhookUrl);
 	});
