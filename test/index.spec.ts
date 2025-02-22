@@ -1425,9 +1425,9 @@ describe('Firebase + Cloudflare API Proxy Run model usage', () => {
 		expect(response.status).toBe(200);
 	});
 
-	it('empty message', async () => {
+	it('empty summary', async () => {
 		response = await SELF.fetch(
-			`https://example.com/v1/crud/proxy/${testUserId}/${proxyId!}/${runEndpoint}`,
+			`https://example.com/v1/crud/proxy/${testUserId}/${proxyId!}/summary`,
 			{
 				method: 'GET',
 				headers: {
@@ -1454,6 +1454,29 @@ describe('Firebase + Cloudflare API Proxy Run model usage', () => {
 		);
 		if (response.status !== 200) console.error(await response.text());
 		expect(response.status).toBe(200);
+
+		// one user in summary
+		response = await SELF.fetch(
+			`https://example.com/v1/crud/proxy/${testUserId}/${proxyId!}/summary`,
+			{
+				method: 'GET',
+				headers: {
+					Authorization: testUserJwt,
+				},
+			},
+		);
+		if (response.status !== 200) console.error(await response.text());
+		expect(response.status).toBe(200);
+		const body: EndUserAnalyticsSummary[] = await response.json();
+		if (body.length !== 1) console.error(body);
+		expect(body.length).toBe(1);
+		expect(body[0].endUserId).toBe(testUser1stUserId);
+		expect(body[0].totalCost).toBeGreaterThan(0);
+		expect(body[0].totalTiming).toBeGreaterThan(0);
+		expect(body[0].errorCount).toBe(0);
+		expect(body[0].reqCount).toBe(1);
+		expect(body[0].firstTs).toBeGreaterThan(0);
+		expect(body[0].lastTs).toBe(body[0].lastTs);
 	});
 
 	it('forbid any endpoint outside of whitelist', async () => {
