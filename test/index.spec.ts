@@ -87,6 +87,16 @@ const anthropicProxyInit = JSON.stringify({
 	rateLimitUnit: RateLimitUnit.MINUTE,
 	authType: AuthProviderType.FIREBASE,
 });
+const cloudflareProxyInit = JSON.stringify({
+	apiUrl: 'https://api.cloudflare.com',
+	apiReqHeader: 'Authorization',
+	authPublicKey: testUserFirebaseKey,
+	apiPrivateKey: env.TEST_USER_CLOUDFLARE_API_KEY,
+	authAppId: testUserAppId,
+	rateLimit: 20,
+	rateLimitUnit: RateLimitUnit.MINUTE,
+	authType: AuthProviderType.FIREBASE,
+});
 
 describe('Bad proxy requests', () => {
 	it('invalid proxy path', async () => {
@@ -1372,6 +1382,89 @@ describe('Firebase + Anthropic API Proxy Completion usage', () => {
 					'anthropic-version': '2023-06-01',
 				},
 				body: completionBody,
+			},
+		);
+		if (response.status !== 403) console.error(await response.text());
+		expect(response.status).toBe(403);
+	});
+});
+
+describe('Firebase + Cloudflare API Proxy Run model usage', () => {
+	const messageBody = JSON.stringify({
+		messages: [{ role: 'user', content: 'Hello, world' }],
+	});
+	const runEndpoint = `client/v4/accounts/${env.TEST_USER_CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/meta/llama-3.2-1b-instruct`
+	const wrongEndpoint = `client/v4/accounts/${env.TEST_USER_CLOUDFLARE_ACCOUNT_ID}/ai/finetunes`
+	beforeAll(async () => {
+		response = await SELF.fetch(`https://example.com/v1/crud/proxy/${testUserId}`, {
+			method: 'POST',
+			headers: {
+				Authorization: testUserJwt,
+			},
+			body: cloudflareProxyInit,
+		});
+		expect(response.status).toBe(200);
+		let data = (await response.json()) as ApiProxy;
+		expect(data.id.length).toBeGreaterThan(0);
+		expect(data.proxyUrl.length).toBeGreaterThan(0);
+		expect(data.apiPrivateKey === '').toBe(true);
+		proxyId = data.id;
+		reqHeader = JSON.parse(cloudflareProxyInit)['apiReqHeader'];
+	});
+
+	afterAll(async () => {
+		response = await SELF.fetch(
+			`https://example.com/v1/crud/proxy/${testUserId}/${proxyId!}`,
+			{
+				method: 'DELETE',
+				headers: {
+					Authorization: testUserJwt,
+				},
+			},
+		);
+		expect(response.status).toBe(200);
+	});
+
+	it('empty message', async () => {
+		response = await SELF.fetch(
+			`https://example.com/v1/crud/proxy/${testUserId}/${proxyId!}/${runEndpoint}`,
+			{
+				method: 'GET',
+				headers: {
+					Authorization: testUserJwt,
+				},
+			},
+		);
+		if (response.status !== 200) console.error(await response.text());
+		expect(response.status).toBe(200);
+		const body: EndUserAnalyticsSummary[] = await response.json();
+		expect(body.length).toBe(0);
+	});
+
+	it('run model endpoint', async () => {
+		response = await SELF.fetch(
+			`https://example.com/v1/proxy/${testUserId}/${proxyId!}/${runEndpoint}`,
+			{
+				method: 'POST',
+				headers: {
+					[reqHeader]: `Bearer ${testUser1stUserJwt}`,
+				},
+				body: messageBody,
+			},
+		);
+		if (response.status !== 200) console.error(await response.text());
+		expect(response.status).toBe(200);
+	});
+
+	it('forbid any endpoint outside of whitelist', async () => {
+		response = await SELF.fetch(
+			`https://example.com/v1/proxy/${testUserId}/${proxyId!}/${wrongEndpoint}`,
+			{
+				method: 'POST',
+				headers: {
+					[reqHeader]: `Bearer ${testUser1stUserJwt}`,
+				},
+				body: messageBody,
 			},
 		);
 		if (response.status !== 403) console.error(await response.text());
