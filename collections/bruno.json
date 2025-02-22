@@ -468,7 +468,7 @@
           "name": "Create proxy Firebase-Anthropic",
           "seq": 1,
           "request": {
-            "url": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/{{BACKMESH_UID}}",
+            "url": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/proxy/{{BACKMESH_UID}}",
             "method": "POST",
             "headers": [
               {
@@ -537,7 +537,7 @@
           "name": "Create proxy Firebase-Openai",
           "seq": 2,
           "request": {
-            "url": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/{{BACKMESH_UID}}",
+            "url": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/proxy/{{BACKMESH_UID}}",
             "method": "POST",
             "headers": [
               {
@@ -606,7 +606,7 @@
           "name": "Create proxy Firebase-Gemini",
           "seq": 3,
           "request": {
-            "url": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/{{BACKMESH_UID}}",
+            "url": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/proxy/{{BACKMESH_UID}}",
             "method": "POST",
             "headers": [
               {

@@ -52,11 +52,60 @@ export default {
 		switch (resourceType) {
 			case 'proxy':
 				return handleProxyRequest(request, env, backmeshUid, resourceId, isSummary);
+			case 'stripe':
+				return handleStripeWebhook(request, env, backmeshUid, resourceId);
 			default:
 				return new Response('Invalid resource type', { status: 400 });
 		}
 	},
 };
+
+async function handleStripeWebhook(
+	request: Request, 
+	env: Env, 
+	backmeshUid: string, 
+	webhookId?: string,
+): Promise<Response> {
+	switch (request.method) {
+		case 'POST':
+			if (!request.body) {
+				return new Response('No body in request', { status: 400 });
+			}
+			const requestUrl = new URL(request.url);
+			return handleRequest(async () =>
+				kv.newStripeWebhook(env, requestUrl.origin, backmeshUid, await request.json()),
+			);
+
+		case 'PUT':
+			if (webhookId === undefined) {
+				return new Response('Invalid pathname', { status: 400 });
+			}
+			if (!request.body) {
+				return new Response('No body in request', { status: 400 });
+			}
+			return handleRequest(async () =>
+				kv.editStripeWebhook(env, backmeshUid, webhookId!, await request.json()),
+			);
+
+		case 'GET':
+			return handleRequest(async () => {
+				if (webhookId !== undefined) {
+					return new Response('Invalid pathname', { status: 400 });
+				}
+				return kv.getAllStripeWebhooks(env, backmeshUid);
+			});
+
+		case 'DELETE':
+			if (webhookId === undefined) {
+				return new Response('Invalid pathname', { status: 400 });
+			}
+			return handleRequest(async () => kv.delStripeWebhook(env, backmeshUid, webhookId!));
+
+		default:
+			return new Response('Not Found', { status: 404 });
+	}
+}
+
 
 async function handleProxyRequest(
 	request: Request, 

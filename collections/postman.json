@@ -394,7 +394,7 @@
 							}
 						},
 						"url": {
-							"raw": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/{{BACKMESH_UID}}",
+							"raw": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/proxy/{{BACKMESH_UID}}",
 							"protocol": "https",
 							"host": [
 								"backmesh",
@@ -439,7 +439,7 @@
 							}
 						},
 						"url": {
-							"raw": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/{{BACKMESH_UID}}",
+							"raw": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/proxy/{{BACKMESH_UID}}",
 							"protocol": "https",
 							"host": [
 								"backmesh",
@@ -484,7 +484,7 @@
 							}
 						},
 						"url": {
-							"raw": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/{{BACKMESH_UID}}",
+							"raw": "https://backmesh.backmesh.workers.dev/{{CRUD_ENDPOINT}}/proxy/{{BACKMESH_UID}}",
 							"protocol": "https",
 							"host": [
 								"backmesh",
