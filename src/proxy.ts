@@ -79,12 +79,12 @@ async function getLLMUsage(
 				model: req.path.split('/').pop()!.split(':').shift()!,
 			};
 		} else if (
-			parsedBody.usage &&
+			parsedBody.result.usage &&
 			req.apiProxy.apiUrl === 'https://api.cloudflare.com'
 		) {
 			return {
-				inputTokens: parsedBody.usage.prompt_tokens,
-				outputTokens: parsedBody.usage.completion_tokens,
+				inputTokens: parsedBody.result.usage.prompt_tokens,
+				outputTokens: parsedBody.result.usage.completion_tokens,
 				// "https://api.cloudflare.com/client/v4/accounts/2f94e65d5df1e6e22d0ef9a8f8f81465/ai/run/@cf/meta/llama-3-8b-instruct"
 				model: `@${req.path.split('@').pop()!}`,
 			};
