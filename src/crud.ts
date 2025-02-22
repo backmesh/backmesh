@@ -31,10 +31,12 @@ export default {
 		const requestUrl = new URL(request.url);
 		const parts = requestUrl.pathname.split('/').filter((part) => part);
 
-		// /v1/crud/${backmeshUid}/${apiProxyId}
-		// PUT and DELETE need the id
-		// GET will list if it does not get it
-		const backmeshUid = parts.at(2);
+		// /v1/crud/${resourceType}/${backmeshUid}/${resourceId}
+		const resourceType = parts.at(2); // 'proxy' or 'stripe'
+		const backmeshUid = parts.at(3);
+		const resourceId = parts.at(4);
+		const isSummary = parts.at(5) === 'summary';
+
 		if (jwtUid !== backmeshUid) {
 			return new Response('Invalid token', { status: 401 });
 		}
@@ -46,49 +48,64 @@ export default {
 				return new Response('Subscription required', { status: 402 });
 			}
 		}
-		const proxyId = parts.at(3);
-		const isSummary = parts.at(4) === 'summary';
-		switch (request.method) {
-			case 'POST':
-				if (!request.body) {
-					return new Response('No body in request', { status: 400 });
-				}
-				return handleRequest(async () =>
-					kv.newApiProxy(env, requestUrl.origin, backmeshUid, await request.json()),
-				);
 
-			case 'PUT':
-				if (proxyId === undefined) {
-					return new Response('Invalid pathname', { status: 400 });
-				}
-				if (!request.body) {
-					return new Response('No body in request', { status: 400 });
-				}
-				return handleRequest(async () =>
-					kv.editApiProxy(env, backmeshUid, proxyId!, await request.json()),
-				);
-
-			case 'GET':
-				return handleRequest(async () => {
-					if (isSummary) {
-						if (proxyId === undefined) {
-							return new Response('Invalid pathname', { status: 400 });
-						}
-						return kv.getProxyExchangeSummaries(env, backmeshUid, proxyId);
-					}
-					return proxyId === undefined
-						? kv.getAllApiProxies(env, backmeshUid)
-						: kv.getApiProxy(env, backmeshUid, proxyId!);
-				});
-
-			case 'DELETE':
-				if (proxyId === undefined) {
-					return new Response('Invalid pathname', { status: 400 });
-				}
-				return handleRequest(async () => kv.delApiProxy(env, backmeshUid, proxyId!));
-
+		switch (resourceType) {
+			case 'proxy':
+				return handleProxyRequest(request, env, backmeshUid, resourceId, isSummary);
 			default:
-				return new Response('Not Found', { status: 404 });
+				return new Response('Invalid resource type', { status: 400 });
 		}
 	},
 };
+
+async function handleProxyRequest(
+	request: Request, 
+	env: Env, 
+	backmeshUid: string, 
+	proxyId?: string,
+	isSummary?: boolean
+): Promise<Response> {
+	switch (request.method) {
+		case 'POST':
+			if (!request.body) {
+				return new Response('No body in request', { status: 400 });
+			}
+			const requestUrl = new URL(request.url);
+			return handleRequest(async () =>
+				kv.newApiProxy(env, requestUrl.origin, backmeshUid, await request.json()),
+			);
+
+		case 'PUT':
+			if (proxyId === undefined) {
+				return new Response('Invalid pathname', { status: 400 });
+			}
+			if (!request.body) {
+				return new Response('No body in request', { status: 400 });
+			}
+			return handleRequest(async () =>
+				kv.editApiProxy(env, backmeshUid, proxyId!, await request.json()),
+			);
+
+		case 'GET':
+			return handleRequest(async () => {
+				if (isSummary) {
+					if (proxyId === undefined) {
+						return new Response('Invalid pathname', { status: 400 });
+					}
+					return kv.getProxyExchangeSummaries(env, backmeshUid, proxyId);
+				}
+				return proxyId === undefined
+					? kv.getAllApiProxies(env, backmeshUid)
+					: kv.getApiProxy(env, backmeshUid, proxyId!);
+			});
+
+		case 'DELETE':
+			if (proxyId === undefined) {
+				return new Response('Invalid pathname', { status: 400 });
+			}
+			return handleRequest(async () => kv.delApiProxy(env, backmeshUid, proxyId!));
+
+		default:
+			return new Response('Not Found', { status: 404 });
+	}
+}
