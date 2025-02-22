@@ -412,19 +412,28 @@ class ProxyExchangeSummary {
 		kSumm: ProxyExchangeSummary;
 		endUserId: string;
 	} {
-		const keyParts = key.split('/');
+		const [proxyExchangesKey, status, timing, model, cost] = key.split('|');
+		/*
+		[
+			'reqs/jhsjxdmMVDOFWmK7rfngn1C2cY93/66L9auzfWmt4JLvVaSA6/hwTJkh1Z1GQSiKG7qbMyhtZT5WY2/1740260343109',
+			'200',
+			'588',
+			'@cf/meta/llama-3.2-1b-instruct',
+			'0.0000023880000000000003'
+		]
+		*/
+		const keyParts = proxyExchangesKey.split('/')
 		/*
 		[
 			'reqs',
-			'gbBbHCDBxqb8zwMk6dCio63jhOP2',
-			'FrdhHumtd5UmeeZ3xR3L',
-			'L8krqnkRWPXcxjoocPrQh33xTmD3',
-			'1725915390445|200|1364|claude-3-5-sonnet-20240620|0.00016125'
+			'jhsjxdmMVDOFWmK7rfngn1C2cY93',
+			'66L9auzfWmt4JLvVaSA6',
+			'hwTJkh1Z1GQSiKG7qbMyhtZT5WY2',
+			'1740260343109',
 		]
 		*/
-		const endUserId = keyParts[keyParts.length - 2];
-		const [ts, status, timing, model, cost] =
-			keyParts[keyParts.length - 1].split('|');
+		const endUserId = keyParts[keyParts.length - 2]
+		const ts = keyParts[keyParts.length - 1]
 		return {
 			endUserId,
 			kSumm: new ProxyExchangeSummary({
