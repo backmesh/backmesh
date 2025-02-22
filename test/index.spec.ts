@@ -8,36 +8,8 @@ import {
 	EndUserAnalyticsSummary,
 	RateLimitUnit,
 } from '../src/services/kv';
+import { getTokenFromFirebaseKey } from './utils';
 
-async function getTokenFromFirebaseKey(
-	publicFirebaseKey: string,
-	email: string,
-	password: string,
-): Promise<string> {
-	const response = await fetch(
-		`https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyPassword?key=${publicFirebaseKey}`,
-		{
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				email: email,
-				password: password,
-				returnSecureToken: true,
-			}),
-		},
-	);
-
-	if (!response.ok) {
-		const errorText = await response.text();
-		console.error('Error response text:', errorText);
-		throw new Error('Error verifying password: ' + response.statusText);
-	}
-
-	const data: any = await response.json();
-	return data.idToken;
-}
 
 const backmeshFirebaseKey = env.BACKMESH_FIREBASE_KEY;
 // backmesh test user
@@ -944,7 +916,7 @@ describe('Firebase + OpenAI Proxy: user access control for threads', async () =>
 		expect(response.status).toBe(200);
 		let data = (await response.json()) as ApiProxy;
 		expect(data.id.length).toBeGreaterThan(0);
-		expect(data.proxyUrl.length).toBeGreaterThan(0);
+		expect(data.proxyUrl).toBe(`https://example.com/v1/proxy/${testUserId}/${data.id}`);
 		expect(data.apiPrivateKey === '').toBe(true);
 		proxyId = data.id;
 		reqHeader = JSON.parse(openAIProxyInit)['apiReqHeader'];

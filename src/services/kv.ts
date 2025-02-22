@@ -87,6 +87,48 @@ function assertEndUserAnalyticsSummary(obj: any): obj is EndUserAnalyticsSummary
 	return true;
 }
 
+export type StripeWebhook = {
+	id: string;
+	webhookSecret: string;
+	apiKey: string;
+	serviceAccount: string;
+	webhookUrl: string;
+};
+
+// Type guard to check if an object is of type StripeWebhook at runtime
+function assertStripeWebhook(obj: any): obj is StripeWebhook {
+	if (typeof obj !== 'object' || obj === null) {
+		throw new TypeError('Object is not valid');
+	}
+	if (typeof obj.id !== 'string') {
+		throw new TypeError('id is not a string');
+	}
+	if (typeof obj.webhookSecret !== 'string') {
+		throw new TypeError('webhookSecret is not a string');
+	}
+	if (typeof obj.apiKey !== 'string') {
+		throw new TypeError('apiKey is not a string');
+	}
+	if (typeof obj.serviceAccount !== 'string') {
+		throw new TypeError('serviceAccount is not a string');
+	}
+	if (typeof obj.webhookUrl !== 'string') {
+		throw new TypeError('webhookUrl is not a string');
+	}
+	
+	// Validate that serviceAccount is a valid JSON object
+	try {
+		const parsed = JSON.parse(obj.serviceAccount);
+		if (typeof parsed !== 'object' || parsed === null) {
+			throw new TypeError('serviceAccount must be a valid JSON object');
+		}
+	} catch (e) {
+		throw new TypeError('serviceAccount must be a valid JSON string');
+	}
+	
+	return true;
+}
+
 // TODO use URLs to validate here or in front
 export type ApiProxy = {
 	id: string;
@@ -300,6 +342,14 @@ function getProxiesKey(backmeshUid: string) {
 	return `proxies/${backmeshUid}/`;
 }
 
+function getStripeWebhookKey(backmeshUid: string, id: string) {
+	return `${getStripeWebhooksKey(backmeshUid)}${id}`;
+}
+
+function getStripeWebhooksKey(backmeshUid: string,) {
+	return `stripe/${backmeshUid}/`;
+}
+
 function getRateLimitKey(
 	backmeshUid: string,
 	proxyId: string,
@@ -451,15 +501,81 @@ export default {
 		}
 		return Object.values(summaries);
 	},
+	/*
+		Stripe Webhooks
+	*/
+	async newStripeWebhook(env: Env, origin: string, backmeshUid: string, value: any): Promise<StripeWebhook> {
+		const id = generateId();
+		value.id = id;
+		value.webhookUrl = `${origin}/v1/stripe/${backmeshUid}/${id}`;
+		assertStripeWebhook(value);
+		value.webhookSecret = await encrypt(value.webhookSecret, env.PASSWORD);
+		value.serviceAccount = await encrypt(value.serviceAccount, env.PASSWORD);
+		value.apiKey = await encrypt(value.apiKey, env.PASSWORD);
+		await create<StripeWebhook>(env, getStripeWebhookKey(backmeshUid, id), value);
+		// do not return secrets
+		value.webhookSecret = '';
+		value.serviceAccount = '';
+		value.apiKey = '';
+		return value;
+	},
+
+	async editStripeWebhook(env: Env, backmeshUid: string, id: string, value: any): Promise<StripeWebhook> {
+		assertStripeWebhook(value);
+		// user is trying to set new values
+		if (isValidStr(value.webhookSecret)) {
+			value.webhookSecret = await encrypt(value.webhookSecret, env.PASSWORD);
+		}
+		if (isValidStr(value.serviceAccount)) {
+			value.serviceAccount = await encrypt(value.serviceAccount, env.PASSWORD);
+		}
+		if (isValidStr(value.apiKey)) {
+			value.apiKey = await encrypt(value.apiKey, env.PASSWORD);
+		}
+		await edit<StripeWebhook>(env, getStripeWebhookKey(backmeshUid, id), value, ['id', 'webhookUrl']);
+		// do not return secrets
+		value.webhookSecret = '';
+		value.serviceAccount = '';
+		value.apiKey = '';
+		return value;
+	},
+
+	async getAdminStripeWebhook(env: Env, backmeshUid: string, id: string): Promise<StripeWebhook> {
+		const key = getStripeWebhookKey(backmeshUid, id);
+		const webhook = await get<StripeWebhook>(env, key);
+		assertStripeWebhook(webhook);
+		return webhook;
+	},
+
+	async getAllStripeWebhooks(env: Env, backmeshUid: string): Promise<StripeWebhook[]> {
+		const keys = await listKeys(env, getStripeWebhooksKey(backmeshUid));
+		const webhookPromises = keys.map(async (key) => {
+			const webhook = await get<StripeWebhook>(env, key.name);
+			assertStripeWebhook(webhook);
+			// Clear sensitive data before returning
+			webhook.webhookSecret = '';
+			webhook.serviceAccount = '';
+			webhook.apiKey = '';
+			return webhook;
+		});
+
+		return Promise.all(webhookPromises);
+	},
+
+	async delStripeWebhook(env: Env, backmeshUid: string, id: string) {
+		const key = getStripeWebhookKey(backmeshUid, id);
+		await del(env, key);
+	},
+
+	/*
+		API Proxies
+	*/
 	async newApiProxy(env: Env, origin: string, backmeshUid: string, value: any): Promise<ApiProxy> {
 		const id = generateId();
 		value.id = id;
 		value.proxyUrl = `${origin}/v1/proxy/${backmeshUid}/${id}`;
-		if (!isValidStr(value.apiPrivateKey)) {
-			throw new TypeError('apiPrivateKey is not a valid string');
-		}
-		value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
 		assertApiProxy(value);
+		value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
 		await create<ApiProxy>(env, getProxyKey(backmeshUid, id), value);
 		// do not return private key
 		value.apiPrivateKey = '';

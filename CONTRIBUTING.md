@@ -24,7 +24,8 @@ npx wrangler kv key list --namespace-id <BINDING_ID> --local
 ## Versioned Routes
 
 - `/v1/proxy` uses the user's JWT authentication and should only call KV to stay performant
-- `/v1/crud` called by the dashboard and uses Backmesh Firebase Auth JWT authentication
+- `/v1/crud/proxy` called by the dashboard and uses Backmesh Firebase Auth JWT authentication
+- `/v1/crud/stripe` called by the dashboard and uses Backmesh Firebase Auth JWT authentication
 
 ### HTTP methods
 
@@ -68,8 +69,8 @@ Cloudflare KV is the main data store. Resources have unique alphanumeric names s
 
 - `resources/${backmeshUid}/${proxyId}/${resource.id}`
 
-### Plan
+### Stripe
 
-`plans/[]`
+`stripe/${backmeshUid}/[]`
 
-- `plans/${backmeshUid}`
+- `stripe/${backmeshUid}/${stripeId}`

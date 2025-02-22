@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import Firebase from './services/gateways/firebase';
 import Subscription from './services/subscription';
+import kv from './services/kv';
 
 export default {
 	async fetch(request: Request, env: Env) {
@@ -14,13 +15,24 @@ export default {
 			const body = await request.text();
 
 			// parametrize
-			// const requestUrl = new URL(request.url);
-			// const parts = requestUrl.pathname.split('/').filter((part) => part);
-			// const backmeshUid = parts.at(2);
-			// /v1/stripe/${backmeshUid}
-			const stripeKey = env.STRIPE_KEY;
-			const serviceAccount = env.BACKMESH_FIREBASE_SERVICE_ACCOUNT;
-			const stripeWebhookSecret = env.STRIPE_WEBHOOK_SECRET;
+			// /v1/stripe/${backmeshUid}/${stripeId}
+			const requestUrl = new URL(request.url);
+			const parts = requestUrl.pathname.split('/').filter((part) => part);
+			const backmeshUid = parts.at(2);
+			const stripeId = parts.at(3);
+			let stripeKey, serviceAccount, stripeWebhookSecret;
+			if (backmeshUid === null || stripeId === null) {
+				stripeKey = env.STRIPE_KEY;
+				serviceAccount = env.BACKMESH_FIREBASE_SERVICE_ACCOUNT;
+				stripeWebhookSecret = env.STRIPE_WEBHOOK_SECRET;
+			}	else if (backmeshUid !== null && stripeId !== null) {
+				const stripeWebhook = await kv.getAdminStripeWebhook(env, backmeshUid!, stripeId!);
+				stripeKey = stripeWebhook.apiKey;
+				serviceAccount = stripeWebhook.serviceAccount;
+				stripeWebhookSecret = stripeWebhook.webhookSecret;
+			} else {
+				throw new Error("Invalid pathname");
+			}
 
 			const stripe = new Stripe(stripeKey, {
 				httpClient: Stripe.createFetchHttpClient()
