@@ -3,7 +3,7 @@ import Firebase from './services/gateways/firebase';
 import Subscription from './services/subscription';
 import { ProxyExchangeSummary } from './services/analytics';
 import { apiProxyCrud } from './services/proxy';
-import { stripeWebhookCrud } from './services/webhook';
+import { stripeIntegrationCrud } from './services/stripe';
 
 async function handleRequest(callback: () => Promise<any>): Promise<Response> {
 	try {
@@ -75,7 +75,7 @@ async function handleStripeWebhook(
 			}
 			const requestUrl = new URL(request.url);
 			return handleRequest(async () =>
-				stripeWebhookCrud.create(env, requestUrl.origin, backmeshUid, await request.json()),
+				stripeIntegrationCrud.create(env, requestUrl.origin, backmeshUid, await request.json()),
 			);
 
 		case 'PUT':
@@ -86,7 +86,7 @@ async function handleStripeWebhook(
 				return new Response('No body in request', { status: 400 });
 			}
 			return handleRequest(async () =>
-				stripeWebhookCrud.edit(env, backmeshUid, webhookId!, await request.json()),
+				stripeIntegrationCrud.edit(env, backmeshUid, webhookId!, await request.json()),
 			);
 
 		case 'GET':
@@ -94,14 +94,14 @@ async function handleStripeWebhook(
 				if (webhookId !== undefined) {
 					return new Response('Invalid pathname', { status: 400 });
 				}
-				return stripeWebhookCrud.getAll(env, backmeshUid);
+				return stripeIntegrationCrud.getAll(env, backmeshUid);
 			});
 
 		case 'DELETE':
 			if (webhookId === undefined) {
 				return new Response('Invalid pathname', { status: 400 });
 			}
-			return handleRequest(async () => stripeWebhookCrud.delete(env, backmeshUid, webhookId!));
+			return handleRequest(async () => stripeIntegrationCrud.delete(env, backmeshUid, webhookId!));
 
 		default:
 			return new Response('Not Found', { status: 404 });

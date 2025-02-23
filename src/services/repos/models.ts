@@ -114,7 +114,7 @@ export function assertEndUserAnalytics(obj: any): obj is EndUserAnalytics {
 	return true;
 }
 
-export type StripeWebhook = {
+export type StripeIntegration = {
 	id: string;
 	webhookSecret: string;
 	stripePrivateKey: string;
@@ -124,8 +124,8 @@ export type StripeWebhook = {
 	schemaVersion: SchemaVersion;
 };
 
-// Type guard to check if an object is of type StripeWebhook at runtime
-export function assertStripeWebhook(obj: any): obj is StripeWebhook {
+// Type guard to check if an object is of type StripeIntegration at runtime
+export function assertStripeIntegration(obj: any): obj is StripeIntegration {
 	if (!obj.schemaVersion) {
 		obj.schemaVersion = SchemaVersion.V1;
 	}
