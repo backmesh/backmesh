@@ -143,7 +143,7 @@ async function handleProxyRequest(
 					if (proxyId === undefined) {
 						return new Response('Invalid pathname', { status: 400 });
 					}
-					return ProxyExchangeSummary.getAll(env, backmeshUid, proxyId);
+					return ProxyExchangeSummary.analyticsPerUser(env, backmeshUid, proxyId);
 				}
 				return proxyId === undefined
 					? apiProxyCrud.getAll(env, backmeshUid)

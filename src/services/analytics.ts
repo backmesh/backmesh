@@ -1,15 +1,24 @@
 import {
   InvalidProxyRequest,
-  assertEndUserAnalyticsSummary,
+  assertEndUserAnalytics,
   modelCostsPerMillion,
   ProxyExchange,
   ProxyRequest,
   ProxyResponse,
   LLMUsage,
-  EndUserAnalyticsSummary,
+  EndUserAnalytics,
 } from "./repos/models";
 import KV from "./repos/kv";
 
+/**
+ * A class representing a proxy exchange with of it summary stored in the key itself.
+ *
+ * @property ts - The timestamp of the proxy exchange.
+ * @property status - The status code of the proxy response.
+ * @property timing - The timing of the proxy exchange.
+ * @property model - The model used in the proxied request.
+ * @property cost - The cost of the proxied request.
+ */
 export class ProxyExchangeSummary {
 	ts: number;
 	status: number;
@@ -83,8 +92,16 @@ export class ProxyExchangeSummary {
 		return `${key}|${this.model}|${this.cost}`;
 	}
 
-	// adds a new proxy exchange to the end user's summary and updates the end user summary by generating a new key
-	static async update(
+  /**
+   * Saves a proxy exchange and generates a summary to store in the key itself.
+   *
+   * @param env - The environment object containing the KV store.
+   * @param proxyReq - The proxy request object.
+   * @param ts - The timestamp of the proxy exchange.
+   * @param timing - The timing of the proxy exchange.
+   * @param proxyRes - The proxy response object.
+   */
+	static async create(
 		env: Env,
 		proxyReq: ProxyRequest | InvalidProxyRequest,
 		ts: number,
@@ -113,16 +130,24 @@ export class ProxyExchangeSummary {
 		});
 	}
 
-	// returns summaries for all end users of this backmesh proxy
-	// which implies just getting the keys, parsing them and adding them to the summaries
-	static async getAll(
+	/**
+	 * Aggregates analytics data for all end users of a specific proxy.
+	 * Retrieves all proxy exchange keys and extracts usage summaries from the metadata in the key itself.
+	 * Groups metrics (requests, errors, costs, timing) by end user.
+	 *
+	 * @param env - The environment object containing the KV store.
+	 * @param backmeshUid - The unique identifier for the backmesh.
+	 * @param proxyId - The identifier for the proxy.
+	 * @returns An array of EndUserAnalytics objects containing aggregated analytics data.
+	 */
+	static async analyticsPerUser(
 		env: Env,
 		backmeshUid: string,
 		proxyId: string,
-	): Promise<EndUserAnalyticsSummary[]> {
+	): Promise<EndUserAnalytics[]> {
 		const prefix = this.getListKey(backmeshUid, proxyId);
 		const keys = await KV.listKeys(env.BACKMESH_KV, prefix);
-		const summaries: { [endUserId: string]: EndUserAnalyticsSummary } = {};
+		const summaries: { [endUserId: string]: EndUserAnalytics } = {};
 
 		for (const key of keys) {
 			const { kSumm, endUserId } = ProxyExchangeSummary.fromKey(key.name);
@@ -147,7 +172,7 @@ export class ProxyExchangeSummary {
 			summary.firstTs = Math.min(summary.firstTs, Number(kSumm.ts));
 			summary.lastTs = Math.max(summary.lastTs, Number(kSumm.ts));
 
-			assertEndUserAnalyticsSummary(summary);
+			assertEndUserAnalytics(summary);
 		}
 		return Object.values(summaries);
 	}
@@ -156,8 +181,12 @@ export class ProxyExchangeSummary {
 		return `reqs/${backmeshUid}/${proxyId}/`;
 	}
 
-	// this is best effort so it fallsback to 0 cost
-	// does not support caching, fine tuned models, image and audio models
+  /**
+   * Estimates the cost of an LLM usage.
+   *
+   * @param usage - The LLM usage object containing input and output tokens.
+   * @returns The estimated cost of the LLM usage.
+   */
 	static estimateCost(usage: LLMUsage): number {
 		const model = usage.model.toLowerCase();
 		const costs = modelCostsPerMillion[model] || { input: 0, output: 0 };
