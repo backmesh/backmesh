@@ -1,7 +1,7 @@
 import { assertStripeIntegration, StripeIntegration, isValidJson, isValidStr, AuthProviderType } from "./repos/models";
 import KV from "./repos/kv";
 import { Crud } from "./repos/models";
-import { encrypt } from "./crypto";
+import { decrypt, encrypt } from "./crypto";
 
 class StripeIntegrationCrud implements Crud<StripeIntegration> {
 	constructor(){}
@@ -62,6 +62,9 @@ class StripeIntegrationCrud implements Crud<StripeIntegration> {
 	async getAdmin(env: Env, backmeshUid: string, id: string): Promise<StripeIntegration> {
 		const key = this.getKey(backmeshUid, id);
 		const webhook = await KV.get<StripeIntegration>(env.BACKMESH_KV, key);
+		webhook.webhookSecret = await decrypt(webhook.webhookSecret, env.PASSWORD);
+		webhook.authPrivateKey = await decrypt(webhook.authPrivateKey, env.PASSWORD);
+		webhook.stripePrivateKey = await decrypt(webhook.stripePrivateKey, env.PASSWORD);
 		assertStripeIntegration(webhook);
 		return webhook;
 	}

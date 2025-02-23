@@ -1,5 +1,7 @@
 import { env, SELF } from 'cloudflare:test';
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import Stripe from 'stripe';
+
 import { AuthProviderType, SchemaVersion, StripeIntegration } from '../src/services/repos/models';
 import { getTokenFromFirebaseKey } from './utils';
 
@@ -13,7 +15,7 @@ const testUserJwt = await getTokenFromFirebaseKey(
 	env.TEST_USER_PASS,
 );
 
-describe('Stripe Webhook CRUD Operations', () => {
+describe('Stripe Integration CRUD Operations', () => {
 	let response: Response;
 	let webhookId: string;
 	let webhookUrl: string;
@@ -188,5 +190,101 @@ describe('Stripe Webhook CRUD Operations', () => {
 			},
 		});
 		expect(response.status).toBe(400);
+	});
+
+	describe('Webhook Endpoint Tests', () => {
+		const payload = JSON.stringify({
+			type: 'customer.subscription.created',
+			data: {
+				object: {
+					customer: 'cus_test123',
+					status: 'active'
+				}
+			}
+		});
+		const stripe = new Stripe(validWebhookInit.stripePrivateKey, {
+			httpClient: Stripe.createFetchHttpClient()
+		});
+
+		beforeAll(async () => {
+
+			response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}`, {
+				method: 'POST',
+				headers: {
+					Authorization: testUserJwt,
+				},
+				body: JSON.stringify(validWebhookInit),
+			});
+			const webhook = await response.json() as StripeIntegration;
+			webhookId = webhook.id;
+			webhookUrl = webhook.webhookUrl;
+		});
+
+		it('fails webhook call without stripe signature', async () => {
+			response = await SELF.fetch(webhookUrl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: payload,
+			});
+			expect(response.status).toBe(400);
+		});
+
+		it('fails webhook call with invalid stripe signature', async () => {
+			response = await SELF.fetch(webhookUrl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Stripe-Signature': 'invalid_signature',
+				},
+				body: payload,
+			});
+			expect(response.status).toBe(401);
+		});
+
+		it('fails webhook call with invalid webhook ID', async () => {
+			response = await SELF.fetch(`https://example.com/v1/stripe/${testUserId}/invalid_webhook_id`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Stripe-Signature': 'invalid_signature',
+				},
+				body: payload,
+			});
+			expect(response.status).toBe(404);
+		});
+
+		it('successfully processes webhook with valid signature', async () => {
+			const header = await stripe.webhooks.generateTestHeaderStringAsync({
+				payload,
+				secret: validWebhookInit.webhookSecret,
+			});
+	
+			response = await SELF.fetch(webhookUrl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Stripe-Signature': header,
+				},
+				body: payload,
+			});
+			if (response.status !== 200) {
+				const errorText = await response.text();
+				console.error('Response status:', response.status);
+				console.error('Response text:', errorText);
+			}
+			expect(response.status).toBe(200);
+		});
+
+		// Clean up webhook after tests
+		afterAll(async () => {
+			await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}/${webhookId}`, {
+				method: 'DELETE',
+				headers: {
+					Authorization: testUserJwt,
+				},
+			});
+		});
 	});
 });
