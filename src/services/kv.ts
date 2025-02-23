@@ -276,22 +276,6 @@ function estimateCost(usage: LLMUsage): number {
 	return cost;
 }
 
-function getProxyKey(backmeshUid: string, id: string) {
-	return `${getProxiesKey(backmeshUid)}${id}`;
-}
-
-function getProxiesKey(backmeshUid: string) {
-	return `proxies/${backmeshUid}/`;
-}
-
-function getStripeWebhookKey(backmeshUid: string, id: string) {
-	return `${getStripeWebhooksKey(backmeshUid)}${id}`;
-}
-
-function getStripeWebhooksKey(backmeshUid: string,) {
-	return `stripe/${backmeshUid}/`;
-}
-
 function getRateLimitKey(
 	backmeshUid: string,
 	proxyId: string,
@@ -310,7 +294,7 @@ function getPrivateResourceKey(
 	return `resources/${backmeshUid}/${proxyId}/${resourceId}`;
 }
 
-class ProxyExchangeSummary {
+export class ProxyExchangeSummary {
 	ts: number;
 	status: number;
 	timing: number;
@@ -337,7 +321,8 @@ class ProxyExchangeSummary {
 		this.status = status;
 	}
 
-	static parseKey(key: string): {
+	// get summary from key
+	static fromKey(key: string): {
 		kSumm: ProxyExchangeSummary;
 		endUserId: string;
 	} {
@@ -375,23 +360,92 @@ class ProxyExchangeSummary {
 		};
 	}
 
-	newKey(backmeshUid: string, proxyId: string, endUserId: string): string {
-		let key = `${getProxyExchangesKey(backmeshUid, proxyId)}${endUserId}/${
+	toKey(backmeshUid: string, proxyId: string, endUserId: string): string {
+		let key = `${ProxyExchangeSummary.getListKey(backmeshUid, proxyId)}${endUserId}/${
 			this.ts
 		}|${this.status}|${this.timing}`;
 		return `${key}|${this.model}|${this.cost}`;
 	}
-}
 
-function getProxyExchangesKey(backmeshUid: string, proxyId: string) {
-	return `reqs/${backmeshUid}/${proxyId}/`;
-}
+	// adds a new proxy exchange to the end user's summary and updates the end user summary by generating a new key
+	static async update(
+		env: Env,
+		proxyReq: ProxyRequest | InvalidProxyRequest,
+		ts: number,
+		timing: number,
+		proxyRes: ProxyResponse,
+	): Promise<void> {
+		const { backmeshUid, proxyId, endUserId, request } = proxyReq;
+		if (!backmeshUid || !proxyId || !endUserId) return;
+		const usage = proxyRes.usage;
+		const model = usage ? usage.model : undefined;
+		const cost = usage ? estimateCost(usage) : undefined;
+		const summary = new ProxyExchangeSummary({
+			status: proxyRes.response.status,
+			ts,
+			timing,
+			cost,
+			model,
+		});
+		const key = summary.toKey(backmeshUid, proxyId, endUserId);
+		await KV.create<ProxyExchange>(env.BACKMESH_KV, key, {
+			url: request.url,
+			reqHeaders: Array.from(request.headers.entries()),
+			reqBody: request.body ? await request.clone().text() : undefined,
+			resBody: proxyRes.parsedBody,
+			resHeaders: Array.from(proxyRes.response.headers.entries()),
+		});
+	}
 
+	// returns summaries for all end users of this backmesh proxy
+	// which implies just getting the keys, parsing them and adding them to the summaries
+	static async getAll(
+		env: Env,
+		backmeshUid: string,
+		proxyId: string,
+	): Promise<EndUserAnalyticsSummary[]> {
+		const prefix = this.getListKey(backmeshUid, proxyId);
+		const keys = await KV.listKeys(env.BACKMESH_KV, prefix);
+		const summaries: { [endUserId: string]: EndUserAnalyticsSummary } = {};
+
+		for (const key of keys) {
+			const { kSumm, endUserId } = ProxyExchangeSummary.fromKey(key.name);
+
+			if (!summaries[endUserId]) {
+				summaries[endUserId] = {
+					endUserId,
+					reqCount: 0,
+					errorCount: 0,
+					totalCost: 0,
+					totalTiming: 0,
+					firstTs: Number(kSumm.ts),
+					lastTs: Number(kSumm.ts),
+				};
+			}
+
+			const summary = summaries[endUserId];
+			summary.reqCount += 1;
+			summary.errorCount += Number(kSumm.status) >= 400 ? 1 : 0;
+			summary.totalCost += kSumm.cost ? Number(kSumm.cost) : 0;
+			summary.totalTiming += Number(kSumm.timing);
+			summary.firstTs = Math.min(summary.firstTs, Number(kSumm.ts));
+			summary.lastTs = Math.max(summary.lastTs, Number(kSumm.ts));
+
+			assertEndUserAnalyticsSummary(summary);
+		}
+		return Object.values(summaries);
+	}
+
+	static getListKey(backmeshUid: string, proxyId: string) {
+		return `reqs/${backmeshUid}/${proxyId}/`;
+	}
+}
 
 interface Crud<T> {
 	create(env: Env, origin: string, backmeshUid: string, value: any): Promise<T>;
-	edit(env: Env, backmeshUid: string, id: string, value: any): Promise<T>;
 	getAdmin(env: Env, backmeshUid: string, id: string): Promise<T>;
+	get(env: Env, backmeshUid: string, id: string): Promise<T>;
+	edit(env: Env, backmeshUid: string, id: string, value: any): Promise<T>;
 	getAll(env: Env, backmeshUid: string): Promise<T[]>;
 	delete(env: Env, backmeshUid: string, id: string): Promise<void>;
 	getKey(backmeshUid: string, id: string): string;
@@ -476,12 +530,18 @@ class ApiProxyCrud implements Crud<ApiProxy> {
 	}
 }
 
-class StripeWebhookCrud {
-	static getKey(backmeshUid: string, id: string) {
-		return `${StripeWebhookCrud.getListKey(backmeshUid)}${id}`;
+class StripeWebhookCrud implements Crud<StripeWebhook> {
+	constructor(){}
+
+	async get(env: Env, backmeshUid: string, id: string): Promise<StripeWebhook> {
+		throw new Error('Not implemented');
 	}
 
-	static getListKey(backmeshUid: string,) {
+	getKey(backmeshUid: string, id: string) {
+		return `${this.getListKey(backmeshUid)}${id}`;
+	}
+
+	getListKey(backmeshUid: string,) {
 		return `stripe/${backmeshUid}/`;
 	}
 	async create(env: Env, origin: string, backmeshUid: string, value: any): Promise<StripeWebhook> {
@@ -495,7 +555,7 @@ class StripeWebhookCrud {
 		value.webhookSecret = await encrypt(value.webhookSecret, env.PASSWORD);
 		value.serviceAccount = await encrypt(value.serviceAccount, env.PASSWORD);
 		value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
-		await KV.create<StripeWebhook>(env.BACKMESH_KV, StripeWebhookCrud.getKey(backmeshUid, id), value);
+		await KV.create<StripeWebhook>(env.BACKMESH_KV, this.getKey(backmeshUid, id), value);
 		// do not return secrets
 		value.webhookSecret = '';
 		value.serviceAccount = '';
@@ -515,7 +575,7 @@ class StripeWebhookCrud {
 		if (isValidStr(value.apiPrivateKey)) {
 			value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
 		}
-		await KV.edit<StripeWebhook>(env.BACKMESH_KV, StripeWebhookCrud.getKey(backmeshUid, id), value, ['id', 'webhookUrl']);
+		await KV.edit<StripeWebhook>(env.BACKMESH_KV, this.getKey(backmeshUid, id), value, ['id', 'webhookUrl']);
 		// do not return secrets
 		value.webhookSecret = '';
 		value.serviceAccount = '';
@@ -524,14 +584,14 @@ class StripeWebhookCrud {
 	}
 
 	async getAdmin(env: Env, backmeshUid: string, id: string): Promise<StripeWebhook> {
-		const key = StripeWebhookCrud.getKey(backmeshUid, id);
+		const key = this.getKey(backmeshUid, id);
 		const webhook = await KV.get<StripeWebhook>(env.BACKMESH_KV, key);
 		assertStripeWebhook(webhook);
 		return webhook;
 	}
 
 	async getAll(env: Env, backmeshUid: string): Promise<StripeWebhook[]> {
-		const keys = await KV.listKeys(env.BACKMESH_KV, StripeWebhookCrud.getListKey(backmeshUid));
+		const keys = await KV.listKeys(env.BACKMESH_KV, this.getListKey(backmeshUid));
 		const webhookPromises = keys.map(async (key) => {
 			const webhook = await KV.get<StripeWebhook>(env.BACKMESH_KV, key.name);
 			assertStripeWebhook(webhook);
@@ -546,7 +606,7 @@ class StripeWebhookCrud {
 	}
 
 	async delete(env: Env, backmeshUid: string, id: string) {
-		const key = StripeWebhookCrud.getKey(backmeshUid, id);
+		const key = this.getKey(backmeshUid, id);
 		await KV.del(env.BACKMESH_KV, key);
 	}
 
@@ -556,71 +616,6 @@ export const apiProxyCrud = new ApiProxyCrud();
 export const stripeWebhookCrud = new StripeWebhookCrud();
 
 export default {
-	async newProxyExchange(
-		env: Env,
-		proxyReq: ProxyRequest | InvalidProxyRequest,
-		ts: number,
-		timing: number,
-		proxyRes: ProxyResponse,
-	) {
-		const { backmeshUid, proxyId, endUserId, request } = proxyReq;
-		if (!backmeshUid || !proxyId || !endUserId) return;
-		const usage = proxyRes.usage;
-		const model = usage ? usage.model : undefined;
-		const cost = usage ? estimateCost(usage) : undefined;
-		const summary = new ProxyExchangeSummary({
-			status: proxyRes.response.status,
-			ts,
-			timing,
-			cost,
-			model,
-		});
-		const key = summary.newKey(backmeshUid, proxyId, endUserId);
-		await KV.create<ProxyExchange>(env.BACKMESH_KV, key, {
-			url: request.url,
-			reqHeaders: Array.from(request.headers.entries()),
-			reqBody: request.body ? await request.clone().text() : undefined,
-			resBody: proxyRes.parsedBody,
-			resHeaders: Array.from(proxyRes.response.headers.entries()),
-		});
-	},
-	async getProxyExchangeSummaries(
-		env: Env,
-		backmeshUid: string,
-		proxyId: string,
-	): Promise<EndUserAnalyticsSummary[]> {
-		const prefix = getProxyExchangesKey(backmeshUid, proxyId);
-		const keys = await KV.listKeys(env.BACKMESH_KV, prefix);
-		const summaries: { [endUserId: string]: EndUserAnalyticsSummary } = {};
-
-		for (const key of keys) {
-			const { kSumm, endUserId } = ProxyExchangeSummary.parseKey(key.name);
-
-			if (!summaries[endUserId]) {
-				summaries[endUserId] = {
-					endUserId,
-					reqCount: 0,
-					errorCount: 0,
-					totalCost: 0,
-					totalTiming: 0,
-					firstTs: Number(kSumm.ts),
-					lastTs: Number(kSumm.ts),
-				};
-			}
-
-			const summary = summaries[endUserId];
-			summary.reqCount += 1;
-			summary.errorCount += Number(kSumm.status) >= 400 ? 1 : 0;
-			summary.totalCost += kSumm.cost ? Number(kSumm.cost) : 0;
-			summary.totalTiming += Number(kSumm.timing);
-			summary.firstTs = Math.min(summary.firstTs, Number(kSumm.ts));
-			summary.lastTs = Math.max(summary.lastTs, Number(kSumm.ts));
-
-			assertEndUserAnalyticsSummary(summary);
-		}
-		return Object.values(summaries);
-	},
-
 	async newUserResource(
 		env: Env,
 		{

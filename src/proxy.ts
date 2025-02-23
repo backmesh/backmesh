@@ -1,5 +1,5 @@
 import auth, { AuthHeader } from './services/auth';
-import kv, { apiProxyCrud, ApiProxy } from './services/kv';
+import kv, { apiProxyCrud, ApiProxy, ProxyExchangeSummary } from './services/kv';
 
 import posthog from './services/gateways/posthog';
 
@@ -415,7 +415,7 @@ export default {
 		env: Env,
 	) {
 		if (proxyReq instanceof ProxyRequest)
-			await kv.newProxyExchange(env, proxyReq, ts, timing, proxyRes);
+			await ProxyExchangeSummary.update(env, proxyReq, ts, timing, proxyRes);
 		await posthog.captureProxyReq(proxyReq, proxyRes, timing, env);
 	},
 };

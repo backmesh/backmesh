@@ -1,6 +1,6 @@
 import auth from './services/auth';
 import Firebase from './services/gateways/firebase';
-import kv, { apiProxyCrud, stripeWebhookCrud } from './services/kv';
+import kv, { apiProxyCrud, ProxyExchangeSummary, stripeWebhookCrud } from './services/kv';
 import Subscription from './services/subscription';
 
 async function handleRequest(callback: () => Promise<any>): Promise<Response> {
@@ -141,7 +141,7 @@ async function handleProxyRequest(
 					if (proxyId === undefined) {
 						return new Response('Invalid pathname', { status: 400 });
 					}
-					return kv.getProxyExchangeSummaries(env, backmeshUid, proxyId);
+					return ProxyExchangeSummary.getAll(env, backmeshUid, proxyId);
 				}
 				return proxyId === undefined
 					? apiProxyCrud.getAll(env, backmeshUid)
