@@ -374,7 +374,7 @@ export default {
 		env: Env,
 	) {
 		if (proxyReq instanceof ProxyRequest)
-			await ProxyExchangeSummary.update(env, proxyReq, ts, timing, proxyRes);
+			await ProxyExchangeSummary.create(env, proxyReq, ts, timing, proxyRes);
 		await posthog.captureProxyReq(proxyReq, proxyRes, timing, env);
 	},
 };

@@ -74,7 +74,7 @@ export type ProxyExchange = {
 };
 
 // derived from key
-export type EndUserAnalyticsSummary = {
+export type EndUserAnalytics = {
 	endUserId: string;
 	reqCount: number;
 	errorCount: number;
@@ -85,8 +85,8 @@ export type EndUserAnalyticsSummary = {
 	// TODO return model count distribution maybe
 };
 
-// Type guard to check if an object is of type EndUserAnalyticsSummary at runtime
-export function assertEndUserAnalyticsSummary(obj: any): obj is EndUserAnalyticsSummary {
+// Type guard to check if an object is of type EndUserAnalytics at runtime
+export function assertEndUserAnalytics(obj: any): obj is EndUserAnalytics {
 	if (typeof obj !== 'object' || obj === null) {
 		throw new TypeError('Object is not valid');
 	}

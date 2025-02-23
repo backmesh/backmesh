@@ -5,7 +5,7 @@ import Firebase from '../src/services/gateways/firebase';
 import {
 	ApiProxy,
 	AuthProviderType,
-	EndUserAnalyticsSummary,
+	EndUserAnalytics,
 	RateLimitUnit,
 } from '../src/services/repos/models';
 import { getTokenFromFirebaseKey } from './utils';
@@ -770,7 +770,7 @@ describe('Firebase + Gemini Proxy: completion + summary', async () => {
 		);
 		if (response.status !== 200) console.error(await response.text());
 		expect(response.status).toBe(200);
-		const body: EndUserAnalyticsSummary[] = await response.json();
+		const body: EndUserAnalytics[] = await response.json();
 		expect(body.length).toBe(0);
 	});
 
@@ -812,7 +812,7 @@ describe('Firebase + Gemini Proxy: completion + summary', async () => {
 		);
 		if (response.status !== 200) console.error(await response.text());
 		expect(response.status).toBe(200);
-		const body: EndUserAnalyticsSummary[] = await response.json();
+		const body: EndUserAnalytics[] = await response.json();
 		if (body.length !== 1) console.error(body);
 		expect(body.length).toBe(1);
 		expect(body[0].endUserId).toBe(testUser1stUserId);
@@ -856,7 +856,7 @@ describe('Firebase + OpenAI Proxy: completion + summary', async () => {
 		);
 		if (response.status !== 200) console.error(await response.text());
 		expect(response.status).toBe(200);
-		const body: EndUserAnalyticsSummary[] = await response.json();
+		const body: EndUserAnalytics[] = await response.json();
 		expect(body.length).toBe(0);
 	});
 
@@ -899,7 +899,7 @@ describe('Firebase + OpenAI Proxy: completion + summary', async () => {
 		);
 		if (response.status !== 200) console.error(await response.text());
 		expect(response.status).toBe(200);
-		const body: EndUserAnalyticsSummary[] = await response.json();
+		const body: EndUserAnalytics[] = await response.json();
 		if (body.length !== 1) console.error(body);
 		expect(body.length).toBe(1);
 		expect(body[0].endUserId).toBe(testUser1stUserId);
@@ -1329,7 +1329,7 @@ describe('Firebase + Anthropic API Proxy Completion usage', () => {
 		);
 		if (response.status !== 200) console.error(await response.text());
 		expect(response.status).toBe(200);
-		const body: EndUserAnalyticsSummary[] = await response.json();
+		const body: EndUserAnalytics[] = await response.json();
 		expect(body.length).toBe(0);
 	});
 
@@ -1360,7 +1360,7 @@ describe('Firebase + Anthropic API Proxy Completion usage', () => {
 		);
 		if (response.status !== 200) console.error(await response.text());
 		expect(response.status).toBe(200);
-		const body: EndUserAnalyticsSummary[] = await response.json();
+		const body: EndUserAnalytics[] = await response.json();
 		if (body.length !== 1) console.error(body);
 		expect(body.length).toBe(1);
 		expect(body[0].endUserId).toBe(testUser1stUserId);
@@ -1437,7 +1437,7 @@ describe('Firebase + Cloudflare API Proxy Run model usage', () => {
 		);
 		if (response.status !== 200) console.error(await response.text());
 		expect(response.status).toBe(200);
-		const body: EndUserAnalyticsSummary[] = await response.json();
+		const body: EndUserAnalytics[] = await response.json();
 		expect(body.length).toBe(0);
 	});
 
@@ -1467,7 +1467,7 @@ describe('Firebase + Cloudflare API Proxy Run model usage', () => {
 		);
 		if (response.status !== 200) console.error(await response.text());
 		expect(response.status).toBe(200);
-		const body: EndUserAnalyticsSummary[] = await response.json();
+		const body: EndUserAnalytics[] = await response.json();
 		if (body.length !== 1) console.error(body);
 		expect(body.length).toBe(1);
 		expect(body[0].endUserId).toBe(testUser1stUserId);
