@@ -1,7 +1,9 @@
 import auth from './services/auth';
 import Firebase from './services/gateways/firebase';
-import kv, { apiProxyCrud, ProxyExchangeSummary, stripeWebhookCrud } from './services/kv';
 import Subscription from './services/subscription';
+import { ProxyExchangeSummary } from './services/analytics';
+import { apiProxyCrud } from './services/proxy';
+import { stripeWebhookCrud } from './services/webhook';
 
 async function handleRequest(callback: () => Promise<any>): Promise<Response> {
 	try {
