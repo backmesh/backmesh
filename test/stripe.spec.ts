@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, it, expect, beforeAll } from 'vitest';
-import { AuthProviderType, SchemaVersion, StripeWebhook } from '../src/services/repos/models';
+import { AuthProviderType, SchemaVersion, StripeIntegration } from '../src/services/repos/models';
 import { getTokenFromFirebaseKey } from './utils';
 
 
@@ -41,7 +41,7 @@ describe('Stripe Webhook CRUD Operations', () => {
 			body: JSON.stringify(validWebhookInit),
 		});
 		expect(response.status).toBe(200);
-		const webhook = await response.json() as StripeWebhook;
+		const webhook = await response.json() as StripeIntegration;
 		expect(webhook.id).toBeDefined();
 		expect(webhook.webhookUrl).toBeDefined();
 		expect(webhook.webhookUrl).toBe(`https://example.com/v1/stripe/${testUserId}/${webhook.id}`);
@@ -83,7 +83,7 @@ describe('Stripe Webhook CRUD Operations', () => {
 			body: JSON.stringify(validWebhookInit),
 		});
 		expect(response.status).toBe(200);
-		const webhook = await response.json() as StripeWebhook;
+		const webhook = await response.json() as StripeIntegration;
 		expect(webhook.id).toBeDefined();
 		expect(webhook.webhookUrl).toBe(`https://example.com/v1/stripe/${testUserId}/${webhook.id}`);
 		expect(webhook.webhookSecret).toBe('');
@@ -99,7 +99,7 @@ describe('Stripe Webhook CRUD Operations', () => {
 			},
 		});
 		expect(response.status).toBe(200);
-		const webhooks = await response.json() as StripeWebhook[];
+		const webhooks = await response.json() as StripeIntegration[];
 		expect(webhooks.length).toBe(1);
 		const foundWebhook = webhooks.find(webhook => webhook.id === webhookId);
 		expect(foundWebhook).toBeDefined();
@@ -124,7 +124,7 @@ describe('Stripe Webhook CRUD Operations', () => {
 			body: JSON.stringify(updatedWebhook),
 		});
 		expect(response.status).toBe(200);
-		const webhook = await response.json() as StripeWebhook;
+		const webhook = await response.json() as StripeIntegration;
 		expect(webhook.webhookSecret).toBe('');
 		expect(webhook.stripePrivateKey).toBe('');
 		expect(webhook.authPrivateKey).toBe('');
@@ -176,7 +176,7 @@ describe('Stripe Webhook CRUD Operations', () => {
 			},
 		});
 		expect(response.status).toBe(200);
-		const webhooks = await response.json() as StripeWebhook[];
+		const webhooks = await response.json() as StripeIntegration[];
 		expect(webhooks.some(webhook => webhook.id === webhookId)).toBe(false);
 	});
 

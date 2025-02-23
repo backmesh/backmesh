@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import Firebase from './services/gateways/firebase';
 import Subscription from './services/subscription';
-import { stripeWebhookCrud } from './services/webhook';
+import { stripeIntegrationCrud } from './services/stripe';
 import { AuthProviderType } from './services/repos/models';
 
 export default {
@@ -27,7 +27,7 @@ export default {
 				serviceAccount = env.BACKMESH_FIREBASE_SERVICE_ACCOUNT;
 				stripeWebhookSecret = env.STRIPE_WEBHOOK_SECRET;
 			}	else if (backmeshUid !== null && stripeId !== null) {
-				const stripeWebhook = await stripeWebhookCrud.getAdmin(env, backmeshUid!, stripeId!);
+				const stripeWebhook = await stripeIntegrationCrud.getAdmin(env, backmeshUid!, stripeId!);
 				stripeWebhookSecret = stripeWebhook.webhookSecret;
 				if (stripeWebhook.authType === AuthProviderType.FIREBASE) {
 					stripeKey = stripeWebhook.stripePrivateKey;

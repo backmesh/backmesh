@@ -1,12 +1,12 @@
-import { assertStripeWebhook, StripeWebhook, isValidJson, isValidStr, AuthProviderType } from "./repos/models";
+import { assertStripeIntegration, StripeIntegration, isValidJson, isValidStr, AuthProviderType } from "./repos/models";
 import KV from "./repos/kv";
 import { Crud } from "./repos/models";
 import { encrypt } from "./crypto";
 
-class StripeWebhookCrud implements Crud<StripeWebhook> {
+class StripeIntegrationCrud implements Crud<StripeIntegration> {
 	constructor(){}
 
-	async get(env: Env, backmeshUid: string, id: string): Promise<StripeWebhook> {
+	async get(env: Env, backmeshUid: string, id: string): Promise<StripeIntegration> {
 		throw new Error('Not implemented');
 	}
 
@@ -17,18 +17,18 @@ class StripeWebhookCrud implements Crud<StripeWebhook> {
 	getListKey(backmeshUid: string,) {
 		return `stripe/${backmeshUid}/`;
 	}
-	async create(env: Env, origin: string, backmeshUid: string, value: any): Promise<StripeWebhook> {
+	async create(env: Env, origin: string, backmeshUid: string, value: any): Promise<StripeIntegration> {
 		const id = KV.generateId();
 		value.id = id;
 		value.webhookUrl = `${origin}/v1/stripe/${backmeshUid}/${id}`;
-		assertStripeWebhook(value);
+		assertStripeIntegration(value);
 		if (AuthProviderType.FIREBASE && !isValidJson(value.authPrivateKey)) {
 			throw new TypeError('serviceAccount must be a valid JSON string');
 		}
 		value.webhookSecret = await encrypt(value.webhookSecret, env.PASSWORD);
 		value.authPrivateKey = await encrypt(value.authPrivateKey, env.PASSWORD);
 		value.stripePrivateKey = await encrypt(value.stripePrivateKey, env.PASSWORD);
-		await KV.create<StripeWebhook>(env.BACKMESH_KV, this.getKey(backmeshUid, id), value);
+		await KV.create<StripeIntegration>(env.BACKMESH_KV, this.getKey(backmeshUid, id), value);
 		// do not return secrets
 		value.webhookSecret = '';
 		value.authPrivateKey = '';
@@ -36,8 +36,8 @@ class StripeWebhookCrud implements Crud<StripeWebhook> {
 		return value;
 	}
 
-	async edit(env: Env, backmeshUid: string, id: string, value: any): Promise<StripeWebhook> {
-		assertStripeWebhook(value);
+	async edit(env: Env, backmeshUid: string, id: string, value: any): Promise<StripeIntegration> {
+		assertStripeIntegration(value);
 		// user is trying to set new values
 		if (isValidStr(value.webhookSecret)) {
 			value.webhookSecret = await encrypt(value.webhookSecret, env.PASSWORD);
@@ -51,7 +51,7 @@ class StripeWebhookCrud implements Crud<StripeWebhook> {
 		if (isValidStr(value.stripePrivateKey)) {
 			value.stripePrivateKey = await encrypt(value.stripePrivateKey, env.PASSWORD);
 		}
-		await KV.edit<StripeWebhook>(env.BACKMESH_KV, this.getKey(backmeshUid, id), value, ['id', 'webhookUrl']);
+		await KV.edit<StripeIntegration>(env.BACKMESH_KV, this.getKey(backmeshUid, id), value, ['id', 'webhookUrl']);
 		// do not return secrets
 		value.webhookSecret = '';
 		value.authPrivateKey = '';
@@ -59,18 +59,18 @@ class StripeWebhookCrud implements Crud<StripeWebhook> {
 		return value;
 	}
 
-	async getAdmin(env: Env, backmeshUid: string, id: string): Promise<StripeWebhook> {
+	async getAdmin(env: Env, backmeshUid: string, id: string): Promise<StripeIntegration> {
 		const key = this.getKey(backmeshUid, id);
-		const webhook = await KV.get<StripeWebhook>(env.BACKMESH_KV, key);
-		assertStripeWebhook(webhook);
+		const webhook = await KV.get<StripeIntegration>(env.BACKMESH_KV, key);
+		assertStripeIntegration(webhook);
 		return webhook;
 	}
 
-	async getAll(env: Env, backmeshUid: string): Promise<StripeWebhook[]> {
+	async getAll(env: Env, backmeshUid: string): Promise<StripeIntegration[]> {
 		const keys = await KV.listKeys(env.BACKMESH_KV, this.getListKey(backmeshUid));
 		const webhookPromises = keys.map(async (key) => {
-			const webhook = await KV.get<StripeWebhook>(env.BACKMESH_KV, key.name);
-			assertStripeWebhook(webhook);
+			const webhook = await KV.get<StripeIntegration>(env.BACKMESH_KV, key.name);
+			assertStripeIntegration(webhook);
 			// Clear sensitive data before returning
 			webhook.webhookSecret = '';
 			webhook.authPrivateKey = '';
@@ -88,4 +88,4 @@ class StripeWebhookCrud implements Crud<StripeWebhook> {
 
 }
 
-export const stripeWebhookCrud = new StripeWebhookCrud();
+export const stripeIntegrationCrud = new StripeIntegrationCrud();
