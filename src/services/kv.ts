@@ -363,6 +363,174 @@ function getProxyExchangesKey(backmeshUid: string, proxyId: string) {
 	return `reqs/${backmeshUid}/${proxyId}/`;
 }
 
+
+interface Crud<T> {
+	create(env: Env, origin: string, backmeshUid: string, value: any): Promise<T>;
+	edit(env: Env, backmeshUid: string, id: string, value: any): Promise<T>;
+	getAdmin(env: Env, backmeshUid: string, id: string): Promise<T>;
+	getAll(env: Env, backmeshUid: string): Promise<T[]>;
+	delete(env: Env, backmeshUid: string, id: string): Promise<void>;
+	getKey(backmeshUid: string, id: string): string;
+	getListKey(backmeshUid: string): string;
+}
+
+class ApiProxyCrud implements Crud<ApiProxy> {
+	constructor(){}
+
+	getKey(backmeshUid: string, id: string) {
+		return `${this.getListKey(backmeshUid)}${id}`;
+	}
+	
+	getListKey(backmeshUid: string) {
+		return `proxies/${backmeshUid}/`;
+	}
+
+	async create(env: Env, origin: string, backmeshUid: string, value: any): Promise<ApiProxy> {
+		const id = KV.generateId();
+		value.id = id;
+		value.proxyUrl = `${origin}/v1/proxy/${backmeshUid}/${id}`;
+		assertApiProxy(value);
+		value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
+		await KV.create<ApiProxy>(env.BACKMESH_KV, this.getKey(backmeshUid, id), value);
+		// do not return private key
+		value.apiPrivateKey = '';
+		return value;
+	}
+
+	async edit(
+		env: Env,
+		backmeshUid: string,
+		proxyId: string,
+		value: any,
+	): Promise<ApiProxy> {
+		assertApiProxy(value);
+		// user is trying to set a new one
+		if (isValidStr(value.apiPrivateKey)) {
+			value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
+		}
+		await KV.edit<ApiProxy>(env.BACKMESH_KV, this.getKey(backmeshUid, proxyId), value, [
+			'id',
+			'proxyUrl',
+		]);
+		// do not return private key
+		value.apiPrivateKey = '';
+		return value;
+	}
+
+	async get(env: Env, backmeshUid: string, id: string) {
+		const key = this.getKey(backmeshUid, id);
+		const proxy = await KV.get<ApiProxy>(env.BACKMESH_KV, key);
+		assertApiProxy(proxy);
+		proxy.apiPrivateKey = '';
+		return proxy;
+	}
+
+	async getAdmin(env: Env, backmeshUid: string, id: string) {
+		const key = this.getKey(backmeshUid, id);
+		const proxy = await KV.get<ApiProxy>(env.BACKMESH_KV, key);
+		proxy.apiPrivateKey = await decrypt(proxy.apiPrivateKey, env.PASSWORD);
+		assertApiProxy(proxy);
+		return proxy;
+	}
+
+	async getAll(env: Env, backmeshUid: string): Promise<ApiProxy[]> {
+		const keys = await KV.listKeys(env.BACKMESH_KV, this.getListKey(backmeshUid));
+
+		const proxyPromises = keys.map(async (key) => {
+			const proxy = await KV.get<ApiProxy>(env.BACKMESH_KV, key.name);
+			assertApiProxy(proxy);
+			proxy.apiPrivateKey = '';
+			return proxy;
+		});
+
+		return Promise.all(proxyPromises);
+	}
+
+	async delete(env: Env, backmeshUid: string, id: string) {
+		const key = this.getKey(backmeshUid, id);
+		await KV.del(env.BACKMESH_KV, key);
+	}
+}
+
+class StripeWebhookCrud {
+	static getKey(backmeshUid: string, id: string) {
+		return `${StripeWebhookCrud.getListKey(backmeshUid)}${id}`;
+	}
+
+	static getListKey(backmeshUid: string,) {
+		return `stripe/${backmeshUid}/`;
+	}
+	async create(env: Env, origin: string, backmeshUid: string, value: any): Promise<StripeWebhook> {
+		const id = KV.generateId();
+		value.id = id;
+		value.webhookUrl = `${origin}/v1/stripe/${backmeshUid}/${id}`;
+		assertStripeWebhook(value);
+		if (!isValidJson(value.serviceAccount)) {
+			throw new TypeError('serviceAccount must be a valid JSON string');
+		}
+		value.webhookSecret = await encrypt(value.webhookSecret, env.PASSWORD);
+		value.serviceAccount = await encrypt(value.serviceAccount, env.PASSWORD);
+		value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
+		await KV.create<StripeWebhook>(env.BACKMESH_KV, StripeWebhookCrud.getKey(backmeshUid, id), value);
+		// do not return secrets
+		value.webhookSecret = '';
+		value.serviceAccount = '';
+		value.apiPrivateKey = '';
+		return value;
+	}
+
+	async edit(env: Env, backmeshUid: string, id: string, value: any): Promise<StripeWebhook> {
+		assertStripeWebhook(value);
+		// user is trying to set new values
+		if (isValidStr(value.webhookSecret)) {
+			value.webhookSecret = await encrypt(value.webhookSecret, env.PASSWORD);
+		}
+		if (isValidStr(value.serviceAccount)) {
+			value.serviceAccount = await encrypt(value.serviceAccount, env.PASSWORD);
+		}
+		if (isValidStr(value.apiPrivateKey)) {
+			value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
+		}
+		await KV.edit<StripeWebhook>(env.BACKMESH_KV, StripeWebhookCrud.getKey(backmeshUid, id), value, ['id', 'webhookUrl']);
+		// do not return secrets
+		value.webhookSecret = '';
+		value.serviceAccount = '';
+		value.apiPrivateKey = '';
+		return value;
+	}
+
+	async getAdmin(env: Env, backmeshUid: string, id: string): Promise<StripeWebhook> {
+		const key = StripeWebhookCrud.getKey(backmeshUid, id);
+		const webhook = await KV.get<StripeWebhook>(env.BACKMESH_KV, key);
+		assertStripeWebhook(webhook);
+		return webhook;
+	}
+
+	async getAll(env: Env, backmeshUid: string): Promise<StripeWebhook[]> {
+		const keys = await KV.listKeys(env.BACKMESH_KV, StripeWebhookCrud.getListKey(backmeshUid));
+		const webhookPromises = keys.map(async (key) => {
+			const webhook = await KV.get<StripeWebhook>(env.BACKMESH_KV, key.name);
+			assertStripeWebhook(webhook);
+			// Clear sensitive data before returning
+			webhook.webhookSecret = '';
+			webhook.serviceAccount = '';
+			webhook.apiPrivateKey = '';
+			return webhook;
+		});
+
+		return Promise.all(webhookPromises);
+	}
+
+	async delete(env: Env, backmeshUid: string, id: string) {
+		const key = StripeWebhookCrud.getKey(backmeshUid, id);
+		await KV.del(env.BACKMESH_KV, key);
+	}
+
+}
+
+export const apiProxyCrud = new ApiProxyCrud();
+export const stripeWebhookCrud = new StripeWebhookCrud();
+
 export default {
 	async newProxyExchange(
 		env: Env,
@@ -427,143 +595,6 @@ export default {
 			assertEndUserAnalyticsSummary(summary);
 		}
 		return Object.values(summaries);
-	},
-	/*
-		Stripe Webhooks
-	*/
-	async newStripeWebhook(env: Env, origin: string, backmeshUid: string, value: any): Promise<StripeWebhook> {
-		const id = KV.generateId();
-		value.id = id;
-		value.webhookUrl = `${origin}/v1/stripe/${backmeshUid}/${id}`;
-		assertStripeWebhook(value);
-		if (!isValidJson(value.serviceAccount)) {
-			throw new TypeError('serviceAccount must be a valid JSON string');
-		}
-		value.webhookSecret = await encrypt(value.webhookSecret, env.PASSWORD);
-		value.serviceAccount = await encrypt(value.serviceAccount, env.PASSWORD);
-		value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
-		await KV.create<StripeWebhook>(env.BACKMESH_KV, getStripeWebhookKey(backmeshUid, id), value);
-		// do not return secrets
-		value.webhookSecret = '';
-		value.serviceAccount = '';
-		value.apiPrivateKey = '';
-		return value;
-	},
-
-	async editStripeWebhook(env: Env, backmeshUid: string, id: string, value: any): Promise<StripeWebhook> {
-		assertStripeWebhook(value);
-		// user is trying to set new values
-		if (isValidStr(value.webhookSecret)) {
-			value.webhookSecret = await encrypt(value.webhookSecret, env.PASSWORD);
-		}
-		if (isValidStr(value.serviceAccount)) {
-			value.serviceAccount = await encrypt(value.serviceAccount, env.PASSWORD);
-		}
-		if (isValidStr(value.apiPrivateKey)) {
-			value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
-		}
-		await KV.edit<StripeWebhook>(env.BACKMESH_KV, getStripeWebhookKey(backmeshUid, id), value, ['id', 'webhookUrl']);
-		// do not return secrets
-		value.webhookSecret = '';
-		value.serviceAccount = '';
-		value.apiPrivateKey = '';
-		return value;
-	},
-
-	async getAdminStripeWebhook(env: Env, backmeshUid: string, id: string): Promise<StripeWebhook> {
-		const key = getStripeWebhookKey(backmeshUid, id);
-		const webhook = await KV.get<StripeWebhook>(env.BACKMESH_KV, key);
-		assertStripeWebhook(webhook);
-		return webhook;
-	},
-
-	async getAllStripeWebhooks(env: Env, backmeshUid: string): Promise<StripeWebhook[]> {
-		const keys = await KV.listKeys(env.BACKMESH_KV, getStripeWebhooksKey(backmeshUid));
-		const webhookPromises = keys.map(async (key) => {
-			const webhook = await KV.get<StripeWebhook>(env.BACKMESH_KV, key.name);
-			assertStripeWebhook(webhook);
-			// Clear sensitive data before returning
-			webhook.webhookSecret = '';
-			webhook.serviceAccount = '';
-			webhook.apiPrivateKey = '';
-			return webhook;
-		});
-
-		return Promise.all(webhookPromises);
-	},
-
-	async delStripeWebhook(env: Env, backmeshUid: string, id: string) {
-		const key = getStripeWebhookKey(backmeshUid, id);
-		await KV.del(env.BACKMESH_KV, key);
-	},
-
-	/*
-		API Proxies
-	*/
-	async newApiProxy(env: Env, origin: string, backmeshUid: string, value: any): Promise<ApiProxy> {
-		const id = KV.generateId();
-		value.id = id;
-		value.proxyUrl = `${origin}/v1/proxy/${backmeshUid}/${id}`;
-		assertApiProxy(value);
-		value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
-		await KV.create<ApiProxy>(env.BACKMESH_KV, getProxyKey(backmeshUid, id), value);
-		// do not return private key
-		value.apiPrivateKey = '';
-		return value;
-	},
-
-	async editApiProxy(
-		env: Env,
-		backmeshUid: string,
-		proxyId: string,
-		value: any,
-	): Promise<ApiProxy> {
-		assertApiProxy(value);
-		// user is trying to set a new one
-		if (isValidStr(value.apiPrivateKey)) {
-			value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
-		}
-		await KV.edit<ApiProxy>(env.BACKMESH_KV, getProxyKey(backmeshUid, proxyId), value, [
-			'id',
-			'proxyUrl',
-		]);
-		// do not return private key
-		value.apiPrivateKey = '';
-		return value;
-	},
-
-	async getApiProxy(env: Env, backmeshUid: string, id: string) {
-		const key = getProxyKey(backmeshUid, id);
-		const proxy = await KV.get<ApiProxy>(env.BACKMESH_KV, key);
-		assertApiProxy(proxy);
-		proxy.apiPrivateKey = '';
-		return proxy;
-	},
-
-	async getAdminApiProxy(env: Env, backmeshUid: string, id: string) {
-		const key = getProxyKey(backmeshUid, id);
-		const proxy = await KV.get<ApiProxy>(env.BACKMESH_KV, key);
-		proxy.apiPrivateKey = await decrypt(proxy.apiPrivateKey, env.PASSWORD);
-		assertApiProxy(proxy);
-		return proxy;
-	},
-
-	async getAllApiProxies(env: Env, backmeshUid: string): Promise<ApiProxy[]> {
-		const keys = await KV.listKeys(env.BACKMESH_KV, getProxiesKey(backmeshUid));
-
-		const proxyPromises = keys.map(async (key) => {
-			const proxy = await KV.get<ApiProxy>(env.BACKMESH_KV, key.name);
-			assertApiProxy(proxy);
-			proxy.apiPrivateKey = '';
-			return proxy;
-		});
-
-		return Promise.all(proxyPromises);
-	},
-
-	async delApiProxy(env: Env, backmeshUid: string, id: string) {
-		const key = getProxyKey(backmeshUid, id);
-		await KV.del(env.BACKMESH_KV, key);
 	},
 
 	async newUserResource(

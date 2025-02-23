@@ -1,6 +1,6 @@
 import auth from './services/auth';
 import Firebase from './services/gateways/firebase';
-import kv from './services/kv';
+import kv, { apiProxyCrud, stripeWebhookCrud } from './services/kv';
 import Subscription from './services/subscription';
 
 async function handleRequest(callback: () => Promise<any>): Promise<Response> {
@@ -73,7 +73,7 @@ async function handleStripeWebhook(
 			}
 			const requestUrl = new URL(request.url);
 			return handleRequest(async () =>
-				kv.newStripeWebhook(env, requestUrl.origin, backmeshUid, await request.json()),
+				stripeWebhookCrud.create(env, requestUrl.origin, backmeshUid, await request.json()),
 			);
 
 		case 'PUT':
@@ -84,7 +84,7 @@ async function handleStripeWebhook(
 				return new Response('No body in request', { status: 400 });
 			}
 			return handleRequest(async () =>
-				kv.editStripeWebhook(env, backmeshUid, webhookId!, await request.json()),
+				stripeWebhookCrud.edit(env, backmeshUid, webhookId!, await request.json()),
 			);
 
 		case 'GET':
@@ -92,14 +92,14 @@ async function handleStripeWebhook(
 				if (webhookId !== undefined) {
 					return new Response('Invalid pathname', { status: 400 });
 				}
-				return kv.getAllStripeWebhooks(env, backmeshUid);
+				return stripeWebhookCrud.getAll(env, backmeshUid);
 			});
 
 		case 'DELETE':
 			if (webhookId === undefined) {
 				return new Response('Invalid pathname', { status: 400 });
 			}
-			return handleRequest(async () => kv.delStripeWebhook(env, backmeshUid, webhookId!));
+			return handleRequest(async () => stripeWebhookCrud.delete(env, backmeshUid, webhookId!));
 
 		default:
 			return new Response('Not Found', { status: 404 });
@@ -121,7 +121,7 @@ async function handleProxyRequest(
 			}
 			const requestUrl = new URL(request.url);
 			return handleRequest(async () =>
-				kv.newApiProxy(env, requestUrl.origin, backmeshUid, await request.json()),
+				apiProxyCrud.create(env, requestUrl.origin, backmeshUid, await request.json()),
 			);
 
 		case 'PUT':
@@ -132,7 +132,7 @@ async function handleProxyRequest(
 				return new Response('No body in request', { status: 400 });
 			}
 			return handleRequest(async () =>
-				kv.editApiProxy(env, backmeshUid, proxyId!, await request.json()),
+				apiProxyCrud.edit(env, backmeshUid, proxyId!, await request.json()),
 			);
 
 		case 'GET':
@@ -144,15 +144,15 @@ async function handleProxyRequest(
 					return kv.getProxyExchangeSummaries(env, backmeshUid, proxyId);
 				}
 				return proxyId === undefined
-					? kv.getAllApiProxies(env, backmeshUid)
-					: kv.getApiProxy(env, backmeshUid, proxyId!);
+					? apiProxyCrud.getAll(env, backmeshUid)
+					: apiProxyCrud.get(env, backmeshUid, proxyId!);
 			});
 
 		case 'DELETE':
 			if (proxyId === undefined) {
 				return new Response('Invalid pathname', { status: 400 });
 			}
-			return handleRequest(async () => kv.delApiProxy(env, backmeshUid, proxyId!));
+			return handleRequest(async () => apiProxyCrud.delete(env, backmeshUid, proxyId!));
 
 		default:
 			return new Response('Not Found', { status: 404 });
