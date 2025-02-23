@@ -5,7 +5,7 @@ import {
 	ProxyResponse,
 } from '../proxy';
 import { decrypt, encrypt } from './crypto';
-import { KVNamespaceListResult } from '@cloudflare/workers-types';
+import KV from './repos/kv';
 
 export enum AuthProviderType {
 	FIREBASE = 'Firebase',
@@ -185,77 +185,6 @@ function assertApiProxy(obj: any): obj is ApiProxy {
 		throw new TypeError('rateLimit is not valid');
 	}
 	return true;
-}
-
-async function create<T>(env: Env, key: string, value: T) {
-	const curr = await env.BACKMESH_KV.get(key);
-	if (curr !== null) {
-		throw new TypeError(`New ${key}, but it already exists`);
-	}
-	const jsonValue = JSON.stringify(value);
-	await env.BACKMESH_KV.put(key, jsonValue);
-}
-
-async function edit<T>(
-	env: Env,
-	key: string,
-	value: T,
-	immutableFields: Array<string>,
-) {
-	const curr = await env.BACKMESH_KV.get(key);
-	if (curr === null) throw new TypeError(`No value to edit for key: ${key}`);
-	const currVal = JSON.parse(curr);
-	const newValue = value as any;
-	for (const field of immutableFields) {
-		if (currVal[field] !== newValue[field]) {
-			throw new TypeError(`Field '${field}' is immutable and cannot be changed`);
-		}
-	}
-	// Use current value if the new value is empty
-	// needed to preserve private api key on updates
-	for (const field in currVal) {
-		if (newValue[field] === undefined || newValue[field] === '') {
-			newValue[field] = currVal[field];
-		}
-	}
-	const jsonValue = JSON.stringify(value);
-	await env.BACKMESH_KV.put(key, jsonValue);
-}
-
-async function get<T>(env: Env, key: string): Promise<T> {
-	const value = await env.BACKMESH_KV.get(key);
-	if (value === null) throw new TypeError(`No value for key: ${key}`);
-	return JSON.parse(value) as T;
-}
-
-async function del(env: Env, key: string) {
-	const curr = await env.BACKMESH_KV.get(key);
-	if (curr === null) throw new TypeError(`No value to delete for key: ${key}`);
-	await env.BACKMESH_KV.delete(key);
-}
-
-async function listKeys(env: Env, prefix: string) {
-	const keysList = [];
-	let cursor: string | undefined = undefined;
-
-	do {
-		const res: KVNamespaceListResult<unknown> = await env.BACKMESH_KV.list({
-			prefix,
-			cursor,
-		});
-
-		keysList.push(...res.keys);
-
-		cursor = res.list_complete ? undefined : res.cursor;
-	} while (cursor);
-	return keysList;
-}
-
-function generateId(length: number = 20): string {
-	const array = new Uint8Array(length);
-	crypto.getRandomValues(array);
-	const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-	return Array.from(array, (byte) => chars[byte % chars.length]).join('');
 }
 
 function isValidStr(testStr: string) {
@@ -455,7 +384,7 @@ export default {
 			model,
 		});
 		const key = summary.newKey(backmeshUid, proxyId, endUserId);
-		await create<ProxyExchange>(env, key, {
+		await KV.create<ProxyExchange>(env.BACKMESH_KV, key, {
 			url: request.url,
 			reqHeaders: Array.from(request.headers.entries()),
 			reqBody: request.body ? await request.clone().text() : undefined,
@@ -469,7 +398,7 @@ export default {
 		proxyId: string,
 	): Promise<EndUserAnalyticsSummary[]> {
 		const prefix = getProxyExchangesKey(backmeshUid, proxyId);
-		const keys = await listKeys(env, prefix);
+		const keys = await KV.listKeys(env.BACKMESH_KV, prefix);
 		const summaries: { [endUserId: string]: EndUserAnalyticsSummary } = {};
 
 		for (const key of keys) {
@@ -503,7 +432,7 @@ export default {
 		Stripe Webhooks
 	*/
 	async newStripeWebhook(env: Env, origin: string, backmeshUid: string, value: any): Promise<StripeWebhook> {
-		const id = generateId();
+		const id = KV.generateId();
 		value.id = id;
 		value.webhookUrl = `${origin}/v1/stripe/${backmeshUid}/${id}`;
 		assertStripeWebhook(value);
@@ -513,7 +442,7 @@ export default {
 		value.webhookSecret = await encrypt(value.webhookSecret, env.PASSWORD);
 		value.serviceAccount = await encrypt(value.serviceAccount, env.PASSWORD);
 		value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
-		await create<StripeWebhook>(env, getStripeWebhookKey(backmeshUid, id), value);
+		await KV.create<StripeWebhook>(env.BACKMESH_KV, getStripeWebhookKey(backmeshUid, id), value);
 		// do not return secrets
 		value.webhookSecret = '';
 		value.serviceAccount = '';
@@ -533,7 +462,7 @@ export default {
 		if (isValidStr(value.apiPrivateKey)) {
 			value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
 		}
-		await edit<StripeWebhook>(env, getStripeWebhookKey(backmeshUid, id), value, ['id', 'webhookUrl']);
+		await KV.edit<StripeWebhook>(env.BACKMESH_KV, getStripeWebhookKey(backmeshUid, id), value, ['id', 'webhookUrl']);
 		// do not return secrets
 		value.webhookSecret = '';
 		value.serviceAccount = '';
@@ -543,15 +472,15 @@ export default {
 
 	async getAdminStripeWebhook(env: Env, backmeshUid: string, id: string): Promise<StripeWebhook> {
 		const key = getStripeWebhookKey(backmeshUid, id);
-		const webhook = await get<StripeWebhook>(env, key);
+		const webhook = await KV.get<StripeWebhook>(env.BACKMESH_KV, key);
 		assertStripeWebhook(webhook);
 		return webhook;
 	},
 
 	async getAllStripeWebhooks(env: Env, backmeshUid: string): Promise<StripeWebhook[]> {
-		const keys = await listKeys(env, getStripeWebhooksKey(backmeshUid));
+		const keys = await KV.listKeys(env.BACKMESH_KV, getStripeWebhooksKey(backmeshUid));
 		const webhookPromises = keys.map(async (key) => {
-			const webhook = await get<StripeWebhook>(env, key.name);
+			const webhook = await KV.get<StripeWebhook>(env.BACKMESH_KV, key.name);
 			assertStripeWebhook(webhook);
 			// Clear sensitive data before returning
 			webhook.webhookSecret = '';
@@ -565,19 +494,19 @@ export default {
 
 	async delStripeWebhook(env: Env, backmeshUid: string, id: string) {
 		const key = getStripeWebhookKey(backmeshUid, id);
-		await del(env, key);
+		await KV.del(env.BACKMESH_KV, key);
 	},
 
 	/*
 		API Proxies
 	*/
 	async newApiProxy(env: Env, origin: string, backmeshUid: string, value: any): Promise<ApiProxy> {
-		const id = generateId();
+		const id = KV.generateId();
 		value.id = id;
 		value.proxyUrl = `${origin}/v1/proxy/${backmeshUid}/${id}`;
 		assertApiProxy(value);
 		value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
-		await create<ApiProxy>(env, getProxyKey(backmeshUid, id), value);
+		await KV.create<ApiProxy>(env.BACKMESH_KV, getProxyKey(backmeshUid, id), value);
 		// do not return private key
 		value.apiPrivateKey = '';
 		return value;
@@ -594,7 +523,7 @@ export default {
 		if (isValidStr(value.apiPrivateKey)) {
 			value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
 		}
-		await edit<ApiProxy>(env, getProxyKey(backmeshUid, proxyId), value, [
+		await KV.edit<ApiProxy>(env.BACKMESH_KV, getProxyKey(backmeshUid, proxyId), value, [
 			'id',
 			'proxyUrl',
 		]);
@@ -605,7 +534,7 @@ export default {
 
 	async getApiProxy(env: Env, backmeshUid: string, id: string) {
 		const key = getProxyKey(backmeshUid, id);
-		const proxy = await get<ApiProxy>(env, key);
+		const proxy = await KV.get<ApiProxy>(env.BACKMESH_KV, key);
 		assertApiProxy(proxy);
 		proxy.apiPrivateKey = '';
 		return proxy;
@@ -613,17 +542,17 @@ export default {
 
 	async getAdminApiProxy(env: Env, backmeshUid: string, id: string) {
 		const key = getProxyKey(backmeshUid, id);
-		const proxy = await get<ApiProxy>(env, key);
+		const proxy = await KV.get<ApiProxy>(env.BACKMESH_KV, key);
 		proxy.apiPrivateKey = await decrypt(proxy.apiPrivateKey, env.PASSWORD);
 		assertApiProxy(proxy);
 		return proxy;
 	},
 
 	async getAllApiProxies(env: Env, backmeshUid: string): Promise<ApiProxy[]> {
-		const keys = await listKeys(env, getProxiesKey(backmeshUid));
+		const keys = await KV.listKeys(env.BACKMESH_KV, getProxiesKey(backmeshUid));
 
 		const proxyPromises = keys.map(async (key) => {
-			const proxy = await get<ApiProxy>(env, key.name);
+			const proxy = await KV.get<ApiProxy>(env.BACKMESH_KV, key.name);
 			assertApiProxy(proxy);
 			proxy.apiPrivateKey = '';
 			return proxy;
@@ -634,7 +563,7 @@ export default {
 
 	async delApiProxy(env: Env, backmeshUid: string, id: string) {
 		const key = getProxyKey(backmeshUid, id);
-		await del(env, key);
+		await KV.del(env.BACKMESH_KV, key);
 	},
 
 	async newUserResource(
