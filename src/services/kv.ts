@@ -233,6 +233,21 @@ const modelCostsPerMillion: {
 		input: 0.5,
 		output: 1.5,
 	},
+	// cloudflare
+	'@cf/meta/llama-3.2-1b-instruct': { input: 0.027, output: 0.201 },
+	'@cf/meta/llama-3.2-3b-instruct': { input: 0.051, output: 0.335 },
+	'@cf/meta/llama-3.1-8b-instruct-fp8-fast': { input: 0.045, output: 0.384 },
+	'@cf/meta/llama-3.2-11b-vision-instruct': { input: 0.049, output: 0.676 },
+	'@cf/meta/llama-3.1-70b-instruct-fp8-fast': { input: 0.293, output: 2.253 },
+	'@cf/meta/llama-3.3-70b-instruct-fp8-fast': { input: 0.293, output: 2.253 },
+	'@cf/deepseek-ai/deepseek-r1-distill-qwen-32b': { input: 0.497, output: 4.881 },
+	'@cf/mistral/mistral-7b-instruct-v0.1': { input: 0.11, output: 0.19 },
+	'@cf/meta/llama-3.1-8b-instruct': { input: 0.282, output: 0.827 },
+	'@cf/meta/llama-3.1-8b-instruct-fp8': { input: 0.152, output: 0.287 },
+	'@cf/meta/llama-3.1-8b-instruct-awq': { input: 0.123, output: 0.266 },
+	'@cf/meta/llama-3-8b-instruct': { input: 0.282, output: 0.827 },
+	'@cf/meta/llama-3-8b-instruct-awq': { input: 0.123, output: 0.266 },
+	'@cf/meta/llama-2-7b-chat-fp16': { input: 0.556, output: 6.667 },
 };
 
 // this is best effort so it fallsback to 0 cost
@@ -326,19 +341,28 @@ class ProxyExchangeSummary {
 		kSumm: ProxyExchangeSummary;
 		endUserId: string;
 	} {
-		const keyParts = key.split('/');
+		const [proxyExchangesKey, status, timing, model, cost] = key.split('|');
+		/*
+		[
+			'reqs/jhsjxdmMVDOFWmK7rfngn1C2cY93/66L9auzfWmt4JLvVaSA6/hwTJkh1Z1GQSiKG7qbMyhtZT5WY2/1740260343109',
+			'200',
+			'588',
+			'@cf/meta/llama-3.2-1b-instruct',
+			'0.0000023880000000000003'
+		]
+		*/
+		const keyParts = proxyExchangesKey.split('/')
 		/*
 		[
 			'reqs',
-			'gbBbHCDBxqb8zwMk6dCio63jhOP2',
-			'FrdhHumtd5UmeeZ3xR3L',
-			'L8krqnkRWPXcxjoocPrQh33xTmD3',
-			'1725915390445|200|1364|claude-3-5-sonnet-20240620|0.00016125'
+			'jhsjxdmMVDOFWmK7rfngn1C2cY93',
+			'66L9auzfWmt4JLvVaSA6',
+			'hwTJkh1Z1GQSiKG7qbMyhtZT5WY2',
+			'1740260343109',
 		]
 		*/
-		const endUserId = keyParts[keyParts.length - 2];
-		const [ts, status, timing, model, cost] =
-			keyParts[keyParts.length - 1].split('|');
+		const endUserId = keyParts[keyParts.length - 2]
+		const ts = keyParts[keyParts.length - 1]
 		return {
 			endUserId,
 			kSumm: new ProxyExchangeSummary({

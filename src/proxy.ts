@@ -79,6 +79,16 @@ async function getLLMUsage(
 				// "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$GOOGLE_API_KEY"
 				model: req.path.split('/').pop()!.split(':').shift()!,
 			};
+		} else if (
+			parsedBody.result.usage &&
+			req.apiProxy.apiUrl === 'https://api.cloudflare.com'
+		) {
+			return {
+				inputTokens: parsedBody.result.usage.prompt_tokens,
+				outputTokens: parsedBody.result.usage.completion_tokens,
+				// "https://api.cloudflare.com/client/v4/accounts/2f94e65d5df1e6e22d0ef9a8f8f81465/ai/run/@cf/meta/llama-3-8b-instruct"
+				model: `@${req.path.split('@').pop()!}`,
+			};
 		}
 	} catch (e) {}
 }
@@ -202,6 +212,15 @@ export default {
 				'v1beta/models',
 			];
 			if (!allowedInitPaths.some((p) => path.startsWith(p))) {
+				return { response: new Response('Forbidden', { status: 403 }) };
+			}
+		}
+
+		if (fullApiUrl.startsWith('https://api.cloudflare.com')) {
+			const allowedPaths = ['ai/run'];
+			// Cloudflare API has a different structure, so we cannot check the route directly
+			// https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/ai/run/$MODEL_NAME 
+			if (!allowedPaths.some((p) => path.includes(p))) {
 				return { response: new Response('Forbidden', { status: 403 }) };
 			}
 		}
