@@ -1,5 +1,6 @@
 import { identitytoolkit_v3 } from '@googleapis/identitytoolkit';
 import { AdminAuthApiClient, ServiceAccountCredential } from 'firebase-auth-cloudflare-workers';
+import { CustomClaims } from '../repos/models';
 
 // https://github.com/firebase/firebase-admin-node/blob/master/src/auth/auth-api-request.ts
 async function getAccountInfo(
@@ -66,7 +67,7 @@ export default {
       await auth.setCustomUserClaims(uid, claims);
     },
 
-    async getUsersWithClaims(serviceAccount: string) {
+    async getAllUsersClaims(serviceAccount: string): Promise<CustomClaims[]> {
       const credential = new ServiceAccountCredential(serviceAccount);
       const jwt = (await credential.getAccessToken()).access_token;
       const allUsers = [];
@@ -96,7 +97,7 @@ export default {
         }
         nextPageToken = data.nextPageToken ?? undefined;
       } while (nextPageToken);
-      return allUsers.filter(user => user.customAttributes);
+      return allUsers.filter(user => user.customAttributes).map(user => JSON.parse(user.customAttributes!));
     },
   }
 }

@@ -2,18 +2,23 @@ import { env, SELF } from 'cloudflare:test';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Stripe from 'stripe';
 
-import { AuthProviderType, SchemaVersion, StripeIntegration } from '../src/services/repos/models';
+import { AuthProviderType, CustomClaims, SchemaVersion, StripeIntegration } from '../src/services/repos/models';
 import { getTokenFromFirebaseKey } from './utils';
+import Firebase from '../src/services/gateways/firebase';
 
 
 const backmeshFirebaseKey = env.BACKMESH_FIREBASE_KEY;
 const testUserEmail = env.FIREBASE_TEST_USER_EMAIL;
 const testUserId = env.FIREBASE_TEST_USER_ID;
+const serviceAccount = env.BACKMESH_FIREBASE_SERVICE_ACCOUNT;
 const testUserJwt = await getTokenFromFirebaseKey(
 	backmeshFirebaseKey,
 	testUserEmail,
 	env.TEST_USER_PASS,
 );
+
+const stripeKey = env.STRIPE_KEY;
+const stripeWebhookSecret = env.STRIPE_WEBHOOK_SECRET;
 
 describe('Stripe Integration CRUD Operations', () => {
 	let response: Response;
@@ -21,14 +26,9 @@ describe('Stripe Integration CRUD Operations', () => {
 	let webhookUrl: string;
 
 	const validWebhookInit = {
-		webhookSecret: 'whsec_test_secret',
-		stripePrivateKey: 'sk_test_key',
-		authPrivateKey: JSON.stringify({
-			type: 'service_account',
-			project_id: 'test-project',
-			private_key: 'test-private-key',
-			client_email: 'test@test.com'
-		}),
+		webhookSecret: stripeWebhookSecret,
+		stripePrivateKey: stripeKey,
+		authPrivateKey: serviceAccount,
 		authType: AuthProviderType.FIREBASE,
 		schemaVersion: SchemaVersion.V1,
 	};
@@ -193,21 +193,15 @@ describe('Stripe Integration CRUD Operations', () => {
 	});
 
 	describe('Webhook Endpoint Tests', () => {
-		const payload = JSON.stringify({
-			type: 'customer.subscription.created',
-			data: {
-				object: {
-					customer: 'cus_test123',
-					status: 'active'
-				}
-			}
-		});
 		const stripe = new Stripe(validWebhookInit.stripePrivateKey, {
 			httpClient: Stripe.createFetchHttpClient()
 		});
+		// from stripe test dashboard
+		const productId = 'prod_RaNeaDpniWdiK4';
+		const priceId = 'price_1QhCsvIz61apsROqzT6eFZ2B';
+		let subscriptionId: string;
 
 		beforeAll(async () => {
-
 			response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}`, {
 				method: 'POST',
 				headers: {
@@ -218,6 +212,7 @@ describe('Stripe Integration CRUD Operations', () => {
 			const webhook = await response.json() as StripeIntegration;
 			webhookId = webhook.id;
 			webhookUrl = webhook.webhookUrl;
+			await Firebase.Admin.setClaims(serviceAccount, testUserId, {});
 		});
 
 		it('fails webhook call without stripe signature', async () => {
@@ -226,7 +221,7 @@ describe('Stripe Integration CRUD Operations', () => {
 				headers: {
 					'Content-Type': 'application/json',
 				},
-				body: payload,
+				body: '{}',
 			});
 			expect(response.status).toBe(400);
 		});
@@ -238,7 +233,7 @@ describe('Stripe Integration CRUD Operations', () => {
 					'Content-Type': 'application/json',
 					'Stripe-Signature': 'invalid_signature',
 				},
-				body: payload,
+				body: '{}',
 			});
 			expect(response.status).toBe(401);
 		});
@@ -250,17 +245,55 @@ describe('Stripe Integration CRUD Operations', () => {
 					'Content-Type': 'application/json',
 					'Stripe-Signature': 'invalid_signature',
 				},
-				body: payload,
+				body: '{}',
 			});
 			expect(response.status).toBe(404);
 		});
 
 		it('successfully processes webhook with valid signature', async () => {
+			// https://dashboard.stripe.com/test/customers/cus_RoNS7LKeXVWZCg
+			const customer = await stripe.customers.retrieve('cus_RoNS7LKeXVWZCg');
+			const session = await stripe.checkout.sessions.create({
+				mode: 'subscription',
+				success_url: 'https://example.com/success',
+				// subscription_data: {
+				// 	metadata: {
+				// 		auth_user_id: testUserId
+				// 	}
+				// },
+				line_items: [{
+					price: priceId,
+					// price_data: {
+					// 	product: productId,
+					// 	currency: 'usd',
+					// 	unit_amount: 10,
+					// },
+					quantity: 1
+				}],
+			});
+			session.subscription = await stripe.subscriptions.create({
+				customer: customer.id,
+				items: [{
+					price: priceId,
+				}],
+				default_payment_method: 'pm_1QukhzIz61apsROqqUl2wxR1',
+			});
+			const payload = JSON.stringify({
+				type: 'checkout.session.completed',
+				data: {
+					object: {
+						client_reference_id: testUserId,
+						subscription: session.subscription,
+						customer: customer.id,
+						},
+					}
+				},
+			);
+			subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id;
 			const header = await stripe.webhooks.generateTestHeaderStringAsync({
 				payload,
 				secret: validWebhookInit.webhookSecret,
 			});
-	
 			response = await SELF.fetch(webhookUrl, {
 				method: 'POST',
 				headers: {
@@ -275,6 +308,22 @@ describe('Stripe Integration CRUD Operations', () => {
 				console.error('Response text:', errorText);
 			}
 			expect(response.status).toBe(200);
+		});
+
+		it('successfully finds subscription created', async () => {
+			response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}/${webhookId}/subscriptions`, {
+				method: 'GET',
+				headers: {
+					Authorization: testUserJwt,
+				},
+			});
+			expect(response.status).toBe(200);
+			const subscriptions = await response.json() as CustomClaims[];
+			const savedSub = subscriptions.find(sub => sub[subscriptionId])?.[subscriptionId];
+			expect(savedSub).toBeDefined();
+			expect(savedSub?.status).toBe('active');
+			expect(savedSub?.prods.length).toBe(1);
+			expect(savedSub?.prods[0]).toBe('1xprod_RaNeaDpniWdiK4');
 		});
 
 		// Clean up webhook after tests

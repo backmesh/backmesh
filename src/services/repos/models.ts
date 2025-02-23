@@ -1,3 +1,5 @@
+import Stripe from "stripe";
+
 export type AuthHeader = {
 	field: string;
 	value: string;
@@ -300,3 +302,12 @@ export interface Crud<T> {
 }
 
 export type CustomClaims = {[key: string]: any};
+
+export interface StripeSubscriptionData {
+  status: Stripe.Subscription.Status;
+  prods: string[];
+}
+
+export type StripeSubscriptions = {
+	[subscriptionId: string]: StripeSubscriptionData;
+};

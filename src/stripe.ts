@@ -22,7 +22,7 @@ export default {
 			const backmeshUid = parts.at(2);
 			const stripeId = parts.at(3);
 			let stripeKey, serviceAccount, stripeWebhookSecret;
-			if (backmeshUid === null || stripeId === null) {
+			if (backmeshUid === undefined || stripeId === undefined) {
 				stripeKey = env.STRIPE_KEY;
 				serviceAccount = env.BACKMESH_FIREBASE_SERVICE_ACCOUNT;
 				stripeWebhookSecret = env.STRIPE_WEBHOOK_SECRET;
@@ -47,7 +47,6 @@ export default {
 				signature,
 				stripeWebhookSecret
 			);
-			console.log(event);
 
 			let session, subscription, authUserId, existingClaims, updatedClaims;
 			console.log(event.type);
@@ -96,6 +95,7 @@ export default {
 				status: 200,
 			});
 		} catch (err) {
+			console.error(err);
 			if (err instanceof TypeError) {
 				return new Response('Stripe Integration not found', {
 					status: 404,
@@ -107,7 +107,6 @@ export default {
 				});
 			}
 			const errorMessage = `⚠️  Webhook handling failed for event. ${err instanceof Error ? err.message : "Internal server error"}`
-			console.error(errorMessage);
 			return new Response(errorMessage, {
 				status: 500,
 			});

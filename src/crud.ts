@@ -37,7 +37,6 @@ export default {
 		const resourceType = parts.at(2); // 'proxy' or 'stripe'
 		const backmeshUid = parts.at(3);
 		const resourceId = parts.at(4);
-		const isSummary = parts.at(5) === 'summary';
 
 		if (jwtUid !== backmeshUid) {
 			return new Response('Invalid token', { status: 401 });
@@ -53,9 +52,11 @@ export default {
 
 		switch (resourceType) {
 			case 'proxy':
+				const isSummary = parts.at(5) === 'summary';
 				return handleProxyRequest(request, env, backmeshUid, resourceId, isSummary);
 			case 'stripe':
-				return handleStripeWebhook(request, env, backmeshUid, resourceId);
+				const subscriptions = parts.at(5) === 'subscriptions';
+				return handleStripeWebhook(request, env, backmeshUid, resourceId, subscriptions);
 			default:
 				return new Response('Invalid resource type', { status: 400 });
 		}
@@ -67,6 +68,7 @@ async function handleStripeWebhook(
 	env: Env, 
 	backmeshUid: string, 
 	webhookId?: string,
+	subscriptions?: boolean,
 ): Promise<Response> {
 	switch (request.method) {
 		case 'POST':
@@ -91,6 +93,12 @@ async function handleStripeWebhook(
 
 		case 'GET':
 			return handleRequest(async () => {
+				if (subscriptions && webhookId !== undefined) {
+					// get all subscriptions for stripe integration
+					const integration = await stripeIntegrationCrud.getAdmin(env, backmeshUid, webhookId!);
+					const claims = await Firebase.Admin.getAllUsersClaims(integration.authPrivateKey);
+					return claims.map(claim => claim['stripe_subs']);
+				}
 				if (webhookId !== undefined) {
 					return new Response('Invalid pathname', { status: 400 });
 				}
