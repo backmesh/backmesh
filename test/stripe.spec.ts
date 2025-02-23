@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, it, expect, beforeAll } from 'vitest';
-import { StripeWebhook } from '../src/services/repos/models';
+import { AuthProviderType, SchemaVersion, StripeWebhook } from '../src/services/repos/models';
 import { getTokenFromFirebaseKey } from './utils';
 
 
@@ -20,13 +20,15 @@ describe('Stripe Webhook CRUD Operations', () => {
 
 	const validWebhookInit = {
 		webhookSecret: 'whsec_test_secret',
-		apiPrivateKey: 'sk_test_key',
-		serviceAccount: JSON.stringify({
+		stripePrivateKey: 'sk_test_key',
+		authPrivateKey: JSON.stringify({
 			type: 'service_account',
 			project_id: 'test-project',
 			private_key: 'test-private-key',
 			client_email: 'test@test.com'
-		})
+		}),
+		authType: AuthProviderType.FIREBASE,
+		schemaVersion: SchemaVersion.V1,
 	};
 
 	// Add beforeAll to ensure clean state
@@ -44,8 +46,8 @@ describe('Stripe Webhook CRUD Operations', () => {
 		expect(webhook.webhookUrl).toBeDefined();
 		expect(webhook.webhookUrl).toBe(`https://example.com/v1/stripe/${testUserId}/${webhook.id}`);
 		expect(webhook.webhookSecret).toBe('');
-		expect(webhook.apiPrivateKey).toBe('');
-		expect(webhook.serviceAccount).toBe('');
+		expect(webhook.stripePrivateKey).toBe('');
+		expect(webhook.authPrivateKey).toBe('');
 		webhookId = webhook.id;
 		webhookUrl = webhook.webhookUrl;
 	});
@@ -85,8 +87,8 @@ describe('Stripe Webhook CRUD Operations', () => {
 		expect(webhook.id).toBeDefined();
 		expect(webhook.webhookUrl).toBe(`https://example.com/v1/stripe/${testUserId}/${webhook.id}`);
 		expect(webhook.webhookSecret).toBe('');
-		expect(webhook.apiPrivateKey).toBe('');
-		expect(webhook.serviceAccount).toBe('');
+		expect(webhook.stripePrivateKey).toBe('');
+		expect(webhook.authPrivateKey).toBe('');
 	});
 
 	it('successfully lists webhooks with webhookUrl', async () => {
@@ -124,8 +126,8 @@ describe('Stripe Webhook CRUD Operations', () => {
 		expect(response.status).toBe(200);
 		const webhook = await response.json() as StripeWebhook;
 		expect(webhook.webhookSecret).toBe('');
-		expect(webhook.apiPrivateKey).toBe('');
-		expect(webhook.serviceAccount).toBe('');
+		expect(webhook.stripePrivateKey).toBe('');
+		expect(webhook.authPrivateKey).toBe('');
 		expect(webhook.webhookUrl).toBe(webhookUrl);
 	});
 

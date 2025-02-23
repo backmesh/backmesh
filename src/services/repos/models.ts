@@ -117,13 +117,18 @@ export function assertEndUserAnalytics(obj: any): obj is EndUserAnalytics {
 export type StripeWebhook = {
 	id: string;
 	webhookSecret: string;
-	apiPrivateKey: string;
-	serviceAccount: string;
+	stripePrivateKey: string;
+	authPrivateKey: string;
 	webhookUrl: string;
+	authType: AuthProviderType;
+	schemaVersion: SchemaVersion;
 };
 
 // Type guard to check if an object is of type StripeWebhook at runtime
 export function assertStripeWebhook(obj: any): obj is StripeWebhook {
+	if (!obj.schemaVersion) {
+		obj.schemaVersion = SchemaVersion.V1;
+	}
 	if (typeof obj !== 'object' || obj === null) {
 		throw new TypeError('Object is not valid');
 	}
@@ -133,14 +138,20 @@ export function assertStripeWebhook(obj: any): obj is StripeWebhook {
 	if (typeof obj.webhookSecret !== 'string') {
 		throw new TypeError('webhookSecret is not a string');
 	}
-	if (typeof obj.apiPrivateKey !== 'string') {
-		throw new TypeError('apiPrivateKey is not a string');
+	if (typeof obj.stripePrivateKey !== 'string') {
+		throw new TypeError('stripePrivateKey is not a string');
 	}
-	if (typeof obj.serviceAccount !== 'string') {
-		throw new TypeError('serviceAccount is not a string');
+	if (typeof obj.authPrivateKey !== 'string') {
+		throw new TypeError('authPrivateKey is not a string');
 	}
 	if (typeof obj.webhookUrl !== 'string') {
 		throw new TypeError('webhookUrl is not a string');
+	}
+	if (!Object.values(AuthProviderType).includes(obj.authType)) {
+		throw new TypeError('authType is not valid');
+	}
+	if (!Object.values(SchemaVersion).includes(obj.schemaVersion)) {
+		throw new TypeError('schemaVersion is not valid');
 	}
 	
 	return true;

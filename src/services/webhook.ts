@@ -1,4 +1,4 @@
-import { assertStripeWebhook, StripeWebhook, isValidJson, isValidStr } from "./repos/models";
+import { assertStripeWebhook, StripeWebhook, isValidJson, isValidStr, AuthProviderType } from "./repos/models";
 import KV from "./repos/kv";
 import { Crud } from "./repos/models";
 import { encrypt } from "./crypto";
@@ -22,17 +22,17 @@ class StripeWebhookCrud implements Crud<StripeWebhook> {
 		value.id = id;
 		value.webhookUrl = `${origin}/v1/stripe/${backmeshUid}/${id}`;
 		assertStripeWebhook(value);
-		if (!isValidJson(value.serviceAccount)) {
+		if (AuthProviderType.FIREBASE && !isValidJson(value.authPrivateKey)) {
 			throw new TypeError('serviceAccount must be a valid JSON string');
 		}
 		value.webhookSecret = await encrypt(value.webhookSecret, env.PASSWORD);
-		value.serviceAccount = await encrypt(value.serviceAccount, env.PASSWORD);
-		value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
+		value.authPrivateKey = await encrypt(value.authPrivateKey, env.PASSWORD);
+		value.stripePrivateKey = await encrypt(value.stripePrivateKey, env.PASSWORD);
 		await KV.create<StripeWebhook>(env.BACKMESH_KV, this.getKey(backmeshUid, id), value);
 		// do not return secrets
 		value.webhookSecret = '';
-		value.serviceAccount = '';
-		value.apiPrivateKey = '';
+		value.authPrivateKey = '';
+		value.stripePrivateKey = '';
 		return value;
 	}
 
@@ -42,17 +42,20 @@ class StripeWebhookCrud implements Crud<StripeWebhook> {
 		if (isValidStr(value.webhookSecret)) {
 			value.webhookSecret = await encrypt(value.webhookSecret, env.PASSWORD);
 		}
-		if (isValidStr(value.serviceAccount)) {
-			value.serviceAccount = await encrypt(value.serviceAccount, env.PASSWORD);
+		if (isValidStr(value.authPrivateKey)) {
+			if (AuthProviderType.FIREBASE && !isValidJson(value.authPrivateKey)) {
+				throw new TypeError('serviceAccount must be a valid JSON string');
+			}
+			value.authPrivateKey = await encrypt(value.authPrivateKey, env.PASSWORD);
 		}
-		if (isValidStr(value.apiPrivateKey)) {
-			value.apiPrivateKey = await encrypt(value.apiPrivateKey, env.PASSWORD);
+		if (isValidStr(value.stripePrivateKey)) {
+			value.stripePrivateKey = await encrypt(value.stripePrivateKey, env.PASSWORD);
 		}
 		await KV.edit<StripeWebhook>(env.BACKMESH_KV, this.getKey(backmeshUid, id), value, ['id', 'webhookUrl']);
 		// do not return secrets
 		value.webhookSecret = '';
-		value.serviceAccount = '';
-		value.apiPrivateKey = '';
+		value.authPrivateKey = '';
+		value.stripePrivateKey = '';
 		return value;
 	}
 
@@ -70,8 +73,8 @@ class StripeWebhookCrud implements Crud<StripeWebhook> {
 			assertStripeWebhook(webhook);
 			// Clear sensitive data before returning
 			webhook.webhookSecret = '';
-			webhook.serviceAccount = '';
-			webhook.apiPrivateKey = '';
+			webhook.authPrivateKey = '';
+			webhook.stripePrivateKey = '';
 			return webhook;
 		});
 

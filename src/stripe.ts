@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import Firebase from './services/gateways/firebase';
 import Subscription from './services/subscription';
 import { stripeWebhookCrud } from './services/webhook';
+import { AuthProviderType } from './services/repos/models';
 
 export default {
 	async fetch(request: Request, env: Env) {
@@ -27,9 +28,13 @@ export default {
 				stripeWebhookSecret = env.STRIPE_WEBHOOK_SECRET;
 			}	else if (backmeshUid !== null && stripeId !== null) {
 				const stripeWebhook = await stripeWebhookCrud.getAdmin(env, backmeshUid!, stripeId!);
-				stripeKey = stripeWebhook.apiPrivateKey;
-				serviceAccount = stripeWebhook.serviceAccount;
 				stripeWebhookSecret = stripeWebhook.webhookSecret;
+				if (stripeWebhook.authType === AuthProviderType.FIREBASE) {
+					stripeKey = stripeWebhook.stripePrivateKey;
+					serviceAccount = stripeWebhook.authPrivateKey;
+				} else {
+					throw new Error("Unsupported auth provider");
+				}
 			} else {
 				throw new Error("Invalid pathname");
 			}
