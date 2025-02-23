@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import Firebase from './services/gateways/firebase';
 import Subscription from './services/subscription';
-import kv from './services/kv';
+import { stripeWebhookCrud } from './services/kv';
 
 export default {
 	async fetch(request: Request, env: Env) {
@@ -26,7 +26,7 @@ export default {
 				serviceAccount = env.BACKMESH_FIREBASE_SERVICE_ACCOUNT;
 				stripeWebhookSecret = env.STRIPE_WEBHOOK_SECRET;
 			}	else if (backmeshUid !== null && stripeId !== null) {
-				const stripeWebhook = await kv.getAdminStripeWebhook(env, backmeshUid!, stripeId!);
+				const stripeWebhook = await stripeWebhookCrud.getAdmin(env, backmeshUid!, stripeId!);
 				stripeKey = stripeWebhook.apiPrivateKey;
 				serviceAccount = stripeWebhook.serviceAccount;
 				stripeWebhookSecret = stripeWebhook.webhookSecret;

@@ -1,5 +1,6 @@
 import auth, { AuthHeader } from './services/auth';
-import kv, { ApiProxy } from './services/kv';
+import kv, { apiProxyCrud, ApiProxy } from './services/kv';
+
 import posthog from './services/gateways/posthog';
 
 export class InvalidProxyRequest {
@@ -104,7 +105,7 @@ export default {
 		}
 		let apiProxy;
 		try {
-			apiProxy = await kv.getAdminApiProxy(env, backmeshUid, proxyId);
+			apiProxy = await apiProxyCrud.getAdmin(env, backmeshUid, proxyId);
 		} catch (error: any) {
 			console.error(error);
 			const status = error instanceof TypeError ? 404 : 500;
