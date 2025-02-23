@@ -250,32 +250,6 @@ const modelCostsPerMillion: {
 	'@cf/meta/llama-2-7b-chat-fp16': { input: 0.556, output: 6.667 },
 };
 
-// this is best effort so it fallsback to 0 cost
-// does not support caching, fine tuned models, image and audio models
-function estimateCost(usage: LLMUsage): number {
-	const model = usage.model.toLowerCase();
-	const costs = modelCostsPerMillion[model] || { input: 0, output: 0 };
-
-	let cost = 0;
-
-	if (costs.threshold && usage.inputTokens > costs.threshold) {
-		cost +=
-			(usage.inputTokens * (costs.postThresholdInput || costs.input)) / 1_000_000;
-		if (usage.outputTokens) {
-			cost +=
-				(usage.outputTokens * (costs.postThresholdOutput || costs.output || 0)) /
-				1_000_000;
-		}
-	} else {
-		cost += (usage.inputTokens * costs.input) / 1_000_000;
-		if (usage.outputTokens) {
-			cost += (usage.outputTokens * (costs.output || 0)) / 1_000_000;
-		}
-	}
-
-	return cost;
-}
-
 function getRateLimitKey(
 	backmeshUid: string,
 	proxyId: string,
@@ -283,15 +257,6 @@ function getRateLimitKey(
 	windowStart: number,
 ) {
 	return `limits/${backmeshUid}/${proxyId}/${endUserId}-${windowStart}`;
-}
-
-// value is a string endUserId that owns this resource
-function getPrivateResourceKey(
-	backmeshUid: string,
-	proxyId: string,
-	resourceId: string,
-) {
-	return `resources/${backmeshUid}/${proxyId}/${resourceId}`;
 }
 
 export class ProxyExchangeSummary {
@@ -379,7 +344,7 @@ export class ProxyExchangeSummary {
 		if (!backmeshUid || !proxyId || !endUserId) return;
 		const usage = proxyRes.usage;
 		const model = usage ? usage.model : undefined;
-		const cost = usage ? estimateCost(usage) : undefined;
+		const cost = usage ? ProxyExchangeSummary.estimateCost(usage) : undefined;
 		const summary = new ProxyExchangeSummary({
 			status: proxyRes.response.status,
 			ts,
@@ -438,6 +403,32 @@ export class ProxyExchangeSummary {
 
 	static getListKey(backmeshUid: string, proxyId: string) {
 		return `reqs/${backmeshUid}/${proxyId}/`;
+	}
+
+	// this is best effort so it fallsback to 0 cost
+	// does not support caching, fine tuned models, image and audio models
+	static estimateCost(usage: LLMUsage): number {
+		const model = usage.model.toLowerCase();
+		const costs = modelCostsPerMillion[model] || { input: 0, output: 0 };
+
+		let cost = 0;
+
+		if (costs.threshold && usage.inputTokens > costs.threshold) {
+			cost +=
+				(usage.inputTokens * (costs.postThresholdInput || costs.input)) / 1_000_000;
+			if (usage.outputTokens) {
+				cost +=
+					(usage.outputTokens * (costs.postThresholdOutput || costs.output || 0)) /
+					1_000_000;
+			}
+		} else {
+			cost += (usage.inputTokens * costs.input) / 1_000_000;
+			if (usage.outputTokens) {
+				cost += (usage.outputTokens * (costs.output || 0)) / 1_000_000;
+			}
+		}
+
+		return cost;
 	}
 }
 
@@ -615,26 +606,19 @@ class StripeWebhookCrud implements Crud<StripeWebhook> {
 export const apiProxyCrud = new ApiProxyCrud();
 export const stripeWebhookCrud = new StripeWebhookCrud();
 
-export default {
-	async newUserResource(
-		env: Env,
-		{
-			backmeshUid,
-			proxyId,
-			endUserId,
-			resourceId,
-		}: {
-			backmeshUid: string;
-			proxyId: string;
-			endUserId: string;
-			resourceId: string;
-		},
+export class EndUserResource {
+	// value is a string endUserId that owns this resource
+	static getKey(
+		backmeshUid: string,
+		proxyId: string,
+		resourceId: string,
 	) {
-		const key = getPrivateResourceKey(backmeshUid, proxyId, resourceId);
-		await env.BACKMESH_KV.put(key, endUserId);
-	},
+		return `resources/${backmeshUid}/${proxyId}/${resourceId}`;
+	}
 
-	async isUserResource(
+	// register a new resource (e.g. thread, file) created by the end user in this LLM API
+	// this will be used to check if the end user is the owner of the resource
+	static async create(
 		env: Env,
 		{
 			backmeshUid,
@@ -648,10 +632,32 @@ export default {
 			resourceId: string;
 		},
 	) {
-		const key = getPrivateResourceKey(backmeshUid, proxyId, resourceId);
+		const key = EndUserResource.getKey(backmeshUid, proxyId, resourceId);
+		await env.BACKMESH_KV.put(key, endUserId);
+	}
+
+	// check if the end user owns the resource
+	static async exists(
+		env: Env,
+		{
+			backmeshUid,
+			proxyId,
+			endUserId,
+			resourceId,
+		}: {
+			backmeshUid: string;
+			proxyId: string;
+			endUserId: string;
+			resourceId: string;
+		},
+	) {
+		const key = EndUserResource.getKey(backmeshUid, proxyId, resourceId);
 		const kvUid = await env.BACKMESH_KV.get(key);
 		return kvUid === endUserId;
-	},
+	}
+}
+
+export default {
 
 	// Sliding window rate limiting per user with retry logic
 	async rateLimit(
