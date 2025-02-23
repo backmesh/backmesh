@@ -1,5 +1,5 @@
 import auth, { AuthHeader } from './services/auth';
-import kv, { apiProxyCrud, ApiProxy } from './services/kv';
+import kv, { apiProxyCrud, ApiProxy, ProxyExchangeSummary, EndUserResource } from './services/kv';
 
 import posthog from './services/gateways/posthog';
 
@@ -258,7 +258,7 @@ export default {
 				parsedBody = await response.clone().json();
 				const file = parsedBody.file;
 
-				await kv.newUserResource(env, {
+				await EndUserResource.create(env, {
 					backmeshUid,
 					proxyId: apiProxy.id,
 					endUserId,
@@ -268,7 +268,7 @@ export default {
 			} else if (route === 'files' && pathParts.length === 3) {
 				// GET or DELETE
 				const resourceId = pathParts[2];
-				const isOwner = await kv.isUserResource(env, {
+				const isOwner = await EndUserResource.exists(env, {
 					backmeshUid,
 					proxyId: apiProxy.id,
 					endUserId,
@@ -286,7 +286,7 @@ export default {
 				// TODO handle pagination
 				const filteredFiles = await Promise.all(
 					(parsedBody.files as any[]).map(async (file) => {
-						const isOwner = await kv.isUserResource(env, {
+						const isOwner = await EndUserResource.exists(env, {
 							backmeshUid,
 							proxyId: apiProxy.id,
 							endUserId,
@@ -317,7 +317,7 @@ export default {
 					response = await fetch(fullApiUrl, init);
 					const parsedBody: any = await response.clone().json();
 					const resourceId = parsedBody.id;
-					await kv.newUserResource(env, {
+					await EndUserResource.create(env, {
 						backmeshUid,
 						proxyId,
 						endUserId,
@@ -336,7 +336,7 @@ export default {
 					// v1/threads/${threadId}/...
 				} else if (pathParts.length === 3 || pathParts.length === 4) {
 					const resourceId = pathParts[2];
-					const isOwner = await kv.isUserResource(env, {
+					const isOwner = await EndUserResource.exists(env, {
 						backmeshUid,
 						proxyId,
 						endUserId,
@@ -357,7 +357,7 @@ export default {
 					const parsedBody: any = await response.clone().json();
 					const filteredData = await Promise.all(
 						(parsedBody.data as any[]).map(async (file) => {
-							const isOwner = await kv.isUserResource(env, {
+							const isOwner = await EndUserResource.exists(env, {
 								backmeshUid,
 								proxyId,
 								endUserId,
@@ -415,7 +415,7 @@ export default {
 		env: Env,
 	) {
 		if (proxyReq instanceof ProxyRequest)
-			await kv.newProxyExchange(env, proxyReq, ts, timing, proxyRes);
+			await ProxyExchangeSummary.update(env, proxyReq, ts, timing, proxyRes);
 		await posthog.captureProxyReq(proxyReq, proxyRes, timing, env);
 	},
 };
