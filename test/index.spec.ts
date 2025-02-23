@@ -7,7 +7,7 @@ import {
 	AuthProviderType,
 	EndUserAnalyticsSummary,
 	RateLimitUnit,
-} from '../src/services/kv';
+} from '../src/services/repos/models';
 import { getTokenFromFirebaseKey } from './utils';
 
 

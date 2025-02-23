@@ -1,52 +1,11 @@
-import auth, { AuthHeader } from './services/auth';
-import kv, { apiProxyCrud, ApiProxy, ProxyExchangeSummary, EndUserResource } from './services/kv';
+import auth from './services/auth';
+import { apiProxyCrud } from './services/proxy';
+import { EndUserResource } from './services/permissions';
+import { ProxyExchangeSummary } from './services/analytics';
+import rateLimit from './services/limit';
 
 import posthog from './services/gateways/posthog';
-
-export class InvalidProxyRequest {
-	endUserId?: string;
-	backmeshUid?: string;
-	proxyId?: string;
-	authHeader?: AuthHeader;
-	apiProxy?: ApiProxy;
-	request!: Request;
-	path!: string;
-	response!: Response;
-
-	constructor(init: Partial<InvalidProxyRequest>) {
-		Object.assign(this, init);
-	}
-}
-
-export class ProxyRequest {
-	endUserId!: string;
-	backmeshUid!: string;
-	proxyId!: string;
-	authHeader!: AuthHeader;
-	request!: Request;
-	apiProxy!: ApiProxy;
-	path!: string;
-
-	constructor(init: ProxyRequest) {
-		Object.assign(this, init);
-	}
-}
-
-export class ProxyResponse {
-	response!: Response;
-	parsedBody?: any;
-	usage?: LLMUsage;
-
-	constructor(init: ProxyResponse) {
-		Object.assign(this, init);
-	}
-}
-
-export type LLMUsage = {
-	model: string;
-	inputTokens: number;
-	outputTokens?: number; // missing for embedding models
-};
+import { LLMUsage, InvalidProxyRequest, ProxyRequest, ProxyResponse } from './services/repos/models';
 
 async function getLLMUsage(
 	req: ProxyRequest,
@@ -169,8 +128,8 @@ export default {
 			return { response: proxyRequest.response };
 		const { apiProxy, request, authHeader, proxyId, backmeshUid, endUserId, path } =
 			proxyRequest;
-		const rateLimit = await kv.rateLimit(env, backmeshUid, apiProxy, endUserId);
-		if (rateLimit)
+		const rL = await rateLimit(env, backmeshUid, apiProxy, endUserId);
+		if (rL)
 			return {
 				response: new Response('Backmesh request limit exceeded', { status: 429 }),
 			};

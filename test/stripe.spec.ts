@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, it, expect, beforeAll } from 'vitest';
-import { StripeWebhook } from '../src/services/kv';
+import { StripeWebhook } from '../src/services/repos/models';
 import { getTokenFromFirebaseKey } from './utils';
 
 

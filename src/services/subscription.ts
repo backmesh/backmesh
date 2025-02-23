@@ -1,6 +1,5 @@
 import Stripe from "stripe";
-
-type CustomClaims = {[key: string]: any};
+import { CustomClaims } from "./repos/models";
 
 // TODO create wrapper that support supabase by passing AuthProviderType
 export default {

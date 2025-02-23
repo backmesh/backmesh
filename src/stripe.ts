@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import Firebase from './services/gateways/firebase';
 import Subscription from './services/subscription';
-import { stripeWebhookCrud } from './services/kv';
+import { stripeWebhookCrud } from './services/webhook';
 
 export default {
 	async fetch(request: Request, env: Env) {

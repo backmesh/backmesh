@@ -1,12 +1,6 @@
 import firebase from './gateways/firebase';
 import supabase from './gateways/supabase';
-import { ApiProxy, AuthProviderType } from './kv';
-
-export type AuthHeader = {
-	field: string;
-	value: string;
-	extractedJwt: string;
-};
+import { ApiProxy, AuthProviderType, AuthHeader } from './repos/models';
 
 export default {
 
