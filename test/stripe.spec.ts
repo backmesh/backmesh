@@ -17,8 +17,8 @@ const testUserJwt = await getTokenFromFirebaseKey(
 	env.TEST_USER_PASS,
 );
 
-const stripeKey = env.STRIPE_KEY;
-const stripeWebhookSecret = env.STRIPE_WEBHOOK_SECRET;
+const stripeKey = env.TEST_STRIPE_KEY;
+const stripeWebhookSecret = env.TEST_STRIPE_WEBHOOK_SECRET;
 
 describe('Stripe Integration CRUD Operations', () => {
 	let response: Response;
