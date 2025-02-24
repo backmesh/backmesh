@@ -13,6 +13,8 @@ interface Env {
 	PASSWORD: string;
 	STRIPE_KEY: string;
 	STRIPE_WEBHOOK_SECRET: string;
+	TEST_STRIPE_KEY: string;
+	TEST_STRIPE_WEBHOOK_SECRET: string;
 	SUPABASE_TEST_USER_KEY: string;
 	SUPABASE_TEST_USER_URL: string;
 	SUPABASE_TEST_USER_USER_ID: string;

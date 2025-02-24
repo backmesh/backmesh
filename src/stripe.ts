@@ -22,21 +22,21 @@ export default {
 			const backmeshUid = parts.at(2);
 			const stripeId = parts.at(3);
 			let stripeKey, serviceAccount, stripeWebhookSecret;
-			if (backmeshUid === null || stripeId === null) {
+			if (backmeshUid === undefined || stripeId === undefined) {
 				stripeKey = env.STRIPE_KEY;
 				serviceAccount = env.BACKMESH_FIREBASE_SERVICE_ACCOUNT;
 				stripeWebhookSecret = env.STRIPE_WEBHOOK_SECRET;
 			}	else if (backmeshUid !== null && stripeId !== null) {
 				const stripeWebhook = await stripeIntegrationCrud.getAdmin(env, backmeshUid!, stripeId!);
 				stripeWebhookSecret = stripeWebhook.webhookSecret;
+				stripeKey = stripeWebhook.stripePrivateKey;
 				if (stripeWebhook.authType === AuthProviderType.FIREBASE) {
-					stripeKey = stripeWebhook.stripePrivateKey;
 					serviceAccount = stripeWebhook.authPrivateKey;
 				} else {
-					throw new Error("Unsupported auth provider");
+					throw new TypeError("Unsupported auth provider");
 				}
 			} else {
-				throw new Error("Invalid pathname");
+				throw new TypeError("Invalid pathname");
 			}
 
 			const stripe = new Stripe(stripeKey, {
@@ -95,10 +95,20 @@ export default {
 				status: 200,
 			});
 		} catch (err) {
+			console.error(err);
+			if (err instanceof TypeError) {
+				return new Response('Stripe Integration not found', {
+					status: 404,
+				});
+			}
+			if (err instanceof Stripe.errors.StripeSignatureVerificationError) {
+				return new Response('Invalid Stripe webhook signature', {
+					status: 401
+				});
+			}
 			const errorMessage = `⚠️  Webhook handling failed for event. ${err instanceof Error ? err.message : "Internal server error"}`
-			console.log(errorMessage);
 			return new Response(errorMessage, {
-				status: 400,
+				status: 500,
 			});
 		}
 	},

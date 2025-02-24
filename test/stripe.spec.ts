@@ -1,36 +1,77 @@
 import { env, SELF } from 'cloudflare:test';
-import { describe, it, expect, beforeAll } from 'vitest';
-import { AuthProviderType, SchemaVersion, StripeIntegration } from '../src/services/repos/models';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import Stripe from 'stripe';
+
+import { AuthProviderType, CustomClaims, SchemaVersion, StripeIntegration } from '../src/services/repos/models';
 import { getTokenFromFirebaseKey } from './utils';
+import Firebase from '../src/services/gateways/firebase';
 
 
 const backmeshFirebaseKey = env.BACKMESH_FIREBASE_KEY;
 const testUserEmail = env.FIREBASE_TEST_USER_EMAIL;
 const testUserId = env.FIREBASE_TEST_USER_ID;
+const serviceAccount = env.BACKMESH_FIREBASE_SERVICE_ACCOUNT;
 const testUserJwt = await getTokenFromFirebaseKey(
 	backmeshFirebaseKey,
 	testUserEmail,
 	env.TEST_USER_PASS,
 );
 
-describe('Stripe Webhook CRUD Operations', () => {
+const stripeKey = env.TEST_STRIPE_KEY;
+const stripeWebhookSecret = env.TEST_STRIPE_WEBHOOK_SECRET;
+
+const validWebhookInit = {
+	webhookSecret: stripeWebhookSecret,
+	stripePrivateKey: stripeKey,
+	authPrivateKey: serviceAccount,
+	authType: AuthProviderType.FIREBASE,
+	schemaVersion: SchemaVersion.V1,
+};
+
+const stripe = new Stripe(validWebhookInit.stripePrivateKey, {
+	httpClient: Stripe.createFetchHttpClient()
+});
+// from stripe test dashboard
+const productId = 'prod_RaNeaDpniWdiK4';
+const priceId = 'price_1QhCsvIz61apsROqzT6eFZ2B';
+// https://dashboard.stripe.com/test/customers/cus_RoNS7LKeXVWZCg
+const customer = await stripe.customers.retrieve('cus_RoNS7LKeXVWZCg');
+const session = await stripe.checkout.sessions.create({
+	mode: 'subscription',
+	success_url: 'https://example.com/success',
+	line_items: [{
+		price: priceId,
+		quantity: 1
+	}],
+});
+session.subscription = await stripe.subscriptions.create({
+	customer: customer.id,
+	items: [{
+		price: priceId,
+	}],
+	default_payment_method: 'pm_1QukhzIz61apsROqqUl2wxR1',
+});
+const payload = JSON.stringify({
+	type: 'checkout.session.completed',
+	data: {
+		object: {
+			client_reference_id: testUserId,
+			subscription: session.subscription,
+			customer: customer.id,
+			},
+		}
+	},
+);
+const subscription = session.subscription;
+const header = await stripe.webhooks.generateTestHeaderStringAsync({
+	payload,
+	secret: validWebhookInit.webhookSecret,
+});
+
+describe('Stripe Integration CRUD Operations', () => {
 	let response: Response;
 	let webhookId: string;
 	let webhookUrl: string;
-
-	const validWebhookInit = {
-		webhookSecret: 'whsec_test_secret',
-		stripePrivateKey: 'sk_test_key',
-		authPrivateKey: JSON.stringify({
-			type: 'service_account',
-			project_id: 'test-project',
-			private_key: 'test-private-key',
-			client_email: 'test@test.com'
-		}),
-		authType: AuthProviderType.FIREBASE,
-		schemaVersion: SchemaVersion.V1,
-	};
-
 	// Add beforeAll to ensure clean state
 	beforeAll(async () => {
 		response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}`, {
@@ -40,6 +81,11 @@ describe('Stripe Webhook CRUD Operations', () => {
 			},
 			body: JSON.stringify(validWebhookInit),
 		});
+		if (response.status !== 200) {
+			const errorText = await response.text();
+			console.error('Response status:', response.status);
+			console.error('Response text:', errorText);
+		}
 		expect(response.status).toBe(200);
 		const webhook = await response.json() as StripeIntegration;
 		expect(webhook.id).toBeDefined();
@@ -188,5 +234,191 @@ describe('Stripe Webhook CRUD Operations', () => {
 			},
 		});
 		expect(response.status).toBe(400);
+	});
+
+	describe('Webhook Endpoint Tests', () => {
+
+		beforeAll(async () => {
+			response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}`, {
+				method: 'POST',
+				headers: {
+					Authorization: testUserJwt,
+				},
+				body: JSON.stringify(validWebhookInit),
+			});
+			const webhook = await response.json() as StripeIntegration;
+			webhookId = webhook.id;
+			webhookUrl = webhook.webhookUrl;
+			await Firebase.Admin.setClaims(serviceAccount, testUserId, {});
+		});
+
+		it('fails webhook call without stripe signature', async () => {
+			response = await SELF.fetch(webhookUrl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: '{}',
+			});
+			expect(response.status).toBe(400);
+		});
+
+		it('fails webhook call with invalid stripe signature', async () => {
+			response = await SELF.fetch(webhookUrl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Stripe-Signature': 'invalid_signature',
+				},
+				body: '{}',
+			});
+			expect(response.status).toBe(401);
+		});
+
+		it('fails webhook call with invalid webhook ID', async () => {
+			response = await SELF.fetch(`https://example.com/v1/stripe/${testUserId}/invalid_webhook_id`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Stripe-Signature': 'invalid_signature',
+				},
+				body: '{}',
+			});
+			expect(response.status).toBe(404);
+		});
+
+		it('successfully processes webhook with valid signature for checkout.session.completed', async () => {
+			// https://dashboard.stripe.com/test/customers/cus_RoNS7LKeXVWZCg
+
+			response = await SELF.fetch(webhookUrl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Stripe-Signature': header,
+				},
+				body: payload,
+			});
+			if (response.status !== 200) {
+				const errorText = await response.text();
+				console.error('Response status:', response.status);
+				console.error('Response text:', errorText);
+			}
+			expect(response.status).toBe(200);
+		});
+
+		it('successfully finds subscription created', async () => {
+			response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}/${webhookId}/subscriptions`, {
+				method: 'GET',
+				headers: {
+					Authorization: testUserJwt,
+				},
+			});
+			expect(response.status).toBe(200);
+			const subscriptions = await response.json() as CustomClaims[];
+			const savedSub = subscriptions.find(sub => sub[subscription.id])?.[subscription.id];
+			expect(savedSub).toBeDefined();
+			expect(savedSub?.status).toBe('active');
+			expect(savedSub?.prods.length).toBe(1);
+			expect(savedSub?.prods[0]).toBe(`1x${productId}`);
+		});
+
+		it('successfully processes webhook with valid signature to cancel subscription', async () => {
+			const payloadCancel = JSON.stringify({
+				type: 'customer.subscription.updated',
+				data: {
+					object: {
+						...subscription,
+						status: 'canceled',
+						metadata: {
+							auth_user_id: testUserId
+						}
+					}
+				}
+			});
+			const header = await stripe.webhooks.generateTestHeaderStringAsync({
+				payload: payloadCancel,
+				secret: validWebhookInit.webhookSecret,
+			});
+			response = await SELF.fetch(webhookUrl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Stripe-Signature': header,
+				},
+				body: payloadCancel,
+			});
+			if (response.status !== 200) {
+				const errorText = await response.text();
+				console.error('Response status:', response.status);
+				console.error('Response text:', errorText);
+			}
+			expect(response.status).toBe(200);
+		});
+
+		it('successfully finds subscription canceled', async () => {
+			response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}/${webhookId}/subscriptions`, {
+				method: 'GET',
+				headers: {
+					Authorization: testUserJwt,
+				},
+			});
+			expect(response.status).toBe(200);
+			const subscriptions = await response.json() as CustomClaims[];
+			const savedSub = subscriptions.find(sub => sub[subscription.id])?.[subscription.id];
+			expect(savedSub).toBeDefined();
+			expect(savedSub?.status).toBe('canceled');
+			expect(savedSub?.prods.length).toBe(1);
+			expect(savedSub?.prods[0]).toBe(`1x${productId}`);
+		});
+
+		// Clean up webhook after tests
+		afterAll(async () => {
+			await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}/${webhookId}`, {
+				method: 'DELETE',
+				headers: {
+					Authorization: testUserJwt,
+				},
+			});
+			await Firebase.Admin.setClaims(serviceAccount, testUserId, {});
+		});
+	});
+
+	describe('Stripe Admin/Self Subscription Tests', () => {
+		let response: Response;
+		beforeAll(async () => {
+			await Firebase.Admin.setClaims(serviceAccount, testUserId, {});
+		});
+
+		it('successfully create subscription in backmesh itself', async () => {
+
+			response = await SELF.fetch('https://example.com/v1/stripe', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Stripe-Signature': header,
+				},
+				body: payload,
+			});
+			if (response.status !== 200) {
+				const errorText = await response.text();
+				console.error('Response status:', response.status);
+				console.error('Response text:', errorText);
+			}
+			expect(response.status).toBe(200);
+		});
+
+		it('successfully finds subscription created', async () => {
+			const claims = await Firebase.Admin.getClaims(serviceAccount, testUserId);
+			expect(claims?.stripe_subs).toBeDefined();
+			expect(claims?.stripe_subs?.[subscription.id]).toBeDefined();
+			expect(claims?.stripe_subs?.[subscription.id].status).toBe('active');
+			expect(claims?.stripe_subs?.[subscription.id].prods.length).toBe(1);
+			expect(claims?.stripe_subs?.[subscription.id].prods[0]).toBe(`1x${productId}`);
+		});
+
+		// Clean up webhook after tests
+		afterAll(async () => {
+			await Firebase.Admin.setClaims(serviceAccount, testUserId, {});
+		});
 	});
 });
