@@ -2,9 +2,9 @@ import Stripe from "stripe";
 import { AuthProviderType, CustomClaims, StripeSubscriptions, StripeIntegration } from "./repos/models";
 import Firebase from "./gateways/firebase";
 
-async function getClaims(serviceAccount: string, uid: string, integration: StripeIntegration): Promise<CustomClaims> {
+async function getClaims(uid: string, integration: StripeIntegration): Promise<CustomClaims> {
   if (integration.authType === AuthProviderType.FIREBASE) {
-    return await Firebase.Admin.getClaims(serviceAccount, uid);
+    return await Firebase.Admin.getClaims(integration.authPrivateKey, uid);
   } else if (integration.authType === AuthProviderType.SUPABASE) {
     throw new TypeError("Supabase not supported");
   } else {
@@ -12,9 +12,9 @@ async function getClaims(serviceAccount: string, uid: string, integration: Strip
   }
 }
 
-async function setClaims(serviceAccount: string, uid: string, integration: StripeIntegration, claims: CustomClaims) {
+async function setClaims(uid: string, integration: StripeIntegration, claims: CustomClaims) {
   if (integration.authType === AuthProviderType.FIREBASE) {
-    return await Firebase.Admin.setClaims(serviceAccount, uid, claims);
+    return await Firebase.Admin.setClaims(integration.authPrivateKey, uid, claims);
   } else if (integration.authType === AuthProviderType.SUPABASE) {
     throw new TypeError("Supabase not supported");
   }
@@ -69,10 +69,10 @@ export default {
       throw new TypeError("Supabase not supported");
     }
   },
-  async save(serviceAccount: string, uid: string, integration: StripeIntegration, subscription: Stripe.Subscription) {
-    const claims = await getClaims(serviceAccount, uid, integration);
+  async save(uid: string, integration: StripeIntegration, subscription: Stripe.Subscription) {
+    const claims = await getClaims(uid, integration);
     const updatedClaims = updateClaims(claims, subscription);
-    await setClaims(serviceAccount, uid, integration, updatedClaims);
+    await setClaims(uid, integration, updatedClaims);
   },
   Backmesh: {
     async save(serviceAccount: string, uid: string, subscription: Stripe.Subscription) {

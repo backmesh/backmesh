@@ -7,6 +7,7 @@ const supabaseKey = env.SUPABASE_TEST_USER_KEY;
 const testUserEmail = env.SUPABASE_TEST_USER_USER_EMAIL;
 const testUserId = env.SUPABASE_TEST_USER_USER_ID;
 
+// TODO refactor /proxy and /stripe tests to also use supabase in main paths
 async function getTokenFromSupabase(
 	email: string,
 	password: string,

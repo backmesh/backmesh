@@ -28,7 +28,6 @@ export default {
 				stripeIntegration = await stripeIntegrationCrud.getAdmin(env, backmeshUid!, stripeId!);
 				stripeWebhookSecret = stripeIntegration.webhookSecret;
 				stripeKey = stripeIntegration.stripePrivateKey;
-				serviceAccount = stripeIntegration.authPrivateKey;
 			} else {
 				throw new TypeError("Invalid pathname");
 			}
@@ -51,9 +50,9 @@ export default {
 					subscription = event.data.object;
 					authUserId = subscription.metadata.auth_user_id;
 					if (stripeIntegration !== undefined) {
-						await Subscription.save(serviceAccount, authUserId, stripeIntegration, subscription);
+						await Subscription.save(authUserId, stripeIntegration, subscription);
 					} else {
-						await Subscription.Backmesh.save(serviceAccount, authUserId, subscription);
+						await Subscription.Backmesh.save(serviceAccount!, authUserId, subscription);
 					}
 					break;
 
@@ -71,9 +70,9 @@ export default {
 					authUserId = session.client_reference_id;
 					subscription = typeof session.subscription === 'string' ? await stripe.subscriptions.retrieve(session.subscription) : session.subscription;
 					if (stripeIntegration !== undefined) {
-						await Subscription.save(serviceAccount, authUserId, stripeIntegration, subscription);
+						await Subscription.save(authUserId, stripeIntegration, subscription);
 					} else {
-						await Subscription.Backmesh.save(serviceAccount, authUserId, subscription);
+						await Subscription.Backmesh.save(serviceAccount!, authUserId, subscription);
 					}
 						// set auth user id in metadata to use in subsequent webhooks
 						// https://docs.stripe.com/api/metadata

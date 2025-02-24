@@ -66,7 +66,6 @@ const geminiProxyInit = JSON.stringify({
 	apiPrivateKey: env.TEST_USER_GEMINI_API_KEY,
 	rateLimit: 20,
 });
-// TODO use supabase to test both
 const openAIProxyInit = JSON.stringify({
 	apiUrl: 'https://api.openai.com',
 	apiReqHeader: 'Authorization',
