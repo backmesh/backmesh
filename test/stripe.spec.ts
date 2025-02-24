@@ -314,9 +314,10 @@ describe('Stripe Integration CRUD Operations', () => {
 				},
 			});
 			expect(response.status).toBe(200);
-			const subsByUser: { [key: string]: CustomClaims } = await response.json();
-			const userClaims = subsByUser[testUserId];
-			const savedSub = Object.values(userClaims).find((s: any) => s[subscription.id])?.[subscription.id];
+			const claims: CustomClaims[] = await response.json();
+			const claim = claims
+				.find((s: CustomClaims) => s.uid === testUserId)
+			const savedSub = claim?.stripe_subs?.[subscription.id];
 			expect(savedSub).toBeDefined();
 			expect(savedSub?.status).toBe('active');
 			expect(savedSub?.prods.length).toBe(1);
@@ -364,9 +365,10 @@ describe('Stripe Integration CRUD Operations', () => {
 				},
 			});
 			expect(response.status).toBe(200);
-			const subsByUser: { [key: string]: CustomClaims } = await response.json();
-			const userClaims = subsByUser[testUserId];
-			const savedSub = Object.values(userClaims).find((s: any) => s[subscription.id])?.[subscription.id];
+			const claims: CustomClaims[] = await response.json();
+			const claim = claims
+				.find((s: CustomClaims) => s.uid === testUserId)
+			const savedSub = claim?.stripe_subs?.[subscription.id];
 			expect(savedSub).toBeDefined();
 			expect(savedSub?.status).toBe('canceled');
 			expect(savedSub?.prods.length).toBe(1);
