@@ -161,7 +161,7 @@ export function assertStripeIntegration(obj: any): obj is StripeIntegration {
 
 export function isValidJson(str: string) {
 	try {
-		JSON.parse(str.trim());
+		JSON.parse(str);
 		return true;
 	} catch (e) {
 		return false;
