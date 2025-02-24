@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type Stripe from 'stripe';
 
-import Subscription from '../src/services/subscription';
-import { updateClaims } from '../src/services/subscription';
+import { updateClaims, hasValidSubscription } from '../src/services/subscription';
 
 describe('Subscription', () => {
 	it('has valid subscription', () => {
@@ -14,7 +13,7 @@ describe('Subscription', () => {
 				},
 			},
 		};
-		expect(Subscription.hasValidSubscription(claims)).toBe(true);
+		expect(hasValidSubscription(claims)).toBe(true);
 	});
 	it('has invalid subscription', () => {
 		const claims = {
@@ -25,7 +24,7 @@ describe('Subscription', () => {
 				},
 			},
 		};
-		expect(Subscription.hasValidSubscription(claims)).toBe(false);
+		expect(hasValidSubscription(claims)).toBe(false);
 	});
 
 	describe('updateClaims', () => {
