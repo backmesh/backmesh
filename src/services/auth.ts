@@ -4,6 +4,12 @@ import { ApiProxy, AuthProviderType, AuthHeader } from './repos/models';
 
 export default {
 
+	Backmesh: {
+		async getUid(firebaseKey: string, jwt: string): Promise<string | null> {
+			return await firebase.getUid(jwt, firebaseKey);
+		},
+	},
+
 	async getUid(jwt: string, apiProxy: ApiProxy): Promise<string | null> {
 		let uid: string | null = null;
 		try {

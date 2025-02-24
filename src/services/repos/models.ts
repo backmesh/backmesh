@@ -124,6 +124,7 @@ export type StripeIntegration = {
 	webhookUrl: string;
 	authType: AuthProviderType;
 	schemaVersion: SchemaVersion;
+	authAppId: string;
 };
 
 // Type guard to check if an object is of type StripeIntegration at runtime
@@ -148,6 +149,9 @@ export function assertStripeIntegration(obj: any): obj is StripeIntegration {
 	}
 	if (typeof obj.webhookUrl !== 'string') {
 		throw new TypeError('webhookUrl is not a string');
+	}
+	if (typeof obj.authAppId !== 'string') {
+		throw new TypeError('authAppId is not a string');
 	}
 	if (!Object.values(AuthProviderType).includes(obj.authType)) {
 		throw new TypeError('authType is not valid');

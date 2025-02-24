@@ -1,5 +1,4 @@
 import auth from './services/auth';
-import Firebase from './services/gateways/firebase';
 import Subscription from './services/subscription';
 import { ProxyExchangeSummary } from './services/analytics';
 import { apiProxyCrud } from './services/proxy';
@@ -25,9 +24,9 @@ export default {
 			return new Response('Missing or invalid Authorization header', {
 				status: 401,
 			});
-		const jwtUid = await Firebase.getUid(
-			authHeader.extractedJwt,
+		const jwtUid = await auth.Backmesh.getUid(
 			env.BACKMESH_FIREBASE_KEY,
+			authHeader.extractedJwt,
 		);
 		if (jwtUid === null) return new Response('Invalid token', { status: 401 });
 		const requestUrl = new URL(request.url);
@@ -43,8 +42,7 @@ export default {
 		}
 		// return 402, payment required, if billing is enabled and user has not paid
 		if (env.STRIPE_KEY && env.STRIPE_KEY != env.TEST_STRIPE_KEY && request.method !== 'GET') {
-			const claims = await Firebase.getClaims(authHeader.extractedJwt, env.BACKMESH_FIREBASE_KEY);
-			const isValid = Subscription.hasValidSubscription(claims);
+			const isValid = await Subscription.Backmesh.isValid(env.BACKMESH_FIREBASE_KEY, authHeader.extractedJwt);
 			if (!isValid) {
 				return new Response('Subscription required', { status: 402 });
 			}
@@ -96,7 +94,7 @@ async function handleStripeWebhook(
 				if (subscriptions && webhookId !== undefined) {
 					// get all subscriptions for stripe integration
 					const integration = await stripeIntegrationCrud.getAdmin(env, backmeshUid, webhookId!);
-					return await Firebase.Admin.getAllUsersClaims(integration.authPrivateKey);
+					return await Subscription.getAll(integration.authPrivateKey, integration);
 				}
 				if (webhookId !== undefined) {
 					return new Response('Invalid pathname', { status: 400 });

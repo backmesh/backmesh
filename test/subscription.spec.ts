@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import Subscription from '../src/services/subscription';
 import type Stripe from 'stripe';
+
+import Subscription from '../src/services/subscription';
+import { updateClaims } from '../src/services/subscription';
 
 describe('Subscription', () => {
 	it('has valid subscription', () => {
@@ -42,7 +44,7 @@ describe('Subscription', () => {
 				}
 			} as Stripe.Subscription;
 
-			const updatedClaims = Subscription.updateClaims(existingClaims, subscription);
+			const updatedClaims = updateClaims(existingClaims, subscription);
 			
 			expect(updatedClaims).toEqual({
 				stripe_subs: {
@@ -78,7 +80,7 @@ describe('Subscription', () => {
 				}
 			} as Stripe.Subscription;
 
-			const updatedClaims = Subscription.updateClaims(existingClaims, subscription);
+			const updatedClaims = updateClaims(existingClaims, subscription);
 			
 			expect(updatedClaims).toEqual({
 				stripe_subs: {
@@ -114,7 +116,7 @@ describe('Subscription', () => {
 				}
 			} as Stripe.Subscription;
 
-			const updatedClaims = Subscription.updateClaims(existingClaims, subscription);
+			const updatedClaims = updateClaims(existingClaims, subscription);
 			
 			expect(updatedClaims).toEqual({
 				stripe_subs: {

@@ -34,7 +34,7 @@ async function getTokenFromSupabase(
 }
 
 describe('supabase', () => {
-	it('properly auth user to get jwt and the use that jwt to get uid', async () => {
+	it('properly auth user to get jwt and then use that jwt to get uid', async () => {
 		const testUserJwt = await getTokenFromSupabase(
 			testUserEmail,
 			env.TEST_USER_PASS,
