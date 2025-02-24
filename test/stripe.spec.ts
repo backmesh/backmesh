@@ -34,7 +34,7 @@ const stripe = new Stripe(validWebhookInit.stripePrivateKey, {
 // from stripe test dashboard
 const productId = 'prod_RaNeaDpniWdiK4';
 const priceId = 'price_1QhCsvIz61apsROqzT6eFZ2B';
-
+// https://dashboard.stripe.com/test/customers/cus_RoNS7LKeXVWZCg
 const customer = await stripe.customers.retrieve('cus_RoNS7LKeXVWZCg');
 const session = await stripe.checkout.sessions.create({
 	mode: 'subscription',
@@ -368,7 +368,7 @@ describe('Stripe Integration CRUD Operations', () => {
 			expect(savedSub).toBeDefined();
 			expect(savedSub?.status).toBe('canceled');
 			expect(savedSub?.prods.length).toBe(1);
-			expect(savedSub?.prods[0]).toBe('1xprod_RaNeaDpniWdiK4');
+			expect(savedSub?.prods[0]).toBe(`1x${productId}`);
 		});
 
 		// Clean up webhook after tests
@@ -390,7 +390,6 @@ describe('Stripe Integration CRUD Operations', () => {
 		});
 
 		it('successfully create subscription in backmesh itself', async () => {
-			// https://dashboard.stripe.com/test/customers/cus_RoNS7LKeXVWZCg
 
 			response = await SELF.fetch('https://example.com/v1/stripe', {
 				method: 'POST',

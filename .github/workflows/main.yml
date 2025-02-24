@@ -29,6 +29,8 @@ jobs:
           TEST_USER_CLOUDFLARE_API_KEY=${{ secrets.TEST_USER_CLOUDFLARE_API_KEY }}
           TEST_USER_CLOUDFLARE_ACCOUNT_ID=${{ vars.TEST_USER_CLOUDFLARE_ACCOUNT_ID }}
           # stripe vars
+          STRIPE_KEY=${{ secrets.TEST_STRIPE_KEY }}
+          STRIPE_WEBHOOK_SECRET=${{ secrets.TEST_STRIPE_WEBHOOK_SECRET }}
           TEST_STRIPE_KEY=${{ secrets.TEST_STRIPE_KEY }}
           TEST_STRIPE_WEBHOOK_SECRET=${{ secrets.TEST_STRIPE_WEBHOOK_SECRET }}
           # supabase vars
