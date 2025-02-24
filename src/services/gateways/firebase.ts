@@ -97,7 +97,9 @@ export default {
         }
         nextPageToken = data.nextPageToken ?? undefined;
       } while (nextPageToken);
-      return allUsers.filter(user => user.customAttributes).map(user => JSON.parse(user.customAttributes!));
+      return allUsers
+        .filter(user => user.customAttributes && user.customAttributes !== '{}')
+        .map((user) => ({uid: user.localId!, ...JSON.parse(user.customAttributes!)}));
     },
   }
 }
