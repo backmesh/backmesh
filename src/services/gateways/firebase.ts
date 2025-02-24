@@ -67,7 +67,7 @@ export default {
       await auth.setCustomUserClaims(uid, claims);
     },
 
-    async getAllUsersClaims(serviceAccount: string): Promise<CustomClaims[]> {
+    async getAllUsersClaims(serviceAccount: string): Promise<{ [key: string]: CustomClaims }> {
       const credential = new ServiceAccountCredential(serviceAccount);
       const jwt = (await credential.getAccessToken()).access_token;
       const allUsers = [];
@@ -97,7 +97,11 @@ export default {
         }
         nextPageToken = data.nextPageToken ?? undefined;
       } while (nextPageToken);
-      return allUsers.filter(user => user.customAttributes).map(user => JSON.parse(user.customAttributes!));
+      const filtered = allUsers.filter(user => user.customAttributes);
+      const result = Object.fromEntries(
+        filtered.map(user => [user.localId!, JSON.parse(user.customAttributes!)])
+      );
+      return result;
     },
   }
 }

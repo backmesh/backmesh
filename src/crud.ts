@@ -96,8 +96,7 @@ async function handleStripeWebhook(
 				if (subscriptions && webhookId !== undefined) {
 					// get all subscriptions for stripe integration
 					const integration = await stripeIntegrationCrud.getAdmin(env, backmeshUid, webhookId!);
-					const claims = await Firebase.Admin.getAllUsersClaims(integration.authPrivateKey);
-					return claims.map(claim => claim['stripe_subs']);
+					return await Firebase.Admin.getAllUsersClaims(integration.authPrivateKey);
 				}
 				if (webhookId !== undefined) {
 					return new Response('Invalid pathname', { status: 400 });
