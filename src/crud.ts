@@ -42,7 +42,7 @@ export default {
 			return new Response('Invalid token', { status: 401 });
 		}
 		// return 402, payment required, if billing is enabled and user has not paid
-		if (env.STRIPE_KEY && request.method !== 'GET') {
+		if (env.STRIPE_KEY && env.STRIPE_KEY != env.TEST_STRIPE_KEY && request.method !== 'GET') {
 			const claims = await Firebase.getClaims(authHeader.extractedJwt, env.BACKMESH_FIREBASE_KEY);
 			const isValid = Subscription.hasValidSubscription(claims);
 			if (!isValid) {
