@@ -1,4 +1,5 @@
 import { User } from '@supabase/supabase-js';
+import { CustomClaims } from '../repos/models';
 
 export default {
   async getUid(
@@ -20,5 +21,5 @@ export default {
     }
     const userData: User = await response.json();
     return userData.id;
-  }
+  },
 }

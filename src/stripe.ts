@@ -1,8 +1,6 @@
 import Stripe from 'stripe';
-import Firebase from './services/gateways/firebase';
 import Subscription from './services/subscription';
 import { stripeIntegrationCrud } from './services/stripe';
-import { AuthProviderType } from './services/repos/models';
 
 export default {
 	async fetch(request: Request, env: Env) {
@@ -21,20 +19,15 @@ export default {
 			const parts = requestUrl.pathname.split('/').filter((part) => part);
 			const backmeshUid = parts.at(2);
 			const stripeId = parts.at(3);
-			let stripeKey, serviceAccount, stripeWebhookSecret;
+			let stripeKey, serviceAccount, stripeWebhookSecret, stripeIntegration;
 			if (backmeshUid === undefined || stripeId === undefined) {
 				stripeKey = env.STRIPE_KEY;
 				serviceAccount = env.BACKMESH_FIREBASE_SERVICE_ACCOUNT;
 				stripeWebhookSecret = env.STRIPE_WEBHOOK_SECRET;
 			}	else if (backmeshUid !== null && stripeId !== null) {
-				const stripeWebhook = await stripeIntegrationCrud.getAdmin(env, backmeshUid!, stripeId!);
-				stripeWebhookSecret = stripeWebhook.webhookSecret;
-				stripeKey = stripeWebhook.stripePrivateKey;
-				if (stripeWebhook.authType === AuthProviderType.FIREBASE) {
-					serviceAccount = stripeWebhook.authPrivateKey;
-				} else {
-					throw new TypeError("Unsupported auth provider");
-				}
+				stripeIntegration = await stripeIntegrationCrud.getAdmin(env, backmeshUid!, stripeId!);
+				stripeWebhookSecret = stripeIntegration.webhookSecret;
+				stripeKey = stripeIntegration.stripePrivateKey;
 			} else {
 				throw new TypeError("Invalid pathname");
 			}
@@ -48,7 +41,7 @@ export default {
 				stripeWebhookSecret
 			);
 
-			let session, subscription, authUserId, existingClaims, updatedClaims;
+			let session, subscription, authUserId;
 			console.log(event.type);
 			switch(event.type) {
 				// case 'customer.subscription.created':
@@ -56,9 +49,11 @@ export default {
 				case 'customer.subscription.deleted':
 					subscription = event.data.object;
 					authUserId = subscription.metadata.auth_user_id;
-					existingClaims = await Firebase.Admin.getClaims(serviceAccount, authUserId);
-					updatedClaims = Subscription.updateClaims(existingClaims!, subscription);
-					await Firebase.Admin.setClaims(serviceAccount, authUserId, updatedClaims);
+					if (stripeIntegration !== undefined) {
+						await Subscription.save(authUserId, stripeIntegration, subscription);
+					} else {
+						await Subscription.Backmesh.save(serviceAccount!, authUserId, subscription);
+					}
 					break;
 
 				case 'checkout.session.completed':
@@ -74,11 +69,13 @@ export default {
 					}
 					authUserId = session.client_reference_id;
 					subscription = typeof session.subscription === 'string' ? await stripe.subscriptions.retrieve(session.subscription) : session.subscription;
-					existingClaims = await Firebase.Admin.getClaims(serviceAccount, authUserId);
-					updatedClaims = Subscription.updateClaims(existingClaims!, subscription);
-					await Firebase.Admin.setClaims(serviceAccount, authUserId, updatedClaims);
-					// set auth user id in metadata to use in subsequent webhooks
-					// https://docs.stripe.com/api/metadata
+					if (stripeIntegration !== undefined) {
+						await Subscription.save(authUserId, stripeIntegration, subscription);
+					} else {
+						await Subscription.Backmesh.save(serviceAccount!, authUserId, subscription);
+					}
+						// set auth user id in metadata to use in subsequent webhooks
+						// https://docs.stripe.com/api/metadata
 					await stripe.subscriptions.update(
 						subscription.id,
 						{

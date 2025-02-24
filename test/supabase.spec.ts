@@ -7,6 +7,7 @@ const supabaseKey = env.SUPABASE_TEST_USER_KEY;
 const testUserEmail = env.SUPABASE_TEST_USER_USER_EMAIL;
 const testUserId = env.SUPABASE_TEST_USER_USER_ID;
 
+// TODO refactor /proxy and /stripe tests to also use supabase in main paths
 async function getTokenFromSupabase(
 	email: string,
 	password: string,
@@ -34,7 +35,7 @@ async function getTokenFromSupabase(
 }
 
 describe('supabase', () => {
-	it('properly auth user to get jwt and the use that jwt to get uid', async () => {
+	it('properly auth user to get jwt and then use that jwt to get uid', async () => {
 		const testUserJwt = await getTokenFromSupabase(
 			testUserEmail,
 			env.TEST_USER_PASS,

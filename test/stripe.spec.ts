@@ -26,6 +26,7 @@ const validWebhookInit = {
 	authPrivateKey: serviceAccount,
 	authType: AuthProviderType.FIREBASE,
 	schemaVersion: SchemaVersion.V1,
+	authAppId: env.FIREBASE_TEST_USER_APP_ID || '', // does not matter for firebase
 };
 
 const stripe = new Stripe(validWebhookInit.stripePrivateKey, {
