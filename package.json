@@ -13,7 +13,7 @@
 		"@cloudflare/vitest-pool-workers": "^0.4.5",
 		"@cloudflare/workers-types": "^4.20240729.0",
 		"@googleapis/identitytoolkit": "^11.0.0",
-		"@supabase/supabase-js": "^2.49.1",
+		"@supabase/auth-js": "^2.68.0",
 		"@types/stripe": "^8.0.416",
 		"typescript": "^5.5.2",
 		"vitest": "1.5.0",
