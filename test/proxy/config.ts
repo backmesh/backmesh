@@ -35,6 +35,8 @@ export const testUser2ndUserJwt = await getTokenFromFirebaseKey(
 	env.TEST_USER_PASS,
 );
 
+export const geminiModel = 'gemini-1.5-flash';
+
 export const invalidProxyInit = JSON.stringify({
 	apiUrl: 'https://generativelanguage.googleapis.com',
 	apiReqHeader: 'x-goog-api-key',

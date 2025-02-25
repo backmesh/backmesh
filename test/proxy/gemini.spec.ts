@@ -13,6 +13,7 @@ import {
   testUser2ndUserJwt,
   testUser1stUserId,
   rateLimitProxyInit,
+  geminiModel,
 } from './config';
 
 
@@ -332,7 +333,7 @@ describe('Firebase + Gemini Proxy: completion + summary', async () => {
 
 	it('chat completion endpoint', async () => {
 		response = await SELF.fetch(
-			`https://example.com/v1/proxy/${testUserId}/${proxyId!}/v1beta/models/gemini-1.5-flash:generateContent`,
+			`https://example.com/v1/proxy/${testUserId}/${proxyId!}/v1beta/models/${geminiModel}:generateContent`,
 			{
 				method: 'POST',
 				headers: {
@@ -462,7 +463,7 @@ describe('Firebase + Gemini API Proxy Rate Limit', () => {
 
 		// 2nd request for 1st user to proxy
 		response = await SELF.fetch(
-			`https://example.com/v1/proxy/${testUserId}/${proxyId!}/v1beta/models/gemini-pro`,
+			`https://example.com/v1/proxy/${testUserId}/${proxyId!}/v1beta/models/${geminiModel}`,
 			{
 				method: 'GET',
 				headers: {
@@ -474,7 +475,7 @@ describe('Firebase + Gemini API Proxy Rate Limit', () => {
 
 		// 3rd request for 1st user should rate limit
 		response = await SELF.fetch(
-			`https://example.com/v1/proxy/${testUserId}/${proxyId!}/v1beta/models/gemini-pro`,
+			`https://example.com/v1/proxy/${testUserId}/${proxyId!}/v1beta/models/${geminiModel}`,
 			{
 				method: 'GET',
 				headers: {
@@ -486,7 +487,7 @@ describe('Firebase + Gemini API Proxy Rate Limit', () => {
 
 		// but 1st request for 2nd user should go through
 		response = await SELF.fetch(
-			`https://example.com/v1/proxy/${testUserId}/${proxyId!}/v1beta/models/gemini-pro`,
+			`https://example.com/v1/proxy/${testUserId}/${proxyId!}/v1beta/models/${geminiModel}`,
 			{
 				method: 'GET',
 				headers: {
@@ -502,7 +503,7 @@ describe('Firebase + Gemini API Proxy Rate Limit', () => {
 
 		// now the next request for 1st user should not rate limit
 		response = await SELF.fetch(
-			`https://example.com/v1/proxy/${testUserId}/${proxyId!}/v1beta/models/gemini-pro`,
+			`https://example.com/v1/proxy/${testUserId}/${proxyId!}/v1beta/models/${geminiModel}`,
 			{
 				method: 'GET',
 				headers: {
