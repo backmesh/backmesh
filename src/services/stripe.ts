@@ -14,7 +14,6 @@ class StripeIntegrationCrud implements Crud<StripeIntegration> {
 		return `stripe/${backmeshUid}/`;
 	}
 	async create(env: Env, backmeshUid: string, value: any): Promise<StripeIntegration> {
-		console.log('create', value);
 		assertStripeIntegration(value);
 		if (value.authType === AuthProviderType.FIREBASE && !isValidJsonStr(value.authPrivateKey)) {
 			throw new TypeError('serviceAccount must be a valid JSON string');
