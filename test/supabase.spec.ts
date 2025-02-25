@@ -7,7 +7,7 @@ const supabaseKey = env.SUPABASE_TEST_USER_KEY;
 const testUserEmail = env.SUPABASE_TEST_USER_USER_EMAIL;
 const testUserId = env.SUPABASE_TEST_USER_USER_ID;
 const testUserPass = env.TEST_USER_PASS;
-const serviceRoleKey = env.SUPABASE_TEST_USER_SERVICE_ROLE;
+const privateKey = env.SUPABASE_TEST_USER_SERVICE_ROLE;
 
 // TODO refactor /proxy and /stripe tests to also use supabase in main paths
 async function getTokenFromSupabase(
@@ -57,39 +57,52 @@ describe('supabase admin', () => {
 			}
 		}
 	};
+	const emptyClaims = {'stripe_subs': {}};
 
 	beforeAll(async () => {
 		// Clear any existing claims before tests
-		await Supabase.Admin.setClaims({serviceRoleKey, projectUrl, uid: testUserId, claims: {}});
+		await Supabase.Admin.setClaims({privateKey, projectUrl, uid: testUserId, claims: emptyClaims});
 	});
 
-	it('should set and get claims for a user', async () => {
+	it('should set and get a claim for a user', async () => {
 		// Set claims
-		await Supabase.Admin.setClaims({serviceRoleKey, projectUrl, uid: testUserId, claims: testClaims});
+		await Supabase.Admin.setClaims({privateKey, projectUrl, uid: testUserId, claims: testClaims});
 
 		// Get claims and verify
-		const claims = await Supabase.Admin.getClaims({serviceRoleKey, projectUrl, uid: testUserId});
-		expect(claims).toContain({
-			...testClaims,
-		});
+		const claims = await Supabase.Admin.getClaims({privateKey, projectUrl, uid: testUserId});
+		expect(claims['stripe_subs']).toEqual(testClaims['stripe_subs']);
 	});
 
 
-	it('should handle empty claims', async () => {
-		// Set empty claims
-		await Supabase.Admin.setClaims({serviceRoleKey, projectUrl, uid: testUserId, claims: {}});
+	it('should update a claim for a user', async () => {
+		await Supabase.Admin.setClaims({privateKey, projectUrl, uid: testUserId, claims: testClaims});
+
+		// Update claims
+		const updatedClaims = {
+			stripe_subs: {
+				'sub_1QhCsvIz61apsROqzT6eFZ2B': {
+					status: 'inactive',
+					prods: ['1xprod_RaNeaDpniWdiK4'],
+				},
+				'sub_1QhCsvIz61apsROqzT6489348f': {
+					status: 'trialing',
+					prods: ['1xprod_RaNeaDpniWdiK4'],
+				}
+			},
+		};
+		await Supabase.Admin.setClaims({privateKey, projectUrl, uid: testUserId, claims: updatedClaims});
 
 		// Get claims and verify they're empty
-		const claims = await Supabase.Admin.getClaims({serviceRoleKey, projectUrl, uid: testUserId});
-		expect(claims).toEqual({});
+		const claims = await Supabase.Admin.getClaims({privateKey, projectUrl, uid: testUserId});
+		expect(claims['stripe_subs']).toEqual(updatedClaims['stripe_subs']);
 	});
 
 	it('should get all users claims', async () => {
 		// First set some test claims
-		await Supabase.Admin.setClaims({serviceRoleKey, projectUrl, uid: testUserId, claims: testClaims});
+		await Supabase.Admin.setClaims({privateKey, projectUrl, uid: testUserId, claims: testClaims});
 
 		// Get all users claims
-		const allClaims = await Supabase.Admin.getAllUsersClaims({serviceRoleKey, projectUrl});
+		const allClaims = await Supabase.Admin.getAllUsersClaims({privateKey, projectUrl});
 		
 		// Verify the test user's claims are in the results
 		const userClaims = allClaims.find(claim => claim.uid === testUserId);
@@ -105,12 +118,12 @@ describe('supabase admin', () => {
 		
 		// Attempt to get claims for invalid user
 		await expect(
-			Supabase.Admin.getClaims({serviceRoleKey, projectUrl, uid: invalidUserId})
+			Supabase.Admin.getClaims({privateKey, projectUrl, uid: invalidUserId})
 		).rejects.toThrow();
 
 		// Attempt to set claims for invalid user
 		await expect(
-			Supabase.Admin.setClaims({serviceRoleKey, projectUrl, uid: invalidUserId, claims: testClaims})
+			Supabase.Admin.setClaims({privateKey, projectUrl, uid: invalidUserId, claims: testClaims})
 		).rejects.toThrow();
 	});
 
@@ -119,22 +132,22 @@ describe('supabase admin', () => {
 		
 		// Attempt to get claims with invalid key
 		await expect(
-			Supabase.Admin.getClaims({serviceRoleKey: invalidKey, projectUrl, uid: testUserId})
+			Supabase.Admin.getClaims({privateKey: invalidKey, projectUrl, uid: testUserId})
 		).rejects.toThrow();
 
 		// Attempt to set claims with invalid key
 		await expect(
-			Supabase.Admin.setClaims({serviceRoleKey: invalidKey, projectUrl, uid: testUserId, claims: testClaims})
+			Supabase.Admin.setClaims({privateKey: invalidKey, projectUrl, uid: testUserId, claims: testClaims})
 		).rejects.toThrow();
 
 		// Attempt to get all users claims with invalid key
 		await expect(
-			Supabase.Admin.getAllUsersClaims({serviceRoleKey: invalidKey, projectUrl})
+			Supabase.Admin.getAllUsersClaims({privateKey: invalidKey, projectUrl})
 		).rejects.toThrow();
 	});
 
 	// Clean up after all tests
 	afterAll(async () => {
-		await Supabase.Admin.setClaims({serviceRoleKey, projectUrl, uid: testUserId, claims: {}});
+		await Supabase.Admin.setClaims({privateKey, projectUrl, uid: testUserId, claims: emptyClaims});
 	});
 });

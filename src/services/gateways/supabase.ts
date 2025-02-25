@@ -22,12 +22,12 @@ export default {
     const userData: User = await response.json();
     return userData.id;
   },
-    Admin: {
-    async getClaims({serviceRoleKey, projectUrl, uid}: {serviceRoleKey: string, projectUrl: string, uid: string}): Promise<CustomClaims> {
+  Admin: {
+    async getClaims({privateKey, projectUrl, uid}: {privateKey: string, projectUrl: string, uid: string}): Promise<CustomClaims> {
       const response = await fetch(`${projectUrl}/auth/v1/admin/users/${uid}`, {
         headers: {
-          Authorization: `Bearer ${serviceRoleKey}`,
-          apikey: serviceRoleKey,
+          Authorization: `Bearer ${privateKey}`,
+          apikey: privateKey,
         },
       });
       if (!response.ok) {
@@ -37,12 +37,12 @@ export default {
       return userData.user_metadata || null;
     },
 
-    async setClaims({serviceRoleKey, projectUrl, uid, claims}: {serviceRoleKey: string, projectUrl: string, uid: string, claims: CustomClaims}): Promise<void> {
+    async setClaims({privateKey, projectUrl, uid, claims}: {privateKey: string, projectUrl: string, uid: string, claims: CustomClaims}): Promise<void> {
       // Get existing metadata
       const response = await fetch(`${projectUrl}/auth/v1/admin/users/${uid}`, {
         headers: {
-          Authorization: `Bearer ${serviceRoleKey}`,
-          apikey: serviceRoleKey,
+          Authorization: `Bearer ${privateKey}`,
+          apikey: privateKey,
         },
       });
       if (!response.ok) {
@@ -50,7 +50,13 @@ export default {
         throw new Error(`Failed to get user data: ${response.statusText} - ${error}`);
       }
       const userData: User = await response.json();
-      
+
+      // Set all existing metadata fields to null
+      // const nullifiedMetadata = Object.keys(userData.user_metadata || {}).reduce((acc, key) => {
+      //   acc[key] = null;
+      //   return acc;
+      // }, {} as Record<string, null>);
+
       // Create new metadata object, preserving only non-claim fields
       const newMetadata = { ...userData.user_metadata };
       // Remove existing claim fields
@@ -61,8 +67,8 @@ export default {
       const clearResponse = await fetch(`${projectUrl}/auth/v1/admin/users/${uid}`, {
         method: 'PUT',
         headers: {
-          Authorization: `Bearer ${serviceRoleKey}`,
-          apikey: serviceRoleKey,
+          Authorization: `Bearer ${privateKey}`,
+          apikey: privateKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -79,8 +85,8 @@ export default {
         const updateResponse = await fetch(`${projectUrl}/auth/v1/admin/users/${uid}`, {
           method: 'PUT',
           headers: {
-            Authorization: `Bearer ${serviceRoleKey}`,
-            apikey: serviceRoleKey,
+            Authorization: `Bearer ${privateKey}`,
+            apikey: privateKey,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -94,7 +100,7 @@ export default {
       }
     },
 
-    async getAllUsersClaims({serviceRoleKey, projectUrl}: {serviceRoleKey: string, projectUrl: string}): Promise<CustomClaims[]> {
+    async getAllUsersClaims({privateKey, projectUrl}: {privateKey: string, projectUrl: string}): Promise<CustomClaims[]> {
       const allUsers: User[] = [];
       let page = 1;
       const perPage = 1000;
@@ -103,8 +109,8 @@ export default {
           `${projectUrl}/auth/v1/admin/users?page=${page}&per_page=${perPage}`, 
           {
             headers: {
-              Authorization: `Bearer ${serviceRoleKey}`,
-              apikey: serviceRoleKey,
+              Authorization: `Bearer ${privateKey}`,
+              apikey: privateKey,
             },
           }
         );
@@ -112,11 +118,11 @@ export default {
           const error = await response.text();
           throw new Error(`Failed to fetch users: ${response.statusText} - ${error}`);
         }
-        const users: User[] = await response.json();
-        if (!users || users.length === 0) break;
+        const data: {users: User[]} = await response.json();
+        if (!data.users || data.users.length === 0) break;
         
-        allUsers.push(...users);
-        if (users.length < perPage) break;
+        allUsers.push(...data.users);
+        if (data.users.length < perPage) break;
         page++;
       }
       return allUsers

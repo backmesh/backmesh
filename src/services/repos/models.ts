@@ -124,6 +124,8 @@ export type StripeIntegration = {
 	webhookUrl: string;
 	authType: AuthProviderType;
 	schemaVersion: SchemaVersion;
+	// in supabase this case the authAppId is the project or app url
+	// https://naxywnoolzuwzkinwekg.supabase.co
 	authAppId: string;
 };
 
@@ -183,6 +185,8 @@ export type ApiProxy = {
 	apiReqHeader: string;
 	rateLimitUnit: RateLimitUnit;
 	rateLimit: number;
+	// in supabase this case the authAppId is the project or app url
+	// https://naxywnoolzuwzkinwekg.supabase.co
 	authAppId: string;
 };
 
