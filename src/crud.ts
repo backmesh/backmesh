@@ -73,9 +73,8 @@ async function handleStripeWebhook(
 			if (!request.body) {
 				return new Response('No body in request', { status: 400 });
 			}
-			const requestUrl = new URL(request.url);
 			return handleRequest(async () =>
-				stripeIntegrationCrud.create(env, requestUrl.origin, backmeshUid, await request.json()),
+				stripeIntegrationCrud.create(env, backmeshUid, await request.json()),
 			);
 
 		case 'PUT':
