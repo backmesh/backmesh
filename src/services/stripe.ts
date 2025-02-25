@@ -6,10 +6,6 @@ import { decrypt, encrypt } from "./crypto";
 class StripeIntegrationCrud implements Crud<StripeIntegration> {
 	constructor(){}
 
-	async get(env: Env, backmeshUid: string, id: string): Promise<StripeIntegration> {
-		throw new Error('Not implemented');
-	}
-
 	getKey(backmeshUid: string, id: string) {
 		return `${this.getListKey(backmeshUid)}${id}`;
 	}
@@ -17,10 +13,8 @@ class StripeIntegrationCrud implements Crud<StripeIntegration> {
 	getListKey(backmeshUid: string,) {
 		return `stripe/${backmeshUid}/`;
 	}
-	async create(env: Env, origin: string, backmeshUid: string, value: any): Promise<StripeIntegration> {
-		const id = KV.generateId();
-		value.id = id;
-		value.webhookUrl = `${origin}/v1/stripe/${backmeshUid}/${id}`;
+	async create(env: Env, backmeshUid: string, value: any): Promise<StripeIntegration> {
+		console.log('create', value);
 		assertStripeIntegration(value);
 		if (value.authType === AuthProviderType.FIREBASE && !isValidJsonStr(value.authPrivateKey)) {
 			throw new TypeError('serviceAccount must be a valid JSON string');
@@ -28,7 +22,7 @@ class StripeIntegrationCrud implements Crud<StripeIntegration> {
 		value.webhookSecret = await encrypt(value.webhookSecret, env.PASSWORD);
 		value.authPrivateKey = await encrypt(value.authPrivateKey, env.PASSWORD);
 		value.stripePrivateKey = await encrypt(value.stripePrivateKey, env.PASSWORD);
-		await KV.create<StripeIntegration>(env.BACKMESH_KV, this.getKey(backmeshUid, id), value);
+		await KV.create<StripeIntegration>(env.BACKMESH_KV, this.getKey(backmeshUid, value.id), value);
 		// do not return secrets
 		value.webhookSecret = '';
 		value.authPrivateKey = '';

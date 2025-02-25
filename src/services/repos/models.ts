@@ -299,9 +299,8 @@ export const modelCostsPerMillion: {
 };
 
 export interface Crud<T> {
-	create(env: Env, origin: string, backmeshUid: string, value: any): Promise<T>;
+	// create for stripecrud has no origin
 	getAdmin(env: Env, backmeshUid: string, id: string): Promise<T>;
-	get(env: Env, backmeshUid: string, id: string): Promise<T>;
 	edit(env: Env, backmeshUid: string, id: string, value: any): Promise<T>;
 	getAll(env: Env, backmeshUid: string): Promise<T[]>;
 	delete(env: Env, backmeshUid: string, id: string): Promise<void>;

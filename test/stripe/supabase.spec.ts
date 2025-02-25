@@ -2,6 +2,7 @@ import { env, SELF } from 'cloudflare:test';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Stripe from 'stripe';
 
+import KV from '../../src/services/repos/kv';
 import { AuthProviderType, CustomClaims, SchemaVersion, StripeIntegration } from '../../src/services/repos/models';
 import { getTokenFromFirebaseKey } from '../utils';
 import Supabase from '../../src/services/gateways/supabase';
@@ -24,7 +25,12 @@ const testEndUserId = env.SUPABASE_TEST_USER_USER_ID;
 const stripeKey = env.TEST_STRIPE_KEY;
 const stripeWebhookSecret = env.TEST_STRIPE_WEBHOOK_SECRET;
 
+const baseUrl = 'https://example.com/v1';
+const webhookId = KV.generateId();
+const webhookUrl = `${baseUrl}/stripe/${testUserId}/${webhookId}`;
 const validWebhookInit = {
+	id: webhookId,
+	webhookUrl,
 	webhookSecret: stripeWebhookSecret,
 	stripePrivateKey: stripeKey,
 	authPrivateKey: privateKey,
@@ -75,11 +81,9 @@ const header = await stripe.webhooks.generateTestHeaderStringAsync({
 
 describe('Stripe Integration CRUD Operations with Supabase', () => {
 	let response: Response;
-	let webhookId: string;
-	let webhookUrl: string;
 	// Add beforeAll to ensure clean state
 	beforeAll(async () => {
-		response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}`, {
+		response = await SELF.fetch(`${baseUrl}/crud/stripe/${testUserId}`, {
 			method: 'POST',
 			headers: {
 				Authorization: testUserJwt,
@@ -95,33 +99,14 @@ describe('Stripe Integration CRUD Operations with Supabase', () => {
 		const webhook = await response.json() as StripeIntegration;
 		expect(webhook.id).toBeDefined();
 		expect(webhook.webhookUrl).toBeDefined();
-		expect(webhook.webhookUrl).toBe(`https://example.com/v1/stripe/${testUserId}/${webhook.id}`);
-		expect(webhook.webhookSecret).toBe('');
-		expect(webhook.stripePrivateKey).toBe('');
-		expect(webhook.authPrivateKey).toBe('');
-		webhookId = webhook.id;
-		webhookUrl = webhook.webhookUrl;
-	});
-
-	it('successfully creates a webhook', async () => {
-		response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}`, {
-			method: 'POST',
-			headers: {
-				Authorization: testUserJwt,
-			},
-			body: JSON.stringify(validWebhookInit),
-		});
-		expect(response.status).toBe(200);
-		const webhook = await response.json() as StripeIntegration;
-		expect(webhook.id).toBeDefined();
-		expect(webhook.webhookUrl).toBe(`https://example.com/v1/stripe/${testUserId}/${webhook.id}`);
+		expect(webhook.webhookUrl).toBe(`${baseUrl}/stripe/${testUserId}/${webhook.id}`);
 		expect(webhook.webhookSecret).toBe('');
 		expect(webhook.stripePrivateKey).toBe('');
 		expect(webhook.authPrivateKey).toBe('');
 	});
 
 	it('successfully lists webhooks with webhookUrl', async () => {
-		response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}`, {
+		response = await SELF.fetch(`${baseUrl}/crud/stripe/${testUserId}`, {
 			method: 'GET',
 			headers: {
 				Authorization: testUserJwt,
@@ -145,7 +130,7 @@ describe('Stripe Integration CRUD Operations with Supabase', () => {
 			webhookSecret: 'whsec_updated_secret',
 		};
 
-		response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}/${webhookId}`, {
+		response = await SELF.fetch(`${baseUrl}/crud/stripe/${testUserId}/${webhookId}`, {
 			method: 'PUT',
 			headers: {
 				Authorization: testUserJwt,
@@ -161,7 +146,7 @@ describe('Stripe Integration CRUD Operations with Supabase', () => {
 	});
 
 	it('successfully deletes a webhook', async () => {
-		response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}/${webhookId}`, {
+		response = await SELF.fetch(`${baseUrl}/crud/stripe/${testUserId}/${webhookId}`, {
 			method: 'DELETE',
 			headers: {
 				Authorization: testUserJwt,
@@ -170,7 +155,7 @@ describe('Stripe Integration CRUD Operations with Supabase', () => {
 		expect(response.status).toBe(200);
 
 		// Verify webhook was deleted by trying to list it
-		response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}`, {
+		response = await SELF.fetch(`${baseUrl}/crud/stripe/${testUserId}`, {
 			method: 'GET',
 			headers: {
 				Authorization: testUserJwt,
@@ -184,16 +169,6 @@ describe('Stripe Integration CRUD Operations with Supabase', () => {
 	describe('Webhook Endpoint Tests', () => {
 
 		beforeAll(async () => {
-			response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}`, {
-				method: 'POST',
-				headers: {
-					Authorization: testUserJwt,
-				},
-				body: JSON.stringify(validWebhookInit),
-			});
-			const webhook = await response.json() as StripeIntegration;
-			webhookId = webhook.id;
-			webhookUrl = webhook.webhookUrl;
 			await Supabase.Admin.setClaims({privateKey, projectUrl, uid: testEndUserId, claims: {}});
 		});
 
@@ -217,7 +192,7 @@ describe('Stripe Integration CRUD Operations with Supabase', () => {
 		});
 
 		it('successfully finds subscription created', async () => {
-			response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}/${webhookId}/subscriptions`, {
+			response = await SELF.fetch(`${baseUrl}/crud/stripe/${testUserId}/${webhookId}/subscriptions`, {
 				method: 'GET',
 				headers: {
 					Authorization: testUserJwt,
@@ -268,7 +243,7 @@ describe('Stripe Integration CRUD Operations with Supabase', () => {
 		});
 
 		it('successfully finds subscription canceled', async () => {
-			response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}/${webhookId}/subscriptions`, {
+			response = await SELF.fetch(`${baseUrl}/crud/stripe/${testUserId}/${webhookId}/subscriptions`, {
 				method: 'GET',
 				headers: {
 					Authorization: testUserJwt,
@@ -287,7 +262,7 @@ describe('Stripe Integration CRUD Operations with Supabase', () => {
 
 		// Clean up webhook after tests
 		afterAll(async () => {
-			await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}/${webhookId}`, {
+			await SELF.fetch(`${baseUrl}/crud/stripe/${testUserId}/${webhookId}`, {
 				method: 'DELETE',
 				headers: {
 					Authorization: testUserJwt,
