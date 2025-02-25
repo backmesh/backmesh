@@ -78,7 +78,12 @@ export default {
     if (integration.authType === AuthProviderType.FIREBASE) {
       return await Firebase.Admin.getAllUsersClaims(serviceAccount);
     } else if (integration.authType === AuthProviderType.SUPABASE) {
-      throw new TypeError("Supabase not supported");
+      return await Supabase.Admin.getAllUsersClaims({
+        privateKey: integration.authPrivateKey,
+        projectUrl: integration.authAppId,
+      });
+    } else {
+      throw new TypeError("Unsupported auth provider");
     }
   },
   async save(uid: string, integration: StripeIntegration, subscription: Stripe.Subscription) {

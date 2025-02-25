@@ -2,20 +2,24 @@ import { env, SELF } from 'cloudflare:test';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Stripe from 'stripe';
 
-import { AuthProviderType, CustomClaims, SchemaVersion, StripeIntegration } from '../src/services/repos/models';
-import { getTokenFromFirebaseKey } from './utils';
-import Firebase from '../src/services/gateways/firebase';
+import { AuthProviderType, CustomClaims, SchemaVersion, StripeIntegration } from '../../src/services/repos/models';
+import { getTokenFromFirebaseKey } from '../utils';
+import Supabase from '../../src/services/gateways/supabase';
 
-
-const backmeshFirebaseKey = env.BACKMESH_FIREBASE_KEY;
-const testUserEmail = env.FIREBASE_TEST_USER_EMAIL;
-const testUserId = env.FIREBASE_TEST_USER_ID;
-const serviceAccount = env.BACKMESH_FIREBASE_SERVICE_ACCOUNT;
+// backmesh firebase account
 const testUserJwt = await getTokenFromFirebaseKey(
-	backmeshFirebaseKey,
-	testUserEmail,
+	env.BACKMESH_FIREBASE_KEY,
+	env.FIREBASE_TEST_USER_EMAIL,
 	env.TEST_USER_PASS,
 );
+const testUserId = env.FIREBASE_TEST_USER_ID;
+
+// supabase user account
+const projectUrl = env.SUPABASE_TEST_USER_URL;
+const privateKey = env.SUPABASE_TEST_USER_SERVICE_ROLE;
+
+// supabase test end user
+const testEndUserId = env.SUPABASE_TEST_USER_USER_ID;
 
 const stripeKey = env.TEST_STRIPE_KEY;
 const stripeWebhookSecret = env.TEST_STRIPE_WEBHOOK_SECRET;
@@ -23,10 +27,10 @@ const stripeWebhookSecret = env.TEST_STRIPE_WEBHOOK_SECRET;
 const validWebhookInit = {
 	webhookSecret: stripeWebhookSecret,
 	stripePrivateKey: stripeKey,
-	authPrivateKey: serviceAccount,
-	authType: AuthProviderType.FIREBASE,
+	authPrivateKey: privateKey,
+	authType: AuthProviderType.SUPABASE,
 	schemaVersion: SchemaVersion.V1,
-	authAppId: env.FIREBASE_TEST_USER_APP_ID || '', // does not matter for firebase
+	authAppId: projectUrl,
 };
 
 const stripe = new Stripe(validWebhookInit.stripePrivateKey, {
@@ -56,7 +60,7 @@ const payload = JSON.stringify({
 	type: 'checkout.session.completed',
 	data: {
 		object: {
-			client_reference_id: testUserId,
+			client_reference_id: testEndUserId,
 			subscription: session.subscription,
 			customer: customer.id,
 			},
@@ -69,7 +73,7 @@ const header = await stripe.webhooks.generateTestHeaderStringAsync({
 	secret: validWebhookInit.webhookSecret,
 });
 
-describe('Stripe Integration CRUD Operations', () => {
+describe('Stripe Integration CRUD Operations with Supabase', () => {
 	let response: Response;
 	let webhookId: string;
 	let webhookUrl: string;
@@ -97,28 +101,6 @@ describe('Stripe Integration CRUD Operations', () => {
 		expect(webhook.authPrivateKey).toBe('');
 		webhookId = webhook.id;
 		webhookUrl = webhook.webhookUrl;
-	});
-
-	it('fails to create webhook with no token', async () => {
-		response = await SELF.fetch(`https://example.com/v1/crud/stripe/backmeshUid`, {
-			method: 'POST',
-			headers: {
-				Authorization: 'invalid_token',
-			},
-			body: JSON.stringify(validWebhookInit),
-		});
-		expect(response.status).toBe(401);
-	});
-
-	it('fails to create webhook with invalid uid', async () => {
-		response = await SELF.fetch(`https://example.com/v1/crud/stripe/invalid_uid`, {
-			method: 'POST',
-			headers: {
-				Authorization: testUserJwt,
-			},
-			body: JSON.stringify(validWebhookInit),
-		});
-		expect(response.status).toBe(401);
 	});
 
 	it('successfully creates a webhook', async () => {
@@ -178,34 +160,6 @@ describe('Stripe Integration CRUD Operations', () => {
 		expect(webhook.webhookUrl).toBe(webhookUrl);
 	});
 
-	it('fails to update webhook with invalid id', async () => {
-		response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}/invalid_id`, {
-			method: 'PUT',
-			headers: {
-				Authorization: testUserJwt,
-			},
-			body: JSON.stringify(validWebhookInit),
-		});
-		expect(response.status).toBe(400);
-	});
-
-	it('fails to update webhook with modified webhookUrl', async () => {
-		const updatedWebhook = {
-			...validWebhookInit,
-			id: webhookId,
-			webhookUrl: 'https://different-url.com/webhook'
-		};
-
-		response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}/${webhookId}`, {
-			method: 'PUT',
-			headers: {
-				Authorization: testUserJwt,
-			},
-			body: JSON.stringify(updatedWebhook),
-		});
-		expect(response.status).toBe(400);
-	});
-
 	it('successfully deletes a webhook', async () => {
 		response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}/${webhookId}`, {
 			method: 'DELETE',
@@ -227,16 +181,6 @@ describe('Stripe Integration CRUD Operations', () => {
 		expect(webhooks.some(webhook => webhook.id === webhookId)).toBe(false);
 	});
 
-	it('fails to delete webhook with invalid id', async () => {
-		response = await SELF.fetch(`https://example.com/v1/crud/stripe/${testUserId}/invalid_id`, {
-			method: 'DELETE',
-			headers: {
-				Authorization: testUserJwt,
-			},
-		});
-		expect(response.status).toBe(400);
-	});
-
 	describe('Webhook Endpoint Tests', () => {
 
 		beforeAll(async () => {
@@ -250,42 +194,7 @@ describe('Stripe Integration CRUD Operations', () => {
 			const webhook = await response.json() as StripeIntegration;
 			webhookId = webhook.id;
 			webhookUrl = webhook.webhookUrl;
-			await Firebase.Admin.setClaims(serviceAccount, testUserId, {});
-		});
-
-		it('fails webhook call without stripe signature', async () => {
-			response = await SELF.fetch(webhookUrl, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: '{}',
-			});
-			expect(response.status).toBe(400);
-		});
-
-		it('fails webhook call with invalid stripe signature', async () => {
-			response = await SELF.fetch(webhookUrl, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'Stripe-Signature': 'invalid_signature',
-				},
-				body: '{}',
-			});
-			expect(response.status).toBe(401);
-		});
-
-		it('fails webhook call with invalid webhook ID', async () => {
-			response = await SELF.fetch(`https://example.com/v1/stripe/${testUserId}/invalid_webhook_id`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'Stripe-Signature': 'invalid_signature',
-				},
-				body: '{}',
-			});
-			expect(response.status).toBe(404);
+			await Supabase.Admin.setClaims({privateKey, projectUrl, uid: testEndUserId, claims: {}});
 		});
 
 		it('successfully processes webhook with valid signature for checkout.session.completed', async () => {
@@ -317,7 +226,7 @@ describe('Stripe Integration CRUD Operations', () => {
 			expect(response.status).toBe(200);
 			const claims: CustomClaims[] = await response.json();
 			const claim = claims
-				.find((s: CustomClaims) => s.uid === testUserId)
+				.find((s: CustomClaims) => s.uid === testEndUserId)
 			const savedSub = claim?.stripe_subs?.[subscription.id];
 			expect(savedSub).toBeDefined();
 			expect(savedSub?.status).toBe('active');
@@ -333,7 +242,7 @@ describe('Stripe Integration CRUD Operations', () => {
 						...subscription,
 						status: 'canceled',
 						metadata: {
-							auth_user_id: testUserId
+							auth_user_id: testEndUserId
 						}
 					}
 				}
@@ -368,7 +277,7 @@ describe('Stripe Integration CRUD Operations', () => {
 			expect(response.status).toBe(200);
 			const claims: CustomClaims[] = await response.json();
 			const claim = claims
-				.find((s: CustomClaims) => s.uid === testUserId)
+				.find((s: CustomClaims) => s.uid === testEndUserId)
 			const savedSub = claim?.stripe_subs?.[subscription.id];
 			expect(savedSub).toBeDefined();
 			expect(savedSub?.status).toBe('canceled');
@@ -384,46 +293,7 @@ describe('Stripe Integration CRUD Operations', () => {
 					Authorization: testUserJwt,
 				},
 			});
-			await Firebase.Admin.setClaims(serviceAccount, testUserId, {});
-		});
-	});
-
-	describe('Stripe Admin/Self Subscription Tests', () => {
-		let response: Response;
-		beforeAll(async () => {
-			await Firebase.Admin.setClaims(serviceAccount, testUserId, {});
-		});
-
-		it('successfully create subscription in backmesh itself', async () => {
-
-			response = await SELF.fetch('https://example.com/v1/stripe', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'Stripe-Signature': header,
-				},
-				body: payload,
-			});
-			if (response.status !== 200) {
-				const errorText = await response.text();
-				console.error('Response status:', response.status);
-				console.error('Response text:', errorText);
-			}
-			expect(response.status).toBe(200);
-		});
-
-		it('successfully finds subscription created', async () => {
-			const claims = await Firebase.Admin.getClaims(serviceAccount, testUserId);
-			expect(claims?.stripe_subs).toBeDefined();
-			expect(claims?.stripe_subs?.[subscription.id]).toBeDefined();
-			expect(claims?.stripe_subs?.[subscription.id].status).toBe('active');
-			expect(claims?.stripe_subs?.[subscription.id].prods.length).toBe(1);
-			expect(claims?.stripe_subs?.[subscription.id].prods[0]).toBe(`1x${productId}`);
-		});
-
-		// Clean up webhook after tests
-		afterAll(async () => {
-			await Firebase.Admin.setClaims(serviceAccount, testUserId, {});
+			await Supabase.Admin.setClaims({privateKey, projectUrl, uid: testEndUserId, claims: {}});
 		});
 	});
 });

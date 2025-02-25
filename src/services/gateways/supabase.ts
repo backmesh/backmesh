@@ -51,19 +51,11 @@ export default {
       }
       const userData: User = await response.json();
 
-      // Set all existing metadata fields to null
-      // const nullifiedMetadata = Object.keys(userData.user_metadata || {}).reduce((acc, key) => {
-      //   acc[key] = null;
-      //   return acc;
-      // }, {} as Record<string, null>);
-
-      // Create new metadata object, preserving only non-claim fields
-      const newMetadata = { ...userData.user_metadata };
-      // Remove existing claim fields
-      delete newMetadata.stripe_subs;
-      // Add new claims if they exist
-      Object.assign(newMetadata, claims['stripe_subs']);
-      // Update with nullified fields first to clear everything
+      // Create new metadata object, preserving non-claim fields
+      const newMetadata = {
+        ...userData.user_metadata,
+        ...claims,
+      };
       const clearResponse = await fetch(`${projectUrl}/auth/v1/admin/users/${uid}`, {
         method: 'PUT',
         headers: {
