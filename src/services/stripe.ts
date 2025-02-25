@@ -22,7 +22,7 @@ class StripeIntegrationCrud implements Crud<StripeIntegration> {
 		value.id = id;
 		value.webhookUrl = `${origin}/v1/stripe/${backmeshUid}/${id}`;
 		assertStripeIntegration(value);
-		if (AuthProviderType.FIREBASE && !isValidJsonStr(value.authPrivateKey)) {
+		if (value.authType === AuthProviderType.FIREBASE && !isValidJsonStr(value.authPrivateKey)) {
 			throw new TypeError('serviceAccount must be a valid JSON string');
 		}
 		value.webhookSecret = await encrypt(value.webhookSecret, env.PASSWORD);
@@ -43,7 +43,7 @@ class StripeIntegrationCrud implements Crud<StripeIntegration> {
 			value.webhookSecret = await encrypt(value.webhookSecret, env.PASSWORD);
 		}
 		if (isValidStr(value.authPrivateKey)) {
-			if (AuthProviderType.FIREBASE && !isValidJsonStr(value.authPrivateKey)) {
+			if (value.authType === AuthProviderType.FIREBASE && !isValidJsonStr(value.authPrivateKey)) {
 				throw new TypeError('serviceAccount must be a valid JSON string');
 			}
 			value.authPrivateKey = await encrypt(value.authPrivateKey, env.PASSWORD);

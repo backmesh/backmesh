@@ -1,12 +1,17 @@
 import Stripe from "stripe";
 import { AuthProviderType, CustomClaims, StripeSubscriptions, StripeIntegration } from "./repos/models";
 import Firebase from "./gateways/firebase";
+import Supabase from "./gateways/supabase";
 
 async function getClaims(uid: string, integration: StripeIntegration): Promise<CustomClaims> {
   if (integration.authType === AuthProviderType.FIREBASE) {
     return await Firebase.Admin.getClaims(integration.authPrivateKey, uid);
   } else if (integration.authType === AuthProviderType.SUPABASE) {
-    throw new TypeError("Supabase not supported");
+    return await Supabase.Admin.getClaims({
+      privateKey: integration.authPrivateKey,
+      projectUrl: integration.authAppId,
+      uid,
+    });
   } else {
     throw new TypeError("Unsupported auth provider");
   }
@@ -16,7 +21,14 @@ async function setClaims(uid: string, integration: StripeIntegration, claims: Cu
   if (integration.authType === AuthProviderType.FIREBASE) {
     return await Firebase.Admin.setClaims(integration.authPrivateKey, uid, claims);
   } else if (integration.authType === AuthProviderType.SUPABASE) {
-    throw new TypeError("Supabase not supported");
+    return await Supabase.Admin.setClaims({
+      privateKey: integration.authPrivateKey,
+      projectUrl: integration.authAppId,
+      uid,
+      claims,
+    });
+  } else {
+    throw new TypeError("Unsupported auth provider");
   }
 }
 
