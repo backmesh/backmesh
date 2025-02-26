@@ -11,7 +11,7 @@
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.4.5",
-		"@cloudflare/workers-types": "^4.20240729.0",
+		"@cloudflare/workers-types": "^4.20250224.0",
 		"@googleapis/identitytoolkit": "^11.0.0",
 		"@supabase/auth-js": "^2.68.0",
 		"@types/stripe": "^8.0.416",
