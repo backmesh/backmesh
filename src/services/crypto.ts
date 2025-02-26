@@ -23,7 +23,7 @@ const getPasswordKey = (password: string): PromiseLike<CryptoKey> =>
 
 const deriveKey = (
 	passwordKey: CryptoKey,
-	salt: Uint8Array,
+	salt: ArrayBuffer,
 	keyUsage: CryptoKey['usages'],
 ): PromiseLike<CryptoKey> =>
 	crypto.subtle.deriveKey(
@@ -60,11 +60,11 @@ export async function encrypt(
 		const salt = crypto.getRandomValues(new Uint8Array(16));
 		const iv = crypto.getRandomValues(new Uint8Array(12));
 		const passwordKey = await getPasswordKey(password);
-		const aesKey = await deriveKey(passwordKey, salt, ['encrypt']);
+		const aesKey = await deriveKey(passwordKey, salt.buffer, ['encrypt']);
 		const encryptedContent = await crypto.subtle.encrypt(
 			{
 				name: 'AES-GCM',
-				iv: iv,
+				iv: iv.buffer,
 			},
 			aesKey,
 			enc.encode(secretData),
@@ -79,7 +79,7 @@ export async function encrypt(
 		buff.set(iv, salt.byteLength);
 		buff.set(encryptedContentArr, salt.byteLength + iv.byteLength);
 
-		const base64Buff = buffToBase64(buff);
+		const base64Buff = buffToBase64(buff.buffer);
 		return base64Buff;
 	} catch (e) {
 		throw e;
@@ -98,11 +98,11 @@ export async function decrypt(
 		const data = encryptedDataBuff.slice(16 + 12);
 
 		const passwordKey = await getPasswordKey(password);
-		const aesKey = await deriveKey(passwordKey, salt, ['decrypt']);
+		const aesKey = await deriveKey(passwordKey, salt.buffer, ['decrypt']);
 		const decryptedContent = await crypto.subtle.decrypt(
 			{
 				name: 'AES-GCM',
-				iv: iv,
+				iv: iv.buffer,
 			},
 			aesKey,
 			data,

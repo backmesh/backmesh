@@ -17,6 +17,9 @@ jobs:
       - name: Install wrangler
         run: npm install
 
+      - name: Compile check
+        run: npx tsc
+
       - name: Setup environment variables
         run: |
           touch .dev.vars
