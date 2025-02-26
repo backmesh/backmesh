@@ -2,15 +2,9 @@ name: Cloudflare Worker
 
 on:
   pull_request:
-    paths-ignore:
-      - '**/*.md'
-      - '*.md'
   push:
     branches:
       - main
-    paths-ignore:
-      - '**/*.md'
-      - '*.md'
   workflow_dispatch:
 
 jobs:
