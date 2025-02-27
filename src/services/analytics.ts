@@ -194,6 +194,7 @@ export class ProxyExchangeSummary {
 		const modelPricing = MODEL_PRICES[model];
 		// If model not found, return 0 cost
 		if (!modelPricing) {
+			console.error(`Model ${model} not found in MODEL_PRICES`);
 			return 0;
 		}
 		let cost = 0;

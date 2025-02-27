@@ -1,7 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { ProxyExchangeSummary } from '../src/services/analytics';
 import { LLMUsage, MODEL_PRICES } from '../src/services/repos/models';
-import { vi } from 'vitest';
 
 describe('ProxyExchangeSummary', () => {
   describe('estimateCost', () => {
@@ -135,6 +134,21 @@ describe('ProxyExchangeSummary', () => {
       const cost = ProxyExchangeSummary.estimateCost(usage);
       const expectedCost = 500 * MODEL_PRICES[modelName.toLowerCase()].output_cost_per_token!;
       expect(cost).toBe(expectedCost);
+    });
+
+    it('should return 0 when model summary is not found', () => {
+      // Create a usage object with a model name that doesn't exist in MODEL_PRICES
+      const usage: LLMUsage = {
+        model: 'non-existent-model-' + Date.now(), // Ensure uniqueness
+        inputTokens: 1000,
+        outputTokens: 500
+      };
+      
+      // Call estimateCost with the usage object
+      const cost = ProxyExchangeSummary.estimateCost(usage);
+      
+      // Verify that the cost is 0 when the model is not found
+      expect(cost).toBe(0);
     });
   });
 }); 
