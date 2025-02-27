@@ -1,12 +1,12 @@
 import {
   InvalidProxyRequest,
   assertEndUserAnalytics,
-	MODEL_PRICES,
   ProxyExchange,
   ProxyRequest,
   ProxyResponse,
   LLMUsage,
   EndUserAnalytics,
+	MODEL_PRICES,
 } from "./repos/models";
 import KV from "./repos/kv";
 

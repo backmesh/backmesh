@@ -251,8 +251,29 @@ export interface ModelPricing {
   [key: string]: any;
 }
 
-// Cast prices to ModelsPricing type
-export const MODEL_PRICES = prices as { [key: string]: ModelPricing };
+// cloudflare
+// https://developers.cloudflare.com/workers-ai/platform/pricing/
+const cloudflarePrices = {
+	'@cf/meta/llama-3.2-1b-instruct': { input_cost_per_token: 0.027 * 1e6, output_cost_per_token: 0.201 * 1e6 },
+	'@cf/meta/llama-3.2-3b-instruct': { input_cost_per_token: 0.051 * 1e6, output_cost_per_token: 0.335 * 1e6 },
+	'@cf/meta/llama-3.1-8b-instruct-fp8-fast': { input_cost_per_token: 0.045 * 1e6, output_cost_per_token: 0.384 * 1e6 },
+	'@cf/meta/llama-3.2-11b-vision-instruct': { input_cost_per_token: 0.049 * 1e6, output_cost_per_token: 0.676 * 1e6 },
+	'@cf/meta/llama-3.1-70b-instruct-fp8-fast': { input_cost_per_token: 0.293 * 1e6, output_cost_per_token: 2.253 * 1e6 },
+	'@cf/meta/llama-3.3-70b-instruct-fp8-fast': { input_cost_per_token: 0.293 * 1e6, output_cost_per_token: 2.253 * 1e6 },
+	'@cf/deepseek-ai/deepseek-r1-distill-qwen-32b': { input_cost_per_token: 0.497 * 1e6, output_cost_per_token: 4.881 * 1e6 },
+	'@cf/mistral/mistral-7b-instruct-v0.1': { input_cost_per_token: 0.11 * 1e6, output_cost_per_token: 0.19 * 1e6 },
+	'@cf/meta/llama-3.1-8b-instruct': { input_cost_per_token: 0.282 * 1e6, output_cost_per_token: 0.827 * 1e6 },
+	'@cf/meta/llama-3.1-8b-instruct-fp8': { input_cost_per_token: 0.152 * 1e6, output_cost_per_token: 0.287 * 1e6 },
+	'@cf/meta/llama-3.1-8b-instruct-awq': { input_cost_per_token: 0.123 * 1e6, output_cost_per_token: 0.266 * 1e6 },
+	'@cf/meta/llama-3-8b-instruct': { input_cost_per_token: 0.282 * 1e6, output_cost_per_token: 0.827 * 1e6 },
+	'@cf/meta/llama-3-8b-instruct-awq': { input_cost_per_token: 0.123 * 1e6, output_cost_per_token: 0.266 * 1e6 },
+	'@cf/meta/llama-2-7b-chat-fp16': { input_cost_per_token: 0.556 * 1e6, output_cost_per_token: 6.667 * 1e6 },
+};
+
+export const MODEL_PRICES: { [key: string]: ModelPricing } = {
+	...cloudflarePrices,
+	...prices,
+};
 
 export interface Crud<T> {
 	// create for stripecrud has no origin
