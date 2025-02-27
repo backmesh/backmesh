@@ -189,6 +189,7 @@ export type ApiProxy = {
 	// in supabase this case the authAppId is the project or app url
 	// https://naxywnoolzuwzkinwekg.supabase.co
 	authAppId: string;
+	allowedPaths?: string[];
 };
 
 // Type guard to check if an object is of type ApiProxy at runtime
