@@ -142,7 +142,7 @@ export default {
 		const pathParts = path.split('/');
 		const route = pathParts[1];
 		if (fullApiUrl.startsWith('https://api.openai.com')) {
-			const allowedPaths = [
+			const allowedPaths = apiProxy.allowedPaths ?? [
 				'audio',
 				'chat',
 				'models',
@@ -157,7 +157,7 @@ export default {
 		}
 
 		if (fullApiUrl.startsWith('https://api.anthropic.com')) {
-			const allowedInitPaths = ['v1/messages'];
+			const allowedInitPaths = apiProxy.allowedPaths ?? ['v1/messages'];
 			if (!allowedInitPaths.some((p) => path === p)) {
 				return { response: new Response('Forbidden', { status: 403 }) };
 			}
@@ -165,7 +165,7 @@ export default {
 
 		// https://ai.google.dev/api/all-methods
 		if (fullApiUrl.startsWith('https://generativelanguage.googleapis.com')) {
-			const allowedInitPaths = [
+			const allowedInitPaths = apiProxy.allowedPaths ?? [
 				'v1beta/files',
 				'upload/v1beta/files',
 				'v1beta/models',
@@ -176,7 +176,7 @@ export default {
 		}
 
 		if (fullApiUrl.startsWith('https://api.cloudflare.com')) {
-			const allowedPaths = ['ai/run'];
+			const allowedPaths = apiProxy.allowedPaths ?? ['ai/run'];
 			// Cloudflare API has a different structure, so we cannot check the route directly
 			// https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/ai/run/$MODEL_NAME 
 			if (!allowedPaths.some((p) => path.includes(p))) {
