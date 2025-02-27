@@ -1,7 +1,7 @@
 import {
   InvalidProxyRequest,
   assertEndUserAnalytics,
-  modelCostsPerMillion,
+	MODEL_PRICES,
   ProxyExchange,
   ProxyRequest,
   ProxyResponse,
@@ -9,6 +9,7 @@ import {
   EndUserAnalytics,
 } from "./repos/models";
 import KV from "./repos/kv";
+
 
 /**
  * A class representing a proxy exchange with of it summary stored in the key itself.
@@ -189,25 +190,39 @@ export class ProxyExchangeSummary {
    */
 	static estimateCost(usage: LLMUsage): number {
 		const model = usage.model.toLowerCase();
-		const costs = modelCostsPerMillion[model] || { input: 0, output: 0 };
-
-		let cost = 0;
-
-		if (costs.threshold && usage.inputTokens > costs.threshold) {
-			cost +=
-				(usage.inputTokens * (costs.postThresholdInput || costs.input)) / 1_000_000;
-			if (usage.outputTokens) {
-				cost +=
-					(usage.outputTokens * (costs.postThresholdOutput || costs.output || 0)) /
-					1_000_000;
-			}
-		} else {
-			cost += (usage.inputTokens * costs.input) / 1_000_000;
-			if (usage.outputTokens) {
-				cost += (usage.outputTokens * (costs.output || 0)) / 1_000_000;
-			}
+		// Get model pricing from the new data structure
+		const modelPricing = MODEL_PRICES[model];
+		// If model not found, return 0 cost
+		if (!modelPricing) {
+			return 0;
 		}
+		let cost = 0;
+		// Calculate input token cost
+		if (modelPricing.input_cost_per_token) {
+			cost += usage.inputTokens * modelPricing.input_cost_per_token;
+		}
+		// Calculate output token cost if available
+		if (usage.outputTokens && modelPricing.output_cost_per_token) {
+			cost += usage.outputTokens * modelPricing.output_cost_per_token;
+		}
+		// TODO handle audio tokens
+		// if (usage.audioInputTokens && modelPricing.input_cost_per_audio_token) {
+		// 	cost += usage.audioInputTokens * modelPricing.input_cost_per_audio_token;
+		// }
+		// if (usage.audioOutputTokens && modelPricing.output_cost_per_audio_token) {
+		// 	cost += usage.audioOutputTokens * modelPricing.output_cost_per_audio_token;
+		// }
 
+		// TODO handle batch pricing if available and applicable
+		// if (usage.isBatch && modelPricing.input_cost_per_token_batches) {
+		// 	// Replace the standard input cost with batch pricing
+		// 	cost -= usage.inputTokens * modelPricing.input_cost_per_token;
+		// 	cost += usage.inputTokens * modelPricing.input_cost_per_token_batches;
+		// 	if (usage.outputTokens && modelPricing.output_cost_per_token_batches) {
+		// 		cost -= usage.outputTokens * modelPricing.output_cost_per_token;
+		// 		cost += usage.outputTokens * modelPricing.output_cost_per_token_batches;
+		// 	}
+		// }
 		return cost;
 	}
 }

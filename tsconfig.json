@@ -13,6 +13,6 @@
 		"moduleDetection": "force",
 		"isolatedModules": true,
 	},
-	"exclude": ["node_modules", "dist", "test"],
+	"exclude": ["node_modules", "dist", "scripts", "test"],
 	"include": ["worker-configuration.d.ts", "src/**/*.ts"]
 }

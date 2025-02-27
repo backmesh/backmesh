@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import prices from "./prices.json";
 
 export type AuthHeader = {
 	field: string;
@@ -239,64 +240,19 @@ export function isValidStr(testStr: string) {
 	return typeof testStr === 'string' && testStr.trim() !== '';
 }
 
-// TODO how to update programmatically
-export const modelCostsPerMillion: {
-	[key: string]: {
-		input: number;
-		output?: number;
-		threshold?: number;
-		postThresholdInput?: number;
-		postThresholdOutput?: number;
-	};
-} = {
-	// openai
-	'gpt-4o': { input: 5, output: 15 },
-	'gpt-4o-2024-08-06': { input: 2.5, output: 10 },
-	'gpt-4o-2024-05-13': { input: 5, output: 15 },
-	'gpt-4o-mini': { input: 0.15, output: 0.6 },
-	'gpt-4o-mini-2024-07-18': { input: 0.15, output: 0.6 },
-	'text-embedding-3-small': { input: 0.02 },
-	'text-embedding-3-large': { input: 0.13 },
-	'text-embedding-ada-002': { input: 0.1 },
-	// anthropic
-	'claude-3-5-sonnet-20240620': { input: 3, output: 3.75 },
-	'claude-3-opus-20240229': { input: 15, output: 75 },
-	'claude-3-haiku-20240307': { input: 0.25, output: 1.25 },
-	// gemini
-	'gemini-1.5-flash': {
-		input: 0.075,
-		output: 0.3,
-		threshold: 128_000,
-		postThresholdInput: 0.15,
-		postThresholdOutput: 0.6,
-	},
-	'gemini-1.5-pro': {
-		input: 3.5,
-		output: 10.5,
-		threshold: 128_000,
-		postThresholdInput: 7,
-		postThresholdOutput: 21,
-	},
-	'gemini-1.0-pro': {
-		input: 0.5,
-		output: 1.5,
-	},
-	// cloudflare
-	'@cf/meta/llama-3.2-1b-instruct': { input: 0.027, output: 0.201 },
-	'@cf/meta/llama-3.2-3b-instruct': { input: 0.051, output: 0.335 },
-	'@cf/meta/llama-3.1-8b-instruct-fp8-fast': { input: 0.045, output: 0.384 },
-	'@cf/meta/llama-3.2-11b-vision-instruct': { input: 0.049, output: 0.676 },
-	'@cf/meta/llama-3.1-70b-instruct-fp8-fast': { input: 0.293, output: 2.253 },
-	'@cf/meta/llama-3.3-70b-instruct-fp8-fast': { input: 0.293, output: 2.253 },
-	'@cf/deepseek-ai/deepseek-r1-distill-qwen-32b': { input: 0.497, output: 4.881 },
-	'@cf/mistral/mistral-7b-instruct-v0.1': { input: 0.11, output: 0.19 },
-	'@cf/meta/llama-3.1-8b-instruct': { input: 0.282, output: 0.827 },
-	'@cf/meta/llama-3.1-8b-instruct-fp8': { input: 0.152, output: 0.287 },
-	'@cf/meta/llama-3.1-8b-instruct-awq': { input: 0.123, output: 0.266 },
-	'@cf/meta/llama-3-8b-instruct': { input: 0.282, output: 0.827 },
-	'@cf/meta/llama-3-8b-instruct-awq': { input: 0.123, output: 0.266 },
-	'@cf/meta/llama-2-7b-chat-fp16': { input: 0.556, output: 6.667 },
-};
+// Define interface for model pricing
+export interface ModelPricing {
+  input_cost_per_token?: number;
+  output_cost_per_token?: number;
+  input_cost_per_audio_token?: number;
+  output_cost_per_audio_token?: number;
+  input_cost_per_token_batches?: number;
+  output_cost_per_token_batches?: number;
+  [key: string]: any;
+}
+
+// Cast prices to ModelsPricing type
+export const MODEL_PRICES = prices as { [key: string]: ModelPricing };
 
 export interface Crud<T> {
 	// create for stripecrud has no origin
