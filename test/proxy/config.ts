@@ -60,6 +60,15 @@ export const openAIProxyInit = JSON.stringify({
 	apiReqHeader: 'Authorization',
 	authPublicKey: testUserFirebaseKey,
 	apiPrivateKey: env.TEST_USER_OPENAI_API_KEY,
+	allowedPaths: [
+		'audio',
+		'chat',
+		'models',
+		'images',
+		'moderations',
+		'files', // private ones
+		'threads', // private ones
+	],
 	authAppId: testUserAppId,
 	rateLimit: 20,
 	rateLimitUnit: RateLimitUnit.MINUTE,

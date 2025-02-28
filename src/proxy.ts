@@ -140,7 +140,6 @@ export default {
 		// v1/assistants, v1/vector_stores and v1/fine_tuning can be added as private endpoints
 		// whitelist of routes supported until someone complains and then understand their use case
 		const pathParts = path.split('/');
-		const route = pathParts[1];
 		if (fullApiUrl.startsWith('https://api.openai.com')) {
 			const allowedPaths = apiProxy.allowedPaths ?? [
 				'audio',
@@ -151,14 +150,14 @@ export default {
 				'files', // private ones
 				'threads', // private ones
 			];
-			if (!allowedPaths.some((p) => route === p)) {
+			if (!allowedPaths.some((p) => path.startsWith(p))) {
 				return { response: new Response(`Path ${path} is not one of ${allowedPaths.join(', ')}`, { status: 403 }) };
 			}
 		}
 
 		if (fullApiUrl.startsWith('https://api.anthropic.com')) {
 			const allowedInitPaths = apiProxy.allowedPaths ?? ['v1/messages'];
-			if (!allowedInitPaths.some((p) => path === p)) {
+			if (!allowedInitPaths.some((p) => path.startsWith(p))) {
 				return { response: new Response(`Path ${path} is not one of ${allowedInitPaths.join(', ')}`, { status: 403 }) };
 			}
 		}
@@ -177,13 +176,13 @@ export default {
 
 		if (fullApiUrl.startsWith('https://api.cloudflare.com')) {
 			const allowedPaths = apiProxy.allowedPaths ?? ['ai/run'];
-			// Cloudflare API has a different structure, so we cannot check the route directly
+			// Cloudflare API has a different structure, so we cannot check the path start
 			// https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/ai/run/$MODEL_NAME 
 			if (!allowedPaths.some((p) => path.includes(p))) {
 				return { response: new Response(`Path ${path} is not one of ${allowedPaths.join(', ')}`, { status: 403 }) };
 			}
 		}
-
+		const route = pathParts[1];
 		// Add existing query parameters
 		if (requestUrl.searchParams.size > 0) {
 			const url = new URL(fullApiUrl);
