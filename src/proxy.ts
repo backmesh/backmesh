@@ -142,13 +142,13 @@ export default {
 		const pathParts = path.split('/');
 		if (fullApiUrl.startsWith('https://api.openai.com')) {
 			const allowedPaths = apiProxy.allowedPaths ?? [
-				'audio',
-				'chat',
-				'models',
-				'images',
-				'moderations',
-				'files', // private ones
-				'threads', // private ones
+				'v1/audio',
+				'v1/chat',
+				'v1/models',
+				'v1/images',
+				'v1/moderations',
+				'v1/files', // private ones
+				'v1/threads', // private ones
 			];
 			if (!allowedPaths.some((p) => path.startsWith(p))) {
 				return { response: new Response(`Path ${path} is not one of ${allowedPaths.join(', ')}`, { status: 403 }) };
