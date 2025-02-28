@@ -83,6 +83,10 @@ describe('Firebase + Anthropic API Proxy Completion usage', () => {
 				body: messageBody,
 			},
 		);
+		if (response.status === 529) {
+			console.log('Received 529 status, skipping assertions');
+			return;
+		}
 		if (response.status !== 200) console.error(await response.text());
 		expect(response.status).toBe(200);
 
