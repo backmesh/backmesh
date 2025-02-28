@@ -152,14 +152,14 @@ export default {
 				'threads', // private ones
 			];
 			if (!allowedPaths.some((p) => route === p)) {
-				return { response: new Response('Forbidden', { status: 403 }) };
+				return { response: new Response(`Path ${path} is not allowed`, { status: 403 }) };
 			}
 		}
 
 		if (fullApiUrl.startsWith('https://api.anthropic.com')) {
 			const allowedInitPaths = apiProxy.allowedPaths ?? ['v1/messages'];
 			if (!allowedInitPaths.some((p) => path === p)) {
-				return { response: new Response('Forbidden', { status: 403 }) };
+				return { response: new Response(`Path ${path} is not allowed`, { status: 403 }) };
 			}
 		}
 
@@ -171,7 +171,7 @@ export default {
 				'v1beta/models',
 			];
 			if (!allowedInitPaths.some((p) => path.startsWith(p))) {
-				return { response: new Response('Forbidden', { status: 403 }) };
+				return { response: new Response(`Path ${path} is not allowed`, { status: 403 }) };
 			}
 		}
 
@@ -180,7 +180,7 @@ export default {
 			// Cloudflare API has a different structure, so we cannot check the route directly
 			// https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/ai/run/$MODEL_NAME 
 			if (!allowedPaths.some((p) => path.includes(p))) {
-				return { response: new Response('Forbidden', { status: 403 }) };
+				return { response: new Response(`Path ${path} is not allowed`, { status: 403 }) };
 			}
 		}
 
