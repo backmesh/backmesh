@@ -69,6 +69,7 @@ These bindings will provide native-feeling SDKs leveraging the core Rust datasto
 ### Phase 3: Offline and LMDB
 - LMDB backend for Datastore API for offline/local storage.
 - Implement Rust-based replicator for local-to-remote KV synchronization
+- Offline sync resources:https://gist.github.com/pesterhazy/3e039677f2e314cb77ffe3497ebca07b
 
 ### Phase 4: Vector Support (Future Work)
 - Extend datastore capabilities to efficiently handle vector embeddings.
