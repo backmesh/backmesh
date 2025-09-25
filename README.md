@@ -4,11 +4,11 @@
 
 <h1 align="center">Backmesh</h1>
 
-## 😵‍💫 Problem
+### 😵‍💫 Problem
 
 Shipping LLM API keys in your app can lead to bad actors that hack your OpenAI or Anthropic account and rack up thousands of dollars in LLM API costs
 
-## 🛠️ Solution
+### 🛠️ Solution
 
 Backmesh is an open-source, thoroughly tested backend that uses military grade encryption to protect your LLM API key and offer an API Gatekeeper to let your web or mobile app safely call the API using **any LLM SDK** without exposing private API keys. Only 2 changes needed in your app:
 1. Replace the LLM API URL with the Backmesh Gatekeeper URL.
@@ -29,7 +29,7 @@ const client = new OpenAI({
 });
 ```
 
-## 🔒 How is the LLM API protected
+### 🔒 How is the LLM API protected
 
 - *JWT Authentication:* Requests are verified with [JWTs](https://firebase.google.com/docs/auth/admin/verify-id-tokens) from the app's authentication provider so only your users have access to the LLM API via Backmesh.
 - *Rate limits per user:* Configurable per-user rate limits to prevent abuse (e.g. no more than 5 OpenAI API calls per user per hour).
@@ -37,10 +37,10 @@ const client = new OpenAI({
 
 For more details, see the [security documentation](https://backmesh.com/docs/security).
 
-## ⚡️ Try out Backmesh
+### ⚡️ Try out Backmesh
 
 Get started with Backmesh using our [dashboard](https://app.backmesh.com) or if you would like to self host make sure to check out the self hosting [guide](https://backmesh.com/docs/selfhost).
 
-## 🚀 Contribute
+### 🚀 Contribute
 
 To contribute, visit [Contributing.md](./CONTRIBUTING.md)
