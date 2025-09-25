@@ -2,11 +2,17 @@
   <img src="https://backmesh.com/img/logo.png" width="80"/>
 </p>
 
-<h1 align="center">Backmesh, Open Source BaaS for AI apps</h1>
+<h1 align="center">Backmesh, open source backend to protect LLM keys in your app</h1>
 
-Backmesh is an open source Backend as a Service (BaaS) for AI apps. It lets you securely call LLM APIs directly from your mobile or web app using **any LLM SDK** without exposing private API keys. The only changes in your app are to replace:
-1. The LLM API URL with the Backmesh URL.
-2. The LLM private key with the authenticated user's JWT.
+## 😵‍💫 Problem
+
+Shipping LLM API keys in your app can lead to bad actors that hack your OpenAI or Anthropic account and rack up thousands of dollars in LLM API costs
+
+## 🛠️ Solution
+
+Backmesh is an open-source, thoroughly tested backend that uses military grade encryption to protect your LLM API key and offer an API Gatekeeper to let your web or mobile app safely call the API using **any LLM SDK** without exposing private API keys. Only 2 changes needed in your app:
+1. Replace the LLM API URL with the Backmesh Gatekeeper URL.
+2. Replace the LLM private key with the authenticated user's JWT.
 
 ```js title="openai.ts"
 import OpenAI from "openai";
