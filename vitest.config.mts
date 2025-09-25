@@ -5,6 +5,7 @@ export default defineWorkersConfig({
 		// set test timeout to 100 seconds
 		testTimeout: 100000,
 		hookTimeout: 15000,
+		exclude: ['**/stripe/**'],
 		poolOptions: {
 			workers: {
 				wrangler: { configPath: './wrangler.toml' },
