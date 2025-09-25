@@ -17,7 +17,7 @@
 		"@types/stripe": "^8.0.416",
 		"typescript": "^5.5.2",
 		"vitest": "1.5.0",
-		"wrangler": "^3.69.1"
+		"wrangler": "^4.40.1"
 	},
 	"dependencies": {
 		"firebase-auth-cloudflare-workers": "^2.0.6",
