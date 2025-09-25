@@ -2,7 +2,7 @@
   <img src="https://backmesh.com/img/logo.png" width="80"/>
 </p>
 
-<h1 align="center">Backmesh, open source backend to protect LLM keys in your app</h1>
+<h1 align="center">Backmesh is battle-tested backend to protect LLM keys in your app</h1>
 
 ## 😵‍💫 Problem
 
