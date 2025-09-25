@@ -15,7 +15,7 @@
 		"@googleapis/identitytoolkit": "^11.0.0",
 		"@supabase/auth-js": "^2.68.0",
 		"@types/stripe": "^8.0.416",
-		"typescript": "^5.5.2",
+		"typescript": "^5.9.2",
 		"vitest": "^3.2.4",
 		"wrangler": "^4.40.1"
 	},
