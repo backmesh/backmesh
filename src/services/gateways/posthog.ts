@@ -16,6 +16,42 @@ async function captureEvent(name: string, properties: any) {
 }
 
 export default {
+	async captureNewProxy(
+		backmeshUid: string,
+		proxyId: string,
+		env: any,
+	) {
+		if (env.TEST_USER_PASS !== undefined) return;
+		await captureEvent('new_proxy', {
+			distinct_id: backmeshUid,
+			proxy_id: proxyId,
+		});
+	},
+
+	async captureDeleteProxy(
+		backmeshUid: string,
+		proxyId: string,
+		env: any,
+	) {
+		if (env.TEST_USER_PASS !== undefined) return;
+		await captureEvent('delete_proxy', {
+			distinct_id: backmeshUid,
+			proxy_id: proxyId,
+		});
+	},
+
+	async captureEditProxy(
+		backmeshUid: string,
+		proxyId: string,
+		env: any,
+	) {
+		if (env.TEST_USER_PASS !== undefined) return;
+		await captureEvent('edit_proxy', {
+			distinct_id: backmeshUid,
+			proxy_id: proxyId,
+		});
+	},
+
 	async captureProxyReq(
 		req: ProxyRequest | InvalidProxyRequest,
 		res: ProxyResponse,
