@@ -1,5 +1,6 @@
 import auth from './services/auth';
 import Subscription from './services/subscription';
+import posthog from './services/gateways/posthog';
 import { ProxyExchangeSummary } from './services/analytics';
 import { apiProxyCrud } from './services/proxy';
 import { stripeIntegrationCrud } from './services/stripe';
@@ -126,9 +127,10 @@ async function handleProxyRequest(
 				return new Response('No body in request', { status: 400 });
 			}
 			const requestUrl = new URL(request.url);
-			return handleRequest(async () =>
-				apiProxyCrud.create(env, requestUrl.origin, backmeshUid, await request.json()),
-			);
+			return handleRequest(async () => {
+				await apiProxyCrud.create(env, requestUrl.origin, backmeshUid, await request.json());
+				await posthog.captureNewProxy(backmeshUid, proxyId!, env);
+			});
 
 		case 'PUT':
 			if (proxyId === undefined) {
@@ -137,9 +139,10 @@ async function handleProxyRequest(
 			if (!request.body) {
 				return new Response('No body in request', { status: 400 });
 			}
-			return handleRequest(async () =>
-				apiProxyCrud.edit(env, backmeshUid, proxyId!, await request.json()),
-			);
+			return handleRequest(async () => {
+				await apiProxyCrud.edit(env, backmeshUid, proxyId!, await request.json());
+				await posthog.captureEditProxy(backmeshUid, proxyId!, env);
+			});
 
 		case 'GET':
 			return handleRequest(async () => {
@@ -158,7 +161,10 @@ async function handleProxyRequest(
 			if (proxyId === undefined) {
 				return new Response('Invalid pathname', { status: 400 });
 			}
-			return handleRequest(async () => apiProxyCrud.delete(env, backmeshUid, proxyId!));
+			return handleRequest(async () => {
+				await apiProxyCrud.delete(env, backmeshUid, proxyId!);
+				await posthog.captureDeleteProxy(backmeshUid, proxyId!, env);
+			});
 
 		default:
 			return new Response('Not Found', { status: 404 });
