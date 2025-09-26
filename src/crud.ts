@@ -128,8 +128,9 @@ async function handleProxyRequest(
 			}
 			const requestUrl = new URL(request.url);
 			return handleRequest(async () => {
-				await apiProxyCrud.create(env, requestUrl.origin, backmeshUid, await request.json());
-				await posthog.captureNewProxy(backmeshUid, proxyId!, env);
+				const proxy = await apiProxyCrud.create(env, requestUrl.origin, backmeshUid, await request.json());
+				await posthog.captureNewProxy(backmeshUid, proxy.id!, env);
+				return proxy;
 			});
 
 		case 'PUT':
@@ -140,8 +141,9 @@ async function handleProxyRequest(
 				return new Response('No body in request', { status: 400 });
 			}
 			return handleRequest(async () => {
-				await apiProxyCrud.edit(env, backmeshUid, proxyId!, await request.json());
+				const proxy = await apiProxyCrud.edit(env, backmeshUid, proxyId!, await request.json());
 				await posthog.captureEditProxy(backmeshUid, proxyId!, env);
+				return proxy;
 			});
 
 		case 'GET':
@@ -162,8 +164,9 @@ async function handleProxyRequest(
 				return new Response('Invalid pathname', { status: 400 });
 			}
 			return handleRequest(async () => {
-				await apiProxyCrud.delete(env, backmeshUid, proxyId!);
+				const proxy = await apiProxyCrud.delete(env, backmeshUid, proxyId!);
 				await posthog.captureDeleteProxy(backmeshUid, proxyId!, env);
+				return proxy;
 			});
 
 		default:
