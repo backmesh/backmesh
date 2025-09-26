@@ -1,4 +1,4 @@
-import { ApiProxy, InvalidProxyRequest, ProxyRequest, ProxyResponse } from '../repos/models';
+import { InvalidProxyRequest, ProxyRequest, ProxyResponse } from '../repos/models';
 
 async function captureEvent(name: string, properties: any) {
 	const payload = {
