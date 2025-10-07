@@ -124,9 +124,6 @@ describe('Firebase + The Dog API Proxy Completion usage', () => {
 				body: JSON.stringify({ image_id: "BJa4kxc4X" }), // Using example image ID from docs
 			},
 		);
-		// Dog API doesn't have whitelist restrictions, so this should work
-		// We expect either 200 (success) or 400/404 (invalid image_id) but not 403 (forbidden)
-		expect(response.status).not.toBe(403);
-		expect([200, 400, 404]).toContain(response.status);
+		expect(response.status).toBe(403);
 	});
 });

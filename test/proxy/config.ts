@@ -125,4 +125,5 @@ export const dogApiProxyInit = JSON.stringify({
 	rateLimit: 20,
 	rateLimitUnit: RateLimitUnit.MINUTE,
 	authType: AuthProviderType.FIREBASE,
+	allowedPaths: ['v1/breeds'],
 });
