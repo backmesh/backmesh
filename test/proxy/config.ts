@@ -3,7 +3,6 @@ import { AuthProviderType } from "../../src/services/repos/models";
 import { RateLimitUnit } from "../../src/services/repos/models";
 import { getTokenFromFirebaseKey } from "../utils";
 
-
 export const backmeshFirebaseKey = env.BACKMESH_FIREBASE_KEY;
 // backmesh test user
 export const testUserAppId = env.FIREBASE_TEST_USER_APP_ID;
