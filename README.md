@@ -6,13 +6,13 @@
 
 ### 😵‍💫 Problem
 
-Shipping LLM API keys in your app can lead to bad actors that hack your OpenAI or Anthropic account and rack up thousands of dollars in LLM API costs
+Shipping private API keys in your app can lead to bad actors that hack your API account and rack up thousands of dollars in API costs
 
 ### 🛠️ Solution
 
-Backmesh is an open-source, thoroughly tested backend that uses military grade encryption to protect your LLM API key and offer an API Gatekeeper to let your web or mobile app safely call the API using **any LLM SDK** without exposing private API keys. Only 2 changes needed in your app:
-1. Replace the LLM API URL with the Backmesh Gatekeeper URL.
-2. Replace the LLM private key with the authenticated user's JWT.
+Backmesh is an open-source, thoroughly tested backend that uses military grade encryption to protect your private API key and offer an API Gatekeeper to let your web or mobile app safely call the API using **any SDK** without exposing private API keys. Only 2 changes needed in your app:
+1. Replace the API URL with the Backmesh Gatekeeper URL.
+2. Replace the API private key with the authenticated user's JWT.
 
 ```js title="openai.ts"
 import OpenAI from "openai";
@@ -33,6 +33,8 @@ const client = new OpenAI({
 
 - *JWT Authentication:* Requests are verified with [JWTs](https://firebase.google.com/docs/auth/admin/verify-id-tokens) from the app's authentication provider so only your users have access to the LLM API via Backmesh.
 - *Rate limits per user:* Configurable per-user rate limits to prevent abuse (e.g. no more than 5 OpenAI API calls per user per hour).
+
+## 🛡️ Additional Protections for LLM APIs
 - *Resource access control:* Sensitive API resources like [Files](https://platform.openai.com/docs/api-reference/files) and [Threads](https://platform.openai.com/docs/api-reference/threads) are protected so only the users that create them can continue to access them.
 
 For more details, see the [security documentation](https://backmesh.com/docs/security).

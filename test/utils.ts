@@ -3,29 +3,47 @@ export async function getTokenFromFirebaseKey(
 	email: string,
 	password: string,
 ): Promise<string> {
-	const response = await fetch(
-		`https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyPassword?key=${publicFirebaseKey}`,
-		{
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
+	console.log(`Attempting Firebase authentication for email: ${email}`);
+	
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+	
+	try {
+		const response = await fetch(
+			`https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyPassword?key=${publicFirebaseKey}`,
+			{
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					email: email,
+					password: password,
+					returnSecureToken: true,
+				}),
+				signal: controller.signal,
 			},
-			body: JSON.stringify({
-				email: email,
-				password: password,
-				returnSecureToken: true,
-			}),
-		},
-	);
+		);
 
-	if (!response.ok) {
-		const errorText = await response.text();
-		console.error('Error response text:', errorText);
-		throw new Error('Error verifying password: ' + response.statusText);
+		clearTimeout(timeoutId);
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			console.error('Firebase auth error response:', errorText);
+			throw new Error(`Firebase authentication failed: ${response.status} ${response.statusText}`);
+		}
+
+		const data: any = await response.json();
+		console.log(`Firebase authentication successful for email: ${email}`);
+		return data.idToken;
+	} catch (error) {
+		clearTimeout(timeoutId);
+		if (error.name === 'AbortError') {
+			throw new Error('Firebase authentication timed out after 30 seconds');
+		}
+		console.error('Firebase authentication error:', error);
+		throw error;
 	}
-
-	const data: any = await response.json();
-	return data.idToken;
 }
 
 export async function getTokenFromSupabase({

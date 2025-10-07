@@ -140,8 +140,9 @@ export default {
 		// v1/assistants, v1/vector_stores and v1/fine_tuning can be added as private endpoints
 		// whitelist of routes supported until someone complains and then understand their use case
 		const pathParts = path.split('/');
+		let allowedPaths : string[] | undefined = apiProxy.allowedPaths;
 		if (fullApiUrl.startsWith('https://api.openai.com')) {
-			const allowedPaths = apiProxy.allowedPaths ?? [
+			allowedPaths = allowedPaths ?? [
 				'v1/audio',
 				'v1/chat',
 				'v1/models',
@@ -150,37 +151,28 @@ export default {
 				'v1/files', // private ones
 				'v1/threads', // private ones
 			];
-			if (!allowedPaths.some((p) => path.startsWith(p))) {
-				return { response: new Response(`Path ${path} is not one of ${allowedPaths.join(', ')}`, { status: 403 }) };
-			}
 		}
 
 		if (fullApiUrl.startsWith('https://api.anthropic.com')) {
-			const allowedInitPaths = apiProxy.allowedPaths ?? ['v1/messages'];
-			if (!allowedInitPaths.some((p) => path.startsWith(p))) {
-				return { response: new Response(`Path ${path} is not one of ${allowedInitPaths.join(', ')}`, { status: 403 }) };
-			}
+			allowedPaths = allowedPaths ?? ['v1/messages'];
 		}
 
 		// https://ai.google.dev/api/all-methods
 		if (fullApiUrl.startsWith('https://generativelanguage.googleapis.com')) {
-			const allowedInitPaths = apiProxy.allowedPaths ?? [
+			allowedPaths = allowedPaths ?? [
 				'v1beta/files',
 				'upload/v1beta/files',
 				'v1beta/models',
 			];
-			if (!allowedInitPaths.some((p) => path.startsWith(p))) {
-				return { response: new Response(`Path ${path} is not one of ${allowedInitPaths.join(', ')}`, { status: 403 }) };
-			}
 		}
 
 		if (fullApiUrl.startsWith('https://api.cloudflare.com')) {
-			const allowedPaths = apiProxy.allowedPaths ?? ['ai/run'];
+			allowedPaths = allowedPaths ?? ['ai/run'];
 			// Cloudflare API has a different structure, so we cannot check the path start
 			// https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/ai/run/$MODEL_NAME 
-			if (!allowedPaths.some((p) => path.includes(p))) {
-				return { response: new Response(`Path ${path} is not one of ${allowedPaths.join(', ')}`, { status: 403 }) };
-			}
+		}
+		if (allowedPaths === undefined || !allowedPaths.some((p) => path.includes(p))) {
+			return { response: new Response(`Path ${path} is not one of ${allowedPaths?.join(', ')}`, { status: 403 }) };
 		}
 		const route = pathParts[1];
 		// Add existing query parameters

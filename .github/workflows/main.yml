@@ -54,6 +54,8 @@ jobs:
           FIREBASE_TEST_USER_USER_1_ID=${{ vars.FIREBASE_TEST_USER_USER_1_ID }}
           FIREBASE_TEST_USER_USER_2_EMAIL=${{ vars.FIREBASE_TEST_USER_USER_2_EMAIL }}
           FIREBASE_TEST_USER_USER_2_ID=${{ vars.FIREBASE_TEST_USER_USER_2_ID }}
+          # dog api vars
+          TEST_USER_DOG_API_KEY=${{ vars.TEST_USER_DOG_API_KEY }}
           EOL
 
       - name: Run tests
