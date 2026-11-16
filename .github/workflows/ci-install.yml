@@ -35,9 +35,10 @@ on:
         required: true
         default: aws:us-east-2
       mode:
-        description: install; upgrade to move the deployed listener to BACKMESH_VERSION; diagnose to only print the status and the last runner Jobs' ends and logs; uninstall; or stop-runner to terminate one lost-runner check's runner Job
+        description: install; upgrade to move the deployed listener to BACKMESH_VERSION; diagnose to only print the status and the last runner Jobs' ends and logs; uninstall; or stop-runner to terminate one lost-runner check's runner Job; seed-state, once, saves anycloud-sh/backmesh's anycloud-state here from blob
         type: choice
-        options: [install, diagnose, upgrade, uninstall, stop-runner]
+        options:
+          [install, diagnose, upgrade, uninstall, stop-runner, seed-state]
         default: install
       jobs:
         description: diagnose only, how many of the newest ended runner Jobs to print with their events and logs
@@ -60,6 +61,9 @@ on:
         description: uninstall only, also delete the checkpoint bucket, which holds the control plane's backups; otherwise it's kept
         type: boolean
         default: false
+      blob:
+        description: seed-state only, the git blob SHA in this repository of anycloud-sh/backmesh's newest anycloud-state ciphertext
+        default: ''
   schedule:
     - cron: '17 6 1 * *'
 
@@ -90,7 +94,7 @@ concurrency:
 # so it must run while they're down.
 jobs:
   install:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.mode != 'seed-state'
     runs-on: ubuntu-24.04
     # Holds the secrets, and is the subject each cloud's OIDC trust names.
     environment: ci-install
@@ -605,6 +609,57 @@ jobs:
           echo saved=true >>"$GITHUB_OUTPUT"
       - if: ${{ !cancelled() && steps.state.outputs.saved }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.STATE }}
+          path: ${{ runner.temp }}/anycloud.tar.gz.gpg
+          if-no-files-found: error
+          retention-days: 90
+
+  # One-off, for the move from anycloud-sh/backmesh (anycloud-sh/handbook#1,
+  # B7 step 6): saves that repository's newest anycloud-state here, so the
+  # next run restores the anycloud-sh installation instead of starting fresh.
+  # The ciphertext arrives as a git blob of this repository, is kept only if
+  # BACKMESH_STATE_KEY decrypts it, and never replaces a saved state. Removed
+  # after use.
+  seed-state:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'seed-state'
+    runs-on: ubuntu-24.04
+    environment: ci-install
+    timeout-minutes: 10
+    permissions:
+      contents: read # the blob
+      actions: read # the saved state
+    env:
+      ORG: anycloud-sh
+    steps:
+      - *find-state
+      - if: steps.saved.outputs.run-id
+        env:
+          RUN: ${{ steps.saved.outputs.run-id }}
+        run: |
+          echo "::error::$STATE is already saved here, by run $RUN"
+          exit 1
+      - name: Fetch and check the ciphertext
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BLOB: ${{ inputs.blob }}
+          STATE_KEY: ${{ secrets.BACKMESH_STATE_KEY }}
+        run: |
+          [[ $BLOB =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Not a blob SHA: $BLOB"; exit 1; }
+          out=$RUNNER_TEMP/anycloud.tar.gz.gpg
+          gh api "repos/$GITHUB_REPOSITORY/git/blobs/$BLOB" -H 'Accept: application/vnd.github.raw+json' >"$out"
+          [[ $(git hash-object "$out") == "$BLOB" ]] || { echo "::error::The blob's content doesn't match $BLOB"; exit 1; }
+          # As the restore checks it, and it must hold ~/.anycloud.
+          status=$(gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 3 --status-fd 1 \
+            --output "$RUNNER_TEMP/check.tar.gz" --decrypt "$out" 3<<<"$STATE_KEY")
+          if ! grep -q '^\[GNUPG:\] NEED_PASSPHRASE_SYM ' <<<"$status" ||
+            ! grep -qx '\[GNUPG:\] DECRYPTION_OKAY' <<<"$status"; then
+            echo "::error::The blob isn't encrypted with BACKMESH_STATE_KEY"
+            exit 1
+          fi
+          tar -tzf "$RUNNER_TEMP/check.tar.gz" .anycloud >/dev/null
+          rm "$RUNNER_TEMP/check.tar.gz"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.STATE }}
           path: ${{ runner.temp }}/anycloud.tar.gz.gpg
