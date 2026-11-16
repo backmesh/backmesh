@@ -1,0 +1,437 @@
+// `backmesh status`: the runners, the queue, month-to-date
+// cost and the doctor checks, from the hosted API and the listener's
+// `/status`.
+import { CACHE_CAP_ENV } from '../listener/sweep.js';
+import { z } from 'zod';
+
+import type { RunAnycloud } from '../anycloud/binary.js';
+import type { AnycloudApi } from '../anycloud/client.js';
+import {
+  FEATURES,
+  missingFeatures,
+  type FeatureTable,
+} from '../anycloud/features.js';
+import { runnerGroupName } from '../github/runner-group.js';
+import { OVERRIDE_ENV } from '../app/override.js';
+import type { TelemetryStatus } from '../listener/telemetry.js';
+import { INSTALL_KEY_ENV, ROTATING_FROM_ENV } from './worker.js';
+import { parseRoutes, RUNNERS_ENV } from '../listener/routes.js';
+import { where } from '../runners/classes.js';
+import {
+  formatQuota,
+  quotaCheck,
+  quotaCode,
+  readQuotas,
+  readQuotaStatus,
+} from '../runners/quota.js';
+import {
+  formatReasons,
+  formatJobs,
+  formatPlanner,
+  formatSlow,
+  listenerStatusSchema,
+} from '../listener/status.js';
+import {
+  CONTROL_POOL,
+  clusterIdOf,
+  installTag,
+  listenerName,
+  orgOfListener,
+  readControlPool,
+  readOrgId,
+  sessionOf,
+} from './installation.js';
+
+// The listener binds loopback only and its image has Node but no curl
+// (`docs/reference/cli/workloads.md:260-262` at v0.1.71), so `status`,
+// `upgrade` and `uninstall` call it inside its Pod. Prints the response's
+// code and JSON body, and the named variables of install's environment.
+const execSchema = z.object({
+  code: z.number().int(),
+  body: z.unknown(),
+  env: z.record(z.string(), z.string()),
+});
+
+export async function execListener(
+  run: RunAnycloud,
+  listener: string,
+  path: string,
+  {
+    method = 'GET',
+    env = [],
+  }: { method?: 'GET' | 'POST'; env?: string[] } = {},
+) {
+  const script = `fetch("http://127.0.0.1:8080${path}", { method: "${method}" }).then(async (r) => console.log(JSON.stringify({ code: r.status, body: await r.json(), env: Object.fromEntries(${JSON.stringify(env)}.map((name) => [name, process.env[name]])) })))`;
+  return execSchema.parse(
+    JSON.parse(await run(['exec', listener, `node -e '${script}'`])),
+  );
+}
+
+export const readApiVersion = async (
+  apiUrl: string,
+  fetch: typeof globalThis.fetch,
+) =>
+  z
+    .object({ version: z.string() })
+    .parse(await (await fetch(`${apiUrl}/v1/version`)).json()).version;
+
+// The listener's `/status` (`listenerStatusSchema`), and the org, its
+// ID, runner image, install key and override install gave it.
+export async function readListener(run: RunAnycloud, listener: string) {
+  const { body, env } = await execListener(run, listener, '/status', {
+    env: [
+      'ORG',
+      'ORG_ID',
+      OVERRIDE_ENV,
+      'BACKMESH_RUNNER_IMAGE',
+      INSTALL_KEY_ENV,
+      RUNNERS_ENV,
+      ROTATING_FROM_ENV,
+      CACHE_CAP_ENV,
+    ],
+  });
+  return {
+    status: listenerStatusSchema.parse(body),
+    // The listener doesn't start without it.
+    org: z.string().parse(env.ORG),
+    orgId: env.ORG_ID === undefined ? undefined : Number(env.ORG_ID),
+    override: !!env[OVERRIDE_ENV],
+    runnerImage: env.BACKMESH_RUNNER_IMAGE,
+    // Absent on a listener installed before install keys.
+    installKey: env[INSTALL_KEY_ENV],
+    // The runner classes (`routes.ts`), absent before VM Jobs.
+    runners: env[RUNNERS_ENV],
+    // Set while `rotate-key` has a replacement minted but not yet revoked
+    // the install named here; absent otherwise.
+    rotatingFrom: env[ROTATING_FROM_ENV],
+    // `install --cache-cap`, absent for the default.
+    // A value that isn't a positive number reads as the default.
+    cacheCapGb:
+      Number(env[CACHE_CAP_ENV]) > 0 ? Number(env[CACHE_CAP_ENV]) : undefined,
+  };
+}
+
+export interface StatusDeps {
+  api: AnycloudApi;
+  apiUrl: string;
+  run: RunAnycloud;
+  fetch?: typeof globalThis.fetch;
+  now?: Date;
+  features?: FeatureTable;
+  // Narrows the report to one org.
+  org?: string;
+}
+
+export async function readStatus({
+  api,
+  apiUrl,
+  run,
+  fetch = globalThis.fetch,
+  now = new Date(),
+  features = FEATURES,
+  org: only,
+}: StatusDeps) {
+  const clusterId = clusterIdOf(apiUrl);
+  const monthStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+  const [version, control] = await Promise.all([
+    readApiVersion(apiUrl, fetch),
+    readControlPool(api),
+  ]);
+  const deployments = control.listeners.filter(
+    ({ name }) => !only || name === listenerName(only),
+  );
+  if (only && !deployments.length) {
+    throw new Error(`There's no listener for ${only} on ${apiUrl}.`);
+  }
+  // One section per org: its listener, and its runners' month-to-date cost
+  // through its own session.
+  const orgs = await Promise.all(
+    deployments.map(async ({ name, id }) => {
+      const login = orgOfListener(name)!;
+      // The install key stays out of the report, which `--json` prints, and
+      // the classes are summed up per cloud.
+      const listener = await readListener(run, name).then(
+        async ({ installKey: _, runners, ...listener }) => ({
+          ...listener,
+          runners: await runnerClouds(runners, api),
+        }),
+        (error: unknown) => ({ error: message(error) }),
+      );
+      const org = 'org' in listener ? listener.org : login;
+      // The tag needs the org's ID: the listener's, or GitHub's while it's
+      // down. Neither failing here stops the other orgs' sections.
+      // Known once the tag is, even if the cost report then fails.
+      let runnerGroup: string | null = null;
+      try {
+        const orgId =
+          ('orgId' in listener && listener.orgId) ||
+          (await readOrgId(login, fetch));
+        const tag = installTag(clusterId, orgId);
+        runnerGroup = runnerGroupName(tag, id);
+        const session = sessionOf(tag);
+        const cost = await api.getWorkloadCostReport({
+          query: { session, sessionExact: 'true', sinceMs: String(monthStart) },
+        });
+        return {
+          org,
+          serviceAccount: name,
+          session,
+          runnerGroup,
+          listener,
+          cost: {
+            since: new Date(monthStart).toISOString(),
+            totalUsd: cost.totalCost,
+            byCloud: Object.fromEntries(
+              Object.entries(cost.byProvider).map(([cloud, { cost }]) => [
+                cloud,
+                cost,
+              ]),
+            ),
+          },
+        };
+      } catch (error) {
+        return {
+          org,
+          serviceAccount: name,
+          session: null,
+          runnerGroup,
+          listener,
+          cost: null,
+          costError: message(error),
+        };
+      }
+    }),
+  );
+
+  const warnings = [...control.problems];
+  if (!control.pool) warnings.push(`There's no ${CONTROL_POOL} pool.`);
+  if (!orgs.length) {
+    warnings.push(
+      `There's no listener on ${CONTROL_POOL}; run \`backmesh install\`.`,
+    );
+  }
+  for (const { org, listener, ...section } of orgs) {
+    if ('costError' in section) {
+      warnings.push(
+        `${org}'s runner cost couldn't be read: ${section.costError}`,
+      );
+    }
+    const broker = 'status' in listener && listener.status.broker;
+    if (broker) {
+      warnings.push(
+        `${org}: the token broker has failed since ${minute(broker.since)}: ${broker.error}. The listener keeps its current token until it expires, then stops scaling.`,
+      );
+    }
+    if ('error' in listener) {
+      warnings.push(`${org}'s listener didn't answer: ${listener.error}`);
+    } else if (!listener.status.installed) {
+      warnings.push(
+        `The backmesh App isn't installed on ${listener.org}; the listener waits for it and its log has the install link.`,
+      );
+    } else {
+      const lost = listener.status.notInstalled;
+      if (lost) {
+        warnings.push(
+          `The backmesh App's installation on ${listener.org} is gone since ${minute(lost.since)}, so the listener can't reach GitHub or start runners. An org owner installs the App again at ${lost.installUrl}; the listener picks it up without a restart.`,
+        );
+      }
+      const actions = listener.status.actionsPermission;
+      // `install --public-repos`.
+      const forks = listener.status.scaleSets.some(
+        (set) => set.label.startsWith('backmesh-public-') && !set.retiring,
+      );
+      if (actions && actions !== 'write') {
+        warnings.push(
+          `The backmesh App has Actions: ${actions}; it needs Actions: write to rerun reclaimed jobs${forks ? ' and to cancel fork runs that ask for a label other than backmesh-public-*' : ''}. An org owner accepts the App's new permissions at https://github.com/organizations/${listener.org}/settings/installations.`,
+        );
+      }
+      for (const set of listener.status.scaleSets) {
+        const { skipped, avoiding } = set;
+        if (avoiding) {
+          warnings.push(
+            `${listener.org}: ${set.label} starts no runners until ${avoiding.until.slice(11, 16)}Z: runners in ${avoiding.regions.join(', ')} missed the 3-minute start deadline${skipped?.regions.length ? ', and its other regions are skipped for quota' : ''}. Its jobs wait at GitHub meanwhile.`,
+          );
+        }
+        if (!skipped?.all) continue;
+        const regions = skipped.regions
+          .map(({ region, limit }) => `${region} ${limit} vCPU`)
+          .join(', ');
+        warnings.push(
+          `${listener.org}: ${set.label} starts no runners: every runner region's ${skipped.spot ? 'spot' : 'on-demand'} quota is under one ${skipped.vcpus}-vCPU runner (${regions}). Its jobs wait at GitHub until ${quotaCode(skipped.cloud, skipped.spot)} is raised; nothing to reinstall.`,
+        );
+      }
+    }
+  }
+  // C29 comes in release 1.
+  const missing = missingFeatures(version, ['release-1'], features);
+  if (missing.includes('release-1')) {
+    warnings.push(
+      `The control plane (${version}) is too old for this backmesh. Run \`backmesh upgrade\`.`,
+    );
+  }
+
+  return {
+    api: { url: apiUrl, version, missingFeatures: missing },
+    controlPool: control.pool && {
+      name: control.pool.name,
+      state: control.pool.state,
+      vms:
+        control.pool.capacity.readyVmCount +
+        control.pool.capacity.startingVmCount,
+      lastError: control.pool.lastError,
+    },
+    orgs,
+    warnings,
+  };
+}
+
+export type StatusReport = Awaited<ReturnType<typeof readStatus>>;
+
+// Each cloud's regions, label count and summed vCPU quotas, such as "aws
+// us-east-2, 16 labels; quota: 640 spot vCPUs (…)"; null when the listener
+// has no classes, or they don't parse. The quotas are the control plane's
+// reads with each cloud's credential there, so no cloud CLI is needed; GCP's
+// aren't read.
+async function runnerClouds(json: string | undefined, api: AnycloudApi) {
+  if (!json) return null;
+  let routes;
+  try {
+    // A draining label's cloud may be gone.
+    routes = parseRoutes(json).filter((r) => !r.retiring);
+  } catch {
+    return null;
+  }
+  return Promise.all(
+    [...Map.groupBy(routes, (r) => r.cloud)].map(async ([cloud, labels]) => {
+      // The install region first, whose read failing fails the line.
+      const regions = [
+        ...new Set([labels[0]!.region, ...labels.flatMap((r) => r.regions)]),
+      ];
+      const line = `${where(cloud, regions)}, ${labels.length} labels`;
+      if (cloud === 'gcp') return line;
+      const credentials = labels[0]!.credentials;
+      const quota = await readQuotas(regions, (region) =>
+        readQuotaStatus(api, cloud, credentials, region),
+      ).then(
+        (limits) =>
+          [true, false]
+            .map((spot) =>
+              formatQuota(quotaCheck(cloud, regions, limits, spot), spot),
+            )
+            .join(', '),
+        (error: unknown) => `unread (${message(error)})`,
+      );
+      return `${line}; quota: ${quota}`;
+    }),
+  );
+}
+
+const message = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+const minute = (iso: string) => `${iso.slice(0, 16).replace('T', ' ')}Z`;
+
+// Telemetry's line, only when its sends fail.
+function formatTelemetry({
+  lastError,
+  lastStatus,
+  pending,
+}: TelemetryStatus): string[] {
+  if (lastStatus === 401) {
+    return [
+      "Telemetry: backmesh.com refused this install's sign-in; run backmesh upgrade to sign in with GitHub again.",
+    ];
+  }
+  if (!lastError) return [];
+  const refused = String(lastStatus).startsWith('4');
+  return [
+    `Telemetry: backmesh.com ${refused ? 'refused' : "didn't answer"} (${lastError}); ${pending} event${pending === 1 ? '' : 's'} to send. Jobs aren't affected.`,
+  ];
+}
+
+const usd = (value: number) => `$${value.toFixed(2)}`;
+const minutes = (ms: number) => `${Math.round(ms / 60_000)} min`;
+
+export function formatStatus(report: StatusReport): string {
+  const { api, controlPool, orgs, warnings } = report;
+  const lines = [
+    `Control plane ${api.url} (${api.version})`,
+    '',
+    'Runners: each job gets its own VM; the job controls that VM’s Docker.',
+    ...(controlPool
+      ? [
+          `The listeners' VMs: ${controlPool.state}, ${controlPool.vms} VM${controlPool.vms === 1 ? '' : 's'}${controlPool.lastError ? `, last error: ${controlPool.lastError}` : ''}`,
+        ]
+      : []),
+    '',
+  ];
+  for (const { org, session, runnerGroup, listener, cost } of orgs) {
+    lines.push(
+      `${org}${session ? `, session ${session}` : ''}${runnerGroup ? `, runner group ${runnerGroup}` : ''}:`,
+    );
+    if ('status' in listener && !listener.status.installed) {
+      lines.push(`Listener: waiting for the App's installation on ${org}`);
+    } else if ('status' in listener) {
+      const { status } = listener;
+      lines.push(
+        `Queue (${status.runners} runners; the control plane's cap is ${status.cap}):`,
+      );
+      for (const set of status.scaleSets) {
+        const stats = set.statistics;
+        lines.push(
+          `  ${set.label}${set.retiring ? ' (draining, then deleted)' : ''}: ${stats ? `${stats.totalAssignedJobs} assigned, ${stats.totalRunningJobs} running; ` : ''}runners ${set.queued} queued, ${set.starting} starting, ${set.running} running`,
+        );
+        if (set.oldestQueuedMs !== null) {
+          lines.push(`    oldest queued ${minutes(set.oldestQueuedMs)}`);
+        }
+        lines.push(...formatReasons(set, status.cap));
+        lines.push(...formatJobs(set));
+        lines.push(...formatSlow(set));
+        if (set.backoff) {
+          lines.push(
+            `    backing off after ${set.backoff.failures} startup failures (last ${set.backoff.lastEnd ?? 'unknown'}), next probe ${set.backoff.nextProbeAt ?? 'pending'}`,
+          );
+        }
+      }
+      const retry = status.retry;
+      if (retry?.waiting || retry?.paused.length) {
+        const paused = retry.paused.map(
+          ({ capacity, until }) =>
+            `; ${capacity} paused until ${until.slice(11, 16)}Z`,
+        );
+        lines.push(
+          `Retry: ${retry.waiting} run${retry.waiting === 1 ? '' : 's'} waiting to be rerun${paused.join('')}`,
+        );
+      }
+      if (status.avoided?.length) {
+        const avoided = status.avoided.map(
+          ({ where, until }) => `${where} until ${until.slice(11, 16)}Z`,
+        );
+        lines.push(
+          `Avoiding ${avoided.join(', ')}: runners there missed the 3-minute start deadline`,
+        );
+      }
+      lines.push(...formatPlanner(status.planner));
+      lines.push(
+        `Runner VMs: ${listener.runners?.join('; ') ?? 'none'}`,
+        `Runner image: ${listener.runnerImage ?? 'unknown'}`,
+        ...(status.telemetry ? formatTelemetry(status.telemetry) : []),
+      );
+    }
+    if (cost) {
+      lines.push(
+        `Cost since ${cost.since.slice(0, 10)}: ${usd(cost.totalUsd)}${Object.entries(
+          cost.byCloud,
+        )
+          .map(([cloud, value]) => `, ${cloud} ${usd(value)}`)
+          .join('')}`,
+      );
+    }
+    lines.push('');
+  }
+  lines.push(
+    ...(warnings.length
+      ? ['Warnings:', ...warnings.map((warning) => `  ${warning}`)]
+      : ['No warnings.']),
+  );
+  return lines.join('\n');
+}

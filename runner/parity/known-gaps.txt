@@ -1,0 +1,77 @@
+# Tools GitHub's Ubuntu 24.04 image has and backmesh's doesn't: gaps.sh fails
+# only on a gap not listed here. Generated from its first run; drop a line
+# once the image has the tool.
+.NET Core SDK
+AWS CLI Session Manager Plugin
+AWS SAM CLI
+Android Command Line Tools
+Android SDK Platform-Tools
+Ansible
+Ant
+AzCopy
+Bazel
+Bazelisk
+Bicep
+Buildah
+CMake
+Cabal
+Cargo
+ChromeDriver
+Chromium
+Clang
+Clang-format
+Clang-tidy
+Composer
+Docker Amazon ECR Credential Helper
+Docker Server
+Fastlane
+GHC
+GHCup
+GNU Fortran
+Geckodriver
+Git-ftp
+Google Chrome
+Gradle
+Homebrew
+Java
+Julia
+Kind
+Kotlin
+Kustomize
+Lerna
+Maven
+Microsoft Edge
+Microsoft Edge WebDriver
+Miniconda
+Minikube
+Mozilla Firefox
+MySQL
+Newman
+Ninja
+PHP
+PHPUnit
+Packer
+Parcel
+Pip
+Pip3
+Podman
+PostgreSQL
+PowerShell
+Pulumi
+Ruby
+RubyGems
+Rust
+Rustdoc
+Rustfmt
+Rustup
+Selenium server
+Skopeo
+Stack
+Swift
+Vcpkg
+apache2
+n
+nbgv
+nginx
+nvm
+yamllint

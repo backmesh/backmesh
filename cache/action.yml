@@ -1,0 +1,31 @@
+# backmesh's cache: actions/cache's inputs and
+# outputs, against the runner region's bucket; GitHub's cache elsewhere.
+name: backmesh cache
+description: Cache files in the runner region's bucket, saved after the job
+inputs:
+  path:
+    description: A list of files, directories and wildcard patterns to cache and restore
+    required: true
+  key:
+    description: An explicit key for restoring and saving the cache
+    required: true
+  restore-keys:
+    description: An ordered multiline list of key prefixes to restore from when the key misses
+    required: false
+  enableCrossOsArchive:
+    description: GitHub's cache only, as in actions/cache
+    default: 'false'
+  fail-on-cache-miss:
+    description: Fail the workflow if the cache entry isn't found
+    default: 'false'
+  lookup-only:
+    description: Check whether an entry exists without downloading it
+    default: 'false'
+outputs:
+  cache-hit:
+    description: Whether the primary key matched exactly
+runs:
+  using: node24
+  main: dist/restore.mjs
+  post: dist/post.mjs
+  post-if: success()

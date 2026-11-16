@@ -1,0 +1,160 @@
+name: E2E
+
+# The inner e2e suite: per label,
+# asserts the cloud and region, the runner image digest, host Docker's limits
+# and binds, /dev/kvm on KVM labels, a step's kill of every container sparing
+# the runner, and the stop member (backmesh runs 42753183250 and
+# 42753320207). Dispatch only, against an
+# existing installation: it changes nothing about it besides the stop
+# member's one runner Job, which it ends the same way a reclaim or an
+# `uninstall` drain would.
+#
+# `org` and `labels` are the org-level members the install, uninstall and
+# per-cloud control-plane checks will plug into once we have a test org
+# (our installations are all live): this
+# workflow and `labels`' per-entry cloud and regions are shaped so adding
+# those members later needs no rework here.
+on:
+  workflow_dispatch:
+    inputs:
+      org:
+        description: GitHub org the installation is on (ci-install.yml's org)
+        required: true
+        default: backmesh
+      labels:
+        description: >-
+          space-separated label=cloud:region[,region…] entries to check,
+          matching the installation's BACKMESH_RUNNERS; a label naming
+          "-kvm-" also gets the /dev/kvm check
+        required: true
+        default: >-
+          backmesh-4=aws:us-east-2,us-east-1,us-west-2
+          backmesh-kvm-4=aws:us-east-2,us-east-1,us-west-2
+
+permissions: {}
+
+concurrency:
+  group: e2e-${{ inputs.org }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Reads the pinned release's compatibility.json (ci-install.yml's own
+  # BACKMESH_VERSION, so there's one place that names it) and turns `labels`
+  # into the matrix the label and stop jobs run over.
+  plan:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+          cache: ''
+
+      - name: Read ci-install.yml's pinned release
+        id: pinned
+        run: |
+          version=$(awk -F': ' '/^ {6}BACKMESH_VERSION:/ { print $2; exit }' .github/workflows/ci-install.yml)
+          [[ -n $version ]] || { echo "::error::couldn't read ci-install.yml's BACKMESH_VERSION"; exit 1; }
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+
+      - name: Download that release's compatibility.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "${{ steps.pinned.outputs.version }}" --repo "$GITHUB_REPOSITORY" \
+            --pattern compatibility.json --dir "$RUNNER_TEMP" --clobber
+
+      - name: Plan the label matrix
+        id: plan
+        env:
+          LABELS: ${{ inputs.labels }}
+          COMPAT_PATH: ${{ runner.temp }}/compatibility.json
+        run: echo "matrix=$(node test/e2e/plan.ts)" >>"$GITHUB_OUTPUT"
+
+  # Assertions 1-4 and the kill-all: on the label itself, so instance metadata, the VM's own
+  # Docker and /dev/kvm are all the real thing.
+  label:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.label }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Cloud and region match the label
+        env:
+          EXPECTED_CLOUD: ${{ matrix.cloud }}
+          EXPECTED_REGIONS: ${{ join(matrix.regions, ',') }}
+        run: node test/e2e/check-cloud-region.ts
+
+      - name: Runner image digest matches the pinned release
+        env:
+          EXPECTED_IMAGE: ${{ matrix.runnerImage }}
+        run: node test/e2e/check-image-digest.ts
+
+      - name: Host Docker applies limits and shares /tmp and $HOME
+        run: node test/e2e/check-docker-limits.ts
+
+      - name: /dev/kvm is usable
+        if: matrix.kvm
+        run: node test/e2e/check-kvm.ts
+
+      # The runner is a container on this VM's Docker, which the image's
+      # `docker` (runner/docker.sh) leaves out, as GitHub's runners aren't
+      # containers. Last: a killed runner fails this job as lost.
+      - name: A step's docker kill and rm -f of every container spare the runner
+        run: |
+          [[ -x /usr/local/libexec/backmesh/docker ]] \
+            || { echo "::error::this runner image has no docker wrapper (runner/docker.sh), so the step would kill its runner"; exit 1; }
+          for _ in 1 2; do docker run -d mirror.gcr.io/library/busybox:1.37 sleep 300; done
+          docker kill $(docker ps -q)
+          docker rm -f $(docker ps -aq)
+          [[ -z $(docker ps -aq) ]] || { echo "::error::docker rm -f left containers"; docker ps -a; exit 1; }
+
+  # Assertion 5, the stop member: orchestrated from a GitHub-hosted runner,
+  # since the label's own runner Job is what gets terminated mid-job.
+  # max-parallel 1: one label at a time, so a label's dispatch of
+  # lost-runner-check.yml (and of ci-install.yml's stop-runner and diagnose
+  # modes, which share ci-install.yml's own singleton `ci-install`
+  # concurrency group) never races another label's. After the label jobs,
+  # pass or fail: on a new cloud connection their burst can hold boots for
+  # many minutes, past the stop member's 5-minute runner wait.
+  stop:
+    needs: [plan, label]
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: write # dispatch lost-runner-check.yml and ci-install.yml, and read their runs
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LABEL: ${{ matrix.label }}
+      ORG: ${{ inputs.org }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+          cache: ''
+
+      - name: 'Stop member: terminate the runner Job, GitHub must fail the job within 15 s'
+        run: node test/e2e/run-stop-member.ts

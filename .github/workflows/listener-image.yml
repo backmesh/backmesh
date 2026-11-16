@@ -1,0 +1,39 @@
+name: Listener image
+
+# backmesh's listener image (listener/), built from the
+# repository root (image.yml). Pull requests build and smoke-check it; only
+# release.yml publishes and signs it, since our CI runs released builds only.
+on:
+  pull_request:
+    paths:
+      - 'listener/**'
+      - 'src/**'
+      - package.json
+      - yarn.lock
+      - 'tsconfig*.json'
+      - .dockerignore
+      - .github/workflows/listener-image.yml
+      - .github/workflows/image.yml
+  workflow_call:
+    outputs:
+      image:
+        description: The published image, by digest
+        value: ${{ jobs.image.outputs.image }}
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    uses: ./.github/workflows/image.yml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    with:
+      name: backmesh-listener
+      context: .
+      file: listener/Dockerfile
+      # Without the listener's environment, the entry point refuses to start.
+      expect-status: 1
+      expect-output: ORG is not set.

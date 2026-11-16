@@ -1,0 +1,57 @@
+/* backmesh's tokens: white, ink and one cerulean; Schibsted Grotesk and
+   Fragment Mono. The theme script sets [data-theme] from the stored choice
+   or the system's preference; without it the system's preference decides. */
+:root {
+  --bm-bg: #ffffff;
+  --bm-ink: #15171a;
+  --bm-body: #2c3036;
+  --bm-soft: #5f6670;
+  --bm-hair: #e6e8eb;
+  --bm-line: #c5cbd2;
+  --bm-accent: #0e6ba8;
+  --bm-accent-hover: #0a5283;
+  --bm-accent-soft: #b9d4e8;
+  --bm-navy: #0b3557;
+  --bm-on-accent: #ffffff;
+  --bm-band: #15171a;
+  --bm-band-ink: #f1f3f5;
+  --bm-band-soft: #a3abb5;
+  --bm-band-accent: #7cc4f5;
+  --bm-sans: 'Schibsted Grotesk Variable', 'Helvetica Neue', Arial, sans-serif;
+  --bm-mono: 'Fragment Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  /* Keep identical to the no-[data-theme] dark block below. */
+  --bm-bg: #0e1114;
+  --bm-ink: #eceff2;
+  --bm-body: #c9ced4;
+  --bm-soft: #959ea8;
+  --bm-hair: #242a31;
+  --bm-line: #3c444e;
+  --bm-accent: #7cc4f5;
+  --bm-accent-hover: #a6d7f8;
+  --bm-accent-soft: #2a4a63;
+  --bm-navy: #3a6f9e;
+  --bm-on-accent: #0e1114;
+  --bm-band: #1a2129;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    /* Keep identical to the [data-theme='dark'] block above. */
+    --bm-bg: #0e1114;
+    --bm-ink: #eceff2;
+    --bm-body: #c9ced4;
+    --bm-soft: #959ea8;
+    --bm-hair: #242a31;
+    --bm-line: #3c444e;
+    --bm-accent: #7cc4f5;
+    --bm-accent-hover: #a6d7f8;
+    --bm-accent-soft: #2a4a63;
+    --bm-navy: #3a6f9e;
+    --bm-on-accent: #0e1114;
+    --bm-band: #1a2129;
+    color-scheme: dark;
+  }
+}

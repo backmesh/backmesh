@@ -1,0 +1,86 @@
+---
+// The page's call to action: the prompt to paste into a coding agent. The
+// copy button shows only where the clipboard works; if the copy fails, it
+// selects the prompt to copy by hand.
+---
+
+<div class="agent">
+  <p class="m"># Paste into Claude Code, Codex, or another coding agent</p>
+  <div class="row">
+    <code class="cmd">set up https://backmesh.com/SKILL.md</code>
+    <button class="copy" type="button" aria-live="polite" hidden>Copy</button>
+  </div>
+</div>
+
+<script>
+  for (const box of document.querySelectorAll('.agent')) {
+    const copy = box.querySelector('button');
+    // Only the prompt itself, not the comment above it.
+    const prompt = box.querySelector('.cmd');
+    if (!copy || !prompt || !navigator.clipboard) continue;
+    copy.hidden = false;
+    copy.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(prompt.textContent?.trim() ?? '');
+        copy.textContent = 'Copied';
+      } catch {
+        getSelection()?.selectAllChildren(prompt);
+        copy.textContent = 'Selected';
+      }
+      setTimeout(() => (copy.textContent = 'Copy'), 2000);
+    });
+  }
+</script>
+
+<style>
+  /* The prompt reads as a line of text over a rule; colors come from the
+     tokens, so it works on the page and in the dark band. The command and
+     the copy button share a row that wraps, so they never overlap however
+     narrow the column is. */
+  .agent {
+    max-width: 560px;
+    padding-bottom: 14px;
+    border-bottom: 1.5px solid var(--bm-ink);
+  }
+  .m {
+    margin: 0 0 4px;
+    font: 400 12.5px/1.5 var(--bm-mono);
+    color: var(--bm-soft);
+  }
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    column-gap: 16px;
+  }
+  .cmd {
+    min-width: 0;
+    font: 400 17px/1.5 var(--bm-mono);
+    color: var(--bm-ink);
+    overflow-wrap: anywhere;
+  }
+  .copy {
+    padding: 2px 0;
+    border: 0;
+    background: none;
+    color: var(--bm-accent);
+    font: 500 15px var(--bm-sans);
+    cursor: pointer;
+  }
+  .copy:hover {
+    color: var(--bm-accent-hover);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .copy:focus-visible {
+    outline: 2px solid var(--bm-accent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+  @media (max-width: 520px) {
+    .cmd {
+      font-size: 14.5px;
+    }
+  }
+</style>

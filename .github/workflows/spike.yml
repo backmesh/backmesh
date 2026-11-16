@@ -1,0 +1,93 @@
+name: Spike
+
+# Runs one experiments/<name>/run.ts from a pushed commit, after anycloud's
+# Spike workflow: SPIKE_PHASE=run, then SPIKE_PHASE=cleanup always, with the
+# evidence in SPIKE_OUTPUT_DIR uploaded either way. The experiment owns its
+# resources and its cleanup's check that they are gone. Dispatch only, from
+# main: the publish environment's Cloudflare token also deploys backmesh.com
+# and api.backmesh.com, and the dispatched commit's code runs with it, so
+# dispatch only a source_sha whose code has been reviewed. That is the same
+# control the token has today: the repository can't protect main or v* tags
+# (private, without GitHub Pro), so any writer can already reach it by
+# pushing either; this adds no new path for someone with less access.
+on:
+  workflow_dispatch:
+    inputs:
+      experiment:
+        description: Directory name under experiments/
+        required: true
+        type: string
+      source_sha:
+        description: Full commit SHA containing the experiment
+        required: true
+        type: string
+
+run-name: 'Spike: ${{ inputs.experiment }} @ ${{ inputs.source_sha }}'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spike-${{ inputs.experiment }}
+  cancel-in-progress: false
+
+jobs:
+  experiment:
+    # Each backmesh job has its own VM, so a token-holding job may run there.
+    runs-on: backmesh-4
+    environment: publish
+    timeout-minutes: 60
+    steps:
+      - name: Check the inputs
+        env:
+          EXPERIMENT: ${{ inputs.experiment }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          [[ $SOURCE_SHA =~ ^[0-9a-f]{40}$ ]]
+          [[ $EXPERIMENT =~ ^[a-z0-9][a-z0-9-]*$ ]]
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+          # No cache: a spike's commit must not seed main's yarn cache.
+          cache: ''
+
+      # The runner image has no yarn (ci.yml).
+      - run: npm install --global yarn@1.22.22
+      # wrangler is pinned in website/.
+      - run: yarn install --frozen-lockfile --ignore-scripts
+      - run: yarn --cwd website install --frozen-lockfile
+      - run: test -f "experiments/$EXPERIMENT/run.ts"
+        env:
+          EXPERIMENT: ${{ inputs.experiment }}
+
+      - name: Run the experiment
+        timeout-minutes: 40
+        env: &spike-env
+          EXPERIMENT: ${{ inputs.experiment }}
+          SPIKE_OUTPUT_DIR: ${{ runner.temp }}/spike-evidence
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # Read-only here (contents: read): org, user and repository lookups.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: SPIKE_PHASE=run node "experiments/$EXPERIMENT/run.ts"
+
+      - name: Clean up
+        if: always()
+        timeout-minutes: 10
+        env: *spike-env
+        run: SPIKE_PHASE=cleanup node "experiments/$EXPERIMENT/run.ts"
+
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: spike-${{ inputs.experiment }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/spike-evidence/
+          if-no-files-found: warn
+          retention-days: 30

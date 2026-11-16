@@ -1,0 +1,66 @@
+name: Runner toolset
+
+# Nightly: moves runner/parity/toolset.lock to actions/runner-images' main,
+# builds the runner image with it, and opens a pull request with the gap
+# check's summary (runner/parity/gaps.sh), replacing the last night's. GitHub
+# starts no workflows for a pull request this token opens, so the summary is
+# in its body; close and reopen it to run CI before merging (owner,
+# 2026-11-08: no App or PAT token for this).
+on:
+  schedule:
+    - cron: '23 10 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runner-toolset
+
+jobs:
+  bump:
+    runs-on: backmesh-4
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Each lock is a new branch from main and a new pull request, which
+      # replaces an open one: deleting its branch closes it, so nothing is
+      # force-pushed. The same lock as the open one's leaves it.
+      - name: Move the lock and open a pull request
+        run: |
+          runner/parity/update.sh
+          if git diff --quiet; then echo 'The lock is current.'; exit 0; fi
+          rev=$(sed -n 's/^revision=//p' runner/parity/toolset.lock)
+          branch=runner-toolset-${rev:0:12}
+          if git ls-remote --exit-code origin "refs/heads/$branch" >/dev/null; then
+            echo "$branch is open already."
+            exit 0
+          fi
+          status=0
+          if docker build --tag runner:toolset runner; then
+            runner/parity/gaps.sh runner:toolset >summary.md || status=$?
+          else
+            echo 'The image failed to build.' >summary.md
+            status=1
+          fi
+          {
+            echo "Moves \`runner/parity/toolset.lock\` to [actions/runner-images \`${rev:0:12}\`](https://github.com/actions/runner-images/tree/$rev/images/ubuntu), from the nightly runner-toolset workflow."
+            echo
+            if ((status)); then echo '**The image fails its gap check**: see the run below.'; echo; fi
+            cat summary.md
+            echo
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. GitHub starts no CI for a pull request this workflow's token opens: close and reopen this one to run CI before merging."
+          } >body.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$branch"
+          git commit -am "Move the runner toolset to actions/runner-images ${rev:0:12}"
+          git push origin "HEAD:refs/heads/$branch"
+          for old in $(git ls-remote --heads origin 'runner-toolset-*' | sed 's|.*refs/heads/||'); do
+            [[ $old == "$branch" ]] || git push origin --delete "$old"
+          done
+          gh pr create --head "$branch" --title "Move the runner toolset to actions/runner-images ${rev:0:12}" --body-file body.md

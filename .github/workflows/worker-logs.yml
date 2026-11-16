@@ -1,0 +1,53 @@
+name: Worker logs
+
+# Streams the Worker's live requests for a few minutes, to watch a
+# failure while someone reproduces it. Only the method, path, status,
+# exceptions and console lines are printed: never headers, cookies, query
+# strings or bodies. Workers Logs (wrangler.jsonc) keeps history; this is for
+# watching in real time. Dispatch only.
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: How long to watch
+        type: choice
+        options: ['5', '10', '15']
+        default: '10'
+
+permissions:
+  contents: read
+
+jobs:
+  tail:
+    # GitHub-hosted, as worker-setup.yml is: it watches the Worker that
+    # backmesh's own runners stop without.
+    runs-on: ubuntu-24.04
+    environment: publish
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+          cache: yarn
+          cache-dependency-path: website/yarn.lock
+
+      - run: yarn --cwd website install --frozen-lockfile
+
+      - name: Watch the Worker
+        env:
+          MINUTES: ${{ inputs.minutes }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -o pipefail
+          timeout "$((MINUTES * 60))" yarn --silent --cwd website wrangler tail backmesh-billing --format json \
+            | jq --unbuffered -r '
+                (.event.request.url // "" | sub("\\?.*$"; "") | sub("^https?://[^/]+"; "")) as $path
+                | "\((.eventTimestamp // 0) / 1000 | todate) \(.event.request.method // "-") \($path) \(.event.response.status // "-") \(.outcome)",
+                  (.exceptions[]? | "  exception: \(.name): \(.message)"),
+                  (.logs[]? | "  \(.level): \(.message | map(tostring) | join(" "))")
+              ' || [ $? -eq 124 ]

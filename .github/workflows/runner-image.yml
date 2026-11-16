@@ -1,0 +1,68 @@
+name: Runner image
+
+# backmesh's runner image (runner/). Every change runs
+# the entrypoint's tests and builds the image (image.yml); pushes to main
+# publish and sign it. release.yml calls this for a `v*` tag.
+on:
+  pull_request:
+    paths:
+      - 'runner/**'
+      - .github/workflows/runner-image.yml
+      - .github/workflows/image.yml
+  push:
+    branches: [main]
+    paths:
+      - 'runner/**'
+      - .github/workflows/runner-image.yml
+      - .github/workflows/image.yml
+  workflow_call:
+    outputs:
+      image:
+        description: The published image, by digest
+        value: ${{ jobs.image.outputs.image }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # GitHub-hosted under release.yml and for a fork's pull request, as
+    # image.yml's jobs are.
+    runs-on: ${{ (startsWith(github.ref, 'refs/tags/') || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || 'backmesh-4' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # GitHub's image has it; backmesh's runner image doesn't.
+      - run: command -v shellcheck || { sudo apt-get update -q && sudo apt-get install -yq --no-install-recommends shellcheck; }
+      - name: Lint the entrypoint, the docker wrapper, the first-use installs, the parity scripts and their tests
+        run: >-
+          shellcheck -x runner/runner-job.sh runner/runner-job-completed.sh runner/runner-job-started.sh
+          runner/docker.sh runner/cloud-cli.sh runner/apt.sh runner/test/*.sh runner/parity/*.sh
+          && shellcheck -s bash runner/first-use.bash
+      - name: Test the entrypoint
+        run: bash runner/test/runner-job.test.sh
+      - name: Test the first-use install
+        run: bash runner/test/first-use.test.sh
+      - name: Test the apt-get shim
+        run: bash runner/test/apt.test.sh
+      - name: Test the docker wrapper
+        run: bash runner/test/docker.test.sh
+
+  image:
+    needs: [test]
+    uses: ./.github/workflows/image.yml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    with:
+      name: backmesh-runner
+      context: runner
+      file: runner/Dockerfile
+      # It refuses to run without a JIT config.
+      expect-status: 1
+      expect-output: RUNNER_JITCONFIG is required
+      # A container, one with resource limits, and K3s, through
+      # the host's Docker as the runner user; and the docker wrapper's skips.
+      docker-check: runner/test/docker-check.sh runner/test/docker-wrapper-check.sh
+      # A real first-use install, and the gaps against GitHub's image.
+      check: runner/test/image.test.sh

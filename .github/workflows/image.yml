@@ -1,0 +1,184 @@
+name: Image
+
+# Builds one of backmesh's images; runner-image.yml and listener-image.yml call
+# it. Pull requests build it and smoke-check it: the image, run with no
+# configuration, must exit with `expect-status` and print `expect-output`,
+# and pass `check`, when given. Pushes to main and
+# release tags also publish it to GHCR, run the check on the pushed digest and
+# sign it with cosign, keyless: the signature binds the digest to this
+# workflow's GitHub OIDC identity, so no signing key exists. Pull requests
+# never reach the publish job or its permissions.
+#
+# Its jobs run on backmesh's own runners, except under
+# release.yml, the only workflow a tag starts: a release stays on
+# GitHub-hosted runners, the recovery path when backmesh's are down. A fork's
+# pull request builds on GitHub's too, and skips the host-socket check, which
+# needs a runner VM's paths.
+on:
+  workflow_call:
+    inputs:
+      name:
+        description: The image, ghcr.io/backmesh/<name>
+        type: string
+        required: true
+      context:
+        type: string
+        required: true
+      file:
+        type: string
+        required: true
+      expect-status:
+        description: The exit status the image's entry point gives with no configuration
+        type: number
+        required: true
+      expect-output:
+        description: Text that run prints
+        type: string
+        required: true
+      docker-check:
+        description: The paths of bash scripts, each run in the image on pull requests as uid 1001 through the host's Docker socket, as runner VM Jobs use it
+        type: string
+        default: ''
+      check:
+        description: A script that checks the built image, given its tag
+        type: string
+        default: ''
+    outputs:
+      image:
+        description: The published image, by digest
+        value: ${{ jobs.publish.outputs.image }}
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/backmesh/${{ inputs.name }}
+  EXPECT_STATUS: ${{ inputs.expect-status }}
+  EXPECT_OUTPUT: ${{ inputs.expect-output }}
+
+jobs:
+  build:
+    if: github.event_name == 'pull_request'
+    runs-on: ${{ github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || 'backmesh-4' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.file }}
+          platforms: linux/amd64
+          load: true
+          tags: ${{ env.IMAGE }}:check
+      - name: Smoke check
+        run: |
+          status=0
+          out=$(docker run --rm "$IMAGE:check" 2>&1) || status=$?
+          printf '%s\n' "$out"
+          [[ $status == "$EXPECT_STATUS" && $out == *"$EXPECT_OUTPUT"* ]]
+      # As uid 1001 through the host's Docker socket, as a runner VM Job uses
+      # its VM's Docker.
+      - name: Check Docker through the host's socket
+        if: inputs.docker-check != '' && runner.environment == 'self-hosted'
+        env:
+          CHECK: ${{ inputs.docker-check }}
+        run: |
+          # As the listener submits a runner Job (src/listener/runner-jobs.ts):
+          # /tmp, /var/tmp, /mnt and /workspace (the work directory, RUNNER_TEMP
+          # and HOME) at the same paths as on the host.
+          for check in $CHECK; do
+            docker run -i --rm --user 1001 --group-add "$(stat -c %g /var/run/docker.sock)" \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v /tmp:/tmp -v /var/tmp:/var/tmp -v /mnt:/mnt -v /workspace:/workspace \
+              -e RUNNER_TEMP --entrypoint bash "$IMAGE:check" -s <"$check"
+          done
+      - name: Check
+        if: inputs.check != ''
+        env:
+          CHECK: ${{ inputs.check }}
+        run: '"$CHECK" "$IMAGE:check"'
+
+  publish:
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ${{ startsWith(github.ref, 'refs/tags/') && 'ubuntu-24.04' || 'backmesh-4' }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # cosign's keyless signing certificate
+    outputs:
+      image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # cosign-installer (below) runs envsubst, which GitHub's image has and
+      # backmesh's runner image doesn't. Installed before the push, so a
+      # failed install pushes nothing. The runner user has passwordless sudo.
+      - run: command -v envsubst || { sudo apt-get update -q && sudo apt-get install -yq --no-install-recommends gettext-base; }
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # One tag per commit or release. GHCR tags can be overwritten, so a
+      # release names its image by digest and never reuses a tag: a
+      # rerun of a release whose image is already out fails here.
+      - name: Tag
+        id: tag
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            if docker manifest inspect "$IMAGE:$GITHUB_REF_NAME" >/dev/null 2>&1; then
+              echo "::error::$IMAGE:$GITHUB_REF_NAME already exists; cut a new version"
+              exit 1
+            fi
+            echo "tag=$GITHUB_REF_NAME" >>"$GITHUB_OUTPUT"
+          else
+            echo "tag=sha-$GITHUB_SHA" >>"$GITHUB_OUTPUT"
+          fi
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.file }}
+          platforms: linux/amd64
+          # zstd layers unpack faster than gzip: a runner VM's cold pull of
+          # the runner image takes about 2.3 s less (anycloud's image-pull
+          # spike). force-compression recompresses the base image's gzip
+          # layers too. Docker 23+ and containerd 1.5+ pull zstd.
+          outputs: type=image,push=true,oci-mediatypes=true,compression=zstd,compression-level=3,force-compression=true
+          provenance: false
+          tags: ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+          build-args: IMAGE_VERSION=${{ steps.tag.outputs.tag }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.tag.outputs.tag }}
+      - name: Smoke check the pushed digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          status=0
+          out=$(docker run --rm "$IMAGE@$DIGEST" 2>&1) || status=$?
+          printf '%s\n' "$out"
+          [[ $status == "$EXPECT_STATUS" && $out == *"$EXPECT_OUTPUT"* ]]
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+      - name: Sign and verify
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          # The certificate names this file, whichever workflow called it.
+          IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/image.yml@${{ github.ref }}
+        run: |
+          image="$IMAGE@$DIGEST"
+          cosign sign --yes "$image"
+          cosign verify "$image" \
+            --certificate-identity "$IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com >/dev/null
+          {
+            echo "Published and signed \`$image\`."
+            echo
+            echo 'Verify with:'
+            echo
+            echo "    cosign verify $image --certificate-identity $IDENTITY \\"
+            echo '      --certificate-oidc-issuer https://token.actions.githubusercontent.com'
+          } >>"$GITHUB_STEP_SUMMARY"

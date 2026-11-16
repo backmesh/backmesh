@@ -1,0 +1,35 @@
+# The public labels' cap, runtime limit and read-only cache, from a fork.
+name: public-labels
+on: pull_request
+permissions: {}
+jobs:
+  # 10 × 4 vCPUs against the 32-vCPU cap: at most 8 at once.
+  cap:
+    strategy:
+      matrix:
+        n: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    runs-on: backmesh-public-4
+    steps:
+      - run: sleep 300
+  # Cancelled at 60 minutes, with a heartbeat step's last line to time it.
+  limit:
+    runs-on: backmesh-public-2
+    timeout-minutes: 120
+    steps:
+      - run: for i in $(seq 1 70); do echo "heartbeat $(date -u +%s)"; sleep 60; done
+  # Reads the default branch's entry, which seed.yml saved, and gets no
+  # write grant: its token file names no own prefix. Prints no token.
+  cache:
+    runs-on: backmesh-public-2
+    steps:
+      - uses: backmesh/cache@v1
+        with:
+          path: seed
+          key: public-repos-check
+          fail-on-cache-miss: 'true'
+      - run: test "$(cat seed/value)" = main
+      - name: No own prefix in the job's cache grants
+        run: |
+          file=/run/anycloud-secrets/_bm-cache-$RUNNER_NAME/BACKMESH_CACHE
+          for _ in $(seq 1 60); do jq -e '.state == "ready"' "$file" >/dev/null && break; sleep 1; done
+          jq -e '.prefixes.default and (.prefixes | has("own") | not)' "$file" >/dev/null

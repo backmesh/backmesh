@@ -1,0 +1,1133 @@
+---
+// The landing page, in the order of julian.com's landing-page guide: navbar,
+// hero, CTA, features, objections, CTA again, footer. There's no proof line
+// until customers agree to be named. Short copy and real visuals; the detail
+// lives in the docs. Every claim must hold for
+// backmesh today.
+//
+// TODO(owner): link the release that opens customer installs.
+// TODO(owner): add customer logos once users agree to be named.
+import '../styles/fonts.css';
+import '../styles/tokens.css';
+import { SUMMARY } from '../about';
+import * as captures from '../captures';
+import AgentPrompt from '../components/AgentPrompt.astro';
+import AppKey from '../components/AppKey.astro';
+import Capture from '../components/Capture.astro';
+import Chart, { type Row } from '../components/Chart.astro';
+import CloudLanes from '../components/CloudLanes.astro';
+import CueLanes from '../components/CueLanes.astro';
+import HeroDiagram from '../components/HeroDiagram.astro';
+import TrustStrip from '../components/TrustStrip.astro';
+import {
+  CATALOG_DATE,
+  GITHUB_4_CORE_PER_MIN,
+  MINUTES,
+  headline,
+  per1000,
+} from '../cost';
+
+const title = 'backmesh: Self-hosted GitHub Actions runners for up to 10× less';
+const description =
+  'Each GitHub Actions job runs on its own spot VM in your AWS, GCP or Azure account, at up to 10× less compute cost. Your cloud bills you, so its credits apply.';
+const og = new URL('/brand/og.png', Astro.site).href;
+const money = (v: number) => `$${Math.round(v).toLocaleString('en-US')}`;
+const range = (lo: number, hi: number) => `${money(lo)}–${money(hi)}`;
+const minutes = MINUTES.toLocaleString('en-US');
+const caption = `GitHub's list price against spot prices on ${CATALOG_DATE}, without disks, VM boots or runners no job takes, so it's a floor; see`;
+
+// The cost chart: GitHub's list price against each cloud's control plane
+// plus its spot VMs over the cheapest and most expensive types.
+const month = (per1000Usd: number) => (MINUTES / 1000) * per1000Usd;
+const cents = (v: number) => `$${v.toFixed(2)}`;
+const seconds = ([fast, slow]: number[]) =>
+  fast === slow ? `${fast} s` : `${fast}–${slow} s`;
+const clouds = per1000.map((p) => {
+  const [lo, hi] = [month(p.low), month(p.high)];
+  const fixed = p.controlPlane;
+  const total = range(fixed + lo, fixed + hi);
+  return { ...p, lo, hi, fixed, total };
+});
+const costRows: Row[] = [
+  {
+    name: 'GitHub-hosted',
+    value: money(headline.github),
+    segments: [{ from: 0, to: headline.github, kind: 'ink' }],
+  },
+  ...clouds.map(
+    (c): Row => ({
+      name: `backmesh on ${c.cloud}`,
+      cloud: c.cloud.toLowerCase(),
+      value: c.total,
+      segments: [
+        { from: 0, to: c.fixed, kind: 'fixed' },
+        { from: c.fixed, to: c.fixed + c.lo, kind: 'solid' },
+        { from: c.fixed + c.lo, to: c.fixed + c.hi, kind: 'range' },
+      ],
+      note: `+ ${cents(c.bootLow)}–${cents(c.bootHigh)} per 1,000 jobs to boot their VMs, about ${seconds(c.bootS)} each`,
+    }),
+  ),
+];
+const [first, ...others] = clouds;
+const fixedNote = `Control plane: about ${money(first!.fixed)} on ${first!.cloud}, ${others.map((c) => `${money(c.fixed)} on ${c.cloud}`).join(', ')}.`;
+const aws = clouds.find((c) => c.cloud === 'AWS')!;
+
+// The FAQ, shown below and in the structured data, which must match it.
+const faq = [
+  {
+    q: 'Will backmesh work for my jobs?',
+    short: 'Linux x86-64 only. Private repos only.',
+    points: [
+      'No macOS, Windows, Arm or GPU runners.',
+      "Each job waits for its VM to boot: about 30 s on AWS, 60–70 s on GCP and Azure. Starting runners ahead of predicted jobs, and your agent's cue, mostly hide it.",
+      "A reclaimed spot VM fails its job; if reclaims were the run's only failures, backmesh reruns them, up to twice.",
+      'Each job starts with an empty Docker layer cache.',
+    ],
+  },
+  {
+    q: 'Is backmesh safe?',
+    short: 'Each job gets its own VM.',
+    points: [
+      'Jobs from every repo in the org use the same labels.',
+      "Only run code you'd trust your org's members to run.",
+      'Per-repo isolation is planned.',
+    ],
+  },
+  {
+    q: 'What does backmesh cost?',
+    short: 'No VM while idle.',
+    points: [
+      'Idle: the control plane, about $86 a month on AWS, $74 on GCP, $111 on Azure.',
+      "Each job's VM bills from boot until the job ends.",
+    ],
+  },
+];
+
+// Structured data (schema.org) for search engines and AI assistants.
+const site = Astro.site!.href;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': `${site}#organization`,
+      name: 'backmesh',
+      url: site,
+      logo: new URL('/brand/icon-512.png', site).href,
+      email: 'luis@backmesh.com',
+    },
+    {
+      '@type': 'SoftwareApplication',
+      name: 'backmesh',
+      url: site,
+      description: SUMMARY,
+      applicationCategory: 'DeveloperApplication',
+      operatingSystem: 'macOS, Linux',
+      publisher: { '@id': `${site}#organization` },
+      offers: {
+        '@type': 'Offer',
+        name: 'Free',
+        price: '0',
+        priceCurrency: 'USD',
+        description:
+          'The core features, with unlimited jobs and the cache included. Your clouds bill you for the VMs.',
+      },
+    },
+    {
+      '@type': 'FAQPage',
+      mainEntity: faq.map(({ q, short, points }) => ({
+        '@type': 'Question',
+        name: q,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: [short, ...points].join(' '),
+        },
+      })),
+    },
+  ],
+};
+
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={Astro.site} />
+    <link rel="icon" href="/brand/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/brand/favicon.ico" sizes="48x48" />
+    <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="backmesh" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={Astro.site} />
+    <meta property="og:image" content={og} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script
+      is:inline
+      type="application/ld+json"
+      set:html={JSON.stringify(jsonLd).replaceAll('<', '\\u003c')}
+    />
+    <script is:inline>
+      // The docs' stored choice (Starlight's key), else the system's.
+      let stored = null;
+      try {
+        stored = localStorage.getItem('starlight-theme');
+      } catch {}
+      document.documentElement.dataset.theme =
+        stored === 'light' || stored === 'dark'
+          ? stored
+          : matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
+    </script>
+  </head>
+  <body>
+    <header class="wrap nav">
+      <a href="/" class="logo" aria-label="backmesh home">
+        <img
+          class="only-light"
+          src="/brand/lockup-light.svg"
+          alt="backmesh"
+          width="124"
+          height="25"
+        />
+        <img
+          class="only-dark"
+          src="/brand/lockup-dark.svg"
+          alt="backmesh"
+          width="124"
+          height="25"
+        />
+      </a>
+      <nav>
+        <a href="#cost">Cost</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#faq">FAQ</a>
+        <a href="/install/">Docs</a>
+        <a
+          id="discord"
+          href="https://discord.backmesh.com"
+          aria-label="backmesh on Discord"
+          title="Discord"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"
+            ></path>
+          </svg>
+        </a>
+        <button id="theme" type="button" aria-label="Switch light or dark">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 2v14a7 7 0 0 1 0-14Z"
+            ></path>
+          </svg>
+        </button>
+      </nav>
+    </header>
+
+    <main>
+      <section class="wrap hero">
+        <h1>Self-hosted GitHub Actions runners for up to 10× less.</h1>
+        <div class="hero-figure"><HeroDiagram /></div>
+        <div class="hero-body">
+          <p class="sub">
+            Each job runs on its own spot VM in your AWS, GCP or Azure account.
+            Your cloud bills you, so your cloud credits apply.
+          </p>
+          <AgentPrompt />
+          <p class="free">Core features free, no credit card.</p>
+          <div class="ctas">
+            <a class="more" href="/install/">Install manually</a>
+            <a class="more" href="#cost">See the costs</a>
+          </div>
+        </div>
+      </section>
+
+      <div class="wrap trust-wrap">
+        <TrustStrip />
+      </div>
+
+      <section id="cost" class="wrap section cost">
+        <h2>
+          {minutes} minutes a month: {money(headline.github)} on GitHub,{' '}
+          <span class="accent">{range(headline.low, headline.high)}</span> on
+          backmesh.
+        </h2>
+        <p class="lead">
+          4-vCPU Linux jobs; the range spans AWS, Azure and GCP and the VM types a job may get.
+        </p>
+        <Chart
+          title="Compute cost a month"
+          label={`Compute cost of ${minutes} minutes a month of 4-vCPU Linux jobs: ${costRows.map((r) => `${r.name} ${r.value}`).join('; ')}.`}
+          max={headline.github}
+          ticks={[
+            { at: 0, label: '$0' },
+            { at: 500, label: '$500' },
+            { at: 1000, label: '$1,000' },
+            { at: 1500, label: '$1,500', narrow: true },
+            { at: headline.github, label: money(headline.github) },
+          ]}
+          rows={costRows}
+          legend={[
+            { kind: 'solid', label: 'Spot VMs (range across VM types)' },
+            { kind: 'fixed', label: 'Control plane, fixed' },
+          ]}
+          note={fixedNote}
+        />
+        <div class="cost-foot">
+          <p class="caption">
+            {caption} <a href="#faq">What does backmesh cost?</a>
+          </p>
+          <div
+            class="receipt"
+            role="img"
+            aria-label={`A month of ${minutes} minutes of 4-vCPU Linux jobs: ${money(headline.github)} on GitHub-hosted runners, ${range(headline.low, headline.high)} on backmesh across AWS, Azure and GCP.`}
+          >
+            <div class="r-top">
+              <b>Compute, one month</b>
+            </div>
+            <div class="r-group">
+              <div class="r-head">GitHub-hosted <code>linux_4_core</code></div>
+              <div class="r-line">
+                <span>{minutes} min × ${GITHUB_4_CORE_PER_MIN}</span><i></i><span
+                  >{money(headline.github)}.00</span
+                >
+              </div>
+              <div class="r-total gh">
+                <span>Total</span><b>{money(headline.github)}</b>
+              </div>
+            </div>
+            <div class="r-group">
+              <div class="r-head">backmesh <span>in your AWS account</span></div>
+              <div class="r-line">
+                <span>Spot VMs, one per job</span><i></i><span
+                  >{range(aws.lo, aws.hi)}</span
+                >
+              </div>
+              <div class="r-sub">{minutes} min, {aws.region}</div>
+              <div class="r-line">
+                <span>Control plane, fixed</span><i></i><span
+                  >{money(aws.fixed)}</span
+                >
+              </div>
+              <div class="r-line">
+                <span>backmesh Free</span><i></i><span>$0</span>
+              </div>
+              <div class="r-total">
+                <span>Total</span><b>{range(aws.fixed + aws.lo, aws.fixed + aws.hi)}</b>
+              </div>
+            </div>
+            <p class="r-note">
+              Spot prices on {CATALOG_DATE}, without disks or boots.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="pricing" class="wrap section pricing">
+        <h2>Pricing</h2>
+        <p class="lead">
+          backmesh's core features are free; you pay your clouds for the VMs.
+        </p>
+        <ul class="plans">
+          <li>
+            <b>Free</b>
+            <strong>$0</strong>
+            <ul>
+              <li>Unlimited jobs</li>
+              <li>Cache included</li>
+              <li>No credit card required</li>
+            </ul>
+            <a class="more" href="/install/">Install</a>
+          </li>
+          <li>
+            <b>Premium</b>
+            <strong>Let's talk</strong>
+            <ul>
+              <li>Slack monitoring</li>
+              <li>Logs</li>
+              <li>Runtime history</li>
+            </ul>
+            <a class="more" href="mailto:luis@backmesh.com">Talk to us</a>
+          </li>
+        </ul>
+      </section>
+
+      <section class="wrap section features">
+        <article>
+          <div class="copy">
+            <h2>Pick the cloud per workflow.</h2>
+            <p>
+              Each label runs in one cloud. Out of spot capacity, the next VM
+              type launches, never the next cloud. Use{' '}
+              <code>backmesh-od-*</code> (on-demand) for jobs that shouldn't be interrupted.
+            </p>
+            <p class="links"><a class="more" href="/labels/">Learn more</a></p>
+          </div>
+          <CloudLanes />
+        </article>
+
+        <article>
+          <div class="copy">
+            <h2>Every job log ends with what it used.</h2>
+            <p class="links">
+              <a class="more" href="/status/#in-each-jobs-log">Learn more</a>
+            </p>
+          </div>
+          <Capture title="Job log" code={captures.summary} />
+        </article>
+
+        <article>
+          <div class="copy">
+            <h2>One status for every cloud.</h2>
+            <p>
+              Runner VMs, queue, 24 h and 7 d job times, and month-to-date
+              cost.
+            </p>
+            <p class="links"><a class="more" href="/status/">Learn more</a></p>
+          </div>
+          <Capture
+            title="backmesh status"
+            caption="Abridged, with illustrative numbers."
+            code={captures.status}
+          />
+        </article>
+
+        <article>
+          <div class="copy">
+            <h2>One GitHub App, and what its key can do.</h2>
+            <p>
+              Four permissions, its webhook off, and a key held by backmesh,
+              never in your accounts. The same key works in every org that
+              installs the App.
+            </p>
+            <p class="links">
+              <a class="more" href="/security/">Learn more</a>
+            </p>
+          </div>
+          <AppKey />
+        </article>
+      </section>
+
+      <section id="cue" class="wrap section cue">
+        <div class="copy">
+          <h2>The boot happens before the push.</h2>
+          <p>
+            Your coding agent cues backmesh as its checks start, so runners
+            boot while it finishes and the job starts on one that's already up.
+          </p>
+          <p class="links">
+            <a class="more" href="/faq/">Learn more</a>
+          </p>
+        </div>
+        <CueLanes />
+      </section>
+
+      <section id="faq" class="wrap section faq">
+        <h2>Before you install</h2>
+        {
+          faq.map(({ q, short, points }) => (
+            <details>
+              <summary>
+                <span class="q">
+                  <b>{q}</b>
+                  <span>{short}</span>
+                </span>
+                <span class="toggle" aria-hidden="true" />
+              </summary>
+              <ul>
+                {points.map((p) => (
+                  <li>{p}</li>
+                ))}
+              </ul>
+            </details>
+          ))
+        }
+      </section>
+    </main>
+
+    <section class="band" aria-labelledby="closing">
+      <div class="wrap">
+        <h2 id="closing">One install. Your clouds. Your bill.</h2>
+        <AgentPrompt />
+        <a class="more" href="/install/">Install manually</a>
+      </div>
+    </section>
+
+    <footer class="wrap foot">
+      <a href="/" class="foot-logo" aria-label="backmesh home">
+        <img
+          class="only-light"
+          src="/brand/lockup-light.svg"
+          alt=""
+          width="104"
+          height="21"
+        />
+        <img
+          class="only-dark"
+          src="/brand/lockup-dark.svg"
+          alt=""
+          width="104"
+          height="21"
+        />
+      </a>
+      <div class="links">
+        <a href="/install/">Install</a>
+        <a href="/security/">Security model</a>
+        <a href="/faq/">FAQ</a>
+        <a href="#pricing">Pricing</a>
+        <a href="https://discord.backmesh.com">Discord</a>
+        <a href="/terms/">Terms</a>
+        <a href="/privacy/">Privacy</a>
+        <a href="/telemetry/">Telemetry</a>
+      </div>
+    </footer>
+
+    <script>
+      document.getElementById('theme')?.addEventListener('click', () => {
+        const next =
+          document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = next;
+        try {
+          localStorage.setItem('starlight-theme', next);
+        } catch {}
+      });
+    </script>
+  </body>
+</html>
+
+<style is:global>
+  * {
+    box-sizing: border-box;
+  }
+  html {
+    background: var(--bm-bg);
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--bm-bg);
+    color: var(--bm-body);
+    font: 400 18px/1.6 var(--bm-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  a {
+    color: var(--bm-accent);
+    text-decoration: none;
+  }
+  a:hover {
+    color: var(--bm-accent-hover);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  a:focus-visible,
+  button:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--bm-accent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+  code {
+    font: 400 0.88em var(--bm-mono);
+    color: var(--bm-ink);
+  }
+  .only-light,
+  [data-theme='dark'] .only-dark {
+    display: inline;
+  }
+  .only-dark,
+  [data-theme='dark'] .only-light {
+    display: none;
+  }
+  /* With no script, the system's scheme picks the lockup, as it picks the
+     tokens. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) .only-dark {
+      display: inline;
+    }
+    :root:not([data-theme]) .only-light {
+      display: none;
+    }
+  }
+  /* A text link that leads on: an arrow after it. */
+  .more {
+    font-weight: 500;
+  }
+  .more::after {
+    content: ' →';
+  }
+</style>
+
+<style>
+  .wrap {
+    --gutter: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 var(--gutter);
+  }
+  @media (min-width: 720px) {
+    .wrap {
+      --gutter: 48px;
+    }
+  }
+
+  /* Navbar */
+  .nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 88px;
+  }
+  .logo {
+    display: flex;
+  }
+  .logo img {
+    height: 25px;
+    width: auto;
+  }
+  nav {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    font: 400 14px/1 var(--bm-mono);
+  }
+  nav a {
+    color: var(--bm-body);
+  }
+  nav a[href='/install/'] {
+    color: var(--bm-accent);
+  }
+  #discord,
+  #theme {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    margin-left: -6px;
+    padding: 0;
+    border: 1px solid var(--bm-hair);
+    border-radius: 50%;
+    background: none;
+    color: var(--bm-body);
+    cursor: pointer;
+  }
+  #discord:hover,
+  #theme:hover {
+    border-color: var(--bm-line);
+    color: var(--bm-ink);
+  }
+  @media (max-width: 600px) {
+    .nav {
+      height: 68px;
+    }
+    .logo img {
+      height: 22px;
+    }
+    nav {
+      gap: 12px;
+      font-size: 13px;
+    }
+    nav a[href='#faq'] {
+      display: none;
+    }
+    #discord,
+    #theme {
+      width: 30px;
+      height: 30px;
+      margin-left: 0;
+    }
+  }
+  @media (max-width: 360px) {
+    .logo img {
+      height: 19px;
+    }
+    nav {
+      gap: 10px;
+      font-size: 12px;
+    }
+  }
+
+  /* Type */
+  h1,
+  h2 {
+    margin: 0;
+    color: var(--bm-ink);
+    font-weight: 700;
+    text-wrap: balance;
+  }
+  h1 {
+    font-size: clamp(44px, 4.7vw, 66px);
+    line-height: 1.02;
+    letter-spacing: -0.036em;
+  }
+  h2 {
+    font-size: clamp(30px, 3.5vw, 48px);
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+    max-width: 24ch;
+  }
+  .accent {
+    color: var(--bm-accent);
+    white-space: nowrap;
+  }
+  .lead {
+    margin: 18px 0 0;
+    max-width: 62ch;
+    font-size: 19px;
+  }
+  .section {
+    padding-top: 152px;
+  }
+
+  /* Hero: words left, the diagram right, both in the first screen. */
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 540px);
+    grid-template-areas: 'h fig' 'body fig';
+    grid-template-rows: auto 1fr;
+    column-gap: 64px;
+    padding-top: 40px;
+  }
+  .hero h1 {
+    grid-area: h;
+  }
+  .hero-figure {
+    grid-area: fig;
+    align-self: center;
+  }
+  .hero-body {
+    grid-area: body;
+  }
+  .sub {
+    margin: 26px 0 34px;
+    max-width: 34ch;
+    font-size: 21px;
+    line-height: 1.5;
+  }
+  .free {
+    margin: 18px 0 0;
+    color: var(--bm-ink);
+    font-weight: 600;
+  }
+  .ctas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 32px;
+    margin-top: 6px;
+  }
+  .trust-wrap {
+    margin-top: 104px;
+  }
+  @media (max-width: 960px) {
+    .hero {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas: 'h' 'fig' 'body';
+      grid-template-rows: none;
+      padding-top: 24px;
+    }
+    .hero-figure {
+      margin: 32px 0 0;
+    }
+    .sub {
+      font-size: 18.5px;
+      margin-top: 18px;
+    }
+    .trust-wrap {
+      margin-top: 72px;
+    }
+    .section {
+      padding-top: 104px;
+    }
+    .lead {
+      font-size: 17.5px;
+    }
+  }
+
+  /* Cost */
+  .cost :global(.chart) {
+    margin-top: 52px;
+  }
+  .cost-foot {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 80px;
+    align-items: start;
+    margin-top: 64px;
+  }
+  .caption {
+    margin: 0;
+    max-width: 62ch;
+    color: var(--bm-soft);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .receipt {
+    justify-self: end;
+    width: 100%;
+    max-width: 460px;
+    padding: 20px 0 22px;
+    border-top: 1.5px solid var(--bm-ink);
+    border-bottom: 1.5px solid var(--bm-ink);
+    font: 400 13.5px/1.7 var(--bm-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .r-top,
+  .r-head,
+  .r-total,
+  .r-note {
+    font-variant-numeric: normal;
+  }
+  .r-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 4px 16px;
+    flex-wrap: wrap;
+    font-family: var(--bm-sans);
+  }
+  .r-top b {
+    color: var(--bm-ink);
+    font-weight: 600;
+    font-size: 15.5px;
+  }
+  .r-top span {
+    color: var(--bm-soft);
+    font-size: 13.5px;
+  }
+  .r-group {
+    margin-top: 18px;
+  }
+  .r-group + .r-group {
+    padding-top: 16px;
+    border-top: 1px dashed var(--bm-line);
+  }
+  .r-head {
+    margin-bottom: 2px;
+    color: var(--bm-ink);
+    font: 600 14.5px var(--bm-sans);
+  }
+  .r-head span {
+    color: var(--bm-soft);
+    font-weight: 400;
+  }
+  .r-line {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    color: var(--bm-body);
+  }
+  .r-line i {
+    flex: 1;
+    min-width: 12px;
+    border-bottom: 1px dotted var(--bm-line);
+    transform: translateY(-4px);
+  }
+  .r-sub {
+    margin-top: -2px;
+    color: var(--bm-soft);
+    font-size: 12.5px;
+  }
+  .r-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-top: 10px;
+    font-family: var(--bm-sans);
+  }
+  .r-total span {
+    color: var(--bm-soft);
+    font-size: 14px;
+  }
+  .r-total b {
+    color: var(--bm-accent);
+    font-size: 30px;
+    line-height: 1;
+    letter-spacing: -0.035em;
+  }
+  .r-total.gh b {
+    color: var(--bm-ink);
+  }
+  .r-note {
+    margin: 14px 0 0;
+    color: var(--bm-soft);
+    font: 400 13.5px/1.55 var(--bm-sans);
+  }
+  @media (max-width: 960px) {
+    .cost-foot {
+      grid-template-columns: minmax(0, 1fr);
+      row-gap: 40px;
+      margin-top: 44px;
+    }
+    .receipt {
+      justify-self: stretch;
+      max-width: none;
+    }
+  }
+
+  /* Pricing: two columns and a hairline. */
+  .plans {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 48px 0 0;
+    padding: 0;
+    list-style: none;
+    border-top: 1.5px solid var(--bm-ink);
+  }
+  .plans > li {
+    display: flex;
+    flex-direction: column;
+    padding: 26px 48px 0 0;
+  }
+  .plans > li + li {
+    padding: 26px 0 0 48px;
+    border-left: 1px solid var(--bm-hair);
+  }
+  .plans b {
+    color: var(--bm-soft);
+    font: 400 14px var(--bm-mono);
+  }
+  .plans strong {
+    margin: 10px 0 18px;
+    color: var(--bm-ink);
+    font-size: 64px;
+    line-height: 1;
+    letter-spacing: -0.04em;
+  }
+  .plans ul {
+    margin: 0 0 22px;
+    padding: 0;
+    list-style: none;
+  }
+  .plans ul li {
+    padding: 8px 0;
+    border-top: 1px solid var(--bm-hair);
+  }
+  .plans ul li:first-child {
+    border-top: 0;
+  }
+  .plans .more {
+    align-self: flex-start;
+    font-weight: 600;
+  }
+  @media (max-width: 720px) {
+    .plans {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .plans > li,
+    .plans > li + li {
+      padding: 24px 0 8px;
+      border-left: 0;
+    }
+    .plans > li + li {
+      margin-top: 24px;
+      border-top: 1px solid var(--bm-hair);
+    }
+    .plans strong {
+      font-size: 52px;
+    }
+  }
+
+  /* Features: copy left, its figure right. */
+  .features {
+    display: grid;
+    gap: 136px;
+  }
+  .features article {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 80px;
+    align-items: start;
+  }
+  .features h2 {
+    font-size: clamp(26px, 2.6vw, 32px);
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+  }
+  .copy p {
+    margin: 16px 0 0;
+    max-width: 52ch;
+  }
+  .copy .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 28px;
+    margin-top: 14px;
+  }
+  .copy :global(.capture) {
+    margin-top: 30px;
+  }
+  @media (max-width: 960px) {
+    .features {
+      gap: 96px;
+    }
+    .features article {
+      grid-template-columns: minmax(0, 1fr);
+      row-gap: 32px;
+    }
+  }
+
+  /* Cue: copy left, the two lanes right, as a feature row. */
+  .cue {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 80px;
+    align-items: center;
+  }
+  .cue h2 {
+    font-size: clamp(26px, 2.6vw, 32px);
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+  }
+  @media (max-width: 960px) {
+    .cue {
+      grid-template-columns: minmax(0, 1fr);
+      row-gap: 32px;
+    }
+  }
+
+  /* FAQ */
+  .faq h2 {
+    margin-bottom: 36px;
+  }
+  details {
+    max-width: 840px;
+    border-top: 1px solid var(--bm-hair);
+  }
+  details:last-of-type {
+    border-bottom: 1px solid var(--bm-hair);
+  }
+  summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 22px 0;
+    list-style: none;
+    cursor: pointer;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  .q {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 16px;
+  }
+  .q b {
+    color: var(--bm-ink);
+    font-size: 21px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+  .q span {
+    color: var(--bm-soft);
+  }
+  summary:hover .q b {
+    color: var(--bm-accent);
+  }
+  /* A plus that turns into a minus. */
+  .toggle {
+    position: relative;
+    flex: none;
+    width: 16px;
+    height: 16px;
+  }
+  .toggle::before,
+  .toggle::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 7px;
+    border-top: 1.5px solid var(--bm-ink);
+    transition: transform 160ms ease;
+  }
+  .toggle::after {
+    transform: rotate(90deg);
+  }
+  details[open] .toggle::after {
+    transform: rotate(0deg);
+  }
+  details ul {
+    margin: -6px 0 0;
+    padding: 0 40px 24px 20px;
+    max-width: 68ch;
+  }
+  details li {
+    padding: 3px 0;
+  }
+  details li::marker {
+    color: var(--bm-accent);
+  }
+
+  /* The one dark band: the closing call to action. */
+  .band {
+    --bm-bg: var(--bm-band);
+    --bm-ink: var(--bm-band-ink);
+    --bm-body: var(--bm-band-ink);
+    --bm-soft: var(--bm-band-soft);
+    --bm-accent: var(--bm-band-accent);
+    --bm-accent-hover: #a6d7f8;
+    margin-top: 168px;
+    padding: 120px 0 128px;
+    background: var(--bm-bg);
+    color: var(--bm-body);
+  }
+  .band h2 {
+    max-width: 14ch;
+    margin-bottom: 48px;
+    font-size: clamp(40px, 5vw, 72px);
+    line-height: 1.02;
+    letter-spacing: -0.04em;
+  }
+  .band :global(.agent) {
+    max-width: 640px;
+  }
+  .band .more {
+    display: inline-block;
+    margin-top: 20px;
+  }
+  @media (max-width: 720px) {
+    .band {
+      margin-top: 112px;
+      padding: 72px 0 80px;
+    }
+    .band h2 {
+      margin-bottom: 36px;
+    }
+  }
+
+  /* Footer */
+  .foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 20px 32px;
+    padding-top: 36px;
+    padding-bottom: 56px;
+  }
+  .foot-logo {
+    display: flex;
+  }
+  .foot .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 24px;
+    font: 400 13.5px var(--bm-mono);
+  }
+  .foot .links a {
+    color: var(--bm-soft);
+  }
+  .foot .links a:hover {
+    color: var(--bm-ink);
+  }
+</style>

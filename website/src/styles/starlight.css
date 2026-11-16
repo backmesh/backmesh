@@ -1,0 +1,47 @@
+@import './tokens.css';
+
+/* The docs in the landing page's type and colors: Starlight is dark by
+   default and sets [data-theme='light'] for light. */
+:root {
+  --sl-font: var(--bm-sans);
+  --sl-font-mono: var(--bm-mono);
+  --sl-color-white: #eceff2;
+  --sl-color-gray-1: #dde1e5;
+  --sl-color-gray-2: #c9ced4;
+  --sl-color-gray-3: #959ea8;
+  --sl-color-gray-4: #5b636d;
+  --sl-color-gray-5: #242a31;
+  --sl-color-gray-6: #161a1f;
+  --sl-color-black: #0e1114;
+  --sl-color-accent-low: #12304a;
+  --sl-color-accent: #7cc4f5;
+  --sl-color-accent-high: #cfe9fb;
+}
+:root[data-theme='light'] {
+  --sl-color-white: #15171a;
+  --sl-color-gray-1: #24282d;
+  --sl-color-gray-2: #2c3036;
+  --sl-color-gray-3: #5f6670;
+  --sl-color-gray-4: #8a919a;
+  --sl-color-gray-5: #e6e8eb;
+  --sl-color-gray-6: #f4f5f7;
+  --sl-color-gray-7: #f8f9fa;
+  --sl-color-black: #ffffff;
+  --sl-color-accent-low: #dcebf6;
+  --sl-color-accent: #0e6ba8;
+  --sl-color-accent-high: #0a4f7d;
+}
+
+.sl-markdown-content :is(h1, h2, h3, h4),
+h1#_top {
+  font-family: var(--bm-sans);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+h1#_top {
+  letter-spacing: -0.035em;
+}
+.site-title img {
+  height: 24px;
+  width: auto;
+}

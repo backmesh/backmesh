@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Superseded pull request runs are cancelled; every push to main keeps its result.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+# On backmesh's own runners, except a fork's pull request, which runs on
+# GitHub's (test/unit/workflows.spec.ts checks every workflow). Their image has
+# no yarn, which setup-node's yarn cache needs, so each job installs it, with
+# no cache: a cold install is about 10 s.
+jobs:
+  verify:
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || 'backmesh-4' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+
+      - run: npm install --global yarn@1.22.22
+
+      - run: yarn install --frozen-lockfile
+
+      - run: yarn verify
+
+      # website/public/install.sh: shellcheck, then a stand-in release.
+      - run: test/install/install.test.sh
+
+      # The cache action runs from its committed bundle: the source's, and
+      # nothing else there, with its third-party notices.
+      - run: yarn build:cache && [[ -z $(git status --porcelain -- cache/dist runner/dist NOTICE) ]]
+
+  # The release's binaries: the darwin signatures and a linux-x64 smoke test.
+  binary:
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || 'backmesh-4' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+
+      - run: npm install --global yarn@1.22.22
+
+      - run: yarn install --frozen-lockfile
+
+      # The release's matrix script, with stand-in image digests.
+      - name: Build the binaries
+        run: |
+          yarn build
+          digest=sha256:$(printf '0%.0s' {1..64})
+          node scripts/release-matrix.mjs "ghcr.io/backmesh/backmesh-runner@$digest" \
+            "ghcr.io/backmesh/backmesh-listener@$digest" >compatibility.json
+          # As release.yml builds an rc: the tag's version, embedded.
+          BACKMESH_RELEASE_VERSION=$(jq -r .version package.json)-rc.0 yarn build:binaries
+
+      - run: test/binary/smoke.sh binaries/backmesh-linux-x64.tar.gz "$(jq -r .version package.json)-rc.0" "$(jq -r .anycloud compatibility.json)"
+
+  # The website: an Astro build of website/, then its link check. No secrets;
+  # website.yml deploys it from main.
+  website:
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || 'backmesh-4' }}
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+
+      - run: npm install --global yarn@1.22.22
+
+      - run: yarn install --frozen-lockfile
+
+      - run: yarn build

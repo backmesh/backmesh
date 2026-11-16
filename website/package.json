@@ -1,0 +1,22 @@
+{
+  "name": "backmesh-website",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "brand": "node scripts/brand.mjs",
+    "dev": "astro dev",
+    "build": "astro build && node scripts/check-links.mjs dist"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.42.9",
+    "@fontsource-variable/schibsted-grotesk": "5.3.0",
+    "@fontsource/fragment-mono": "5.3.0",
+    "astro": "7.4.6"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "2.6.2",
+    "fontkit": "2.0.4",
+    "wawoff2": "2.0.1",
+    "wrangler": "4.158.0"
+  }
+}

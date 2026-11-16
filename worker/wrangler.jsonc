@@ -1,0 +1,59 @@
+// The backmesh Worker on api.backmesh.com, still named
+// backmesh-billing, as is its database. The Worker setup workflow deploys it,
+// with the database ID filled in.
+{
+  "name": "backmesh-billing",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  // The backmesh App's URL slug, for its install link.
+  "vars": { "GITHUB_APP_SLUG": "backmesh" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "backmesh-billing",
+      // Filled in by worker/scripts/setup.ts.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations",
+    },
+  ],
+  // Daily: fold raw events older than 90 days into daily counts (telemetry.ts).
+  // The only cron: the free plan allows 5 per account.
+  "triggers": { "crons": ["17 3 * * *"] },
+  // Rate limits (index.ts): sign-ins, and refused install keys and cue
+  // sign-ins, by client IP; listener cue connects, events plus status by
+  // install, and tokens by install. A listener
+  // sends about one batch a minute and mints a token every 30 minutes;
+  // install polls for one every 15 seconds.
+  "ratelimits": [
+    {
+      "name": "SIGNIN_LIMIT",
+      "namespace_id": "4501",
+      "simple": { "limit": 30, "period": 60 },
+    },
+    {
+      "name": "INSTALL_LIMIT",
+      "namespace_id": "4502",
+      "simple": { "limit": 30, "period": 60 },
+    },
+    {
+      "name": "TOKEN_LIMIT",
+      "namespace_id": "4503",
+      "simple": { "limit": 10, "period": 60 },
+    },
+  ],
+  // The cue relay: one Durable Object per org (relay.ts), SQLite-backed, as
+  // the free plan requires. v3 deletes the connect links' Link class and
+  // its stored links (owner, 2026-11-12: device flow only).
+  "durable_objects": {
+    "bindings": [{ "name": "RELAY", "class_name": "Relay" }],
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Relay"] },
+    { "tag": "v2", "new_sqlite_classes": ["Link"] },
+    { "tag": "v3", "deleted_classes": ["Link"] },
+  ],
+  "routes": [{ "pattern": "api.backmesh.com", "custom_domain": true }],
+  "workers_dev": false,
+  // Workers Logs keeps recent invocations, exceptions and console lines.
+  "observability": { "enabled": true },
+}

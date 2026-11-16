@@ -1,0 +1,40 @@
+# The cue benchmark's target (benchmarks/cue/README.md): run.ts copies this to
+# the target repo as .github/workflows/bench-<label>.yml, with
+# the label for runs-on, and pushes to its bench branch.
+name: Bench
+
+on:
+  push:
+    branches: [bench]
+
+permissions: {}
+
+jobs:
+  bench:
+    runs-on: __LABEL__
+    timeout-minutes: 20
+    permissions:
+      contents: write # report.mjs writes its row to the results branch
+      actions: read # and reads this job's step times
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+          cache: ''
+
+      - name: Install
+        run: corepack enable && yarn install --frozen-lockfile --ignore-scripts
+
+      # The first real step: the benchmark times the push to its start.
+      - name: Marker
+        run: echo marker
+
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node report.mjs

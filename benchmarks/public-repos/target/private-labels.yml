@@ -1,0 +1,14 @@
+# A job on each cloud's label that isn't public. A fork's run of it is
+# cancelled; a same-repo pull request's runs.
+name: private-labels
+on: pull_request
+permissions: {}
+jobs:
+  label:
+    strategy:
+      fail-fast: false
+      matrix:
+        label: [backmesh-kvm-4, backmesh-gcp-2, backmesh-azure-2]
+    runs-on: ${{ matrix.label }}
+    steps:
+      - run: echo "ran on ${{ matrix.label }}"

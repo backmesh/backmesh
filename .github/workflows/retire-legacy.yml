@@ -1,0 +1,58 @@
+name: Retire legacy
+
+# Deletes the old backmesh product's Cloudflare resources, by exact name:
+# the Pages projects backmesh-dashboard, builder, llmcomp and backmesh-site,
+# and the Worker backmesh-edge (website/scripts/retire-legacy.mjs). A dry
+# run, the default, only lists them. backmesh-site goes only once
+# backmesh.com and www.backmesh.com serve the new site.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: dry-run lists what would be deleted; delete deletes it
+        type: choice
+        options: [dry-run, delete]
+        default: dry-run
+      confirm:
+        description: 'For delete, exactly: delete backmesh-dashboard builder llmcomp backmesh-edge backmesh-site'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+# Shared with website.yml, so a retire and a deploy never overlap. GitHub
+# keeps one pending run per group: a newer one replaces one still waiting.
+concurrency:
+  group: website
+  cancel-in-progress: false
+
+jobs:
+  retire:
+    # Each backmesh job has its own VM, so a token-holding job may run there.
+    # Only the retire step sees the token.
+    runs-on: backmesh-2
+    environment: publish
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CONFIRM: ${{ inputs.confirm }}
+      MODE: ${{ inputs.mode }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+
+      - name: Retire
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [[ $MODE == delete ]]; then
+            node website/scripts/retire-legacy.mjs --apply
+          else
+            node website/scripts/retire-legacy.mjs
+          fi

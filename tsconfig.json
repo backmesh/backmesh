@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2023",
+    "lib": ["ES2024"],
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    // worker/scripts run under Node's type stripping, which needs .ts imports.
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "src/**/*",
+    "worker/src/**/*",
+    "worker/scripts/**/*.ts",
+    "scripts/**/*.ts",
+    "benchmarks/**/*.ts",
+    "test/**/*",
+    "*.config.mts"
+  ]
+}

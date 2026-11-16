@@ -1,0 +1,46 @@
+// /llms.txt (llmstxt.org): what backmesh is and its docs, for AI assistants.
+import type { APIRoute } from 'astro';
+import { getCollection } from 'astro:content';
+import { SUMMARY } from '../about';
+import { MINUTES, headline } from '../cost';
+import { sidebar } from '../sidebar.mjs';
+
+const money = (v: number) => `$${Math.round(v).toLocaleString('en-US')}`;
+
+export const GET: APIRoute = async ({ site }) => {
+  const docs = new Map((await getCollection('docs')).map((d) => [d.id, d]));
+  const link = (path: string) => new URL(path, site).href;
+  const sections = sidebar.map(({ label, items }) =>
+    [
+      `## ${label}`,
+      '',
+      ...items.map((id) => {
+        const { title, description } = docs.get(id)!.data;
+        return `- [${title}](${link(`/${id}/`)}): ${description}`;
+      }),
+    ].join('\n'),
+  );
+  const text = `# backmesh
+
+> ${SUMMARY}
+
+- Linux x86-64 jobs in private repositories only: no macOS, Windows, Arm or GPU runners.
+- A job's \`runs-on\` label, such as \`backmesh-4\`, picks its size and cloud. Spot is the default; \`backmesh-od-*\` labels run on demand.
+- Compute: ${MINUTES.toLocaleString('en-US')} minutes a month of 4-vCPU Linux jobs cost ${money(headline.github)} on GitHub-hosted runners and ${money(headline.low)}–${money(headline.high)} on backmesh at spot prices, control plane included, before disks, VM boots and runners started ahead of jobs.
+- Pricing: the core features are free, with unlimited jobs and the cache included. Premium adds Slack monitoring, logs and runtime history; talk to us at luis@backmesh.com.
+
+## Agents
+
+- [SKILL.md](${link('/SKILL.md')}): how a coding agent installs backmesh, moves jobs onto its runners and cues each push.
+
+${sections.join('\n\n')}
+
+## Optional
+
+- [llms-full.txt](${link('/llms-full.txt')}): every docs page above in one file.
+- [Landing page](${link('/')}): costs, pricing and the short FAQ.
+`;
+  return new Response(text, {
+    headers: { 'content-type': 'text/plain; charset=utf-8' },
+  });
+};

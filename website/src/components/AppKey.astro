@@ -1,0 +1,114 @@
+---
+// What backmesh's GitHub App key can and can't do in an org that installed
+// the App.
+const can = [
+  'Register a runner in any runner group and take its jobs, code and secrets',
+  'Dispatch or rerun a workflow',
+  'Change the OIDC subject claim your trust policies match on',
+  'Read, cancel or delete runs and logs',
+  'Write check runs',
+];
+const cannot = [
+  'Read code through the API',
+  'Manage repository secrets',
+  'Change administration settings',
+  'See org members',
+];
+---
+
+<div
+  class="key"
+  role="group"
+  aria-label="What backmesh's App key can and can't do in your org"
+>
+  <div>
+    <h3>Its key can</h3>
+    <ul>
+      {can.map((item) => (
+        <li>
+          <svg class="i warn" viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M10 2 19 18H1Z" />
+            <path class="mark" d="M10 8v4M10 14.5v.5" />
+          </svg>
+          {item}
+        </li>
+      ))}
+    </ul>
+  </div>
+  <div>
+    <h3>It can't</h3>
+    <ul>
+      {cannot.map((item) => (
+        <li>
+          <svg class="i ok" viewBox="0 0 20 20" aria-hidden="true">
+            <circle cx="10" cy="10" r="9" />
+            <path class="mark" d="m6 10 3 3 5-6" />
+          </svg>
+          {item}
+        </li>
+      ))}
+    </ul>
+  </div>
+</div>
+
+<style>
+  /* Two plain lists under one rule; a mark per item says which side it's on. */
+  .key {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 40px;
+    border-top: 1.5px solid var(--bm-ink);
+  }
+  @media (max-width: 560px) {
+    .key {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .key > div + div {
+      margin-top: 8px;
+      border-top: 1px solid var(--bm-hair);
+    }
+  }
+  h3 {
+    margin: 18px 0 10px;
+    color: var(--bm-ink);
+    font: 600 16.5px var(--bm-sans);
+  }
+  ul {
+    list-style: none;
+    margin: 0 0 8px;
+    padding: 0;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  li {
+    display: flex;
+    gap: 12px;
+    padding: 9px 0;
+    border-top: 1px solid var(--bm-hair);
+  }
+  .i {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+  }
+  .warn path:first-child {
+    fill: none;
+    stroke: var(--bm-ink);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+  }
+  .warn .mark {
+    stroke: var(--bm-ink);
+  }
+  .ok circle {
+    fill: var(--bm-accent);
+  }
+  .mark {
+    fill: none;
+    stroke: var(--bm-bg);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+</style>

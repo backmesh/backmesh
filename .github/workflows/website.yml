@@ -1,0 +1,102 @@
+name: Website
+
+# Deploys website/ to backmesh.com, a Cloudflare Worker with static assets.
+# website/scripts/cutover.mjs moves backmesh.com and www.backmesh.com off the
+# old site's Pages project: a read-only guard, then it removes their CNAMEs
+# and Pages custom domains so the deploy can attach them. Without the publish
+# environment's token it skips.
+on:
+  push:
+    branches: [main]
+    paths: ['website/**', '.github/workflows/website.yml']
+
+permissions:
+  contents: read
+
+# Shared with retire-legacy.yml, so a deploy and a retire never overlap. A
+# run waits for the one in progress; GitHub keeps one pending run per group,
+# so a newer push replaces a deploy that is still waiting.
+concurrency:
+  group: website
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Each backmesh job has its own VM, so a token-holding job may run there.
+    # Only the guard and deploy steps see the token.
+    runs-on: backmesh-4
+    environment: publish
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check for the Cloudflare token
+        id: token
+        env:
+          HAS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        run: |
+          if [[ $HAS_TOKEN != true || -z $CLOUDFLARE_ACCOUNT_ID ]]; then
+            echo "::notice::Skipped the deploy: the publish environment has no CLOUDFLARE_API_TOKEN secret or CLOUDFLARE_ACCOUNT_ID variable."
+            echo "ready=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >>"$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.token.outputs.ready == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - if: steps.token.outputs.ready == 'true'
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+
+      # The runner image has no yarn (ci.yml).
+      - if: steps.token.outputs.ready == 'true'
+        run: npm install --global yarn@1.22.22
+
+      - if: steps.token.outputs.ready == 'true'
+        name: Build
+        working-directory: website
+        run: yarn install --frozen-lockfile && yarn build
+
+      - if: steps.token.outputs.ready == 'true'
+        name: Check that the names can move to this site
+        working-directory: website
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/cutover.mjs guard
+
+      # Cloudflare won't attach a Worker custom domain over a CNAME, so the
+      # old site is down from here until the deploy attaches the names.
+      - if: steps.token.outputs.ready == 'true'
+        name: Detach the names from the old site
+        working-directory: website
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/cutover.mjs detach
+
+      - if: steps.token.outputs.ready == 'true'
+        name: Deploy
+        working-directory: website
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: yarn wrangler deploy
+
+      # A new custom domain can take a few minutes to get its certificate.
+      - if: steps.token.outputs.ready == 'true'
+        name: Check the live site
+        run: |
+          redirects() {
+            [[ $(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "$1") == "301 $2" ]]
+          }
+          check() {
+            curl -fsS https://backmesh.com/ | grep -q '<title>backmesh: ' &&
+              redirects https://www.backmesh.com/ https://backmesh.com/ &&
+              redirects https://backmesh.com/docs/ https://backmesh.com/ &&
+              redirects https://backmesh.com/pricing https://backmesh.com/#pricing &&
+              redirects https://backmesh.com/sitemap.xml https://backmesh.com/sitemap-index.xml
+          }
+          for _ in {1..20}; do check && exit 0; sleep 30; done
+          echo "::error::https://backmesh.com/ doesn't serve the new site, www doesn't redirect to it, /docs/ doesn't redirect to /, /pricing to /#pricing or /sitemap.xml to /sitemap-index.xml."
+          exit 1

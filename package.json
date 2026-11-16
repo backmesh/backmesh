@@ -1,0 +1,48 @@
+{
+  "name": "backmesh",
+  "version": "0.4.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "build:binaries": "scripts/build-binaries.sh",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "verify": "yarn lint && yarn format:check && yarn typecheck && yarn test",
+    "generate:anycloud": "node scripts/generate-anycloud-contract.mjs",
+    "build:cache": "scripts/build-cache-action.sh"
+  },
+  "devDependencies": {
+    "@actions/cache": "6.3.0",
+    "@actions/core": "3.0.1",
+    "@actions/glob": "0.7.0",
+    "@eslint/js": "^9.39.5",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.20.5",
+    "bun": "1.4.4",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.14.0",
+    "js-yaml": "^4.3.2",
+    "prettier": "^3.9.10",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^4.1.12"
+  },
+  "dependencies": {
+    "@hpke/core": "^1.10.0",
+    "@octokit/rest": "^22.0.1",
+    "@orpc/client": "^1.15.0",
+    "@orpc/contract": "^1.15.0",
+    "@orpc/openapi-client": "^1.15.0",
+    "commander": "^14.0.2",
+    "zod": "^4.6.7"
+  }
+}

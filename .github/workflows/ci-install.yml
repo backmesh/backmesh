@@ -1,0 +1,646 @@
+name: CI install
+
+# The CI installations of the orgs whose CI runs on backmesh, anycloud-sh and
+# backmesh: `backmesh install` from the released CLI, with our CI's hidden
+# override, by hand only. The `upgrade` mode runs `backmesh upgrade`, which
+# moves the deployed installation to this release; a re-run of install keeps a
+# deployed listener.
+# The `diagnose` mode changes nothing: it prints `backmesh status`, the org's
+# listener log, and why the last runner Jobs ended. The `uninstall` mode runs
+# `backmesh uninstall`, whose one path every run exercises: an org
+# admin's sign-in, the drain, the GitHub cleanup, the cloud side and the App's
+# removal. The schedule only keeps the saved anycloud state from expiring.
+# The owner sets the secrets first (the owner's setup notes).
+# A fresh install, an uninstall, and the first upgrade of an install made
+# before install keys, stop for backmesh's GitHub sign-in: an admin of the
+# org opens the sign-in from the job log before it expires: a code for
+# https://github.com/login/device.
+# `install` with `plan: true` only prints the plan (`backmesh install --plan`)
+# and changes nothing: no sign-in, no billed resource. Preview a clouds change
+# with it first, such as one that connects a cloud for the first time, which
+# `upgrade` refuses to do.
+on:
+  workflow_dispatch:
+    inputs:
+      org:
+        description: GitHub org to install on
+        required: true
+        default: backmesh
+      clouds:
+        description: the clouds the runners use, space-separated, such as aws gcp; backmesh picks each cloud's runner regions (its fixed US list, less any the account denies), and upgrade drains a cloud left out only with remove-clouds
+        required: true
+        default: aws
+      control-plane:
+        description: install only, the control plane's <cloud>:<region>
+        required: true
+        default: aws:us-east-2
+      mode:
+        description: install; upgrade to move the deployed listener to BACKMESH_VERSION; diagnose to only print the status and the last runner Jobs' ends and logs; uninstall; or stop-runner to terminate one lost-runner check's runner Job
+        type: choice
+        options: [install, diagnose, upgrade, uninstall, stop-runner]
+        default: install
+      jobs:
+        description: diagnose only, how many of the newest ended runner Jobs to print with their events and logs
+        default: '3'
+      ids:
+        description: diagnose only, runner Job IDs, space-separated, to print the same way whatever their state, each event with its full metadata
+        default: ''
+      runner:
+        description: stop-runner only, the runner Job ID (its runner's name) of an in-progress lost-runner-check job, which is terminated
+        default: ''
+      plan:
+        description: install only, show the plan (backmesh install --plan --json) and exit instead of applying it; asks nothing new of a human and changes nothing billed ("--plan signs in to nothing")
+        type: boolean
+        default: false
+      remove-clouds:
+        description: upgrade only, allow the plan to remove clouds left out of `clouds`
+        type: boolean
+        default: false
+      delete-checkpoint-bucket:
+        description: uninstall only, also delete the checkpoint bucket, which holds the control plane's backups; otherwise it's kept
+        type: boolean
+        default: false
+  schedule:
+    - cron: '17 6 1 * *'
+
+# e2e.yml's stop member dispatches stop-runner and diagnose and must find its
+# own run back among any others of this workflow in flight; `inputs` is empty
+# on the scheduled refresh, so this reads as "CI install" there.
+run-name: CI install ${{ inputs.mode }} ${{ inputs.runner }}${{ inputs.ids }}
+
+permissions: {}
+# bash -eo pipefail: a failed gh api or tar fails its step.
+defaults:
+  run:
+    shell: bash
+
+# One run at a time, never cancelled: a cancelled install loses its state, and
+# the refresh mustn't copy state an install is replacing.
+concurrency:
+  group: ci-install
+
+# Each org's saved anycloud state is its own artifact, kept for 90 days, the
+# org's cap; the monthly refresh uploads each again well before then. The find
+# step sets STATE: anycloud-sh's keeps its first name, anycloud-state, and any
+# other org's is anycloud-state-<org>, so a run for a test org never restores
+# or replaces production's.
+
+# Both jobs run on GitHub-hosted runners, not backmesh's own: this workflow
+# repairs, upgrades or reinstalls the installation those runners come from,
+# so it must run while they're down.
+jobs:
+  install:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    # Holds the secrets, and is the subject each cloud's OIDC trust names.
+    environment: ci-install
+    timeout-minutes: 120
+    permissions:
+      contents: read # the release's CLI binary
+      actions: read # the saved state
+      id-token: write # each cloud's OIDC sign-in
+    env:
+      BACKMESH_VERSION: v0.3.4
+      # The release's checksums.txt line for backmesh-linux-x64.tar.gz; bump
+      # both together. The install step refuses anything but a 64-character
+      # digest.
+      BACKMESH_SHA256: 20e804300f93666bc7356af42b1ba8375e3b176df8d4853d580ad34834e42a4b
+      ANYCLOUD_VERSION: 0.1.77
+      ANYCLOUD_SHA256: 9d93276292e09c6c14377f829428d9503801cceaa3a630b2ec4fa89744448dbd
+      CLOUDS: ${{ inputs.clouds }}
+      CONTROL_PLANE: ${{ inputs.control-plane }}
+      ORG: ${{ inputs.org }}
+    steps:
+      # Released builds only. The binary embeds compatibility.json.
+      - name: Install the released backmesh and the pinned anycloud
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ $BACKMESH_SHA256 =~ ^[0-9a-f]{64}$ ]] \
+            || { echo "::error::BACKMESH_SHA256 isn't $BACKMESH_VERSION's binary digest"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/bin" && cd "$RUNNER_TEMP/bin"
+          asset=backmesh-linux-x64.tar.gz
+          gh release download "$BACKMESH_VERSION" --repo "$GITHUB_REPOSITORY" --pattern "$asset"
+          echo "$BACKMESH_SHA256  $asset" | sha256sum -c -
+          tar -xzf "$asset" backmesh && rm "$asset"
+          # The anycloud seeded below must be the one this backmesh embeds.
+          gh release download "$BACKMESH_VERSION" --repo "$GITHUB_REPOSITORY" --pattern compatibility.json
+          embedded=$(jq -r .anycloud compatibility.json) && rm compatibility.json
+          [[ $embedded == "$ANYCLOUD_VERSION" ]] \
+            || { echo "::error::$BACKMESH_VERSION embeds anycloud $embedded, not ANYCLOUD_VERSION $ANYCLOUD_VERSION; bump them together"; exit 1; }
+          asset=anycloud-linux-x64.tar.gz
+          # Signed in, as above: anonymous release downloads can answer 504
+          # for a while.
+          gh release download "v$ANYCLOUD_VERSION" --repo anycloud-sh/releases --pattern "$asset"
+          echo "$ANYCLOUD_SHA256  $asset" | sha256sum -c -
+          tar -xzf "$asset" anycloud && rm "$asset"
+          # backmesh runs its own copy of anycloud, which it would otherwise
+          # download anonymously.
+          install -D -m 755 anycloud ~/.backmesh/bin/"$ANYCLOUD_VERSION"/anycloud
+          echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
+          # backmesh and the diagnose step's anycloud share this state, which
+          # backmesh otherwise keeps in ~/.backmesh/anycloud.
+          echo "ANYCLOUD_DIR=$HOME/.anycloud" >>"$GITHUB_ENV"
+          echo "BACKMESH_ANYCLOUD_DIR=$HOME/.anycloud" >>"$GITHUB_ENV"
+
+      # ~/.anycloud holds the control plane's address and sign-in. A run
+      # after the first restores the newest saved copy. Only this workflow's
+      # runs on main in this repository saved it: any other workflow or
+      # branch could upload an artifact of the same name.
+      - &find-state
+        name: Find the saved anycloud state
+        id: saved
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO_ID: ${{ github.repository_id }}
+        run: |
+          # GitHub org names ignore case.
+          org=${ORG,,}
+          [[ $org =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo "::error::Not a GitHub org name: $ORG"; exit 1; }
+          STATE=anycloud-state
+          [[ $org == anycloud-sh ]] || STATE=anycloud-state-$org
+          echo "STATE=$STATE" >>"$GITHUB_ENV"
+          runs=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/ci-install.yml/runs?branch=main&per_page=100" \
+            --jq ".workflow_runs[] | select(.head_branch == \"main\" and .head_repository.id == $REPO_ID and (.event == \"workflow_dispatch\" or .event == \"schedule\")) | .id" | jq -sc .)
+          newest=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$STATE&per_page=100" --jq '.artifacts[]' |
+            jq -sc --argjson runs "$runs" --argjson repo "$REPO_ID" \
+              '[.[] | select(.workflow_run.head_branch == "main" and .workflow_run.head_repository_id == $repo
+                and (.workflow_run.id | IN($runs[])))] | max_by(.created_at) // empty')
+          [[ -n $newest ]] || exit 0
+          if [[ $(jq .expired <<<"$newest") == true ]]; then
+            echo "::error::The newest $STATE artifact expired, so the cluster record is lost. Restore it from a backup."
+            exit 1
+          fi
+          echo "run-id=$(jq .workflow_run.id <<<"$newest")" >>"$GITHUB_OUTPUT"
+      - if: steps.saved.outputs.run-id
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ env.STATE }}
+          run-id: ${{ steps.saved.outputs.run-id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/state
+      - if: steps.saved.outputs.run-id
+        name: Decrypt the anycloud state
+        env:
+          STATE_KEY: ${{ secrets.BACKMESH_STATE_KEY }}
+        # gpg also accepts an unencrypted message, so a restore requires the
+        # passphrase's packet and a decryption that succeeded, then extracts
+        # only ~/.anycloud.
+        run: |
+          status=$(gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 3 --status-fd 1 \
+            --output "$RUNNER_TEMP/anycloud.tar.gz" --decrypt "$RUNNER_TEMP/state/anycloud.tar.gz.gpg" 3<<<"$STATE_KEY")
+          if ! grep -q '^\[GNUPG:\] NEED_PASSPHRASE_SYM ' <<<"$status" ||
+            ! grep -qx '\[GNUPG:\] DECRYPTION_OKAY' <<<"$status"; then
+            echo "::error::The saved $STATE isn't encrypted with BACKMESH_STATE_KEY"
+            exit 1
+          fi
+          tar -xz -C ~ -f "$RUNNER_TEMP/anycloud.tar.gz" .anycloud
+          rm -r "$RUNNER_TEMP/state" "$RUNNER_TEMP/anycloud.tar.gz"
+
+      # Step 3's `--generate` runs as each cloud's CI identity. anycloud
+      # generates on AWS only from a named profile, so the role's session is
+      # saved as the default one.
+      - if: inputs.mode == 'install' && contains(inputs.clouds, 'aws:')
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        id: aws
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+          # The session can't refresh, and install's second --generate runs
+          # after cluster create; two hours covers both.
+          role-duration-seconds: 7200
+          output-credentials: true
+      - if: inputs.mode == 'install' && contains(inputs.clouds, 'aws:')
+        name: Save the role's session as the default profile
+        env:
+          KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
+          SECRET: ${{ steps.aws.outputs.aws-secret-access-key }}
+          SESSION: ${{ steps.aws.outputs.aws-session-token }}
+        run: |
+          mkdir -p ~/.aws
+          printf '[default]\naws_access_key_id = %s\naws_secret_access_key = %s\naws_session_token = %s\n' \
+            "$KEY_ID" "$SECRET" "$SESSION" >~/.aws/credentials
+          chmod 600 ~/.aws/credentials
+      # gcloud's active account and project are the ones install generates with.
+      - if: inputs.mode == 'install' && contains(inputs.clouds, 'gcp:')
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+      - if: inputs.mode == 'install' && contains(inputs.clouds, 'gcp:')
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - if: inputs.mode == 'install' && contains(inputs.clouds, 'azure:')
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Read-only: `--plan` asks nothing new of a human and changes nothing
+      # billed, but it still reads the control plane (the existing listener's
+      # routes), with anycloud's saved GitHub sign-in, and signs in to each
+      # named cloud's CLI above, since the plan reads real quotas through it.
+      # Use this before a live `install` dispatch whose plan you haven't seen
+      # yet, such as one that connects a cloud for the first time: check it
+      # shows only the change you expect (an added cloud's runners, say)
+      # before dispatching without `plan`.
+      - if: inputs.mode == 'install' && inputs.plan
+        name: backmesh install --plan
+        env:
+          BACKMESH_UNSUPPORTED_CI_OVERRIDE: anycloud-ci
+          # anycloud's GitHub sign-in: the cluster's owner and DNS name. Set
+          # here too, as the apply step below sets it, so reading the
+          # control plane can't fall back to a device-code prompt.
+          GITHUB_TOKEN: ${{ secrets.ANYCLOUD_GITHUB_TOKEN }}
+          ORG: ${{ inputs.org }}
+        run: |
+          read -ra clouds <<<"$CLOUDS"
+          placement=(--control-plane "$CONTROL_PLANE")
+          for cloud in "${clouds[@]}"; do placement+=(--runners "$cloud"); done
+          out=$RUNNER_TEMP/install-plan.json
+          backmesh install --org "$ORG" "${placement[@]}" --plan --json | tee "$out"
+          {
+            echo '### Install plan'
+            echo '```json'
+            cat "$out"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - if: inputs.mode == 'install' && !inputs.plan
+        name: backmesh install
+        env:
+          BACKMESH_UNSUPPORTED_CI_OVERRIDE: anycloud-ci
+          # anycloud's GitHub sign-in: the cluster's owner and DNS name.
+          GITHUB_TOKEN: ${{ secrets.ANYCLOUD_GITHUB_TOKEN }}
+          ORG: ${{ inputs.org }}
+        # The sign-in and App prompts also go to annotations, which show on
+        # the run's page with the live log while the step runs, and to the
+        # job summary, which keeps them after it. Install waits an hour for
+        # the App; here it stops after 15 minutes, while it's still waiting:
+        # once the App comes it prints 'Creating the control plane on' (a
+        # fresh or resumed one) or 'Using the control plane on' (a reused
+        # one), and it's left to run.
+        run: |
+          read -ra clouds <<<"$CLOUDS"
+          log=$RUNNER_TEMP/install.log
+          : >"$log"
+          # The control plane goes where `control-plane` says; each cloud's
+          # runners take backmesh's fixed regions that the account allows.
+          placement=(--control-plane "$CONTROL_PLANE")
+          for cloud in "${clouds[@]}"; do placement+=(--runners "$cloud"); done
+          backmesh install --org "$ORG" "${placement[@]}" --yes >"$log" 2>&1 &
+          pid=$!
+          tail -f --pid="$pid" "$log" &
+          signin= app=
+          while kill -0 "$pid" 2>/dev/null; do
+            sleep 5
+            if [[ -z $signin ]] && line=$(grep -m1 'login/device' "$log"); then
+              signin=1
+              echo "::notice title=GitHub sign-in for $ORG::$line"
+              echo "**GitHub sign-in:** $line" >>"$GITHUB_STEP_SUMMARY"
+            fi
+            if [[ -z $app ]] && line=$(grep -m1 'installs the backmesh GitHub App' "$log"); then
+              app=$SECONDS
+              echo "::warning title=Install the backmesh App on $ORG::$line"
+              echo "**Install the backmesh App on $ORG:** $line" >>"$GITHUB_STEP_SUMMARY"
+            fi
+            if [[ -n $app ]] && ((SECONDS - app > 900)) && ! grep -Eq '(Creating|Using) the control plane on' "$log"; then
+              kill "$pid" 2>/dev/null || true
+              wait "$pid" || true
+              wait
+              echo "::error::The backmesh App isn't installed on $ORG after 15 minutes, so install stopped before connecting a cloud. An owner of $ORG installs it from the link above, then dispatches install again."
+              exit 1
+            fi
+          done
+          wait "$pid" && code=0 || code=$?
+          # tail's last lines, then install's status.
+          wait
+          exit "$code"
+
+      # The hosted API to the release's anycloud first, then the
+      # listener to its images and classes. It signs in to the hosted API with
+      # anycloud's GitHub sign-in, and `--runners` names each cloud whose runners
+      # stay, in backmesh's fixed regions, so it reads nothing through a cloud CLI
+      # and needs no cloud sign-in. A cloud `clouds` leaves out drains and is
+      # removed, shown in the plan's `changes.removed`, and only with
+      # `remove-clouds`, so a routine dispatch can't drain a cloud. Without a
+      # terminal a change to the runners needs a plan: the first run moves an
+      # older control plane, then exits needs_plan, `--plan` reads the plan on
+      # the moved control plane, and `--yes --plan-id` applies it.
+      - if: inputs.mode == 'upgrade'
+        name: backmesh upgrade
+        env:
+          GITHUB_TOKEN: ${{ secrets.ANYCLOUD_GITHUB_TOKEN }}
+          REMOVE_CLOUDS: ${{ inputs.remove-clouds }}
+        run: |
+          read -ra clouds <<<"$CLOUDS"
+          runners=()
+          for cloud in "${clouds[@]}"; do runners+=(--runners "$cloud"); done
+          out=$RUNNER_TEMP/upgrade.json
+          if backmesh upgrade "${runners[@]}" --json >"$out"; then
+            cat "$out"
+            exit 0
+          fi
+          cat "$out"
+          [[ $(tail -n1 "$out" | jq -r '.error.code // empty') == needs_plan ]] || exit 1
+          backmesh upgrade "${runners[@]}" --plan --json >"$out" || { cat "$out"; exit 1; }
+          cat "$out"
+          id=$(tail -n1 "$out" | jq -er .planId)
+          removed=$(tail -n1 "$out" | jq -r '[.orgs[] | (.changes.removed // [])[]] | unique | join(" ")')
+          if [[ -n $removed && $REMOVE_CLOUDS != true ]]; then
+            echo "::error title=Upgrade removes clouds::The plan removes $removed; re-run with remove-clouds to drain it, or add it to clouds to keep it"
+            exit 1
+          fi
+          echo "::notice title=Upgrade plan::$id"
+          backmesh upgrade "${runners[@]}" --yes --plan-id "$id"
+      - if: ${{ !cancelled() && inputs.mode == 'upgrade' }}
+        name: backmesh status
+        env:
+          GITHUB_TOKEN: ${{ secrets.ANYCLOUD_GITHUB_TOKEN }}
+        run: backmesh status
+
+      # The pinned anycloud's CLI refuses an older API, so an installation
+      # left on an older release first moves to it. Since 0.1.74 `api
+      # upgrade` needs no Docker or local API and takes no --yes.
+      - if: inputs.mode == 'uninstall'
+        name: Move the control plane to the pinned anycloud
+        env:
+          GITHUB_TOKEN: ${{ secrets.ANYCLOUD_GITHUB_TOKEN }}
+        run: |
+          url=$(anycloud api status --json | jq -r .url)
+          anycloud api upgrade
+          # An API older than the CLI takes the upgrade without an upgrade
+          # record, so `api status --watch` has nothing to follow.
+          for _ in $(seq 120); do
+            version=$(curl -fsS --max-time 10 "$url/v1/version" | jq -r .version) || version=
+            [[ $version == "$ANYCLOUD_VERSION" ]] && exit 0
+            sleep 10
+          done
+          echo "::error::$url still serves ${version:-nothing}, not $ANYCLOUD_VERSION"
+          exit 1
+
+      # Uninstall's one path. An admin of the org opens the sign-in from this
+      # log; --yes skips the confirmations, and --confirm names the cluster for
+      # the bucket's deletion, which happens only when asked. --org for the
+      # control plane's only org removes the whole control plane.
+      - if: inputs.mode == 'uninstall'
+        name: backmesh uninstall
+        env:
+          GITHUB_TOKEN: ${{ secrets.ANYCLOUD_GITHUB_TOKEN }}
+          ORG: ${{ inputs.org }}
+          DELETE_BUCKET: ${{ inputs.delete-checkpoint-bucket }}
+        run: |
+          flags=(--org "$ORG" --yes --confirm backmesh)
+          if [[ $DELETE_BUCKET == true ]]; then flags+=(--delete-checkpoint-bucket); fi
+          backmesh uninstall "${flags[@]}"
+
+      # Read-only, from the hosted API: the status, the org's listener log,
+      # then the newest runner Jobs that ended on their own and any named in
+      # `ids`, each with its end and the log tail anycloud kept; a named Job's
+      # events also carry their metadata, less its log tail. Only named fields
+      # are printed, never a Job's env (the JIT config) or command, and long
+      # tokens are redacted.
+      - if: inputs.mode == 'diagnose'
+        name: Diagnose the runner Jobs
+        env:
+          GITHUB_TOKEN: ${{ secrets.ANYCLOUD_GITHUB_TOKEN }}
+          ORG: ${{ inputs.org }}
+          JOBS: ${{ inputs.jobs }}
+          IDS: ${{ inputs.ids }}
+        run: |
+          redact() { sed -E 's/[A-Za-z0-9+/=_.-]{100,}/[redacted]/g'; }
+          # Through a pipe of its own: backmesh can leave the step's stdout
+          # non-blocking, and a later burst then fails with EAGAIN ("sed:
+          # couldn't write ... Resource temporarily unavailable", diagnose
+          # runs 42513124550 and 42515273003).
+          backmesh status | cat || true
+          echo "::group::$ORG's listener log"
+          # The listener logs only failures and job events, so a healthy one
+          # that GitHub sent no job has an empty log.
+          log=$(timeout 60 backmesh logs --org "$ORG" 2>&1) && code=0 || code=$?
+          [[ -n $log ]] || log="(empty log, exit $code)"
+          tail -n 300 <<<"$log" | redact
+          echo "::endgroup::"
+          session=$(backmesh status --org "$ORG" --json | jq -er '.orgs[0].session // empty')
+          # One listing, capped at 1,000 (anycloud's MAX_LIST_LIMIT). Live Jobs
+          # come first, up to the same cap, and ended Jobs never push them out;
+          # the newest ended Jobs fill what's left (anycloud v0.1.73
+          # workload-queries.ts:983-1023). At the cap, diagnose says which
+          # part was cut.
+          limit=1000
+          anycloud job list --session "$session" -n "$limit" --json >"$RUNNER_TEMP/jobs.json"
+          echo "Runner Jobs in $session by state:"
+          jq -r 'group_by(.state)[] | "  \(.[0].state): \(length)"' "$RUNNER_TEMP/jobs.json"
+          if (($(jq length "$RUNNER_TEMP/jobs.json") >= limit)); then
+            ended=$(jq '[.[] | select(.state | IN("completed", "errored", "failed", "invalid", "terminated"))] | length' "$RUNNER_TEMP/jobs.json")
+            if ((ended > 0)); then
+              cut="live counts are complete; the ended counts and the list below cover only the newest ended Jobs"
+            else
+              cut="every listed Job is live, so even the live counts and the list below cover only the newest $limit"
+            fi
+            echo "  TRUNCATED: the listing reached its $limit-Job cap: $cut."
+            echo "::warning::diagnose's runner Job listing reached its $limit-Job cap: $cut"
+          fi
+          # Why an event happened, from the metadata anycloud records on it
+          # (anycloud v0.1.73 src/api/services/task.ts:282-299 and the launch
+          # classifier's fields): the diagnosis, the error's message, the
+          # target, and a region denied to the credential.
+          why='def denied: (.metadata // {}).targetRegionDenied as $d
+            | if $d == null then null else "region denied\(if $d != "" then " (\($d))" else "" end)" end;
+          def why: (.metadata // {}) as $m | ($m.error // null) as $e
+            | [($m.diagnosis // $m.errorKind),
+               (if ($e | type) == "object" then $e.code else null end),
+               $m.reason,
+               ($m.message // (if ($e | type) == "object" then $e.message else $e end)
+                 | if type == "string" then .[:200] else null end),
+               ([$m.targetVmType, $m.targetRegion, $m.targetAvailabilityZone]
+                 | map(select(. != null and . != "")) | if length > 0 then "target \(join(" "))" else null end),
+               denied]
+            | map(select(. != null and . != "")) | join("; ") | if . == "" then "no reason recorded" else . end;
+          # The same, short enough to count: the diagnosis, the error code and
+          # a denial with its region; else the reason with its numbers masked.
+          def cause: . as $event | (.metadata // {}) as $m
+            | [($m.diagnosis // $m.errorKind), ($m.error | if type == "object" then .code else null end),
+               (denied | if . then "\(.) in \($m.targetRegion // "?")" else null end)]
+            | map(select(. != null and . != "")) | join(" ")
+            | if . != "" then . else ($event | why | gsub("[0-9]+"; "N")) end;'
+          # Each retrying or recovering runner Job's newest retrying or
+          # recovering event, counted by scale set, that event's state and its
+          # cause; a Job that has moved on since the listing still counts there.
+          # The scale set is the runner name's code (bm<install>-<code>-...).
+          jq -r '.[] | select(.state | IN("retrying", "recovering")) | .id' "$RUNNER_TEMP/jobs.json" >"$RUNNER_TEMP/stuck"
+          while read -r id <&3; do
+            code=$(cut -d- -f2 <<<"$id")
+            timeout 30 anycloud status "$id" --json >"$RUNNER_TEMP/stuck-status.json" 2>/dev/null \
+              && jq -ce --arg code "$code" "$why"'
+                [.events[] | select(.state | IN("retrying", "recovering"))] | last
+                | if . then { $code, state, reason: cause }
+                  else { $code, state: "listed", reason: "no retrying or recovering event" } end' \
+                "$RUNNER_TEMP/stuck-status.json" \
+              || jq -nc --arg code "$code" '{ $code, state: "unknown", reason: "status unavailable" }'
+          done 3<"$RUNNER_TEMP/stuck" >"$RUNNER_TEMP/stuck.json"
+          echo "Retrying and recovering runner Jobs by scale set (code), with their newest causes:"
+          jq -rs 'if length == 0 then "  none" else group_by(.code, .state)[]
+            | "  \(.[0].code): \(length) runner Job\(if length == 1 then "" else "s" end) \(.[0].state): \(group_by(.reason) | sort_by(-length) | map("\(.[0].reason) ×\(length)") | join(", "))" end' \
+            "$RUNNER_TEMP/stuck.json" | redact
+          echo "Each, oldest first: ID, state, end, VM type, started, completed, cleaned, cleanup error:"
+          jq -r 'def at: if . then . / 1000 | floor | todate else "-" end; sort_by(.startedAt)[]
+            | "  \(.id) \(.state) \(.endReason // "-") \([.vmType // "-"] | flatten | join(",")) \(.startedAt | at) \(.completedAt | at) \(.cleanedAt | at) \(.cleanupError // "")"' \
+            "$RUNNER_TEMP/jobs.json" | redact
+          jq -r --argjson n "$JOBS" '[.[] | select(.state | IN("completed", "errored", "failed", "invalid"))]
+            | sort_by(.startedAt) | reverse | .[:$n][] | .id' "$RUNNER_TEMP/jobs.json" >"$RUNNER_TEMP/ended"
+          # Named Jobs too, such as a terminated one, each event with its
+          # metadata less any container log tail.
+          read -ra named <<<"$IDS"
+          : >"$RUNNER_TEMP/named"
+          for id in "${named[@]}"; do
+            [[ $id =~ ^bm[0-9a-z]{5}-[0-9a-z]{2}-[0-9a-z]{8}$ ]] || { echo "::warning::$id isn't a runner Job ID"; continue; }
+            echo "$id" >>"$RUNNER_TEMP/named"
+            grep -qx "$id" "$RUNNER_TEMP/ended" || echo "$id" >>"$RUNNER_TEMP/ended"
+          done
+          # fd 3: exec and logs may read stdin.
+          while read -r id <&3; do
+            echo "::group::$id"
+            # A named Job gets every event, not the newest 200.
+            full=false history=()
+            if grep -qx "$id" "$RUNNER_TEMP/named"; then full=true history=(--history); fi
+            anycloud status "$id" --json "${history[@]}" >"$RUNNER_TEMP/status.json" || { echo "::endgroup::"; continue; }
+            jq --argjson full "$full" "$why"'def at: if . then . / 1000 | floor | todate else null end; {
+              id: .workload.id, state: .workload.state, endReason: .workload.endReason,
+              lastAttemptEndReason: .workload.lastAttemptEndReason, deployment: .workload.deploymentId,
+              vmType: .workload.vmType, region: .workload.region,
+              startedAt: (.workload.startedAt | at), completedAt: (.workload.completedAt | at),
+              cleanedAt: (.workload.cleanedAt | at), cleanupError: .workload.cleanupError,
+              buckets: [.workload.inputBucket, .workload.outputBucket, .workload.checkpointBucket],
+              events: [.events[] | {state, at: (.createdAt | at)}
+                + if .state | IN("retrying", "recovering") then {reason: why} else {message: (.metadata.message // .metadata.reason)} end
+                + if $full then {metadata: (.metadata | if type == "object" then del(.logs) else . end)} else {} end]
+            }' "$RUNNER_TEMP/status.json" | redact || true
+            echo "--- anycloud logs $id"
+            timeout 120 anycloud logs "$id" 2>&1 | tail -n 200 | redact || true
+            echo "::endgroup::"
+          done 3<"$RUNNER_TEMP/ended"
+
+      # The lost-runner live check: terminates one runner Job, so the runner's
+      # report of its job can be timed. It goes through the control plane with
+      # the saved anycloud state and no cloud credentials. The fail-fast relies
+      # on the cloud shutting the VM's OS down on delete, as EC2's
+      # TerminateInstances does. The Job ends cancelled, which backmesh doesn't
+      # rerun. Fail-closed: the runner must be running an in-progress
+      # lost-runner-check job on a backmesh label, and be a running runner Job
+      # in a backmesh session.
+      - if: inputs.mode == 'stop-runner'
+        name: Terminate a lost-runner check's runner Job
+        env:
+          GITHUB_TOKEN: ${{ secrets.ANYCLOUD_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          RUNNER_ID: ${{ inputs.runner }}
+        run: |
+          fail() { echo "::error::$*"; exit 1; }
+          [[ $RUNNER_ID =~ ^bm[0-9a-z]{5}-[0-9a-z]{2}-[0-9a-z]{8}$ ]] || fail "$RUNNER_ID isn't a runner Job ID"
+          # The GitHub job it runs: an in-progress lost-runner-check job on a
+          # backmesh label in this repository. The runs query no longer
+          # filters by the run's own status: that field can lag the job's own
+          # runner assignment, which e2e.yml's stop member has already seen
+          # (e2e run 42888142963). The job-level in-progress check below
+          # doesn't share that lag, so it stays the fail-closed condition; the
+          # created window and per_page just bound how much history the query
+          # reads. Looked up for up to about 30 s as a backstop for any
+          # remaining lag.
+          job=
+          since=$(date -u -d '-2 hours' +%FT%TZ)
+          for attempt in 1 2 3 4 5 6; do
+            runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/lost-runner-check.yml/runs?branch=main&created=%3E%3D$since&per_page=20" \
+              --jq '.workflow_runs[] | select(.event == "workflow_dispatch" and .head_branch == "main") | .id')
+            for run in $runs; do
+              job=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/jobs" \
+                --jq ".jobs[] | select(.runner_name == \"$RUNNER_ID\" and .status == \"in_progress\" and any(.labels[]; startswith(\"backmesh-\")))" )
+              [[ -n $job ]] && break 2
+            done
+            (( attempt < 6 )) && sleep 5
+          done
+          [[ -n $job ]] || fail "$RUNNER_ID runs no in-progress lost-runner-check job on a backmesh label"
+          jq -c '{run_id, id, name, labels, runner_name, started_at}' <<<"$job"
+          anycloud status "$RUNNER_ID" --json >"$RUNNER_TEMP/runner.json" || fail "anycloud status failed for $RUNNER_ID"
+          jq -c '{id: .workload.id, state: .workload.state, cloud: .workload.cloudProvider, session: .workload.session, vms: [.vms[]? | {region, endedAt}]}' "$RUNNER_TEMP/runner.json"
+          [[ $(jq -r .workload.state "$RUNNER_TEMP/runner.json") == running ]] || fail "$RUNNER_ID isn't running"
+          [[ $(jq -r '.workload.session // ""' "$RUNNER_TEMP/runner.json") == bm-* ]] || fail "$RUNNER_ID isn't in a backmesh session"
+          # The request's time: cleanup then reads the VM's diagnostics for up
+          # to 15 s before deleting it, so the check's last "alive" line marks
+          # the VM's end.
+          at=$(date -u +%FT%T.%3NZ)
+          echo "Terminating $RUNNER_ID at $at"
+          anycloud terminate "$RUNNER_ID"
+          echo "terminate_requested_at=$at" >>"$GITHUB_STEP_SUMMARY"
+          # terminate succeeds for a Job that already ended, so check it
+          # ended by this request.
+          anycloud status "$RUNNER_ID" --json >"$RUNNER_TEMP/runner.json" || fail "anycloud status failed for $RUNNER_ID"
+          jq -c '{state: .workload.state, endReason: .workload.endReason}' "$RUNNER_TEMP/runner.json"
+          [[ $(jq -r .workload.state "$RUNNER_TEMP/runner.json") == terminated ]] || fail "$RUNNER_ID isn't terminated"
+
+      # Kept even when install, upgrade or uninstall fails: a re-run, upgrade
+      # or `cluster delete` needs the record. It holds the generated cloud keys, so it's
+      # encrypted, and the repository's readers see only ciphertext. Skipped
+      # for `install --plan`, which changes nothing to record.
+      - if: ${{ !cancelled() && inputs.mode != 'diagnose' && inputs.mode != 'stop-runner' && !(inputs.mode == 'install' && inputs.plan) }}
+        name: Stop the local anycloud API
+        # `api stop` fails when none runs: an upgrade with nothing for the API
+        # to do never starts it. anycloud names its container anycloud-api.
+        run: |
+          [[ -f ~/.anycloud/api.db && -n $(docker ps -q --filter name='^anycloud-api$') ]] || exit 0
+          anycloud api stop
+      - if: ${{ !cancelled() && inputs.mode != 'diagnose' && inputs.mode != 'stop-runner' && !(inputs.mode == 'install' && inputs.plan) }}
+        id: state
+        name: Encrypt the anycloud state
+        env:
+          STATE_KEY: ${{ secrets.BACKMESH_STATE_KEY }}
+        run: |
+          # anycloud 0.1.74 keeps no local API: the record is api-url and the
+          # sign-in, beside an older install's api.db.
+          [[ -f ~/.anycloud/api.db || -f ~/.anycloud/api-url ]] || exit 0
+          tar -cz -C ~ .anycloud | gpg --batch --quiet --pinentry-mode loopback \
+            --passphrase-fd 3 --symmetric --cipher-algo AES256 \
+            --output "$RUNNER_TEMP/anycloud.tar.gz.gpg" 3<<<"$STATE_KEY"
+          echo saved=true >>"$GITHUB_OUTPUT"
+      - if: ${{ !cancelled() && steps.state.outputs.saved }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.STATE }}
+          path: ${{ runner.temp }}/anycloud.tar.gz.gpg
+          if-no-files-found: error
+          retention-days: 90
+
+  # Monthly, so the newest copy never expires: it uploads the same ciphertext
+  # again, with no secret.
+  refresh:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      # One org's expired state must not cancel another's refresh.
+      fail-fast: false
+      matrix:
+        # Every org this workflow installs on; E2E_ORG, a repository
+        # variable, names the test org.
+        org: [anycloud-sh, backmesh, '${{ vars.E2E_ORG }}']
+    env:
+      ORG: ${{ matrix.org }}
+    permissions:
+      actions: read # the saved state
+    steps:
+      - *find-state
+      - if: steps.saved.outputs.run-id
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ env.STATE }}
+          run-id: ${{ steps.saved.outputs.run-id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/state
+      - if: steps.saved.outputs.run-id
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.STATE }}
+          path: ${{ runner.temp }}/state/anycloud.tar.gz.gpg
+          if-no-files-found: error
+          retention-days: 90

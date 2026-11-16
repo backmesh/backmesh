@@ -1,0 +1,40 @@
+{
+  "source": "ci-install diagnose run 42504211142 (f-check: messages): the job messages GitHub sent a scale set for one queued, acquired and cancelled job, every field but URLs, with the owner, repository and workflow made neutral. No JobAvailable came, and no JobStarted, as no runner took the job.",
+  "messages": [
+    {
+      "messageType": "JobAssigned",
+      "repositoryName": "example",
+      "ownerName": "example-org",
+      "jobWorkflowRef": "example-org/example/.github/workflows/ci.yml@refs/heads/main",
+      "requestLabels": ["bmtest-msg"],
+      "scaleSetAssignTime": "2026-11-08T17:18:25.659194934Z",
+      "jobId": "675f21a8-3cf9-5f07-a2d3-716bb0341c7f",
+      "runnerAssignTime": "0001-01-01T00:00:00Z",
+      "finishTime": "0001-01-01T00:00:00Z",
+      "jobDisplayName": "msg",
+      "workflowRunId": 42504290355,
+      "eventName": "push",
+      "queueTime": "0001-01-01T00:00:00Z",
+      "runnerRequestId": 0
+    },
+    {
+      "messageType": "JobCompleted",
+      "repositoryName": "example",
+      "ownerName": "example-org",
+      "jobWorkflowRef": "example-org/example/.github/workflows/ci.yml@refs/heads/main",
+      "requestLabels": ["bmtest-msg"],
+      "scaleSetAssignTime": "2026-11-08T17:18:25.659194934Z",
+      "jobId": "675f21a8-3cf9-5f07-a2d3-716bb0341c7f",
+      "runnerAssignTime": "0001-01-01T00:00:00Z",
+      "finishTime": "2026-11-08T17:20:14.239751604Z",
+      "jobDisplayName": "msg",
+      "workflowRunId": 42504290355,
+      "eventName": "push",
+      "queueTime": "0001-01-01T00:00:00Z",
+      "runnerRequestId": 0,
+      "runnerId": 0,
+      "runnerName": "",
+      "result": "canceled"
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+---
+// A matrix over clouds: each job lands in the cloud its label names. The
+// lanes are HTML, not a scaled SVG, so their text keeps its size at every
+// width.
+import { clouds } from './clouds';
+---
+
+<figure class="lanes">
+  <pre class="code"><code>strategy:
+  matrix:
+    cloud: [aws, gcp, azure]
+runs-on: <b>backmesh-${'{{'} matrix.cloud {'}}'}-4</b></code></pre>
+  <ul
+    aria-label="The matrix runs one job in each cloud's lane: backmesh-aws-4, backmesh-gcp-4 and backmesh-azure-4."
+  >
+    {clouds.map((c) => (
+      <li>
+        <span class="mark" set:html={c.svg} aria-hidden="true" />
+        <code>backmesh-{c.key}-4</code>
+        <span class="job"><i aria-hidden="true"></i>test · {c.key}</span>
+      </li>
+    ))}
+  </ul>
+</figure>
+
+<style>
+  .lanes {
+    margin: 0;
+    display: grid;
+    gap: 22px;
+    min-width: 0;
+  }
+  .code {
+    margin: 0;
+    padding: 4px 0 4px 22px;
+    border-left: 2px solid var(--bm-hair);
+    overflow-x: auto;
+    color: var(--bm-body);
+    font: 400 15px/1.75 var(--bm-mono);
+  }
+  .code b {
+    color: var(--bm-accent);
+    font-weight: 400;
+  }
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1.5px solid var(--bm-ink);
+  }
+  li {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--bm-hair);
+  }
+  .mark {
+    flex: none;
+    display: flex;
+    color: var(--bm-ink);
+  }
+  .mark :global(svg) {
+    width: 18px;
+    height: 18px;
+  }
+  li code {
+    flex: 1;
+    min-width: 0;
+    color: var(--bm-ink);
+    font: 400 15px var(--bm-mono);
+    overflow-wrap: anywhere;
+  }
+  .job {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--bm-accent);
+    font: 400 14px var(--bm-mono);
+  }
+  .job i {
+    width: 12px;
+    height: 12px;
+    background: var(--bm-accent);
+  }
+  @media (max-width: 520px) {
+    .code {
+      padding-left: 14px;
+      font-size: 13px;
+    }
+  }
+</style>

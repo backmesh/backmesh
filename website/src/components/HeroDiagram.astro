@@ -1,0 +1,251 @@
+---
+// The hero: GitHub's queued jobs drop through one install and land, each as
+// a square, in a VM slot in AWS, GCP or Azure; later the job ends and its VM
+// goes. The markup is the complete resting state (flow.ts, t = REST); the
+// script replays the same schedule from there. It stays still under reduced
+// motion, off screen, in a hidden tab and on hover.
+import { clouds, placeMark } from './clouds';
+import { G, busyAt, queueAt, slotXY, vmsAt } from './flow';
+
+const busy = busyAt(G.REST);
+const outlines = vmsAt(G.REST);
+const panels = ['aws', 'gcp', 'azure'].map((key, c) => ({
+  name: ['AWS', 'GCP', 'Azure'][c],
+  x: G.PX[c]!,
+  svg: clouds.find((cl) => cl.key === key)!.svg,
+  slots: Array.from({ length: G.COLS * G.ROWS }, (_, s) => {
+    const [x, y] = slotXY(c, s);
+    const key = `${c}:${s}`;
+    return { s, x: x!, y: y!, on: busy.get(key) ?? 0, vm: outlines.get(key) ?? 0 };
+  }),
+}));
+const panelH = G.HEAD + G.ROWS * (G.SS + G.SG) - G.SG + G.PAD;
+const by = G.BOX_Y + G.BOX_H;
+const branch = (cx: number) =>
+  `M${G.DROP} ${by} C ${G.DROP} ${by + 48}, ${cx} ${G.PY - 48}, ${cx} ${G.PY}`;
+const queue = queueAt(G.REST);
+---
+
+<svg
+  class="flow"
+  viewBox="0 0 560 500"
+  role="img"
+  aria-labelledby="flow-title flow-desc"
+>
+  <title id="flow-title">One changed runs-on line, three clouds</title>
+  <desc id="flow-desc">
+    Change runs-on: ubuntu-latest to runs-on: backmesh-4, and GitHub Actions
+    jobs each run on their own spot VM in AWS, Google Cloud or Azure.
+  </desc>
+  <text class="lbl" x="0" y={G.QY - 22}>GitHub Actions</text>
+  <path class="rail" d={`M0 ${G.QY} H ${G.DROP}`}></path>
+  <path class="thread" d={`M${G.DROP} ${G.QY} V ${G.BOX_Y}`}></path>
+  <rect class="box" x={G.DROP - 205} y={G.BOX_Y} width="410" height={G.BOX_H}
+  ></rect>
+  <text class="cmd del" x={G.DROP - 188} y={G.BOX_Y + 27}>
+    <tspan class="sign">-</tspan> runs-on: ubuntu-latest
+  </text>
+  <text class="cmd" x={G.DROP - 188} y={G.BOX_Y + 51}>
+    <tspan class="sign add">+</tspan> runs-on: backmesh-4 <tspan class="note"># 4 vCPU spot VM</tspan>
+  </text>
+  {panels.map((p) => <path class="thread" d={branch(p.x + G.PW / 2)} />)}
+  {
+    panels.map((p, c) => (
+      <g>
+        <rect
+          class="panel"
+          x={p.x + 0.5}
+          y={G.PY + 0.5}
+          width={G.PW - 1}
+          height={panelH}
+        />
+        <g class="logo" set:html={placeMark(p.svg, p.x + G.PAD, G.PY + 15, 16)} />
+        <text class="lbl" x={p.x + G.PAD + 24} y={G.PY + 28}>
+          {p.name}
+        </text>
+        {p.slots.map((s) => (
+          <>
+            <rect
+              class="slot"
+              data-slot={`${c}:${s.s}`}
+              style={`opacity:${s.vm.toFixed(2)}`}
+              x={s.x + 0.5}
+              y={s.y + 0.5}
+              width={G.SS - 1}
+              height={G.SS - 1}
+            />
+            <rect
+              class="vm"
+              data-vm={`${c}:${s.s}`}
+              x={s.x}
+              y={s.y}
+              width={G.SS}
+              height={G.SS}
+              style={`opacity:${s.on.toFixed(2)}`}
+            />
+          </>
+        ))}
+      </g>
+    ))
+  }
+  <g class="queue" data-queue aria-hidden="true">
+    {
+      queue.map((q) => (
+        <rect
+          x={q.x - G.TS / 2}
+          y={G.QY - G.TS / 2}
+          width={G.TS}
+          height={G.TS}
+          style={`opacity:${q.on.toFixed(2)}`}
+        />
+      ))
+    }
+  </g>
+  <g class="tokens" data-tokens aria-hidden="true"></g>
+</svg>
+
+<script>
+  import { G, busyAt, queueAt, tokensAt, vmsAt } from './flow';
+
+  const svg = document.querySelector<SVGSVGElement>('svg.flow');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  if (svg) animate(svg);
+
+  function animate(svg: SVGSVGElement) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const vms = [...svg.querySelectorAll<SVGRectElement>('[data-vm]')];
+    const slots = [...svg.querySelectorAll<SVGRectElement>('[data-slot]')];
+    const queue = [...svg.querySelectorAll<SVGRectElement>('[data-queue] rect')];
+    const box = svg.querySelector('[data-tokens]')!;
+    const tokens = Array.from({ length: 6 }, () => {
+      const el = document.createElementNS(NS, 'rect');
+      el.style.opacity = '0';
+      box.append(el);
+      return el;
+    });
+    function render(t: number) {
+      const busy = busyAt(t);
+      for (const el of vms) el.style.opacity = (busy.get(el.dataset.vm!) ?? 0).toFixed(2);
+      const outlines = vmsAt(t);
+      for (const el of slots) el.style.opacity = (outlines.get(el.dataset.slot!) ?? 0).toFixed(2);
+      queueAt(t).forEach(({ x, on }, j) => {
+        queue[j]!.setAttribute('x', (x - G.TS / 2).toFixed(1));
+        queue[j]!.style.opacity = on.toFixed(2);
+      });
+      const flying = tokensAt(t);
+      tokens.forEach((el, i) => {
+        const tok = flying[i];
+        el.style.opacity = tok?.shown ? '1' : '0';
+        if (!tok) return;
+        el.setAttribute('x', (tok.x - tok.size / 2).toFixed(1));
+        el.setAttribute('y', (tok.y - tok.size / 2).toFixed(1));
+        el.setAttribute('width', tok.size.toFixed(1));
+        el.setAttribute('height', tok.size.toFixed(1));
+      });
+    }
+
+    // Simulated time: pausing freezes it.
+    let t = G.REST;
+    let last: number | null = null;
+    let raf = 0;
+    let onScreen = false;
+    let hovered = false;
+    const running = () => onScreen && !hovered && !document.hidden && !reduce.matches;
+    function loop(now: number) {
+      if (last !== null) t += Math.min(100, now - last) / 1000;
+      last = now;
+      render(t);
+      raf = requestAnimationFrame(loop);
+    }
+    function update() {
+      cancelAnimationFrame(raf);
+      last = null;
+      if (running()) raf = requestAnimationFrame(loop);
+    }
+    new IntersectionObserver(([entry]) => {
+      onScreen = !!entry?.isIntersecting;
+      update();
+    }).observe(svg);
+    document.addEventListener('visibilitychange', update);
+    svg.addEventListener('mouseenter', () => ((hovered = true), update()));
+    svg.addEventListener('mouseleave', () => ((hovered = false), update()));
+    reduce.addEventListener('change', update);
+  }
+</script>
+
+<style>
+  .flow {
+    width: 100%;
+    height: auto;
+    display: block;
+    overflow: visible;
+  }
+  .lbl {
+    fill: var(--bm-ink);
+    font: 600 15px var(--bm-sans);
+    letter-spacing: -0.01em;
+  }
+  .rail {
+    fill: none;
+    stroke: var(--bm-hair);
+  }
+  .thread {
+    fill: none;
+    stroke: var(--bm-accent-soft);
+    stroke-width: 1.5;
+  }
+  .box {
+    fill: var(--bm-bg);
+    stroke: var(--bm-ink);
+    stroke-width: 1.25;
+  }
+  .cmd {
+    fill: var(--bm-ink);
+    font: 400 15px var(--bm-mono);
+  }
+  .cmd.del {
+    fill: var(--bm-soft);
+  }
+  .sign {
+    fill: var(--bm-soft);
+  }
+  .sign.add {
+    fill: var(--bm-accent);
+  }
+  .note {
+    fill: var(--bm-soft);
+  }
+  .p {
+    fill: var(--bm-accent);
+  }
+  .panel {
+    fill: var(--bm-bg);
+    stroke: var(--bm-line);
+  }
+  .logo {
+    color: var(--bm-ink);
+  }
+  .slot {
+    fill: none;
+    stroke: var(--bm-line);
+  }
+  .vm,
+  .queue rect,
+  .tokens :global(rect) {
+    fill: var(--bm-accent);
+  }
+  .tokens :global(rect) {
+    stroke: var(--bm-bg);
+    stroke-width: 2.5;
+  }
+  /* On a phone the drawing is about 350 px wide: larger labels keep it
+     legible. */
+  @media (max-width: 600px) {
+    .lbl {
+      font-size: 19px;
+    }
+    .cmd {
+      font-size: 16px;
+    }
+  }
+</style>

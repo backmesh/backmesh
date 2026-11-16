@@ -1,0 +1,314 @@
+name: Release
+
+# Cuts backmesh release vX.Y.Z from its tag: checks
+# the tag, publishes and signs both images, and attaches compatibility.json,
+# which names their digests and the one anycloud version the release pins,
+# and the CLI binaries that embed it. The binaries are mirrored to
+# backmesh/backmesh-releases, which install.sh and Homebrew's backmesh/tap
+# install from, and the cache action to backmesh/cache. A vX.Y.Z-rc.N tag is a
+# qualification build: a prerelease in this repository only, with no notes
+# file, no mirror and no formula; its images are public as for any release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+# One release per tag; a rerun waits rather than racing the first.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+# Every job, the image workflows' included (image.yml), runs on GitHub-hosted
+# runners, not backmesh's own: a release is how a broken listener or runner
+# image gets fixed, so it must run while backmesh's runners or our CI
+# installation are down.
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    outputs:
+      rc: ${{ steps.tag.outputs.rc }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Before anything publishes. The CLI reports the tag's version.
+      - name: Check the tag is package.json's X.Y.Z version, on main, with notes
+        id: tag
+        run: |
+          version=$(jq -r .version package.json)
+          [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+            || { echo "::error::package.json's version $version isn't X.Y.Z"; exit 1; }
+          rc=false
+          [[ $GITHUB_REF_NAME =~ ^v[0-9.]+-rc\.[0-9]+$ ]] && rc=true
+          [[ ${GITHUB_REF_NAME%-rc.*} == "v$version" && ($rc == true || $GITHUB_REF_NAME == "v$version") ]] \
+            || { echo "::error::$GITHUB_REF_NAME isn't package.json's v$version or v$version-rc.N"; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
+            || { echo "::error::$GITHUB_REF_NAME isn't on main"; exit 1; }
+          # The owner approves notes for customer releases only.
+          [[ $rc == true || -s docs/releases/$GITHUB_REF_NAME.md ]] \
+            || { echo "::error::docs/releases/$GITHUB_REF_NAME.md, the release's notes, is missing"; exit 1; }
+          echo "rc=$rc" >>"$GITHUB_OUTPUT"
+
+  runner:
+    needs: check
+    uses: ./.github/workflows/runner-image.yml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+  listener:
+    needs: check
+    uses: ./.github/workflows/listener-image.yml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+  # Installs and builds without write access; the release job only publishes.
+  matrix:
+    needs: [runner, listener]
+    runs-on: ubuntu-24.04
+    outputs:
+      compatibility: ${{ steps.matrix.outputs.compatibility }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+      - run: yarn install --frozen-lockfile --ignore-scripts
+      # Only Bun's own install script, which links its pinned binary.
+      - run: cd node_modules/bun && node install.js
+      - run: yarn build
+      - name: Write the compatibility matrix
+        id: matrix
+        env:
+          RUNNER_IMAGE: ${{ needs.runner.outputs.image }}
+          LISTENER_IMAGE: ${{ needs.listener.outputs.image }}
+        run: |
+          node scripts/release-matrix.mjs "$RUNNER_IMAGE" "$LISTENER_IMAGE" >compatibility.json
+          echo "compatibility=$(jq -c . compatibility.json)" >>"$GITHUB_OUTPUT"
+      # Each binary embeds the tag's version, rc suffix included, and
+      # compatibility.json; the linux-x64 one must report that version and
+      # read its matrix, or the release fails.
+      - run: BACKMESH_RELEASE_VERSION=${GITHUB_REF_NAME#v} yarn build:binaries
+      - name: Smoke-test the linux-x64 binary
+        run: test/binary/smoke.sh binaries/backmesh-linux-x64.tar.gz "${GITHUB_REF_NAME#v}" "$(jq -r .anycloud compatibility.json)"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cli
+          path: binaries/
+          if-no-files-found: error
+
+  release:
+    needs: [check, matrix]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # the GitHub release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: docs/releases
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: cli
+      # The committed notes, then the generated part.
+      - name: Write compatibility.json and the notes
+        env:
+          COMPATIBILITY: ${{ needs.matrix.outputs.compatibility }}
+          RC: ${{ needs.check.outputs.rc }}
+          # The identity image.yml signed with, for this tag.
+          IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/image.yml@${{ github.ref }}
+        run: |
+          jq . <<<"$COMPATIBILITY" >compatibility.json
+          {
+            if [[ $RC == true ]]; then
+              echo 'A qualification build for testing backmesh, not for customers.'
+            else
+              cat "docs/releases/$GITHUB_REF_NAME.md"
+            fi
+            echo
+            echo 'Images, signed with cosign keyless by this repository'"'"'s workflows:'
+            echo
+            jq -r '"- runner: `\(.runnerImage)`", "- listener: `\(.listenerImage)`"' compatibility.json
+            echo
+            echo 'Verify each with:'
+            echo
+            echo '```sh'
+            for image in $(jq -r '.runnerImage, .listenerImage' compatibility.json); do
+              echo "cosign verify $image --certificate-identity $IDENTITY --certificate-oidc-issuer https://token.actions.githubusercontent.com"
+            done
+            echo '```'
+            echo
+            jq -r '"Pins anycloud `\(.anycloud)`; each CLI binary embeds `compatibility.json`, which `backmesh upgrade` reads. `checksums.txt` holds their sha256 digests."' compatibility.json
+          } >notes.md
+          cat notes.md >>"$GITHUB_STEP_SUMMARY"
+      # Customers pull without credentials, so a private package fails the
+      # release. An empty Docker config keeps the pulls anonymous.
+      - name: Check both images are public
+        run: |
+          export DOCKER_CONFIG=$RUNNER_TEMP/anonymous
+          mkdir -p "$DOCKER_CONFIG"
+          for image in $(jq -r '.runnerImage, .listenerImage' compatibility.json); do
+            docker manifest inspect "$image" >/dev/null \
+              || { echo "::error::$image can't be pulled anonymously"; exit 1; }
+          done
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RC: ${{ needs.check.outputs.rc }}
+        run: |
+          flags=()
+          [[ $RC == true ]] && flags=(--prerelease --latest=false)
+          gh release create "$GITHUB_REF_NAME" compatibility.json backmesh-*.tar.gz checksums.txt --repo "$GITHUB_REPOSITORY" \
+            --verify-tag --title "backmesh $GITHUB_REF_NAME" --notes-file notes.md "${flags[@]}"
+
+  # Mirrors the private release's assets, unchanged, to the public repository
+  # Homebrew downloads from. A rerun finishes a draft an earlier run left and
+  # refuses a published release whose assets differ. Not for an rc tag, so
+  # neither is the formula.
+  public:
+    needs: [check, matrix, release]
+    if: needs.check.outputs.rc == 'false'
+    runs-on: ubuntu-24.04
+    environment: publish # BACKMESH_PUBLISH_TOKEN, for v* tags only
+    env:
+      REPO: backmesh/backmesh-releases
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: cli
+          path: assets
+      - name: Write compatibility.json and the notes
+        env:
+          COMPATIBILITY: ${{ needs.matrix.outputs.compatibility }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq . <<<"$COMPATIBILITY" >assets/compatibility.json
+          (cd assets && sha256sum -c --strict checksums.txt)
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json body --jq .body >notes.md
+      - name: Publish to ${{ env.REPO }}
+        env:
+          GH_TOKEN: ${{ secrets.BACKMESH_PUBLISH_TOKEN }}
+        run: |
+          [[ -n $GH_TOKEN ]] || { echo "::error::BACKMESH_PUBLISH_TOKEN isn't set in the publish environment"; exit 1; }
+          if ! draft=$(gh release view "$GITHUB_REF_NAME" --repo "$REPO" --json isDraft --jq .isDraft 2>/dev/null); then
+            gh release create "$GITHUB_REF_NAME" assets/* --repo "$REPO" \
+              --title "backmesh $GITHUB_REF_NAME" --notes-file notes.md
+          elif [[ $draft == true ]]; then
+            gh release upload "$GITHUB_REF_NAME" assets/* --repo "$REPO" --clobber
+            gh release edit "$GITHUB_REF_NAME" --repo "$REPO" --draft=false --notes-file notes.md
+          fi
+          gh release download "$GITHUB_REF_NAME" --repo "$REPO" --dir published
+          diff <(cd assets && sha256sum -- * | sort) <(cd published && sha256sum -- * | sort) \
+            || { echo "::error::$REPO's $GITHUB_REF_NAME assets aren't this release's"; exit 1; }
+
+  # The cache action: cache/ alone, as the
+  # tag built it, to the public backmesh/cache, tagged with the release and
+  # with v1, which workflows name. BACKMESH_CACHE_PUBLISH_TOKEN: a fine-grained
+  # token of the backmesh org with Contents read and write on backmesh/cache.
+  cache-action:
+    needs: [check, release]
+    if: needs.check.outputs.rc == 'false'
+    runs-on: ubuntu-24.04
+    environment: publish
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Publish cache/ to backmesh/cache
+        env:
+          GH_TOKEN: ${{ secrets.BACKMESH_CACHE_PUBLISH_TOKEN }}
+        run: |
+          [[ -n $GH_TOKEN ]] || { echo "::error::BACKMESH_CACHE_PUBLISH_TOKEN isn't set in the publish environment"; exit 1; }
+          gh auth setup-git
+          git clone -q https://github.com/backmesh/cache.git mirror
+          # A rerun of an older release never moves main or v1 back.
+          latest=$(git -C mirror tag -l 'v*.*.*' | sort -V | tail -1)
+          if [[ -n $latest && $(printf '%s\n' "$latest" "$GITHUB_REF_NAME" | sort -V | tail -1) != "$GITHUB_REF_NAME" ]]; then
+            echo "backmesh/cache already has $latest."
+            exit 0
+          fi
+          find mirror -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a cache/. mirror/
+          cd mirror
+          git -c user.name=backmesh -c user.email=support@backmesh.com add -A
+          git diff --cached --quiet || git -c user.name=backmesh -c user.email=support@backmesh.com \
+            commit -q -m "backmesh $GITHUB_REF_NAME"
+          git tag -f "$GITHUB_REF_NAME" && git tag -f v1
+          git push -q --atomic origin HEAD:refs/heads/main "refs/tags/$GITHUB_REF_NAME" +refs/tags/v1:refs/tags/v1
+
+  homebrew:
+    needs: public
+    runs-on: ubuntu-24.04
+    environment: publish
+    steps:
+      - name: Update Formula/backmesh.rb in backmesh/homebrew-tap
+        env:
+          GH_TOKEN: ${{ secrets.BACKMESH_PUBLISH_TOKEN }}
+        run: |
+          [[ -n $GH_TOKEN ]] || { echo "::error::BACKMESH_PUBLISH_TOKEN isn't set in the publish environment"; exit 1; }
+          version=${GITHUB_REF_NAME#v}
+          base=https://github.com/backmesh/backmesh-releases/releases/download/$GITHUB_REF_NAME
+          # Signed in: an anonymous release download can answer 504 for a while.
+          gh release download "$GITHUB_REF_NAME" --repo backmesh/backmesh-releases --pattern checksums.txt
+          for platform in darwin-arm64 darwin-x64 linux-arm64 linux-x64; do
+            sha=$(awk -v name="backmesh-$platform.tar.gz" '$2 == name { print $1 }' checksums.txt)
+            [[ $sha =~ ^[0-9a-f]{64}$ ]] || { echo "::error::No checksum for backmesh-$platform.tar.gz"; exit 1; }
+            declare "sha_${platform/-/_}=$sha"
+          done
+
+          git clone -q "https://x-access-token:$GH_TOKEN@github.com/backmesh/homebrew-tap.git" tap
+          cd tap
+          # A rerun of an older release never moves the formula back.
+          current=$(sed -n 's/^  version "\(.*\)"$/\1/p' Formula/backmesh.rb 2>/dev/null || true)
+          if [[ -n $current && $(printf '%s\n' "$current" "$version" | sort -V | tail -1) != "$version" ]]; then
+            echo "The tap already has backmesh $current."
+            exit 0
+          fi
+          mkdir -p Formula
+          cat >Formula/backmesh.rb <<EOF
+          class Backmesh < Formula
+            desc "CI runners for GitHub Actions in your own cloud"
+            homepage "https://github.com/backmesh/backmesh-releases"
+            version "$version"
+            license "Apache-2.0"
+
+            if OS.mac? && Hardware::CPU.arm?
+              url "$base/backmesh-darwin-arm64.tar.gz"
+              sha256 "$sha_darwin_arm64"
+            elsif OS.mac?
+              url "$base/backmesh-darwin-x64.tar.gz"
+              sha256 "$sha_darwin_x64"
+            elsif Hardware::CPU.arm?
+              url "$base/backmesh-linux-arm64.tar.gz"
+              sha256 "$sha_linux_arm64"
+            else
+              url "$base/backmesh-linux-x64.tar.gz"
+              sha256 "$sha_linux_x64"
+            end
+
+            def install
+              bin.install "backmesh"
+              prefix.install "LICENSE", "NOTICE"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/backmesh --version")
+            end
+          end
+          EOF
+          ruby -c Formula/backmesh.rb
+          git add Formula/backmesh.rb
+          if git diff --cached --quiet; then
+            echo "The tap already has backmesh $version."
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' -c user.email='github-actions[bot]@users.noreply.github.com' \
+            commit -q -m "Update backmesh to $GITHUB_REF_NAME"
+          git push -q origin HEAD:main

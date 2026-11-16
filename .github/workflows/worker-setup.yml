@@ -1,0 +1,60 @@
+name: Worker setup
+
+# Sets up the Worker, idempotently (worker/scripts/setup.ts):
+# - the D1 database backmesh-billing and its migrations;
+# - the Worker on api.backmesh.com, and its secrets.
+# A dry run, the default, only reads and prints the plan. Dispatch only;
+# the owner adds the secrets its steps read first.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: dry-run prints the plan; apply makes the changes
+        type: choice
+        options: [dry-run, apply]
+        default: dry-run
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    # GitHub-hosted, as the recovery path: this deploys the Worker,
+    # which mints the listener's installation tokens,
+    # so a broken Worker stops backmesh's own runners. The publish
+    # environment is limited to main.
+    runs-on: ubuntu-24.04
+    environment: publish
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+          cache: yarn
+          cache-dependency-path: |
+            yarn.lock
+            website/yarn.lock
+
+      # wrangler is pinned in website/; the Worker's bundle needs the root's
+      # packages (zod).
+      - run: yarn install --frozen-lockfile --ignore-scripts
+      - run: yarn --cwd website install --frozen-lockfile
+
+      - name: Set up the Worker
+        env:
+          MODE: ${{ inputs.mode }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          BILLING_GITHUB_CLIENT_ID: ${{ vars.BILLING_GITHUB_CLIENT_ID }}
+          BILLING_GITHUB_APP_ID: ${{ vars.BILLING_GITHUB_APP_ID || secrets.BILLING_GITHUB_APP_ID }}
+          BILLING_GITHUB_APP_PRIVATE_KEY: ${{ secrets.BILLING_GITHUB_APP_PRIVATE_KEY }}
+          BILLING_GITHUB_APP_PRIVATE_KEY_NEXT: ${{ secrets.BILLING_GITHUB_APP_PRIVATE_KEY_NEXT }}
+        run: node worker/scripts/setup.ts $([[ $MODE == apply ]] && echo --apply)

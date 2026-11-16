@@ -1,0 +1,54 @@
+name: Lost-runner check
+
+# A live check: one job on a backmesh label that waits on its
+# first attempt, while ci-install's `stop-runner` mode terminates its runner
+# Job by ID. The runner should report the job failed within seconds, not at
+# GitHub's ~10-minute runner timeout. A terminated Job ends cancelled, which
+# backmesh doesn't rerun; a rerun by hand passes at once. Dispatch only.
+on:
+  workflow_dispatch:
+    inputs:
+      label:
+        description: The backmesh label to run on
+        required: true
+        default: backmesh-4
+      step:
+        description: What the waiting step runs, sleep or a container that ignores INT (docker), which takes the runner's whole stop window
+        type: choice
+        options: [sleep, docker]
+        default: sleep
+      nonce:
+        description: an opaque value e2e.yml's stop member stamps into run-name, so several concurrent dispatches for the same label (e2e.yml's own parallel stop jobs, or anyone else's) can tell their own run apart
+        default: ''
+
+run-name: Lost-runner check ${{ inputs.label }} ${{ inputs.nonce }}
+
+permissions: {}
+
+jobs:
+  lose-runner:
+    runs-on: ${{ inputs.label }}
+    timeout-minutes: 30
+    steps:
+      - name: Wait for the runner Job to be terminated
+        if: github.run_attempt == 1
+        env:
+          STEP: ${{ inputs.step }}
+        run: |
+          echo "runner=$RUNNER_NAME started=$(date -u +%FT%T.%3NZ)"
+          echo "::notice title=Runner::$RUNNER_NAME"
+          # Printed each 5 s, so the log shows when the VM went. With docker,
+          # a container waits in the foreground; its PID 1 ignores INT, so a
+          # cancel waits out the runner's stop window.
+          wait_alive='for _ in $(seq 300); do echo "alive $(date -u +%FT%T.%3NZ)"; sleep 5; done'
+          if [[ $STEP == docker ]]; then
+            docker pull ubuntu:24.04
+            docker run --rm ubuntu:24.04 sh -c "$wait_alive"
+          else
+            bash -c "$wait_alive"
+          fi
+          echo "::error::The runner Job wasn't terminated within 25 minutes."
+          exit 1
+      - name: Pass on a rerun
+        if: github.run_attempt != 1
+        run: echo "attempt ${{ github.run_attempt }} on $RUNNER_NAME"

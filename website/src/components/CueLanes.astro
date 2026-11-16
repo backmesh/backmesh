@@ -1,0 +1,121 @@
+---
+// Two timelines, without and with a cue, aligned on the push: the runner
+// VM's boot, the same length in both, moves from after the push to before
+// it. Illustrative proportions, no axis or seconds. The lanes are HTML, not
+// a scaled SVG, so their text keeps its size at every width.
+---
+
+<figure
+  class="cue-lanes"
+  aria-label="Without a cue, the runner VM boots after the push and the job runs after it. With a cue, the VM boots before the push and the job runs right after it."
+>
+  <div class="lane">
+    <span class="who">Without a cue</span>
+    <div class="track">
+      <span class="push" style="left: 40%"><b>push</b></span>
+      <span class="seg boot" style="left: 41%; width: 36%">VM boots</span>
+      <span class="seg job" style="left: 78%; width: 22%">job runs</span>
+    </div>
+  </div>
+  <div class="lane">
+    <span class="who">With a cue</span>
+    <div class="track">
+      <span class="seg boot" style="left: 3%; width: 36%">VM boots</span>
+      <span class="push" style="left: 40%"><b>push</b></span>
+      <span class="seg job" style="left: 41%; width: 46%">job runs</span>
+    </div>
+  </div>
+  <figcaption>
+    <span><i class="key boot" aria-hidden="true"></i>runner VM boots</span>
+    <span><i class="key job" aria-hidden="true"></i>CI job</span>
+  </figcaption>
+</figure>
+
+<style>
+  .cue-lanes {
+    margin: 0;
+    display: grid;
+    gap: 34px;
+    min-width: 0;
+    padding-top: 34px;
+    border-top: 1.5px solid var(--bm-ink);
+  }
+  .lane {
+    display: grid;
+    grid-template-columns: 130px minmax(0, 1fr);
+    align-items: center;
+    gap: 18px;
+  }
+  .who {
+    color: var(--bm-ink);
+    font: 500 15px var(--bm-sans);
+  }
+  .track {
+    position: relative;
+    height: 34px;
+  }
+  .seg {
+    position: absolute;
+    top: 4px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    overflow: hidden;
+    white-space: nowrap;
+    font: 400 13px var(--bm-mono);
+  }
+  .boot {
+    background: var(--bm-accent-soft);
+    color: var(--bm-ink);
+  }
+  .job {
+    background: var(--bm-accent);
+    color: var(--bm-on-accent);
+  }
+  .push {
+    position: absolute;
+    top: -10px;
+    bottom: -4px;
+    border-left: 2px solid var(--bm-ink);
+  }
+  .push b {
+    position: absolute;
+    top: -16px;
+    left: -15px;
+    color: var(--bm-ink);
+    font: 500 12px var(--bm-mono);
+  }
+  figcaption {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+    color: var(--bm-soft);
+    font: 400 14px var(--bm-sans);
+  }
+  figcaption span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .key {
+    width: 14px;
+    height: 10px;
+  }
+  .key.boot {
+    background: var(--bm-accent-soft);
+  }
+  .key.job {
+    background: var(--bm-accent);
+  }
+  @media (max-width: 520px) {
+    .lane {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 26px;
+    }
+    .seg {
+      padding: 0 6px;
+      font-size: 11.5px;
+    }
+  }
+</style>

@@ -1,0 +1,15 @@
+# Saves the default branch's entry that public-labels.yml's fork job reads.
+name: seed
+on:
+  push:
+    branches: [main]
+permissions: {}
+jobs:
+  seed:
+    runs-on: backmesh-public-2
+    steps:
+      - run: mkdir -p seed && echo main > seed/value
+      - uses: backmesh/cache@v1
+        with:
+          path: seed
+          key: public-repos-check

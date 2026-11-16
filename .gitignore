@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.context/
+binaries/
+/compatibility.json
+.astro/
+/worker/wrangler.setup.jsonc
+# The cache action runs from its committed bundle (ci.yml checks it).
+!/cache/dist/
+!/runner/dist/

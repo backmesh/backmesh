@@ -1,0 +1,31 @@
+name: backmesh cache restore
+description: Restore a cache from the runner region's bucket
+inputs:
+  path:
+    description: A list of files, directories and wildcard patterns to restore
+    required: true
+  key:
+    description: An explicit key for restoring the cache
+    required: true
+  restore-keys:
+    description: An ordered multiline list of key prefixes to restore from when the key misses
+    required: false
+  enableCrossOsArchive:
+    description: GitHub's cache only, as in actions/cache
+    default: 'false'
+  fail-on-cache-miss:
+    description: Fail the workflow if the cache entry isn't found
+    default: 'false'
+  lookup-only:
+    description: Check whether an entry exists without downloading it
+    default: 'false'
+outputs:
+  cache-hit:
+    description: Whether the primary key matched exactly
+  cache-primary-key:
+    description: The key the step was given
+  cache-matched-key:
+    description: The key of the entry restored
+runs:
+  using: node24
+  main: ../dist/restore.mjs

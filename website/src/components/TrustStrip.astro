@@ -1,0 +1,102 @@
+---
+// What stays in the customer's accounts and what reaches backmesh.com
+// (the security and telemetry docs).
+// Isolation between jobs stays in the FAQ and the security model.
+const items = [
+  {
+    title: 'No cloud keys stored',
+    text: 'A role from your cloud CLI connects each cloud.',
+    // A cloud.
+    icon: 'M5.5 16a3.5 3.5 0 0 1-.4-7 5 5 0 0 1 9.7-1 4 4 0 0 1-.3 8Z',
+  },
+  {
+    title: 'Your code never reaches us',
+    text: 'Code, secrets, caches and logs stay between GitHub and your runners.',
+    // A padlock.
+    icon: 'M5 9h10v8H5ZM7 9V6a3 3 0 0 1 6 0v3',
+  },
+  {
+    title: 'One small event per job',
+    text: 'It never names the repo, workflow, job or branch.',
+    href: '/telemetry/',
+    // A pulse.
+    icon: 'M2 10h4l2-5 4 10 2-5h4',
+  },
+];
+---
+
+<section class="trust" aria-label="Trust and privacy">
+  <ul>
+    {items.map(({ title, text, href, icon }) => (
+      <li>
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path d={icon} />
+        </svg>
+        <b>{title}</b>
+        <span>
+          {text}
+          {href && (
+            <>
+              {' '}
+              <a href={href}>What's sent</a>
+            </>
+          )}
+        </span>
+      </li>
+    ))}
+  </ul>
+</section>
+
+<style>
+  .trust ul {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 28px 40px;
+    list-style: none;
+    margin: 0;
+    padding: 28px 0 0;
+    border-top: 1px solid var(--bm-hair);
+  }
+  @media (max-width: 760px) {
+    .trust ul {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 22px;
+    }
+  }
+  li {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    align-content: start;
+    gap: 4px 12px;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  svg {
+    width: 20px;
+    height: 20px;
+    margin-top: 1px;
+    fill: none;
+    stroke: var(--bm-accent);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  b {
+    color: var(--bm-ink);
+    font: 600 16.5px/1.35 var(--bm-sans);
+    letter-spacing: -0.01em;
+  }
+  span {
+    grid-column: 2;
+    color: var(--bm-soft);
+  }
+  a {
+    color: var(--bm-accent);
+    font-weight: 500;
+    text-decoration: none;
+  }
+  a:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+</style>

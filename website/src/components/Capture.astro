@@ -1,0 +1,60 @@
+---
+// CLI output as text; `code` is preformatted HTML from src/captures.ts.
+interface Props {
+  title: string;
+  caption?: string;
+  code: string;
+}
+const { title, caption, code } = Astro.props;
+---
+
+<figure class="capture">
+  <p class="title">{title}</p>
+  <pre set:html={code} />
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  /* CLI output with no window around it: a title, a hairline, the text. */
+  .capture {
+    margin: 0;
+    min-width: 0;
+  }
+  .title {
+    margin: 0 0 10px;
+    font: 400 13px/1.5 var(--bm-mono);
+    color: var(--bm-soft);
+  }
+  pre {
+    margin: 0;
+    padding: 4px 0 4px 22px;
+    border-left: 2px solid var(--bm-hair);
+    overflow-x: auto;
+    font: 400 15px/1.75 var(--bm-mono);
+    color: var(--bm-body);
+    white-space: pre;
+  }
+  pre :global(.p) {
+    color: var(--bm-accent);
+    user-select: none;
+  }
+  pre :global(.m) {
+    color: var(--bm-soft);
+  }
+  pre :global(.hi) {
+    color: var(--bm-accent);
+  }
+  figcaption {
+    margin-top: 14px;
+    max-width: 62ch;
+    color: var(--bm-soft);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  @media (max-width: 520px) {
+    pre {
+      padding-left: 14px;
+      font-size: 13px;
+    }
+  }
+</style>

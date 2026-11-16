@@ -1,0 +1,15 @@
+name: backmesh cache save
+description: Snapshot files now and upload them to the runner region's bucket after the job
+inputs:
+  path:
+    description: A list of files, directories and wildcard patterns to cache
+    required: true
+  key:
+    description: An explicit key for saving the cache
+    required: true
+  enableCrossOsArchive:
+    description: GitHub's cache only, as in actions/cache
+    default: 'false'
+runs:
+  using: node24
+  main: ../dist/save.mjs
