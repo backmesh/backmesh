@@ -649,7 +649,8 @@ jobs:
           out=$RUNNER_TEMP/anycloud.tar.gz.gpg
           gh api "repos/$GITHUB_REPOSITORY/git/blobs/$BLOB" -H 'Accept: application/vnd.github.raw+json' >"$out"
           [[ $(git hash-object "$out") == "$BLOB" ]] || { echo "::error::The blob's content doesn't match $BLOB"; exit 1; }
-          # As the restore checks it, and it must hold ~/.anycloud.
+          # As the restore checks it, and it must hold the record the save
+          # step requires.
           status=$(gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 3 --status-fd 1 \
             --output "$RUNNER_TEMP/check.tar.gz" --decrypt "$out" 3<<<"$STATE_KEY")
           if ! grep -q '^\[GNUPG:\] NEED_PASSPHRASE_SYM ' <<<"$status" ||
@@ -657,7 +658,10 @@ jobs:
             echo "::error::The blob isn't encrypted with BACKMESH_STATE_KEY"
             exit 1
           fi
-          tar -tzf "$RUNNER_TEMP/check.tar.gz" .anycloud >/dev/null
+          # Listed first: grep -q would cut tar's pipe and fail pipefail.
+          files=$(tar -tzf "$RUNNER_TEMP/check.tar.gz")
+          grep -Eqx '\.anycloud/(api\.db|api-url)' <<<"$files" \
+            || { echo "::error::The state holds no api.db or api-url"; exit 1; }
           rm "$RUNNER_TEMP/check.tar.gz"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
