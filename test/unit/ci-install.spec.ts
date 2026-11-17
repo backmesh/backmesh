@@ -22,10 +22,14 @@ function run(env: {
   ORG?: string;
   MODE?: string;
   FRESH?: string;
+  LOGIN_FAILS?: string;
 }) {
   const dir = mkdtempSync(join(tmpdir(), 'ci-install-'));
   const anycloud = join(dir, 'anycloud');
-  writeFileSync(anycloud, `#!/bin/sh\necho "$@" >>"${dir}/calls"\n`);
+  writeFileSync(
+    anycloud,
+    `#!/bin/sh\necho "$@" >>"${dir}/calls"\n[ -z "$LOGIN_FAILS" ] || { echo 'device code ABCD-1234'; exit 1; }\n`,
+  );
   chmodSync(anycloud, 0o755);
   writeFileSync(join(dir, 'env'), '');
   writeFileSync(join(dir, 'calls'), '');
@@ -64,13 +68,12 @@ describe("ci-install.yml's sign-in to the org's control plane", () => {
     ['unset', ''],
     ['not JSON', 'nope'],
     ['not an object', '[1]'],
-    ['null for the org', '{"anycloud-sh": null}'],
-    ['a number for the org', '{"anycloud-sh": 5}'],
+    ['two keys for one org', '{"anycloud-sh": "a", "Anycloud-SH": "b"}'],
   ])('stops when the variable is %s, even for install', (_, URLS) => {
     const r = run({ URLS });
     expect(r.code).toBe(1);
     expect(r.out).toContain(
-      "::error::ANYCLOUD_API_URLS isn't a JSON object of org to URL",
+      "::error::ANYCLOUD_API_URLS isn't a JSON object of distinct orgs to URLs",
     );
     expect(r.calls).toBe('');
   });
@@ -96,12 +99,30 @@ describe("ci-install.yml's sign-in to the org's control plane", () => {
     expect(r.calls).toBe('');
   });
 
-  it("refuses a URL that isn't a hosted API's", () => {
+  it.each([
+    ['an http URL', 'http://localhost:8080'],
+    ['empty', ''],
+    ['null', null],
+    ['a number', 5],
+  ])(
+    "refuses an org's value that's %s, and fresh can't skip it",
+    (_, value) => {
+      const URLS = JSON.stringify({ 'anycloud-sh': value });
+      const r = run({ URLS });
+      expect(r.code).toBe(1);
+      expect(r.out).toContain("isn't a hosted API URL");
+      expect(r.env).toBe('');
+      expect(run({ URLS, FRESH: 'true' }).code).toBe(1);
+    },
+  );
+
+  it("stops when the sign-in is refused, showing anycloud's prompt", () => {
     const r = run({
-      URLS: JSON.stringify({ 'anycloud-sh': 'http://localhost:8080' }),
+      URLS: JSON.stringify({ 'anycloud-sh': URL }),
+      LOGIN_FAILS: '1',
     });
     expect(r.code).toBe(1);
-    expect(r.out).toContain("isn't a hosted API URL");
-    expect(r.env).toBe('');
+    expect(r.out).toContain('device code ABCD-1234');
+    expect(r.out).toContain("::error::ANYCLOUD_GITHUB_TOKEN couldn't sign in");
   });
 });

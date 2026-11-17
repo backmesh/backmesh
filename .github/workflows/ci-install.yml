@@ -153,17 +153,21 @@ jobs:
           # GitHub org names ignore case.
           org=${ORG,,}
           [[ $org =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo "::error::Not a GitHub org name: $ORG"; exit 1; }
-          url=$(jq -er --arg org "$org" 'if type != "object" then error
-            else with_entries(.key |= ascii_downcase) | if has($org) then .[$org] | strings else "" end end' <<<"$URLS") \
-            || { echo "::error::ANYCLOUD_API_URLS isn't a JSON object of org to URL"; exit 1; }
+          # Distinct orgs whatever their case; a value is the org's URL, and
+          # only an org left out has none.
+          jq -e 'type == "object" and ([keys[] | ascii_downcase] | length == (unique | length))' <<<"$URLS" >/dev/null 2>&1 \
+            || { echo "::error::ANYCLOUD_API_URLS isn't a JSON object of distinct orgs to URLs"; exit 1; }
+          named=$(jq -r --arg org "$org" 'with_entries(.key |= ascii_downcase)
+            | if has($org) then "url \(.[$org])" else "none" end' <<<"$URLS")
           if [[ $FRESH == true ]]; then
-            [[ $MODE == install && -z $url ]] \
+            [[ $MODE == install && $named == none ]] \
               || { echo "::error::fresh is for an install on an org ANYCLOUD_API_URLS leaves out"; exit 1; }
             echo "A fresh install: ANYCLOUD_API_URLS names no control plane for $org"
             exit 0
           fi
-          [[ -n $url ]] \
+          [[ $named != none ]] \
             || { echo "::error::ANYCLOUD_API_URLS names no control plane for $org; for a first install, dispatch install with fresh"; exit 1; }
+          url=${named#url }
           [[ $url =~ ^https://[a-z0-9-]+\.anycloud\.sh$ ]] \
             || { echo "::error::$org's control plane isn't a hosted API URL: $url"; exit 1; }
           echo "API_URL=$url" >>"$GITHUB_ENV"
