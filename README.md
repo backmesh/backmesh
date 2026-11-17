@@ -80,7 +80,8 @@ Run `yarn verify` before you open a pull request. Questions are welcome on
 ## Security
 
 Please report a vulnerability privately to
-[luis@backmesh.com](mailto:luis@backmesh.com), not in a public issue.
+[luis@backmesh.com](mailto:luis@backmesh.com), not in a public issue. See
+[SECURITY.md](SECURITY.md).
 
 ## Licence
 
