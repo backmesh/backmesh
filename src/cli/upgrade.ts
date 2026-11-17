@@ -393,7 +393,7 @@ export async function upgrade(
     }
     // A listener whose org lost the App couldn't start.
     await waitForApp(org, installKey, worker);
-    const orgId = running.orgId || (await readOrgId(org, deps.fetch));
+    const orgId = running.orgId || (await readOrgId(org, deps.fetch, deps.env));
     orgs.push({
       listener,
       running,

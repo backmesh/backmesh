@@ -32,10 +32,40 @@ describe('the installation’s identity', () => {
       urls.push(url);
       return githubOrg(new URL(url).pathname);
     }) as unknown as typeof globalThis.fetch;
-    expect(await readOrgId('Acme', fetch)).toBe(7);
+    expect(await readOrgId('Acme', fetch, {})).toBe(7);
     expect(urls).toEqual(['https://api.github.com/orgs/Acme']);
-    await expect(readOrgId('nobody', fetch)).rejects.toThrow(
+    await expect(readOrgId('nobody', fetch, {})).rejects.toThrow(
       'GitHub has no org named nobody.',
+    );
+  });
+
+  it('sends GITHUB_TOKEN, else GH_TOKEN, to GitHub when set', async () => {
+    const auth: (string | undefined)[] = [];
+    const fetch = (async (url: string, init?: RequestInit) => {
+      auth.push((init?.headers as Record<string, string>).authorization);
+      return githubOrg(new URL(url).pathname);
+    }) as unknown as typeof globalThis.fetch;
+    await readOrgId('Acme', fetch, { GITHUB_TOKEN: 'gho_a', GH_TOKEN: 'b' });
+    await readOrgId('Acme', fetch, { GH_TOKEN: 'b' });
+    await readOrgId('Acme', fetch, {});
+    expect(auth).toEqual(['Bearer gho_a', 'Bearer b', undefined]);
+  });
+
+  it('says when GitHub’s rate limit stopped the read', async () => {
+    const limited = (async () =>
+      new Response('{}', {
+        status: 403,
+        headers: { 'x-ratelimit-remaining': '0' },
+      })) as unknown as typeof globalThis.fetch;
+    await expect(readOrgId('Acme', limited, {})).rejects.toThrow(
+      "GitHub's API rate limit stopped the read of Acme's ID (HTTP 403). Set GITHUB_TOKEN to raise it, or retry once it resets.",
+    );
+    const forbidden = (async () =>
+      new Response('{}', {
+        status: 403,
+      })) as unknown as typeof globalThis.fetch;
+    await expect(readOrgId('Acme', forbidden, {})).rejects.toThrow(
+      "GitHub didn't return Acme's ID (HTTP 403).",
     );
   });
 

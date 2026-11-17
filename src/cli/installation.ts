@@ -56,17 +56,34 @@ export const installConnection = <T extends { name: string }>(
   );
 
 // The org's numeric ID from GitHub's public `GET /orgs/{org}`, which a
-// renamed login doesn't change (external).
+// renamed login doesn't change (external). It sends GITHUB_TOKEN, else
+// GH_TOKEN, when set: a GitHub-hosted runner's shared IP soon spends the
+// 60 anonymous reads an hour.
 export async function readOrgId(
   org: string,
   fetch: typeof globalThis.fetch = globalThis.fetch,
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<number> {
+  const token = env.GITHUB_TOKEN?.trim() || env.GH_TOKEN?.trim();
   const response = await fetch(
     `https://api.github.com/orgs/${encodeURIComponent(org)}`,
-    { headers: { accept: 'application/vnd.github+json' } },
+    {
+      headers: {
+        accept: 'application/vnd.github+json',
+        ...(token && { authorization: `Bearer ${token}` }),
+      },
+    },
   );
   if (response.status === 404) {
     throw new Error(`GitHub has no org named ${org}.`);
+  }
+  if (
+    (response.status === 403 || response.status === 429) &&
+    response.headers.get('x-ratelimit-remaining') === '0'
+  ) {
+    throw new Error(
+      `GitHub's API rate limit stopped the read of ${org}'s ID (HTTP ${response.status}). ${token ? 'Retry' : 'Set GITHUB_TOKEN to raise it, or retry'} once it resets.`,
+    );
   }
   if (!response.ok) {
     throw new Error(

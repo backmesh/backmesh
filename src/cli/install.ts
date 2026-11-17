@@ -964,7 +964,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     !options.plan,
   );
   // The org's numeric ID, for its tag.
-  const orgId = await readOrgId(options.org, deps.fetch);
+  const orgId = await readOrgId(options.org, deps.fetch, deps.env);
 
   // The plan, before any sign-in or anything billed. The catalogs are the
   // pinned CLI's, and the quotas are read through the user's own cloud CLI.

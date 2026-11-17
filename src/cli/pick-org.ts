@@ -104,7 +104,7 @@ export async function pickOrg(
     owner &&
     (admins
       ? admins.find((a) => a.toLowerCase() === owner.toLowerCase())
-      : await readOrgId(owner, deps.fetch).then(
+      : await readOrgId(owner, deps.fetch, deps.env).then(
           () => owner,
           () => undefined,
         ));
