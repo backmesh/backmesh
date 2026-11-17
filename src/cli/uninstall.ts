@@ -111,6 +111,8 @@ async function poll<T>(
 export interface Leftover {
   kind: 'key' | 'role';
   connection?: string;
+  // Not read from the control plane's connections (`everyCloud`).
+  guessed?: boolean;
 }
 export const leftoverIdentity = (cloud: Cloud, connection?: string) =>
   connection
@@ -173,6 +175,8 @@ const listConnections = async (run: RunAnycloud, clusterId: string) => {
 
 // Without the connections, every cloud's: our CI's generated identity, named
 // for the control plane when its ID is known, or a customer's role setup.
+// One from before 0.4.1, `anycloud-bm-<cloud>`, is printed too: in an
+// account several installations share, it may be another's.
 const everyCloud = (env: NodeJS.ProcessEnv, clusterId?: string) =>
   new Map<Cloud, Leftover>(
     CLOUDS.map((cloud) => [
@@ -181,6 +185,7 @@ const everyCloud = (env: NodeJS.ProcessEnv, clusterId?: string) =>
         ? {
             kind: 'key',
             connection: clusterId && connectionName(cloud, clusterId),
+            guessed: true,
           }
         : { kind: 'role' },
     ]),
@@ -727,7 +732,7 @@ export async function uninstall(
   // may still answer keeps it.
   const maybe = !plane;
   const leftovers = plane?.leftovers ?? everyCloud(deps.env, clusterId);
-  for (const [cloud, { kind, connection }] of leftovers) {
+  for (const [cloud, { kind, connection, guessed }] of leftovers) {
     ui.print(
       kind === 'role'
         ? leftoverRole(cloud, maybe)
@@ -735,6 +740,7 @@ export async function uninstall(
           ? await removeIdentity(cloud, connection, deps.command)
           : leftoverIdentity(cloud, connection),
     );
+    if (guessed) ui.print(leftoverIdentity(cloud, `bm-${cloud}`));
   }
   if ((plane && !plane.deleteBucket) || (seedDelete && !deleteBucket)) {
     ui.print(

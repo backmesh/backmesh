@@ -614,17 +614,19 @@ describe('uninstall', () => {
     const ci = setUp({ answers: false });
     ci.deps.env.BACKMESH_UNSUPPORTED_CI_OVERRIDE = 'anycloud-ci';
     await uninstall(gone, ci.deps);
-    // Named for the control plane, and not deleted: it may still answer.
+    // Named for the control plane, and from before 0.4.1, and not deleted:
+    // it may still answer.
     expect(
-      ci.lines.filter((l) =>
-        / is left in your cloud, if install generated it/.test(l),
-      ),
+      ci.lines
+        .filter((l) =>
+          / is left in your cloud, if install generated it/.test(l),
+        )
+        .map((l) => l.split(' ')[2]),
     ).toEqual(
-      (['aws', 'gcp', 'azure'] as const).map((cloud) =>
-        expect.stringContaining(
-          `identity anycloud-${connectionName(cloud, 'c1')} is left`,
-        ),
-      ),
+      (['aws', 'gcp', 'azure'] as const).flatMap((cloud) => [
+        `anycloud-${connectionName(cloud, 'c1')}`,
+        `anycloud-bm-${cloud}`,
+      ]),
     );
     expect(ci.calls.some((c) => c.startsWith('cloud '))).toBe(false);
 
@@ -649,6 +651,12 @@ describe('uninstall', () => {
       deps,
     );
     expect(cloud.live.size).toBe(0);
+    // One from before 0.4.1 is named, not deleted: it may be another's.
+    expect(lines).toContainEqual(
+      expect.stringMatching(
+        /^aws's identity anycloud-bm-aws is left in your cloud, if install generated it\. [^]*--user-name anycloud-bm-aws$/,
+      ),
+    );
     expect(
       calls.findIndex((c) => c.startsWith('cloud aws iam delete-user ')),
     ).toBeGreaterThan(calls.findIndex((c) => c.includes('--delete-vms')));
