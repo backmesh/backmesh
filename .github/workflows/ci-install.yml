@@ -179,7 +179,7 @@ jobs:
       # Step 3's `--generate` runs as each cloud's CI identity. anycloud
       # generates on AWS only from a named profile, so the role's session is
       # saved as the default one.
-      - if: inputs.mode == 'install' && contains(inputs.clouds, 'aws:')
+      - if: inputs.mode == 'install' && (contains(format(' {0} ', inputs.clouds), ' aws ') || startsWith(inputs.control-plane, 'aws:'))
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         id: aws
         with:
@@ -189,7 +189,7 @@ jobs:
           # after cluster create; two hours covers both.
           role-duration-seconds: 7200
           output-credentials: true
-      - if: inputs.mode == 'install' && contains(inputs.clouds, 'aws:')
+      - if: inputs.mode == 'install' && (contains(format(' {0} ', inputs.clouds), ' aws ') || startsWith(inputs.control-plane, 'aws:'))
         name: Save the role's session as the default profile
         env:
           KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
@@ -201,15 +201,15 @@ jobs:
             "$KEY_ID" "$SECRET" "$SESSION" >~/.aws/credentials
           chmod 600 ~/.aws/credentials
       # gcloud's active account and project are the ones install generates with.
-      - if: inputs.mode == 'install' && contains(inputs.clouds, 'gcp:')
+      - if: inputs.mode == 'install' && (contains(format(' {0} ', inputs.clouds), ' gcp ') || startsWith(inputs.control-plane, 'gcp:'))
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           project_id: ${{ secrets.GCP_PROJECT_ID }}
-      - if: inputs.mode == 'install' && contains(inputs.clouds, 'gcp:')
+      - if: inputs.mode == 'install' && (contains(format(' {0} ', inputs.clouds), ' gcp ') || startsWith(inputs.control-plane, 'gcp:'))
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
-      - if: inputs.mode == 'install' && contains(inputs.clouds, 'azure:')
+      - if: inputs.mode == 'install' && (contains(format(' {0} ', inputs.clouds), ' azure ') || startsWith(inputs.control-plane, 'azure:'))
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
