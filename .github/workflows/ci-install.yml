@@ -268,7 +268,13 @@ jobs:
           # runners take backmesh's fixed regions that the account allows.
           placement=(--control-plane "$CONTROL_PLANE")
           for cloud in "${clouds[@]}"; do placement+=(--runners "$cloud"); done
-          backmesh install --org "$ORG" "${placement[@]}" --yes >"$log" 2>&1 &
+          # Install agrees to a plan by its ID, as upgrade does: joining a
+          # control plane another org already uses needs the agreement (the
+          # same-owner check), and --plan is read-only.
+          plan=$(backmesh install --org "$ORG" "${placement[@]}" --plan --json) || { echo "$plan"; exit 1; }
+          id=$(tail -n1 <<<"$plan" | jq -er .planId)
+          echo "::notice title=Install plan::$id"
+          backmesh install --org "$ORG" "${placement[@]}" --yes --plan-id "$id" >"$log" 2>&1 &
           pid=$!
           tail -f --pid="$pid" "$log" &
           signin= app=
