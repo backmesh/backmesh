@@ -272,8 +272,9 @@ jobs:
           # control plane another org already uses needs the agreement (the
           # same-owner check), and --plan is read-only.
           plan=$(backmesh install --org "$ORG" "${placement[@]}" --plan --json) || { echo "$plan"; exit 1; }
-          id=$(tail -n1 <<<"$plan" | jq -er .planId)
+          id=$(tail -n1 <<<"$plan" | jq -er .planId) || { echo "$plan"; exit 1; }
           echo "::notice title=Install plan::$id"
+          { echo "**Install plan agreed:** \`$id\`"; echo '```json'; tail -n1 <<<"$plan" | jq .; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
           backmesh install --org "$ORG" "${placement[@]}" --yes --plan-id "$id" >"$log" 2>&1 &
           pid=$!
           tail -f --pid="$pid" "$log" &
