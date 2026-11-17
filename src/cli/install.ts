@@ -75,6 +75,8 @@ import {
 import {
   CONTROL_POOL,
   clusterIdOf,
+  connectionName,
+  installConnection,
   installTag,
   listenerName,
   orgOfListener,
@@ -254,7 +256,7 @@ export function parseControlPlane(value: string): CloudTarget {
       `--control-plane ${value}: expected <cloud>:<region>, such as ${example}.`,
     );
   }
-  return { cloud, region, credentials: `bm-${cloud}` };
+  return { cloud, region, credentials: '' };
 }
 
 /**
@@ -274,7 +276,7 @@ export function parseRunners(
       cloud === controlPlane.cloud
         ? controlPlane.region
         : SUGGESTED_REGION[cloud],
-    credentials: `bm-${cloud}`,
+    credentials: '',
   }));
 }
 
@@ -317,9 +319,10 @@ async function checkPrerequisites(
   return { identities, signedIn };
 }
 
-// Our CI's generated identity for a cloud's connection: anycloud names it
-// `anycloud-<name>`.
-export const generatedIdentity = (cloud: Cloud) => `anycloud-bm-${cloud}`;
+// Our CI's generated identity for a connection: anycloud names it
+// `anycloud-<connection>`.
+export const generatedIdentity = (connection: string) =>
+  `anycloud-${connection}`;
 
 // What deletes it. anycloud grants it, on GCP, three project roles and,
 // on Azure, Contributor on the subscription (`credential-bootstrap/gcp.ts:14-16`,
@@ -334,8 +337,8 @@ export const SIGNED_IN: Record<Cloud, string> = {
 const GCP_ROLES =
   'roles/compute.instanceAdmin.v1 roles/compute.securityAdmin roles/storage.admin';
 
-export function deleteIdentity(cloud: Cloud): string {
-  const name = generatedIdentity(cloud);
+export function deleteIdentity(cloud: Cloud, connection: string): string {
+  const name = generatedIdentity(connection);
   const command = (() => {
     if (cloud === 'aws') {
       return `for key in $(aws iam list-access-keys --user-name ${name} --query 'AccessKeyMetadata[].AccessKeyId' --output text); do aws iam delete-access-key --user-name ${name} --access-key-id "$key"; done; aws iam delete-user-policy --user-name ${name} --policy-name AnycloudAccess; aws iam delete-user --user-name ${name}`;
@@ -351,17 +354,18 @@ export function deleteIdentity(cloud: Cloud): string {
 // anycloud won't generate over an identity of the same name, and nothing in
 // its CLI deletes or reuses one (`credential-bootstrap/aws.ts:227-231`,
 // `azure.ts:428-433`; GCP's IAM API answers 409 to the create, `gcp.ts:355-370`
-// and `gcp-transport.ts:95-144` at v0.1.73). An earlier installation's
-// identity is left after uninstall, so our CI's reinstall stops at step 3
-// with the commands that delete it.
+// and `gcp-transport.ts:95-144` at v0.1.73). Each control plane's
+// identity is its own (`connectionName`), so only an earlier run on this
+// control plane, stopped between the generate and the connection's save,
+// leaves one: install stops at step 3 with the commands that delete it.
 const GENERATED_EXISTS: Record<Cloud, RegExp> = {
   aws: /AWS user anycloud-\S+ already exists/,
   gcp: /HTTP 409, ALREADY_EXISTS/,
   azure: /Azure identity "anycloud-[^"]+" already exists/,
 };
 
-const identityLeft = (cloud: Cloud) =>
-  `${cloud}'s identity ${generatedIdentity(cloud)} is left from an earlier installation, and backmesh won't generate over it. If no other backmesh installation in this ${SIGNED_IN[cloud]} uses it, delete it, signed in to it, then run install again:\n${deleteIdentity(cloud)}`;
+const identityLeft = (cloud: Cloud, connection: string) =>
+  `${cloud}'s identity ${generatedIdentity(connection)} is left from an earlier install on this control plane that stopped before saving its connection, and backmesh won't generate over it. Delete it, signed in to this ${SIGNED_IN[cloud]}, then run install again:\n${deleteIdentity(cloud, connection)}`;
 
 // Without a TTY, anycloud generates only from a named operator: an AWS
 // profile, or a gcloud account and project (`acquisition.ts:677-680,1241-1244`
@@ -413,17 +417,17 @@ const roleLeft = (cloud: Cloud, apiUrl: string) =>
       'the anycloud-role deployment and resource group, the custom role, and its role assignment',
   })[cloud];
 
+type Listed = {
+  name: string;
+  kind?: string;
+  roleArn?: string;
+  serviceAccountEmail?: string;
+  subscriptionId?: string;
+};
+
 // A saved role connection's account, as `credentials list --json` shows
 // its identifiers; undefined for a key connection (our CI's override).
-const listedAccount = (
-  cloud: Cloud,
-  entry: {
-    kind?: string;
-    roleArn?: string;
-    serviceAccountEmail?: string;
-    subscriptionId?: string;
-  },
-) => {
+const listedAccount = (cloud: Cloud, entry: Listed) => {
   if (entry.kind !== 'role') return undefined;
   if (cloud === 'aws') return entry.roleArn?.split(':')[4];
   if (cloud === 'gcp') {
@@ -462,10 +466,9 @@ export async function connectClouds(
   deps: InstallDeps,
   generate: boolean,
   apiUrl: string,
+  // The hosted API's `credentials list --json`.
+  listed: readonly Listed[],
 ) {
-  const listed = JSON.parse(
-    await deps.run(['credentials', 'list', '--json']),
-  ) as ({ name: string } & Parameters<typeof listedAccount>[1])[];
   for (const target of targets) {
     const { cloud, credentials } = target;
     // anycloud runs the cloud side through the user's CLI, in this region
@@ -514,7 +517,7 @@ export async function connectClouds(
         )
         .catch((error: unknown) => {
           if (!GENERATED_EXISTS[cloud].test(String(error))) throw error;
-          throw new Error(identityLeft(cloud), { cause: error });
+          throw new Error(identityLeft(cloud, credentials), { cause: error });
         });
       continue;
     }
@@ -757,7 +760,7 @@ async function placementOf(
     : undefined;
   const there = targeted?.location && {
     ...targeted.location,
-    credentials: `bm-${targeted.location.cloud}`,
+    credentials: '',
   };
   // Never a default for a control plane install can't place: `cluster
   // create` resumes only in its own region.
@@ -819,7 +822,7 @@ async function placementOf(
       controlPlane = parseControlPlane(`${cloud}:${region}`);
     } else {
       const region = SUGGESTED_REGION[first];
-      controlPlane = { cloud: first, region, credentials: `bm-${first}` };
+      controlPlane = { cloud: first, region, credentials: '' };
       ui.print(
         `The control plane goes on ${first} ${region}, near GitHub's US East${signedIn.length > 1 ? `, the first signed-in of ${signedIn.join(', ')}` : ''}; pass --control-plane <cloud>:<region> to choose another.`,
       );
@@ -1234,14 +1237,29 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   // Invariant 3, before step 6: the cluster may predate this run.
   const existing = await checkControlPool(api);
   await checkAddedOrg(options, plan, existing.listeners, deps);
+  // Each cloud's connection, now that the control plane is known: the one
+  // the org's listener records, else the one install made there, else a
+  // new one named for it.
+  const listed = JSON.parse(
+    await deps.run(['credentials', 'list', '--json']),
+  ) as Listed[];
+  const clusterId = clusterIdOf(url);
+  const named = <T extends CloudTarget>(target: T): T => ({
+    ...target,
+    credentials:
+      target.credentials ||
+      (installConnection(target.cloud, clusterId, listed)?.name ??
+        connectionName(target.cloud, clusterId)),
+  });
   // Step 3, now that the hosted API runs.
   await connectClouds(
-    connections,
+    connections.map(named),
     plan.clouds,
     identities,
     deps,
     !!override,
     url,
+    listed,
   );
   const control = anycloudControl(api, deps.run);
 
@@ -1253,7 +1271,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     await api.createNodePool({
       body: {
         name: CONTROL_POOL,
-        credentialName: first.credentials,
+        credentialName: named(first).credentials,
         region: first.region,
         vmTypes: [CONTROL_VM[first.cloud]],
         minVmCount: 1,
@@ -1266,7 +1284,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   // The listener's configuration is its Deployment's environment,
   // and the runner image and classes are in a Secret that `upgrade`
   // changes, since `deployment upgrade` takes no `--env`.
-  const tag = installTag(clusterIdOf(url), orgId);
+  const tag = installTag(clusterId, orgId);
   // `RUNNER_REGIONS`, narrowed to the ones this account can actually use:
   // a region a cloud policy or a narrower permission denies drops out
   // here, named, with no other change (owner, 2026-11-13). `--plan` can't
@@ -1275,8 +1293,8 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   const finalClasses = await withAllowedRegions(
     api,
     tag,
-    runners,
-    classPlan.classes,
+    runners.map(named),
+    classPlan.classes.map(named),
     new Set(
       current?.routes.filter((r) => !r.retiring).map((r) => r.label) ?? [],
     ),

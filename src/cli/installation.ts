@@ -32,6 +32,29 @@ export function installTag(clusterId: string, orgId: number): string {
   return (digest.readUInt32BE(0) % 36 ** 5).toString(36).padStart(5, '0');
 }
 
+// Each cloud's anycloud connection on a control plane: `bm-<cloud>-` and 6
+// base-36 characters of the cluster ID's hash, so the identity anycloud's
+// `--generate` makes for it, `anycloud-<connection>`, is this control
+// plane's own in a cloud account others share. At most 15 characters, it
+// fits GCP's 30-character service account IDs.
+export function connectionName(cloud: Cloud, clusterId: string): string {
+  const digest = createHash('sha256').update(clusterId).digest();
+  return `bm-${cloud}-${(digest.readUInt32BE(0) % 36 ** 6).toString(36).padStart(6, '0')}`;
+}
+
+// The connection install made on this control plane, by its name in
+// `credentials list --json`: an installation before 0.4.1 named it
+// `bm-<cloud>`, and keeps it.
+export const installConnection = <T extends { name: string }>(
+  cloud: Cloud,
+  clusterId: string,
+  listed: readonly T[],
+) =>
+  listed.find(
+    ({ name }) =>
+      name === `bm-${cloud}` || name === connectionName(cloud, clusterId),
+  );
+
 // The org's numeric ID from GitHub's public `GET /orgs/{org}`, which a
 // renamed login doesn't change (external).
 export async function readOrgId(
