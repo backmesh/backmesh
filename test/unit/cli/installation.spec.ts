@@ -52,20 +52,69 @@ describe('the installation’s identity', () => {
   });
 
   it('says when GitHub’s rate limit stopped the read', async () => {
-    const limited = (async () =>
-      new Response('{}', {
-        status: 403,
-        headers: { 'x-ratelimit-remaining': '0' },
-      })) as unknown as typeof globalThis.fetch;
-    await expect(readOrgId('Acme', limited, {})).rejects.toThrow(
+    const answer = (
+      status: number,
+      headers: Record<string, string> = {},
+      body = '{}',
+    ) =>
+      (async () =>
+        new Response(body, {
+          status,
+          headers,
+        })) as unknown as typeof globalThis.fetch;
+    const primary = { 'x-ratelimit-remaining': '0' };
+    await expect(readOrgId('Acme', answer(403, primary), {})).rejects.toThrow(
       "GitHub's API rate limit stopped the read of Acme's ID (HTTP 403). Set GITHUB_TOKEN to raise it, or retry once it resets.",
     );
-    const forbidden = (async () =>
-      new Response('{}', {
-        status: 403,
-      })) as unknown as typeof globalThis.fetch;
-    await expect(readOrgId('Acme', forbidden, {})).rejects.toThrow(
+    await expect(
+      readOrgId('Acme', answer(429, primary), { GH_TOKEN: 'b' }),
+    ).rejects.toThrow(
+      "GitHub's API rate limit stopped the read of Acme's ID (HTTP 429). Retry once it resets.",
+    );
+    // A secondary limit leaves reads remaining.
+    for (const fetch of [
+      answer(403, { 'retry-after': '60', 'x-ratelimit-remaining': '4000' }),
+      answer(
+        403,
+        {},
+        '{"message":"You have exceeded a secondary rate limit."}',
+      ),
+    ]) {
+      await expect(
+        readOrgId('Acme', fetch, { GITHUB_TOKEN: 'gho_a' }),
+      ).rejects.toThrow(
+        "GitHub's API rate limit stopped the read of Acme's ID (HTTP 403). Retry once it resets.",
+      );
+    }
+    await expect(readOrgId('Acme', answer(403), {})).rejects.toThrow(
       "GitHub didn't return Acme's ID (HTTP 403).",
+    );
+  });
+
+  it('retries anonymously once when GitHub rejects the token', async () => {
+    for (const status of [401, 403]) {
+      const auth: (string | undefined)[] = [];
+      const fetch = (async (url: string, init?: RequestInit) => {
+        const token = (init?.headers as Record<string, string>).authorization;
+        auth.push(token);
+        return token
+          ? Response.json({ message: 'Bad credentials' }, { status })
+          : githubOrg(new URL(url).pathname);
+      }) as unknown as typeof globalThis.fetch;
+      expect(await readOrgId('Acme', fetch, { GH_TOKEN: 'stale' })).toBe(7);
+      expect(auth).toEqual(['Bearer stale', undefined]);
+    }
+    const limited = (async (_url: string, init?: RequestInit) =>
+      (init?.headers as Record<string, string>).authorization
+        ? new Response('{}', { status: 401 })
+        : new Response('{}', {
+            status: 403,
+            headers: { 'x-ratelimit-remaining': '0' },
+          })) as unknown as typeof globalThis.fetch;
+    await expect(
+      readOrgId('Acme', limited, { GITHUB_TOKEN: 'stale' }),
+    ).rejects.toThrow(
+      '(HTTP 403). Replace the GITHUB_TOKEN or GH_TOKEN that GitHub rejected, or retry once it resets.',
     );
   });
 
