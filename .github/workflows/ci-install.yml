@@ -53,6 +53,10 @@ on:
         description: install only, show the plan (backmesh install --plan --json) and exit instead of applying it; asks nothing new of a human and changes nothing billed ("--plan signs in to nothing")
         type: boolean
         default: false
+      fresh:
+        description: install only, the org has no control plane yet, so ANYCLOUD_API_URLS doesn't name one; install creates it and prints its URL to add there
+        type: boolean
+        default: false
       remove-clouds:
         description: upgrade only, allow the plan to remove clouds left out of `clouds`
         type: boolean
@@ -133,27 +137,33 @@ jobs:
           echo "ANYCLOUD_DIR=$HOME/.anycloud" >>"$GITHUB_ENV"
           echo "BACKMESH_ANYCLOUD_DIR=$HOME/.anycloud" >>"$GITHUB_ENV"
 
-      # ANYCLOUD_API_URLS, a JSON object of lowercase org to control plane
-      # URL, points anycloud at the org's; the sign-in for it is exchanged from
-      # ANYCLOUD_GITHUB_TOKEN. An org it leaves out has no installation yet:
-      # only install runs, a fresh one, which prints the new URL to add.
+      # ANYCLOUD_API_URLS, a JSON object of org to control plane URL, points
+      # anycloud at the org's; the sign-in for it is exchanged from
+      # ANYCLOUD_GITHUB_TOKEN. Fail-closed: a missing or malformed variable,
+      # or an org it leaves out, stops the run, so a lost URL can't turn into
+      # a second control plane. Only `install` with `fresh` runs without one,
+      # and only for an org it leaves out.
       - name: Sign in to the org's control plane
         env:
           URLS: ${{ vars.ANYCLOUD_API_URLS }}
           GITHUB_TOKEN: ${{ secrets.ANYCLOUD_GITHUB_TOKEN }}
           MODE: ${{ inputs.mode }}
+          FRESH: ${{ inputs.fresh }}
         run: |
           # GitHub org names ignore case.
           org=${ORG,,}
           [[ $org =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo "::error::Not a GitHub org name: $ORG"; exit 1; }
-          url=$(jq -r --arg org "$org" '.[$org] // empty' <<<"${URLS:-"{}"}") \
-            || { echo "::error::ANYCLOUD_API_URLS isn't a JSON object"; exit 1; }
-          if [[ -z $url ]]; then
-            [[ $MODE == install ]] \
-              || { echo "::error::ANYCLOUD_API_URLS names no control plane for $org"; exit 1; }
-            echo "ANYCLOUD_API_URLS names no control plane for $org: a fresh install"
+          url=$(jq -er --arg org "$org" 'if type != "object" then error
+            else with_entries(.key |= ascii_downcase) | if has($org) then .[$org] | strings else "" end end' <<<"$URLS") \
+            || { echo "::error::ANYCLOUD_API_URLS isn't a JSON object of org to URL"; exit 1; }
+          if [[ $FRESH == true ]]; then
+            [[ $MODE == install && -z $url ]] \
+              || { echo "::error::fresh is for an install on an org ANYCLOUD_API_URLS leaves out"; exit 1; }
+            echo "A fresh install: ANYCLOUD_API_URLS names no control plane for $org"
             exit 0
           fi
+          [[ -n $url ]] \
+            || { echo "::error::ANYCLOUD_API_URLS names no control plane for $org; for a first install, dispatch install with fresh"; exit 1; }
           [[ $url =~ ^https://[a-z0-9-]+\.anycloud\.sh$ ]] \
             || { echo "::error::$org's control plane isn't a hosted API URL: $url"; exit 1; }
           echo "API_URL=$url" >>"$GITHUB_ENV"
@@ -284,10 +294,12 @@ jobs:
           exit "$code"
 
       # A fresh install's control plane, for the owner to add to
-      # ANYCLOUD_API_URLS, which later runs read.
-      - if: inputs.mode == 'install' && !inputs.plan && env.API_URL == ''
+      # ANYCLOUD_API_URLS, which later runs read; also after a failed install
+      # that got as far as creating it, so its re-run reuses it.
+      - if: ${{ !cancelled() && inputs.mode == 'install' && inputs.fresh && !inputs.plan }}
         name: The new control plane's URL
         run: |
+          [[ -f ~/.anycloud/api-url ]] || { echo "No control plane was created"; exit 0; }
           url=$(anycloud api status --json | jq -r .url)
           echo "::notice title=Add to ANYCLOUD_API_URLS::\"${ORG,,}\": \"$url\""
           echo "**Add to ANYCLOUD_API_URLS:** \`\"${ORG,,}\": \"$url\"\`" >>"$GITHUB_STEP_SUMMARY"
