@@ -1,0 +1,97 @@
+<template id="s3-cost-template">
+  <div id="s3-root" data-composition-id="s3-cost" data-width="1920" data-height="1080" data-duration="5.8">
+    <style>
+      @font-face { font-family: "Schibsted Grotesk"; src: url("assets/fonts/SchibstedGrotesk.woff2") format("woff2"); font-weight: 400 900; }
+      @font-face { font-family: "Fragment Mono"; src: url("assets/fonts/FragmentMono.woff2") format("woff2"); font-weight: 400; }
+      #s3-root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: "Schibsted Grotesk", sans-serif; color: #2c3036; }
+      #s3-stage { position: absolute; inset: 0; display: flex; justify-content: center; padding-top: 160px; }
+      #s3-col { width: 1600px; }
+      #s3-h2 { max-width: 1500px; font-weight: 700; font-size: 72px; line-height: 1.08; letter-spacing: -0.03em; color: #15171a; }
+      #s3-h2 .accent { color: #0e6ba8; white-space: nowrap; }
+      #s3-lead { margin-top: 24px; font-size: 32px; line-height: 1.45; color: #2c3036; }
+      /* The page's chart (website/src/components/Chart.astro): label, bar of
+         segments on one shared axis, value at the bar's end. */
+      #s3-chart { margin-top: 56px; }
+      #s3-title { font: 400 23px/1.5 "Fragment Mono", monospace; color: #5f6670; margin-bottom: 14px; }
+      #s3-rows { position: relative; }
+      #s3-grid { position: absolute; top: 0; bottom: 0; left: 428px; width: 972px; }
+      #s3-grid i { position: absolute; top: 0; bottom: 0; border-left: 1.5px solid #e6e8eb; display: block; }
+      .s3-row { display: grid; grid-template-columns: 400px 972px; column-gap: 28px; align-items: center; height: 76px; position: relative; }
+      .s3-name { display: flex; align-items: center; gap: 16px; color: #15171a; font-weight: 600; font-size: 30px; }
+      .s3-name img { width: 28px; height: 28px; display: block; }
+      .s3-bar { position: relative; height: 40px; }
+      .s3-bar i { position: absolute; top: 0; bottom: 0; transform-origin: 0% 50%; display: block; }
+      .s3-ink { background: #0b3557; }
+      .s3-solid { background: #0e6ba8; }
+      .s3-range { background: #adcde1; }
+      .s3-fixed { background: repeating-linear-gradient(135deg, #0e6ba8 0 2.5px, #dde9f3 2.5px 8px); }
+      .s3-val { position: absolute; top: 2px; padding-left: 18px; font: 400 27px "Fragment Mono", monospace; color: #0e6ba8; white-space: nowrap; }
+      .s3-row.gh .s3-val { color: #15171a; }
+      #s3-axis { position: relative; margin-left: 428px; width: 972px; height: 44px; border-top: 1.5px solid #c5cbd2; }
+      #s3-axis span { position: absolute; top: 10px; font: 400 22px "Fragment Mono", monospace; color: #5f6670; transform: translateX(-50%); white-space: nowrap; }
+      #s3-axis span.first { transform: none; }
+      #s3-axis span.end { transform: translateX(-100%); }
+      #s3-legend { margin: 18px 0 0 428px; display: flex; gap: 44px; font-size: 24px; color: #5f6670; }
+      #s3-legend span { display: flex; align-items: center; gap: 12px; }
+      #s3-legend i { width: 30px; height: 18px; display: block; }
+      #s3-legend i.solid { background: linear-gradient(90deg, #0e6ba8 0 55%, #adcde1 55%); }
+      #s3-caption { margin-top: 34px; max-width: 1500px; font-size: 23px; line-height: 1.5; color: #5f6670; }
+    </style>
+    <div id="s3-stage" class="clip" data-start="0" data-duration="5.8" data-track-index="0">
+      <div id="s3-col">
+        <!-- Figures computed by website/src/cost.ts (headline, totals) as the page rounds them. -->
+        <h2 id="s3-h2">150,000 minutes a month: $1,800 on GitHub, <span class="accent">$191–$365</span> on backmesh.</h2>
+        <p id="s3-lead">4-vCPU Linux jobs; the range spans AWS, Azure and GCP and the VM types a job may get.</p>
+        <div id="s3-chart">
+          <div id="s3-title">Compute cost a month</div>
+          <div id="s3-rows">
+            <div id="s3-grid"><i style="left: 0"></i><i style="left: 27%"></i><i style="left: 54%"></i><i style="left: 81%"></i><i style="left: 100%"></i></div>
+            <div class="s3-row gh"><div class="s3-name">GitHub-hosted</div><div class="s3-bar" data-max="1800"><i class="s3-ink" data-from="0" data-to="1800"></i><span class="s3-val">$1,800</span></div></div>
+            <div class="s3-row"><div class="s3-name"><img src="assets/brand/aws.svg" alt="" />backmesh on AWS</div><div class="s3-bar"><i class="s3-fixed" data-from="0" data-to="86"></i><i class="s3-solid" data-from="86" data-to="210.25"></i><i class="s3-range" data-from="210.25" data-to="261"></i><span class="s3-val">$210–$261</span></div></div>
+            <div class="s3-row"><div class="s3-name"><img src="assets/brand/azure.svg" alt="" />backmesh on Azure</div><div class="s3-bar"><i class="s3-fixed" data-from="0" data-to="111"></i><i class="s3-solid" data-from="111" data-to="190.5"></i><i class="s3-range" data-from="190.5" data-to="206.25"></i><span class="s3-val">$191–$206</span></div></div>
+            <div class="s3-row"><div class="s3-name"><img src="assets/brand/gcp.svg" alt="" />backmesh on GCP</div><div class="s3-bar"><i class="s3-fixed" data-from="0" data-to="74"></i><i class="s3-solid" data-from="74" data-to="298.75"></i><i class="s3-range" data-from="298.75" data-to="365.25"></i><span class="s3-val">$299–$365</span></div></div>
+          </div>
+          <div id="s3-axis"><span class="first" style="left: 0">$0</span><span style="left: 27.78%">$500</span><span style="left: 55.56%">$1,000</span><span style="left: 83.33%">$1,500</span><span class="end" style="left: 100%">$1,800</span></div>
+          <div id="s3-legend"><span><i class="solid"></i>Spot VMs (range across VM types)</span><span><i class="s3-fixed"></i>Control plane, fixed</span></div>
+        </div>
+        <p id="s3-caption">GitHub's list price against spot prices on 2026-11-13, without disks, VM boots or runners no job takes, so it's a floor.</p>
+      </div>
+    </div>
+  </div>
+  <script src="assets/vendor/gsap.min.js"></script>
+  <script>
+    (function () {
+      const tl = gsap.timeline({ paused: true });
+      const root = document.querySelector('[data-composition-id="s3-cost"]');
+      const MAX = 1800, W = 972;
+      // The grid lines sit at the ticks: $0, $500, $1,000, $1,500, $1,800.
+      root.querySelectorAll("#s3-grid i").forEach((g, i) => (g.style.left = ([0, 500, 1000, 1500, 1800][i] / MAX) * W + "px"));
+      root.querySelectorAll(".s3-bar").forEach((bar) => {
+        let end = 0;
+        bar.querySelectorAll("i").forEach((seg) => {
+          const from = +seg.dataset.from, to = +seg.dataset.to;
+          seg.style.left = (from / MAX) * W + "px";
+          seg.style.width = ((to - from) / MAX) * W + "px";
+          end = Math.max(end, to);
+        });
+        bar.querySelector(".s3-val").style.left = (end / MAX) * W + "px";
+      });
+      tl.fromTo("#s3-h2", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0.4);
+      tl.fromTo("#s3-lead", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 0.6);
+      tl.fromTo(["#s3-title", "#s3-grid", "#s3-axis", ".s3-name"], { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power1.out" }, 0.8);
+      // GitHub's bar runs the whole axis; each backmesh bar stops short.
+      const rows = root.querySelectorAll(".s3-row");
+      rows.forEach((row, r) => {
+        const start = r === 0 ? 1.0 : 2.0 + 0.3 * (r - 1);
+        const segs = row.querySelectorAll(".s3-bar i");
+        const total = r === 0 ? 0.9 : 0.4;
+        segs.forEach((seg, i) =>
+          tl.fromTo(seg, { scaleX: 0 }, { scaleX: 1, duration: total / segs.length, ease: i === segs.length - 1 ? "power2.out" : "none" }, start + (i * total) / segs.length));
+        tl.fromTo(row.querySelector(".s3-val"), { opacity: 0, x: -10 }, { opacity: 1, x: 0, duration: 0.3, ease: "power2.out" }, start + total);
+      });
+      tl.fromTo("#s3-legend", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 3.3);
+      tl.fromTo("#s3-caption", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 3.5);
+      window.__timelines["s3-cost"] = tl;
+    })();
+  </script>
+</template>

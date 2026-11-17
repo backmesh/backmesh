@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// Downloads the binary assets listed in assets.txt into each cut's git-ignored
+// Downloads the binary assets listed in assets.txt into the cut's git-ignored
 // assets/ folder, verifying every SHA-256, then copies the website's brand
-// files: the Woven B and the monochrome cloud logos, recoloured to the ink
-// colour because an <img> does not inherit currentColor.
+// files: the light and dark lockups and the monochrome cloud logos,
+// recoloured to the ink colour because an <img> does not inherit
+// currentColor.
 
 import { createHash } from 'node:crypto';
 import {
@@ -17,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
-const INK = '#eef3f9';
+const INK = '#15171a';
 
 let base = '';
 for (const line of readFileSync(join(root, 'assets.txt'), 'utf8').split('\n')) {
@@ -54,22 +55,19 @@ for (const line of readFileSync(join(root, 'assets.txt'), 'utf8').split('\n')) {
 }
 
 const website = join(root, '../../website');
-for (const cut of ['hyperframes', 'brag']) {
-  const brand = join(root, cut, 'assets/brand');
-  mkdirSync(brand, { recursive: true });
-  copyFileSync(
-    join(website, 'public/brand/mark-dark.svg'),
-    join(brand, 'mark.svg'),
+const brand = join(root, 'hyperframes/assets/brand');
+mkdirSync(brand, { recursive: true });
+for (const lockup of ['lockup-light.svg', 'lockup-dark.svg']) {
+  copyFileSync(join(website, 'public/brand', lockup), join(brand, lockup));
+}
+for (const cloud of ['aws', 'gcp', 'azure']) {
+  const svg = readFileSync(
+    join(website, `src/assets/clouds/${cloud}.svg`),
+    'utf8',
   );
-  for (const cloud of ['aws', 'gcp', 'azure']) {
-    const svg = readFileSync(
-      join(website, `src/assets/clouds/${cloud}.svg`),
-      'utf8',
-    );
-    writeFileSync(
-      join(brand, `${cloud}.svg`),
-      svg.replaceAll('currentColor', INK),
-    );
-  }
+  writeFileSync(
+    join(brand, `${cloud}.svg`),
+    svg.replaceAll('currentColor', INK),
+  );
 }
 console.log('assets ready');

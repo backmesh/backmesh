@@ -11,7 +11,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
-const [version, input = join(root, 'renders', 'hyperframes.mp4')] =
+const [version, input = join(root, 'renders', 'launch.mp4')] =
   process.argv.slice(2);
 if (!version || !/^[a-z0-9-]*\d{4}-\d{2}-v\d+$/.test(version)) {
   throw new Error(

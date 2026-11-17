@@ -1,0 +1,51 @@
+<template id="s6-log-template">
+  <div id="s6-root" data-composition-id="s6-log" data-width="1920" data-height="1080" data-duration="3.9">
+    <style>
+      @font-face { font-family: "Schibsted Grotesk"; src: url("assets/fonts/SchibstedGrotesk.woff2") format("woff2"); font-weight: 400 900; }
+      @font-face { font-family: "Fragment Mono"; src: url("assets/fonts/FragmentMono.woff2") format("woff2"); font-weight: 400; }
+      #s6-root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: "Schibsted Grotesk", sans-serif; color: #2c3036; }
+      #s6-stage { position: absolute; inset: 0; display: flex; justify-content: center; padding-top: 230px; }
+      #s6-col { width: 1600px; }
+      #s6-h2 { font-weight: 700; font-size: 80px; line-height: 1.08; letter-spacing: -0.03em; color: #15171a; }
+      /* The page's Capture: a title, a hairline, the text, no window. */
+      #s6-cap { margin-top: 80px; }
+      #s6-title { margin-bottom: 18px; font: 400 25px/1.5 "Fragment Mono", monospace; color: #5f6670; }
+      #s6-pre { padding: 8px 0 8px 36px; border-left: 3px solid #e6e8eb; font: 400 31px/1.8 "Fragment Mono", monospace; color: #2c3036; }
+      .s6-l { display: block; white-space: pre; }
+      .s6-l .hi { color: #0e6ba8; }
+      #s6-cite { margin-top: 30px; font-size: 25px; line-height: 1.5; color: #5f6670; }
+    </style>
+    <div id="s6-stage" class="clip" data-start="0" data-duration="3.9" data-track-index="0">
+      <div id="s6-col">
+        <h2 id="s6-h2">Every job log ends with what it used.</h2>
+        <div id="s6-cap">
+          <div id="s6-title">Job log</div>
+          <!-- Verbatim from backmesh CI run 42915065644, job verify (README.md, "Job log"); only the highlights are added. -->
+          <div id="s6-pre">
+            <span class="s6-l">backmesh: resources over 61 s, sampled every 5 s; Docker containers not counted</span>
+            <span class="s6-l">  Memory  <span class="hi">peak 1.7 GiB</span>, page cache excluded; 0 OOM kills</span>
+            <span class="s6-l">  CPU     <span class="hi">average 2.09 cores</span>, peak 3.30</span>
+            <span class="s6-l">          waiting for CPU 4.7 s, avg10 peak 12.03 %</span>
+            <span class="s6-l">  Disk    work directory <span class="hi">peak 0.6 GiB</span>, every 30 s; Docker storage not counted</span>
+          </div>
+        </div>
+        <p id="s6-cite">From backmesh's own CI: a verify job on backmesh-4, AWS, Nov 10 2026.</p>
+      </div>
+    </div>
+  </div>
+  <script src="assets/vendor/gsap.min.js"></script>
+  <script>
+    (function () {
+      const tl = gsap.timeline({ paused: true });
+      const root = document.querySelector('[data-composition-id="s6-log"]');
+      tl.fromTo("#s6-h2", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0.4);
+      tl.fromTo("#s6-title", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 0.7);
+      tl.fromTo("#s6-pre", { borderLeftColor: "rgba(230, 232, 235, 0)" }, { borderLeftColor: "rgba(230, 232, 235, 1)", duration: 0.3 }, 0.7);
+      // One line at a time, as the runner prints them.
+      root.querySelectorAll(".s6-l").forEach((line, i) =>
+        tl.fromTo(line, { opacity: 0, x: -12 }, { opacity: 1, x: 0, duration: 0.22, ease: "power2.out" }, 0.9 + 0.32 * i));
+      tl.fromTo("#s6-cite", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 2.6);
+      window.__timelines["s6-log"] = tl;
+    })();
+  </script>
+</template>

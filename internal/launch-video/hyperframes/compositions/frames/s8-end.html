@@ -1,0 +1,53 @@
+<template id="s8-end-template">
+  <div id="s8-root" data-composition-id="s8-end" data-width="1920" data-height="1080" data-duration="4.7">
+    <style>
+      @font-face { font-family: "Schibsted Grotesk"; src: url("assets/fonts/SchibstedGrotesk.woff2") format("woff2"); font-weight: 400 900; }
+      @font-face { font-family: "Fragment Mono"; src: url("assets/fonts/FragmentMono.woff2") format("woff2"); font-weight: 400; }
+      #s8-root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: "Schibsted Grotesk", sans-serif; }
+      /* The page's one dark band (tokens.css --bm-band*), rising over the last light scene. */
+      #s8-band { position: absolute; inset: 0; background: #15171a; display: block; }
+      #s8-stage { position: absolute; inset: 0; display: flex; justify-content: center; padding-top: 150px; color: #f1f3f5; }
+      #s8-col { width: 1600px; }
+      #s8-lockup { height: 52px; width: 257px; display: block; }
+      #s8-h2 { margin-top: 84px; max-width: 1300px; font-weight: 700; font-size: 132px; line-height: 1.02; letter-spacing: -0.04em; color: #f1f3f5; }
+      /* The page's AgentPrompt: a comment, the prompt, a rule under it. */
+      #s8-agent { position: relative; margin-top: 76px; width: 1120px; padding-bottom: 24px; }
+      #s8-rule { position: absolute; left: 0; bottom: 0; width: 1120px; height: 3px; background: #f1f3f5; transform-origin: 0% 50%; display: block; }
+      #s8-m { font: 400 25px/1.5 "Fragment Mono", monospace; color: #a3abb5; }
+      #s8-cmd { margin-top: 8px; font: 400 44px/1.5 "Fragment Mono", monospace; color: #f1f3f5; white-space: nowrap; }
+      #s8-foot { margin-top: 44px; display: flex; align-items: baseline; gap: 56px; }
+      #s8-free { font-size: 32px; font-weight: 600; color: #f1f3f5; }
+      #s8-url { font: 400 32px "Fragment Mono", monospace; color: #7cc4f5; }
+    </style>
+    <div id="s8-stage-wrap" class="clip" data-start="0" data-duration="4.7" data-track-index="0">
+      <i id="s8-band"></i>
+      <div id="s8-stage">
+        <div id="s8-col">
+          <img id="s8-lockup" src="assets/brand/lockup-dark.svg" alt="backmesh" />
+          <h2 id="s8-h2">One install. Your clouds. Your bill.</h2>
+          <div id="s8-agent">
+            <p id="s8-m"># Paste into Claude Code, Codex, or another coding agent</p>
+            <p id="s8-cmd">set up https://backmesh.com/SKILL.md</p>
+            <i id="s8-rule"></i>
+          </div>
+          <div id="s8-foot"><span id="s8-free">Core features free, no credit card.</span><span id="s8-url">backmesh.com</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="assets/vendor/gsap.min.js"></script>
+  <script>
+    (function () {
+      const tl = gsap.timeline({ paused: true });
+      tl.fromTo("#s8-band", { clipPath: "inset(100% 0% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)", duration: 0.6, ease: "power3.inOut" }, 0);
+      tl.fromTo("#s8-lockup", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 0.35);
+      tl.fromTo("#s8-h2", { opacity: 0, y: 28 }, { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" }, 0.45);
+      tl.fromTo("#s8-m", { opacity: 0 }, { opacity: 1, duration: 0.35 }, 1.25);
+      tl.fromTo("#s8-cmd", { clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)", duration: 0.6, ease: "power2.inOut" }, 1.45);
+      tl.fromTo("#s8-rule", { scaleX: 0 }, { scaleX: 1, duration: 0.6, ease: "power3.inOut" }, 1.45);
+      tl.fromTo("#s8-free", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" }, 2.2);
+      tl.fromTo("#s8-url", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" }, 2.4);
+      window.__timelines["s8-end"] = tl;
+    })();
+  </script>
+</template>

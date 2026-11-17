@@ -7,8 +7,7 @@
   },
   "scripts": {
     "fetch-assets": "node fetch-assets.mjs",
-    "render:hyperframes": "node render.mjs hyperframes",
-    "render:brag": "node render.mjs brag",
+    "render": "node render.mjs",
     "encode": "node encode.mjs"
   }
 }

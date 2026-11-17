@@ -1,0 +1,164 @@
+<template id="s1-hero-template">
+  <div id="s1-root" data-composition-id="s1-hero" data-width="1920" data-height="1080" data-duration="8.4">
+    <style>
+      @font-face { font-family: "Schibsted Grotesk"; src: url("assets/fonts/SchibstedGrotesk.woff2") format("woff2"); font-weight: 400 900; }
+      @font-face { font-family: "Fragment Mono"; src: url("assets/fonts/FragmentMono.woff2") format("woff2"); font-weight: 400; }
+      #s1-root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: "Schibsted Grotesk", sans-serif; color: #2c3036; }
+      /* The page's hero: words left, the diagram right. */
+      #s1-stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 96px; padding: 60px 120px 0; }
+      #s1-copy { width: 700px; flex: 0 0 700px; }
+      #s1-h1 { font-weight: 700; font-size: 92px; line-height: 1.02; letter-spacing: -0.036em; color: #15171a; }
+      #s1-h1 span { display: inline-block; }
+      #s1-sub { margin-top: 44px; font-size: 32px; line-height: 1.45; color: #2c3036; text-wrap: balance; }
+      #s1-sub span { display: block; text-wrap: balance; }
+      #s1-free { margin-top: 30px; font-size: 30px; font-weight: 600; color: #15171a; }
+      #s1-fig { width: 820px; flex: 0 0 820px; }
+      #s1-flow { width: 820px; height: 732px; display: block; overflow: visible; }
+      .s1-lbl { fill: #15171a; font: 600 16px "Schibsted Grotesk", sans-serif; letter-spacing: -0.01em; }
+      .s1-rail { fill: none; stroke: #e6e8eb; }
+      .s1-thread { fill: none; stroke: #b9d4e8; stroke-width: 1.5; }
+      .s1-box { fill: #ffffff; stroke: #15171a; stroke-width: 1.25; }
+      .s1-cmd { fill: #15171a; font: 400 15px "Fragment Mono", monospace; }
+      .s1-cmd.del, .s1-sign, .s1-note { fill: #5f6670; }
+      .s1-sign.add { fill: #0e6ba8; }
+      .s1-panel { fill: #ffffff; stroke: #c5cbd2; }
+      .s1-slot { fill: none; stroke: #c5cbd2; opacity: 0; }
+      .s1-vm { fill: #0e6ba8; opacity: 0; }
+      .s1-q { fill: #0e6ba8; }
+      .s1-tok { opacity: 0; }
+      .s1-tok rect { fill: #0e6ba8; stroke: #ffffff; stroke-width: 2.5; }
+    </style>
+    <div id="s1-stage" class="clip" data-start="0" data-duration="8.4" data-track-index="0">
+      <div id="s1-copy">
+        <h1 id="s1-h1"><span>Self-hosted</span> <span>GitHub</span> <span>Actions</span> <span>runners</span> <span>for</span> <span>up</span> <span>to</span> <span>10×</span> <span>less.</span></h1>
+        <p id="s1-sub"><span id="s1-sub-a">Each job runs on its own spot VM in your AWS, GCP or Azure account.</span><span id="s1-sub-b">Your cloud bills you, so your cloud credits apply.</span></p>
+        <p id="s1-free">Core features free, no credit card.</p>
+      </div>
+      <div id="s1-fig">
+        <!-- The page's hero diagram (website/src/components/HeroDiagram.astro, flow.ts), in its own 560 x 500 units. -->
+        <svg id="s1-flow" viewBox="0 0 560 500" aria-label="GitHub Actions jobs, one changed runs-on line, a spot VM each in AWS, GCP or Azure">
+          <defs>
+            <linearGradient id="s1-qgrad" gradientUnits="userSpaceOnUse" x1="40" y1="0" x2="80" y2="0">
+              <stop offset="0" stop-color="#fff" stop-opacity="0" />
+              <stop offset="1" stop-color="#fff" stop-opacity="1" />
+            </linearGradient>
+            <mask id="s1-qmask" maskUnits="userSpaceOnUse" x="0" y="0" width="560" height="100">
+              <rect x="0" y="0" width="560" height="100" fill="url(#s1-qgrad)" />
+            </mask>
+          </defs>
+          <g id="s1-static">
+            <text class="s1-lbl" x="0" y="22">GitHub Actions</text>
+            <path class="s1-rail" d="M0 44 H 280"></path>
+            <path class="s1-thread" d="M280 44 V 132"></path>
+            <rect class="s1-box" x="75" y="132" width="410" height="66"></rect>
+            <path class="s1-thread" d="M280 198 C 280 246, 86 214, 86 262"></path>
+            <path class="s1-thread" d="M280 198 C 280 246, 280 214, 280 262"></path>
+            <path class="s1-thread" d="M280 198 C 280 246, 474 214, 474 262"></path>
+            <g id="s1-panels"></g>
+          </g>
+          <text id="s1-del" class="s1-cmd del" x="92" y="159"><tspan class="s1-sign">-</tspan> runs-on: ubuntu-latest</text>
+          <text id="s1-add" class="s1-cmd" x="92" y="183"><tspan class="s1-sign add">+</tspan> runs-on: backmesh-4 <tspan class="s1-note"># 4 vCPU spot VM</tspan></text>
+          <g mask="url(#s1-qmask)"><g id="s1-queue"></g></g>
+          <g id="s1-tokens"></g>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <script src="assets/vendor/gsap.min.js"></script>
+  <script>
+    (function () {
+      const tl = gsap.timeline({ paused: true });
+      const root = document.querySelector('[data-composition-id="s1-hero"]');
+      const NS = "http://www.w3.org/2000/svg";
+      const el = (tag, attrs, parent) => {
+        const e = document.createElementNS(NS, tag);
+        for (const k in attrs) e.setAttribute(k, attrs[k]);
+        parent.appendChild(e);
+        return e;
+      };
+      // flow.ts's geometry and fill order; the schedule is faster than the
+      // page's 0.9 s per job so the grids fill within the scene.
+      const G = { DROP: 280, QY: 44, QP: 28, TS: 14, BOX_Y: 132, BOX_H: 66, PY: 262, PW: 172, PX: [0, 194, 388], COLS: 5, ROWS: 5, SS: 22, SG: 8, PAD: 18, HEAD: 44,
+        PATTERN: [0, 1, 2, 0, 2, 1, 2, 0, 1],
+        ORDER: [12, 3, 21, 7, 16, 0, 19, 9, 24, 5, 14, 2, 22, 10, 17, 6, 1, 20, 13, 4, 23, 8, 15, 11, 18] };
+      const T0 = 1.5, STEP = 0.2, TRAVEL = 1.5, BOOT = 0.4, JOBS = 24;
+      const job = (k) => {
+        const c = G.PATTERN[k % 9];
+        const before = G.PATTERN.slice(0, k % 9).filter((v) => v === c).length;
+        const idx = Math.floor(k / 9) * 3 + before;
+        return [c, G.ORDER[(idx + 9 * c) % 25]];
+      };
+      const slotXY = (c, s) => [G.PX[c] + G.PAD + (s % G.COLS) * (G.SS + G.SG), G.PY + G.HEAD + Math.floor(s / G.COLS) * (G.SS + G.SG)];
+      const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+
+      // The three cloud panels, each a 5 x 5 grid of VM slots.
+      const panels = root.querySelector("#s1-panels");
+      const panelH = G.HEAD + G.ROWS * (G.SS + G.SG) - G.SG + G.PAD;
+      const slots = {}, vms = {};
+      ["aws", "gcp", "azure"].forEach((key, c) => {
+        const x = G.PX[c];
+        el("rect", { class: "s1-panel", x: x + 0.5, y: G.PY + 0.5, width: G.PW - 1, height: panelH }, panels);
+        el("image", { href: "assets/brand/" + key + ".svg", x: x + G.PAD, y: G.PY + 15, width: 16, height: 16 }, panels);
+        el("text", { class: "s1-lbl", x: x + G.PAD + 24, y: G.PY + 28 }, panels).textContent = ["AWS", "GCP", "Azure"][c];
+        for (let s = 0; s < 25; s++) {
+          const [sx, sy] = slotXY(c, s);
+          slots[c + ":" + s] = el("rect", { class: "s1-slot", x: sx + 0.5, y: sy + 0.5, width: G.SS - 1, height: G.SS - 1 }, panels);
+          vms[c + ":" + s] = el("rect", { class: "s1-vm", x: sx, y: sy, width: G.SS, height: G.SS }, panels);
+        }
+      });
+
+      // The queue: one square per job, stepping one place right per job.
+      const queue = root.querySelector("#s1-queue");
+      const squares = Array.from({ length: JOBS + 10 }, (_, j) =>
+        el("rect", { class: "s1-q", x: G.DROP - j * G.QP - G.TS / 2, y: G.QY - G.TS / 2, width: G.TS, height: G.TS }, queue));
+
+      // Entrance: the headline word by word, the diagram, the diff, the sub.
+      root.querySelectorAll("#s1-h1 span").forEach((w, i) =>
+        tl.fromTo(w, { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 0.15 + 0.06 * i));
+      tl.fromTo("#s1-static", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.out" }, 0.5);
+      tl.fromTo("#s1-queue", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.out" }, 0.6);
+      tl.fromTo("#s1-del", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 0.7);
+      tl.fromTo("#s1-add", { opacity: 0, x: -8 }, { opacity: 1, x: 0, duration: 0.35, ease: "power2.out" }, 1.1);
+      tl.fromTo("#s1-sub-a", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 2.4);
+      tl.fromTo("#s1-sub-b", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 3.6);
+      tl.fromTo("#s1-free", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 4.8);
+
+      // Each job: down the feed, through the box (hidden), along its cloud's
+      // branch, into its slot as that slot's VM boots.
+      const tokens = root.querySelector("#s1-tokens");
+      const by = G.BOX_Y + G.BOX_H;
+      const bez = (p, u) => [0, 1].map((i) => (1 - u) ** 3 * p[0][i] + 3 * (1 - u) ** 2 * u * p[1][i] + 3 * (1 - u) * u * u * p[2][i] + u ** 3 * p[3][i]);
+      for (let k = 0; k < JOBS; k++) {
+        const D = T0 + k * STEP;
+        const [c, s] = job(k);
+        const cx = G.PX[c] + G.PW / 2;
+        const [sx, sy] = slotXY(c, s);
+        const g = el("g", { class: "s1-tok" }, tokens);
+        const r = el("rect", { x: -G.TS / 2, y: -G.TS / 2, width: G.TS, height: G.TS }, g);
+        tl.set(squares[k], { opacity: 0 }, D);
+        tl.fromTo(queue, { x: k * G.QP }, { x: (k + 1) * G.QP, duration: 0.12, ease: "power1.inOut", immediateRender: false }, D);
+        // Every move is a fromTo or a set, so any seek lands on the same frame.
+        const move = (from, to, at, dur, ease) =>
+          tl.fromTo(g, { x: from[0], y: from[1] }, { x: to[0], y: to[1], duration: dur, ease, immediateRender: false }, at);
+        tl.set(g, { opacity: 1 }, D);
+        move([G.DROP, G.QY], [G.DROP, G.BOX_Y], D, 0.2 * TRAVEL, "power1.in");
+        tl.set(g, { opacity: 0 }, D + 0.2 * TRAVEL);
+        const path = [[G.DROP, by], [G.DROP, by + 48], [cx, G.PY - 48], [cx, G.PY]];
+        const N = 12;
+        let prev = [G.DROP, by];
+        tl.set(g, { opacity: 1 }, D + 0.3 * TRAVEL);
+        for (let i = 1; i <= N; i++) {
+          const next = bez(path, smooth(i / N));
+          move(prev, next, D + 0.3 * TRAVEL + ((i - 1) * 0.48 * TRAVEL) / N, (0.48 * TRAVEL) / N, "none");
+          prev = next;
+        }
+        move(prev, [sx + G.SS / 2, sy + G.SS / 2], D + 0.78 * TRAVEL, 0.22 * TRAVEL, "power2.inOut");
+        tl.fromTo(r, { scale: 1 }, { scale: G.SS / G.TS, transformOrigin: "50% 50%", duration: 0.22 * TRAVEL, ease: "power2.inOut", immediateRender: false }, D + 0.78 * TRAVEL);
+        tl.set(g, { opacity: 0 }, D + TRAVEL);
+        tl.fromTo(slots[c + ":" + s], { opacity: 0 }, { opacity: 1, duration: BOOT, ease: "none", immediateRender: false }, D + TRAVEL - BOOT);
+        tl.set(vms[c + ":" + s], { opacity: 1 }, D + TRAVEL);
+      }
+      window.__timelines["s1-hero"] = tl;
+    })();
+  </script>
+</template>

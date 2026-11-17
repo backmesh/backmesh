@@ -1,33 +1,28 @@
-# Render-time assets for both cuts. `npm run fetch-assets` downloads each line,
+# Render-time assets for the cut. `npm run fetch-assets` downloads each line,
 # checks its SHA-256, and writes it under every destination (paths relative to
 # this folder; a destination ending in "/" gets the source path appended).
 #
 #   base <url>                                 prefix for the lines that follow
 #   <sha256> <source path> <destination>...
 
-# Bricolage Grotesque, Inter and JetBrains Mono (SIL OFL 1.1), the website's
-# variable fonts, from the @fontsource-variable npm packages it pins.
-base https://cdn.jsdelivr.net/npm/@fontsource-variable/
-a79fdb52d4a5c76552452f69202add96e287401fff03d3e8c0e38b4dcb5a99cd bricolage-grotesque@5.3.0/files/bricolage-grotesque-latin-opsz-normal.woff2 hyperframes/assets/fonts/Bricolage.woff2 brag/assets/fonts/Bricolage.woff2
-3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62 inter@5.3.0/files/inter-latin-wght-normal.woff2 hyperframes/assets/fonts/Inter.woff2 brag/assets/fonts/Inter.woff2
-18be452724bfdc236c074ca94a249a7f41a86752c7d04ab258ce9ed5651f6a7e jetbrains-mono@5.3.0/files/jetbrains-mono-latin-wght-normal.woff2 hyperframes/assets/fonts/JetBrainsMono.woff2 brag/assets/fonts/JetBrainsMono.woff2
+# Schibsted Grotesk (variable) and Fragment Mono (SIL OFL 1.1), the website's
+# fonts, from the @fontsource packages it pins.
+base https://cdn.jsdelivr.net/npm/
+4c8b93f431d462c696e12b9d6a033feb3394d36e66e781357c496b95d8a75e05 @fontsource-variable/schibsted-grotesk@5.3.0/files/schibsted-grotesk-latin-wght-normal.woff2 hyperframes/assets/fonts/SchibstedGrotesk.woff2
+44c4e39bff5e76652a24a872cbebabccbcfb20f62c4633b27c1f2745cba86b56 @fontsource/fragment-mono@5.3.0/files/fragment-mono-latin-400-normal.woff2 hyperframes/assets/fonts/FragmentMono.woff2
 
 # GSAP (GSAP Standard "no charge" licence), from the gsap npm package.
-base https://cdn.jsdelivr.net/npm/
-c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280 gsap@3.14.2/dist/gsap.min.js hyperframes/assets/vendor/gsap.min.js brag/assets/vendor/gsap.min.js
+c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280 gsap@3.14.2/dist/gsap.min.js hyperframes/assets/vendor/gsap.min.js
 
 # Kenney sound effects (CC0), as bundled in the brag skill (MIT). The only
-# audio in either cut: there is no music bed (README.md, "Music").
+# audio in the cut: there is no music bed (README.md, "Music").
 base https://raw.githubusercontent.com/latent-spaces/brag/cb89b9f44309b0bf4e3cb89e685fadf80c7999ed/skills/brag/assets/sfx/
-5572ccdeb3b62373b86fa955355b3a222c36e815f0636ba16165189a21cf2514 impact/impactBell_heavy_003.ogg hyperframes/assets/sfx/ brag/assets/sfx/
-7642a4fd43e547afe4f7adfadb3dabb681c0ff512f52c1674bae30a726841faf impact/impactSoft_medium_001.ogg hyperframes/assets/sfx/ brag/assets/sfx/
-b0a4dea90eed47accf50b768beff1166f2f1486fb139e4d025b2427637624bca impact/impactSoft_medium_004.ogg hyperframes/assets/sfx/ brag/assets/sfx/
-d21d0f0b782445db579d11e2506b24cd1ac9d664ee33aeaf807761aa7b6fd710 interface/bong_001.ogg hyperframes/assets/sfx/ brag/assets/sfx/
-adcd1f4adc35f1b41bc1b5bbefeff7aa44f2f3f0d96d3199b544140c7c1e761c interface/click_002.ogg hyperframes/assets/sfx/ brag/assets/sfx/
-2fa929138bc3a0f432696588f66eac94b8f6d463905ec8808c6461ce4b054292 interface/click_003.ogg hyperframes/assets/sfx/ brag/assets/sfx/
-692ee3a6f1821402ca649ff735bee9591dc4846c8098fc7d6a90fd15fa57c1af interface/drop_001.ogg hyperframes/assets/sfx/ brag/assets/sfx/
-4ac4d1cef7e936965cbf795852ca2020300b9e2ba7daa59f2bf4f1f7bf416218 interface/drop_002.ogg hyperframes/assets/sfx/ brag/assets/sfx/
-43d086d50f90493a98cd2e09aa6dbf150d164f1578e1ec768d21cb185571ad87 interface/drop_003.ogg hyperframes/assets/sfx/ brag/assets/sfx/
-f703b6b1c62dae1c246a46d5c2442802588f68be2df4d17e0d65cf7e0dbfc826 interface/select_008.ogg hyperframes/assets/sfx/ brag/assets/sfx/
-3b74efad87f1e69dbd1d05c5ad952ab90859b5a3d11da6ec5bd79b4f03b42afa interface/switch_001.ogg hyperframes/assets/sfx/ brag/assets/sfx/
-6fc395be2ad1f99ce318a5d28f98fb76dbeb676d83a0b28239d8c1fb90736180 interface/switch_002.ogg hyperframes/assets/sfx/ brag/assets/sfx/
+b0a4dea90eed47accf50b768beff1166f2f1486fb139e4d025b2427637624bca impact/impactSoft_medium_004.ogg hyperframes/assets/sfx/
+d21d0f0b782445db579d11e2506b24cd1ac9d664ee33aeaf807761aa7b6fd710 interface/bong_001.ogg hyperframes/assets/sfx/
+adcd1f4adc35f1b41bc1b5bbefeff7aa44f2f3f0d96d3199b544140c7c1e761c interface/click_002.ogg hyperframes/assets/sfx/
+2fa929138bc3a0f432696588f66eac94b8f6d463905ec8808c6461ce4b054292 interface/click_003.ogg hyperframes/assets/sfx/
+692ee3a6f1821402ca649ff735bee9591dc4846c8098fc7d6a90fd15fa57c1af interface/drop_001.ogg hyperframes/assets/sfx/
+4ac4d1cef7e936965cbf795852ca2020300b9e2ba7daa59f2bf4f1f7bf416218 interface/drop_002.ogg hyperframes/assets/sfx/
+43d086d50f90493a98cd2e09aa6dbf150d164f1578e1ec768d21cb185571ad87 interface/drop_003.ogg hyperframes/assets/sfx/
+f703b6b1c62dae1c246a46d5c2442802588f68be2df4d17e0d65cf7e0dbfc826 interface/select_008.ogg hyperframes/assets/sfx/
+3b74efad87f1e69dbd1d05c5ad952ab90859b5a3d11da6ec5bd79b4f03b42afa interface/switch_001.ogg hyperframes/assets/sfx/

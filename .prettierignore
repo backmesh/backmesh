@@ -8,4 +8,3 @@ test/unit/listener/prewarm-replay.json
 scripts/bun-*-LICENSE.md
 # Launch video compositions, kept as authored (internal/launch-video/README.md).
 internal/launch-video/hyperframes
-internal/launch-video/brag

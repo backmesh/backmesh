@@ -6,131 +6,78 @@
     <title>backmesh launch</title>
     <script src="assets/vendor/gsap.min.js"></script>
     <style>
-      @font-face { font-family: "Bricolage Grotesque"; src: url("assets/fonts/Bricolage.woff2") format("woff2"); font-weight: 200 800; }
-      @font-face { font-family: "Inter"; src: url("assets/fonts/Inter.woff2") format("woff2"); font-weight: 100 900; }
-      @font-face { font-family: "JetBrains Mono"; src: url("assets/fonts/JetBrainsMono.woff2") format("woff2"); font-weight: 100 800; }
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body { width: 100%; height: 100%; overflow: hidden; background: #0b111a; }
-      #root { position: relative; width: 100%; height: 100%; overflow: hidden; background: #0b111a; font-family: "Inter", sans-serif; }
-      /* The website's woven bed (tokens.css .bm-bed), at twice its 8 px unit. */
-      .bg-layer { position: absolute; pointer-events: none; z-index: 0; }
-      #bg-bed {
-        inset: -32px;
-        background-image:
-          repeating-linear-gradient(90deg, rgba(124, 196, 245, 0.07) 0 1px, transparent 1px 16px),
-          repeating-linear-gradient(0deg, rgba(238, 243, 249, 0.04) 0 1px, transparent 1px 16px);
-      }
-      #bg-glow {
-        width: 1800px; height: 1800px; left: 60px; top: -900px; border-radius: 50%;
-        background: radial-gradient(circle, rgba(124, 196, 245, 0.30) 0%, rgba(124, 196, 245, 0.08) 40%, rgba(124, 196, 245, 0) 68%);
-      }
-      #bg-vignette { inset: 0; background: radial-gradient(ellipse at 50% 45%, rgba(11, 17, 26, 0) 50%, rgba(5, 8, 13, 0.8) 100%); }
+      /* The site's light ground (website/src/styles/tokens.css); the end card
+         carries the page's one dark band. */
+      html, body { width: 100%; height: 100%; overflow: hidden; background: #ffffff; }
+      #root { position: relative; width: 100%; height: 100%; overflow: hidden; background: #ffffff; }
       .scene { z-index: 1; position: absolute; inset: 0; }
-      /* Weave wipe: twelve bands slide in from alternate sides, cover on the
-         beat, and leave the way they came in, so the scenes swap behind them. */
-      #weave { position: absolute; inset: 0; z-index: 50; pointer-events: none; }
-      .band { position: absolute; left: 0; width: 1920px; height: 90px; display: block; }
-      .band.a { background: #141c28; border-top: 2px solid #253044; }
-      .band.b { background: #7cc4f5; }
+      /* The navbar's lockup (hybrid A), on every light scene. */
+      #nav-lockup { position: absolute; z-index: 1; left: 160px; top: 56px; width: 178px; height: 36px; display: block; }
     </style>
   </head>
   <body>
-    <div id="root" data-composition-id="main" data-start="0" data-duration="22" data-width="1920" data-height="1080">
-      <div id="bg-bed" class="bg-layer"></div>
-      <div id="bg-glow" class="bg-layer"></div>
-      <div id="bg-vignette" class="bg-layer"></div>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="34.5" data-width="1920" data-height="1080">
+      <img id="nav-lockup" src="assets/brand/lockup-light.svg" alt="backmesh" />
 
-      <div id="el-s1-queue" class="scene" data-composition-id="s1-queue" data-composition-src="compositions/frames/s1-queue.html" data-start="0" data-duration="3.5" data-track-index="0"></div>
-      <div id="el-s2-reveal" class="scene" data-composition-id="s2-reveal" data-composition-src="compositions/frames/s2-reveal.html" data-start="3" data-duration="4" data-track-index="1"></div>
-      <div id="el-s3-bill" class="scene" data-composition-id="s3-bill" data-composition-src="compositions/frames/s3-bill.html" data-start="6.5" data-duration="4" data-track-index="0"></div>
-      <div id="el-s4-cue" class="scene" data-composition-id="s4-cue" data-composition-src="compositions/frames/s4-cue.html" data-start="10" data-duration="5" data-track-index="1"></div>
-      <div id="el-s5-log" class="scene" data-composition-id="s5-log" data-composition-src="compositions/frames/s5-log.html" data-start="14.5" data-duration="4" data-track-index="0"></div>
-      <div id="el-s6-outro" class="scene" data-composition-id="s6-outro" data-composition-src="compositions/frames/s6-outro.html" data-start="18" data-duration="4" data-track-index="1"></div>
+      <div id="el-s1-hero" class="scene" data-composition-id="s1-hero" data-composition-src="compositions/frames/s1-hero.html" data-start="0" data-duration="8.4" data-track-index="0" data-width="1920" data-height="1080"></div>
+      <div id="el-s2-trust" class="scene" data-composition-id="s2-trust" data-composition-src="compositions/frames/s2-trust.html" data-start="8" data-duration="3.2" data-track-index="1" data-width="1920" data-height="1080"></div>
+      <div id="el-s3-cost" class="scene" data-composition-id="s3-cost" data-composition-src="compositions/frames/s3-cost.html" data-start="10.8" data-duration="5.8" data-track-index="0" data-width="1920" data-height="1080"></div>
+      <div id="el-s4-pricing" class="scene" data-composition-id="s4-pricing" data-composition-src="compositions/frames/s4-pricing.html" data-start="16.2" data-duration="3.4" data-track-index="1" data-width="1920" data-height="1080"></div>
+      <div id="el-s5-clouds" class="scene" data-composition-id="s5-clouds" data-composition-src="compositions/frames/s5-clouds.html" data-start="19.2" data-duration="3.9" data-track-index="0" data-width="1920" data-height="1080"></div>
+      <div id="el-s6-log" class="scene" data-composition-id="s6-log" data-composition-src="compositions/frames/s6-log.html" data-start="22.7" data-duration="3.9" data-track-index="1" data-width="1920" data-height="1080"></div>
+      <div id="el-s7-cue" class="scene" data-composition-id="s7-cue" data-composition-src="compositions/frames/s7-cue.html" data-start="26.2" data-duration="4.2" data-track-index="0" data-width="1920" data-height="1080"></div>
+      <div id="el-s8-end" class="scene" data-composition-id="s8-end" data-composition-src="compositions/frames/s8-end.html" data-start="29.8" data-duration="4.7" data-track-index="1" data-width="1920" data-height="1080"></div>
 
-      <div id="weave" data-layout-allow-overflow data-layout-allow-occlusion>
-        <div id="band-0" class="band a" data-layout-allow-overflow style="top: 0px"></div>
-        <div id="band-1" class="band b" data-layout-allow-overflow style="top: 90px"></div>
-        <div id="band-2" class="band a" data-layout-allow-overflow style="top: 180px"></div>
-        <div id="band-3" class="band a" data-layout-allow-overflow style="top: 270px"></div>
-        <div id="band-4" class="band b" data-layout-allow-overflow style="top: 360px"></div>
-        <div id="band-5" class="band a" data-layout-allow-overflow style="top: 450px"></div>
-        <div id="band-6" class="band a" data-layout-allow-overflow style="top: 540px"></div>
-        <div id="band-7" class="band b" data-layout-allow-overflow style="top: 630px"></div>
-        <div id="band-8" class="band a" data-layout-allow-overflow style="top: 720px"></div>
-        <div id="band-9" class="band a" data-layout-allow-overflow style="top: 810px"></div>
-        <div id="band-10" class="band b" data-layout-allow-overflow style="top: 900px"></div>
-        <div id="band-11" class="band a" data-layout-allow-overflow style="top: 990px"></div>
-      </div>
-
-      <!-- No music bed (README.md, "Music"). Kenney CC0 sound effects, one per on-screen beat. -->
-      <audio id="sfx-0" src="assets/sfx/interface/click_003.ogg" data-start="0.5" data-duration="0.01" data-track-index="20" data-volume="0.5"></audio>
-      <audio id="sfx-1" src="assets/sfx/interface/click_003.ogg" data-start="1.0" data-duration="0.01" data-track-index="21" data-volume="0.5"></audio>
-      <audio id="sfx-2" src="assets/sfx/interface/click_003.ogg" data-start="1.5" data-duration="0.01" data-track-index="22" data-volume="0.5"></audio>
-      <audio id="sfx-3" src="assets/sfx/interface/click_003.ogg" data-start="2.0" data-duration="0.01" data-track-index="23" data-volume="0.5"></audio>
-      <audio id="sfx-4" src="assets/sfx/interface/click_003.ogg" data-start="2.5" data-duration="0.01" data-track-index="24" data-volume="0.5"></audio>
-      <audio id="sfx-5" src="assets/sfx/interface/switch_001.ogg" data-start="3.0" data-duration="0.62" data-track-index="25" data-volume="0.4"></audio>
-      <audio id="sfx-6" src="assets/sfx/impact/impactSoft_medium_004.ogg" data-start="4.0" data-duration="0.15" data-track-index="26" data-volume="0.6"></audio>
-      <audio id="sfx-7" src="assets/sfx/interface/drop_001.ogg" data-start="5.0" data-duration="0.11" data-track-index="27" data-volume="0.5"></audio>
-      <audio id="sfx-8" src="assets/sfx/interface/drop_002.ogg" data-start="5.5" data-duration="0.19" data-track-index="28" data-volume="0.5"></audio>
-      <audio id="sfx-9" src="assets/sfx/interface/drop_003.ogg" data-start="6.0" data-duration="0.19" data-track-index="29" data-volume="0.5"></audio>
-      <audio id="sfx-10" src="assets/sfx/interface/switch_001.ogg" data-start="6.5" data-duration="0.62" data-track-index="30" data-volume="0.4"></audio>
-      <audio id="sfx-11" src="assets/sfx/interface/click_002.ogg" data-start="7.5" data-duration="0.01" data-track-index="31" data-volume="0.45"></audio>
-      <audio id="sfx-12" src="assets/sfx/interface/click_002.ogg" data-start="8.0" data-duration="0.01" data-track-index="32" data-volume="0.45"></audio>
-      <audio id="sfx-13" src="assets/sfx/interface/click_002.ogg" data-start="8.5" data-duration="0.01" data-track-index="33" data-volume="0.45"></audio>
-      <audio id="sfx-14" src="assets/sfx/interface/click_002.ogg" data-start="9.0" data-duration="0.01" data-track-index="34" data-volume="0.45"></audio>
-      <audio id="sfx-15" src="assets/sfx/interface/bong_001.ogg" data-start="9.5" data-duration="0.12" data-track-index="35" data-volume="0.55"></audio>
-      <audio id="sfx-16" src="assets/sfx/interface/switch_001.ogg" data-start="10.0" data-duration="0.62" data-track-index="36" data-volume="0.4"></audio>
-      <audio id="sfx-17" src="assets/sfx/interface/click_002.ogg" data-start="11.0" data-duration="0.01" data-track-index="37" data-volume="0.6"></audio>
-      <audio id="sfx-18" src="assets/sfx/interface/drop_002.ogg" data-start="12.5" data-duration="0.19" data-track-index="38" data-volume="0.5"></audio>
-      <audio id="sfx-19" src="assets/sfx/impact/impactSoft_medium_001.ogg" data-start="13.0" data-duration="0.18" data-track-index="39" data-volume="0.6"></audio>
-      <audio id="sfx-20" src="assets/sfx/interface/select_008.ogg" data-start="13.5" data-duration="0.05" data-track-index="40" data-volume="0.45"></audio>
-      <audio id="sfx-21" src="assets/sfx/interface/switch_001.ogg" data-start="14.5" data-duration="0.62" data-track-index="41" data-volume="0.4"></audio>
-      <audio id="sfx-22" src="assets/sfx/interface/click_003.ogg" data-start="15.5" data-duration="0.01" data-track-index="42" data-volume="0.45"></audio>
-      <audio id="sfx-23" src="assets/sfx/interface/click_003.ogg" data-start="16.0" data-duration="0.01" data-track-index="43" data-volume="0.45"></audio>
-      <audio id="sfx-24" src="assets/sfx/interface/click_003.ogg" data-start="16.5" data-duration="0.01" data-track-index="44" data-volume="0.45"></audio>
-      <audio id="sfx-25" src="assets/sfx/interface/click_003.ogg" data-start="17.0" data-duration="0.01" data-track-index="45" data-volume="0.45"></audio>
-      <audio id="sfx-26" src="assets/sfx/interface/click_003.ogg" data-start="17.5" data-duration="0.01" data-track-index="46" data-volume="0.45"></audio>
-      <audio id="sfx-27" src="assets/sfx/interface/switch_001.ogg" data-start="18.0" data-duration="0.62" data-track-index="47" data-volume="0.4"></audio>
-      <audio id="sfx-28" src="assets/sfx/impact/impactBell_heavy_003.ogg" data-start="18.5" data-duration="0.65" data-track-index="48" data-volume="0.55"></audio>
-      <audio id="sfx-29" src="assets/sfx/impact/impactSoft_medium_001.ogg" data-start="18.5" data-duration="0.18" data-track-index="49" data-volume="0.6"></audio>
-      <audio id="sfx-30" src="assets/sfx/interface/select_008.ogg" data-start="19.5" data-duration="0.05" data-track-index="50" data-volume="0.45"></audio>
-      <audio id="sfx-31" src="assets/sfx/interface/drop_001.ogg" data-start="20.0" data-duration="0.11" data-track-index="51" data-volume="0.45"></audio>
+      <!-- No music bed (README.md, "Music"). Kenney CC0 sound effects, quiet, one per landing. -->
+      <audio id="sfx-0" src="assets/sfx/interface/drop_001.ogg" data-start="3" data-duration="0.11" data-track-index="20" data-volume="0.35"></audio>
+      <audio id="sfx-1" src="assets/sfx/interface/click_002.ogg" data-start="3.6" data-duration="0.01" data-track-index="21" data-volume="0.25"></audio>
+      <audio id="sfx-2" src="assets/sfx/interface/click_002.ogg" data-start="4.2" data-duration="0.01" data-track-index="22" data-volume="0.25"></audio>
+      <audio id="sfx-3" src="assets/sfx/interface/click_002.ogg" data-start="4.8" data-duration="0.01" data-track-index="23" data-volume="0.25"></audio>
+      <audio id="sfx-4" src="assets/sfx/interface/click_002.ogg" data-start="5.4" data-duration="0.01" data-track-index="24" data-volume="0.25"></audio>
+      <audio id="sfx-5" src="assets/sfx/interface/click_002.ogg" data-start="6" data-duration="0.01" data-track-index="25" data-volume="0.25"></audio>
+      <audio id="sfx-6" src="assets/sfx/interface/click_002.ogg" data-start="6.6" data-duration="0.01" data-track-index="26" data-volume="0.25"></audio>
+      <audio id="sfx-7" src="assets/sfx/interface/click_002.ogg" data-start="7.2" data-duration="0.01" data-track-index="27" data-volume="0.25"></audio>
+      <audio id="sfx-8" src="assets/sfx/interface/click_003.ogg" data-start="8.55" data-duration="0.01" data-track-index="28" data-volume="0.3"></audio>
+      <audio id="sfx-9" src="assets/sfx/interface/click_003.ogg" data-start="8.85" data-duration="0.01" data-track-index="29" data-volume="0.3"></audio>
+      <audio id="sfx-10" src="assets/sfx/interface/click_003.ogg" data-start="9.15" data-duration="0.01" data-track-index="30" data-volume="0.3"></audio>
+      <audio id="sfx-11" src="assets/sfx/interface/drop_002.ogg" data-start="12.7" data-duration="0.19" data-track-index="31" data-volume="0.4"></audio>
+      <audio id="sfx-12" src="assets/sfx/interface/drop_003.ogg" data-start="13.2" data-duration="0.19" data-track-index="32" data-volume="0.35"></audio>
+      <audio id="sfx-13" src="assets/sfx/interface/drop_003.ogg" data-start="13.5" data-duration="0.19" data-track-index="33" data-volume="0.35"></audio>
+      <audio id="sfx-14" src="assets/sfx/interface/drop_003.ogg" data-start="13.8" data-duration="0.19" data-track-index="34" data-volume="0.35"></audio>
+      <audio id="sfx-15" src="assets/sfx/interface/select_008.ogg" data-start="17.25" data-duration="0.05" data-track-index="35" data-volume="0.4"></audio>
+      <audio id="sfx-16" src="assets/sfx/interface/click_002.ogg" data-start="21.15" data-duration="0.01" data-track-index="36" data-volume="0.35"></audio>
+      <audio id="sfx-17" src="assets/sfx/interface/click_002.ogg" data-start="21.45" data-duration="0.01" data-track-index="37" data-volume="0.35"></audio>
+      <audio id="sfx-18" src="assets/sfx/interface/click_002.ogg" data-start="21.75" data-duration="0.01" data-track-index="38" data-volume="0.35"></audio>
+      <audio id="sfx-19" src="assets/sfx/interface/click_003.ogg" data-start="23.6" data-duration="0.01" data-track-index="39" data-volume="0.3"></audio>
+      <audio id="sfx-20" src="assets/sfx/interface/click_003.ogg" data-start="23.92" data-duration="0.01" data-track-index="40" data-volume="0.3"></audio>
+      <audio id="sfx-21" src="assets/sfx/interface/click_003.ogg" data-start="24.24" data-duration="0.01" data-track-index="41" data-volume="0.3"></audio>
+      <audio id="sfx-22" src="assets/sfx/interface/click_003.ogg" data-start="24.56" data-duration="0.01" data-track-index="42" data-volume="0.3"></audio>
+      <audio id="sfx-23" src="assets/sfx/interface/click_003.ogg" data-start="24.88" data-duration="0.01" data-track-index="43" data-volume="0.3"></audio>
+      <audio id="sfx-24" src="assets/sfx/interface/click_002.ogg" data-start="27.2" data-duration="0.01" data-track-index="44" data-volume="0.35"></audio>
+      <audio id="sfx-25" src="assets/sfx/interface/switch_001.ogg" data-start="28.45" data-duration="0.62" data-track-index="45" data-volume="0.3"></audio>
+      <audio id="sfx-26" src="assets/sfx/interface/click_002.ogg" data-start="29.03" data-duration="0.01" data-track-index="46" data-volume="0.35"></audio>
+      <audio id="sfx-27" src="assets/sfx/impact/impactSoft_medium_004.ogg" data-start="29.8" data-duration="0.15" data-track-index="47" data-volume="0.4"></audio>
+      <audio id="sfx-28" src="assets/sfx/interface/bong_001.ogg" data-start="31.25" data-duration="0.12" data-track-index="48" data-volume="0.4"></audio>
     </div>
 
     <script>
       (function () {
         var tl = gsap.timeline({ paused: true });
-        var BEAT = 0.5;
-        var END = 22;
-        // Weave wipes at each scene boundary: every band is in by a quarter beat
-        // after the boundary, when the scenes swap, and out by the next beat.
-        var WIPES = [
-          { at: 3.0, out: "#el-s1-queue", in: "#el-s2-reveal" },
-          { at: 6.5, out: "#el-s2-reveal", in: "#el-s3-bill" },
-          { at: 10.0, out: "#el-s3-bill", in: "#el-s4-cue" },
-          { at: 14.5, out: "#el-s4-cue", in: "#el-s5-log" },
-          { at: 18.0, out: "#el-s5-log", in: "#el-s6-outro" },
+        // Scenes overlap by 0.4 s: the outgoing one fades while the next
+        // begins its own entrance. The end card's band covers the last cut.
+        var FADES = [
+          { el: "#el-s1-hero", end: 8.4 },
+          { el: "#el-s2-trust", end: 11.2 },
+          { el: "#el-s3-cost", end: 16.6 },
+          { el: "#el-s4-pricing", end: 19.6 },
+          { el: "#el-s5-clouds", end: 23.1 },
+          { el: "#el-s6-log", end: 26.6 },
         ];
-        var bands = Array.from(document.querySelectorAll(".band"));
-        bands.forEach(function (band, i) {
-          var side = i % 2 ? 1920 : -1920;
-          tl.set(band, { x: side }, 0);
-          WIPES.forEach(function (w) {
-            var lag = i * 0.005;
-            tl.fromTo(band, { x: side }, { x: 0, duration: 0.19, ease: "power2.in", immediateRender: false }, w.at + lag);
-            tl.fromTo(band, { x: 0 }, { x: -side, duration: 0.19, ease: "power2.out", immediateRender: false }, w.at + 0.26 + lag);
-          });
+        FADES.forEach(function (f) {
+          tl.fromTo(f.el, { opacity: 1, y: 0 }, { opacity: 0, y: -14, duration: 0.4, ease: "power1.in", immediateRender: false }, f.end - 0.4);
         });
-        // Each incoming scene shows only once the bands cover the frame.
-        WIPES.forEach(function (w) {
-          tl.set(w.in, { opacity: 0 }, 0);
-          tl.set(w.in, { opacity: 1 }, w.at + BEAT / 2);
-          tl.set(w.out, { opacity: 0 }, w.at + BEAT / 2);
-        });
-        // The glow breathes on every beat of the 120 BPM grid (44 beats).
-        tl.fromTo("#bg-glow", { opacity: 1, scale: 1.04 }, { opacity: 0.7, scale: 1, duration: BEAT, ease: "power2.out", repeat: 43 }, 0);
-        tl.fromTo("#bg-bed", { x: 0, y: 0 }, { x: -16, y: -32, duration: END, ease: "none" }, 0);
-        tl.to({}, { duration: END }, 0);
+        tl.fromTo("#nav-lockup", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power1.out" }, 0.1);
         window.__timelines["main"] = tl;
       })();
     </script>
