@@ -326,16 +326,16 @@ describe('parseDiagnosis', () => {
   });
 
   it("surfaces ci-install.yml's own error line instead of just reporting the expected JSON missing", () => {
-    // "Find the saved anycloud state" runs ahead of diagnose and can fail
-    // before diagnose ever prints an object, unlike the ci-install-busy
+    // "Sign in to the org's control plane" runs ahead of diagnose and can
+    // fail before diagnose ever prints an object, unlike the ci-install-busy
     // refusal (thrown locally, never written to a ci-install.yml log).
     const log = timestamped([
-      '[command]/usr/bin/env gh api --paginate ...',
-      '##[error]The newest anycloud-state artifact expired, so the cluster record is lost. Restore it from a backup.',
+      '[command]/usr/bin/bash -e /home/runner/work/_temp/sign-in.sh',
+      '##[error]ANYCLOUD_API_URLS names no control plane for backmesh-e2e',
       '##[error]Process completed with exit code 1.',
     ]);
     expect(() => parseDiagnosis(log, 'bmabcde-01-abcdefgh')).toThrow(
-      'the cluster record is lost',
+      'names no control plane for backmesh-e2e',
     );
   });
 });

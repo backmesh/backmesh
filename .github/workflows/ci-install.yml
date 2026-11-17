@@ -9,7 +9,8 @@ name: CI install
 # listener log, and why the last runner Jobs ended. The `uninstall` mode runs
 # `backmesh uninstall`, whose one path every run exercises: an org
 # admin's sign-in, the drain, the GitHub cleanup, the cloud side and the App's
-# removal. The schedule only keeps the saved anycloud state from expiring.
+# removal. Nothing is kept between runs: ANYCLOUD_API_URLS, a repository
+# variable, names each org's control plane, and each run signs in to it.
 # The owner sets the secrets first (the owner's setup notes).
 # A fresh install, an uninstall, and the first upgrade of an install made
 # before install keys, stop for backmesh's GitHub sign-in: an admin of the
@@ -60,12 +61,9 @@ on:
         description: uninstall only, also delete the checkpoint bucket, which holds the control plane's backups; otherwise it's kept
         type: boolean
         default: false
-  schedule:
-    - cron: '17 6 1 * *'
 
 # e2e.yml's stop member dispatches stop-runner and diagnose and must find its
-# own run back among any others of this workflow in flight; `inputs` is empty
-# on the scheduled refresh, so this reads as "CI install" there.
+# own run back among any others of this workflow in flight.
 run-name: CI install ${{ inputs.mode }} ${{ inputs.runner }}${{ inputs.ids }}
 
 permissions: {}
@@ -74,30 +72,22 @@ defaults:
   run:
     shell: bash
 
-# One run at a time, never cancelled: a cancelled install loses its state, and
-# the refresh mustn't copy state an install is replacing.
+# One run at a time, never cancelled: a cancelled install, upgrade or
+# uninstall stops partway.
 concurrency:
   group: ci-install
 
-# Each org's saved anycloud state is its own artifact, kept for 90 days, the
-# org's cap; the monthly refresh uploads each again well before then. The find
-# step sets STATE: anycloud-sh's keeps its first name, anycloud-state, and any
-# other org's is anycloud-state-<org>, so a run for a test org never restores
-# or replaces production's.
-
-# Both jobs run on GitHub-hosted runners, not backmesh's own: this workflow
+# The job runs on GitHub-hosted runners, not backmesh's own: this workflow
 # repairs, upgrades or reinstalls the installation those runners come from,
 # so it must run while they're down.
 jobs:
   install:
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     # Holds the secrets, and is the subject each cloud's OIDC trust names.
     environment: ci-install
     timeout-minutes: 120
     permissions:
       contents: read # the release's CLI binary
-      actions: read # the saved state
       id-token: write # each cloud's OIDC sign-in
     env:
       BACKMESH_VERSION: v0.4.0
@@ -143,59 +133,34 @@ jobs:
           echo "ANYCLOUD_DIR=$HOME/.anycloud" >>"$GITHUB_ENV"
           echo "BACKMESH_ANYCLOUD_DIR=$HOME/.anycloud" >>"$GITHUB_ENV"
 
-      # ~/.anycloud holds the control plane's address and sign-in. A run
-      # after the first restores the newest saved copy. Only this workflow's
-      # runs on main in this repository saved it: any other workflow or
-      # branch could upload an artifact of the same name.
-      - &find-state
-        name: Find the saved anycloud state
-        id: saved
+      # ANYCLOUD_API_URLS, a JSON object of lowercase org to control plane
+      # URL, points anycloud at the org's; the sign-in for it is exchanged from
+      # ANYCLOUD_GITHUB_TOKEN. An org it leaves out has no installation yet:
+      # only install runs, a fresh one, which prints the new URL to add.
+      - name: Sign in to the org's control plane
         env:
-          GH_TOKEN: ${{ github.token }}
-          REPO_ID: ${{ github.repository_id }}
+          URLS: ${{ vars.ANYCLOUD_API_URLS }}
+          GITHUB_TOKEN: ${{ secrets.ANYCLOUD_GITHUB_TOKEN }}
+          MODE: ${{ inputs.mode }}
         run: |
           # GitHub org names ignore case.
           org=${ORG,,}
           [[ $org =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo "::error::Not a GitHub org name: $ORG"; exit 1; }
-          STATE=anycloud-state
-          [[ $org == anycloud-sh ]] || STATE=anycloud-state-$org
-          echo "STATE=$STATE" >>"$GITHUB_ENV"
-          runs=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/ci-install.yml/runs?branch=main&per_page=100" \
-            --jq ".workflow_runs[] | select(.head_branch == \"main\" and .head_repository.id == $REPO_ID and (.event == \"workflow_dispatch\" or .event == \"schedule\")) | .id" | jq -sc .)
-          newest=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$STATE&per_page=100" --jq '.artifacts[]' |
-            jq -sc --argjson runs "$runs" --argjson repo "$REPO_ID" \
-              '[.[] | select(.workflow_run.head_branch == "main" and .workflow_run.head_repository_id == $repo
-                and (.workflow_run.id | IN($runs[])))] | max_by(.created_at) // empty')
-          [[ -n $newest ]] || exit 0
-          if [[ $(jq .expired <<<"$newest") == true ]]; then
-            echo "::error::The newest $STATE artifact expired, so the cluster record is lost. Restore it from a backup."
-            exit 1
+          url=$(jq -r --arg org "$org" '.[$org] // empty' <<<"${URLS:-"{}"}") \
+            || { echo "::error::ANYCLOUD_API_URLS isn't a JSON object"; exit 1; }
+          if [[ -z $url ]]; then
+            [[ $MODE == install ]] \
+              || { echo "::error::ANYCLOUD_API_URLS names no control plane for $org"; exit 1; }
+            echo "ANYCLOUD_API_URLS names no control plane for $org: a fresh install"
+            exit 0
           fi
-          echo "run-id=$(jq .workflow_run.id <<<"$newest")" >>"$GITHUB_OUTPUT"
-      - if: steps.saved.outputs.run-id
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: ${{ env.STATE }}
-          run-id: ${{ steps.saved.outputs.run-id }}
-          github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/state
-      - if: steps.saved.outputs.run-id
-        name: Decrypt the anycloud state
-        env:
-          STATE_KEY: ${{ secrets.BACKMESH_STATE_KEY }}
-        # gpg also accepts an unencrypted message, so a restore requires the
-        # passphrase's packet and a decryption that succeeded, then extracts
-        # only ~/.anycloud.
-        run: |
-          status=$(gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 3 --status-fd 1 \
-            --output "$RUNNER_TEMP/anycloud.tar.gz" --decrypt "$RUNNER_TEMP/state/anycloud.tar.gz.gpg" 3<<<"$STATE_KEY")
-          if ! grep -q '^\[GNUPG:\] NEED_PASSPHRASE_SYM ' <<<"$status" ||
-            ! grep -qx '\[GNUPG:\] DECRYPTION_OKAY' <<<"$status"; then
-            echo "::error::The saved $STATE isn't encrypted with BACKMESH_STATE_KEY"
-            exit 1
-          fi
-          tar -xz -C ~ -f "$RUNNER_TEMP/anycloud.tar.gz" .anycloud
-          rm -r "$RUNNER_TEMP/state" "$RUNNER_TEMP/anycloud.tar.gz"
+          [[ $url =~ ^https://[a-z0-9-]+\.anycloud\.sh$ ]] \
+            || { echo "::error::$org's control plane isn't a hosted API URL: $url"; exit 1; }
+          echo "API_URL=$url" >>"$GITHUB_ENV"
+          # Its output on a refusal is the device-code prompt, no secret.
+          out=$(API_URL=$url anycloud login "$url" 2>&1) \
+            || { echo "$out"; echo "::error::ANYCLOUD_GITHUB_TOKEN couldn't sign in to $url"; exit 1; }
+          echo "Signed in to $org's control plane, $url"
 
       # Step 3's `--generate` runs as each cloud's CI identity. anycloud
       # generates on AWS only from a named profile, so the role's session is
@@ -239,7 +204,7 @@ jobs:
 
       # Read-only: `--plan` asks nothing new of a human and changes nothing
       # billed, but it still reads the control plane (the existing listener's
-      # routes), with anycloud's saved GitHub sign-in, and signs in to each
+      # routes), with anycloud's GitHub sign-in, and signs in to each
       # named cloud's CLI above, since the plan reads real quotas through it.
       # Use this before a live `install` dispatch whose plan you haven't seen
       # yet, such as one that connects a cloud for the first time: check it
@@ -318,6 +283,15 @@ jobs:
           wait
           exit "$code"
 
+      # A fresh install's control plane, for the owner to add to
+      # ANYCLOUD_API_URLS, which later runs read.
+      - if: inputs.mode == 'install' && !inputs.plan && env.API_URL == ''
+        name: The new control plane's URL
+        run: |
+          url=$(anycloud api status --json | jq -r .url)
+          echo "::notice title=Add to ANYCLOUD_API_URLS::\"${ORG,,}\": \"$url\""
+          echo "**Add to ANYCLOUD_API_URLS:** \`\"${ORG,,}\": \"$url\"\`" >>"$GITHUB_STEP_SUMMARY"
+
       # The hosted API to the release's anycloud first, then the
       # listener to its images and classes. It signs in to the hosted API with
       # anycloud's GitHub sign-in, and `--runners` names each cloud whose runners
@@ -394,6 +368,7 @@ jobs:
           flags=(--org "$ORG" --yes --confirm backmesh)
           if [[ $DELETE_BUCKET == true ]]; then flags+=(--delete-checkpoint-bucket); fi
           backmesh uninstall "${flags[@]}"
+          echo "::notice title=Remove from ANYCLOUD_API_URLS::${ORG,,} is uninstalled"
 
       # Read-only, from the hosted API: the status, the org's listener log,
       # then the newest runner Jobs that ended on their own and any named in
@@ -524,7 +499,7 @@ jobs:
 
       # The lost-runner live check: terminates one runner Job, so the runner's
       # report of its job can be timed. It goes through the control plane with
-      # the saved anycloud state and no cloud credentials. The fail-fast relies
+      # anycloud's sign-in and no cloud credentials. The fail-fast relies
       # on the cloud shutting the VM's OS down on delete, as EC2's
       # TerminateInstances does. The Job ends cancelled, which backmesh doesn't
       # rerun. Fail-closed: the runner must be running an in-progress
@@ -578,69 +553,3 @@ jobs:
           anycloud status "$RUNNER_ID" --json >"$RUNNER_TEMP/runner.json" || fail "anycloud status failed for $RUNNER_ID"
           jq -c '{state: .workload.state, endReason: .workload.endReason}' "$RUNNER_TEMP/runner.json"
           [[ $(jq -r .workload.state "$RUNNER_TEMP/runner.json") == terminated ]] || fail "$RUNNER_ID isn't terminated"
-
-      # Kept even when install, upgrade or uninstall fails: a re-run, upgrade
-      # or `cluster delete` needs the record. It holds the generated cloud keys, so it's
-      # encrypted, and the repository's readers see only ciphertext. Skipped
-      # for `install --plan`, which changes nothing to record.
-      - if: ${{ !cancelled() && inputs.mode != 'diagnose' && inputs.mode != 'stop-runner' && !(inputs.mode == 'install' && inputs.plan) }}
-        name: Stop the local anycloud API
-        # `api stop` fails when none runs: an upgrade with nothing for the API
-        # to do never starts it. anycloud names its container anycloud-api.
-        run: |
-          [[ -f ~/.anycloud/api.db && -n $(docker ps -q --filter name='^anycloud-api$') ]] || exit 0
-          anycloud api stop
-      - if: ${{ !cancelled() && inputs.mode != 'diagnose' && inputs.mode != 'stop-runner' && !(inputs.mode == 'install' && inputs.plan) }}
-        id: state
-        name: Encrypt the anycloud state
-        env:
-          STATE_KEY: ${{ secrets.BACKMESH_STATE_KEY }}
-        run: |
-          # anycloud 0.1.74 keeps no local API: the record is api-url and the
-          # sign-in, beside an older install's api.db.
-          [[ -f ~/.anycloud/api.db || -f ~/.anycloud/api-url ]] || exit 0
-          tar -cz -C ~ .anycloud | gpg --batch --quiet --pinentry-mode loopback \
-            --passphrase-fd 3 --symmetric --cipher-algo AES256 \
-            --output "$RUNNER_TEMP/anycloud.tar.gz.gpg" 3<<<"$STATE_KEY"
-          echo saved=true >>"$GITHUB_OUTPUT"
-      - if: ${{ !cancelled() && steps.state.outputs.saved }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: ${{ env.STATE }}
-          path: ${{ runner.temp }}/anycloud.tar.gz.gpg
-          if-no-files-found: error
-          retention-days: 90
-
-  # Monthly, so the newest copy never expires: it uploads the same ciphertext
-  # again, with no secret.
-  refresh:
-    if: github.event_name == 'schedule'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    strategy:
-      # One org's expired state must not cancel another's refresh.
-      fail-fast: false
-      matrix:
-        # Every org this workflow installs on; E2E_ORG, a repository
-        # variable, names the test org.
-        org: [anycloud-sh, backmesh, '${{ vars.E2E_ORG }}']
-    env:
-      ORG: ${{ matrix.org }}
-    permissions:
-      actions: read # the saved state
-    steps:
-      - *find-state
-      - if: steps.saved.outputs.run-id
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: ${{ env.STATE }}
-          run-id: ${{ steps.saved.outputs.run-id }}
-          github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/state
-      - if: steps.saved.outputs.run-id
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: ${{ env.STATE }}
-          path: ${{ runner.temp }}/state/anycloud.tar.gz.gpg
-          if-no-files-found: error
-          retention-days: 90
