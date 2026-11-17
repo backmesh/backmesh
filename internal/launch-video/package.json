@@ -1,0 +1,14 @@
+{
+  "name": "backmesh-launch-video",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "fetch-assets": "node fetch-assets.mjs",
+    "render:hyperframes": "node render.mjs hyperframes",
+    "render:brag": "node render.mjs brag",
+    "encode": "node encode.mjs"
+  }
+}

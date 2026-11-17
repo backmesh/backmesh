@@ -1,0 +1,67 @@
+<template id="s3-bill-template">
+  <div id="s3-root" data-composition-id="s3-bill" data-width="1920" data-height="1080" data-duration="4">
+    <style>
+      @font-face { font-family: "Bricolage Grotesque"; src: url("assets/fonts/Bricolage.woff2") format("woff2"); font-weight: 200 800; }
+      @font-face { font-family: "Inter"; src: url("assets/fonts/Inter.woff2") format("woff2"); font-weight: 100 900; }
+      @font-face { font-family: "JetBrains Mono"; src: url("assets/fonts/JetBrainsMono.woff2") format("woff2"); font-weight: 100 800; }
+      #s3-root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: "Inter", sans-serif; }
+      #s3-stage { position: absolute; inset: 0; padding: 130px 150px 0; }
+      .s3-line { font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: 84px; line-height: 1.08; letter-spacing: -0.03em; color: #eef3f9; white-space: nowrap; display: block; }
+      .s3-line.hi { color: #7cc4f5; }
+      #s3-body { margin-top: 80px; display: flex; gap: 70px; align-items: flex-start; }
+      #s3-lanes { width: 980px; background: #141c28; border: 2px solid #253044; border-radius: 24px; padding: 14px 0; }
+      .s3-lane { display: flex; align-items: center; height: 160px; padding: 0 36px; gap: 36px; border-bottom: 2px solid #1b2433; }
+      .s3-lane:last-child { border-bottom: 0; }
+      .s3-logo { width: 84px; height: 84px; display: block; flex: 0 0 84px; }
+      .s3-track { flex: 1; display: flex; gap: 22px; align-items: center; height: 80px; }
+      .s3-vm { width: 84px; height: 84px; border-radius: 10px; background: rgba(124, 196, 245, 0.18); border: 3px solid #7cc4f5; display: flex; align-items: center; justify-content: center; font-family: "JetBrains Mono", monospace; font-size: 22px; font-weight: 700; color: #7cc4f5; }
+      #s3-card { width: 600px; background: #eef3f9; color: #0b111a; border-radius: 24px; padding: 40px 44px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55); }
+      #s3-card .k { font-size: 30px; color: #52607a; font-weight: 600; }
+      #s3-card .v { margin-top: 10px; font-family: "Bricolage Grotesque", sans-serif; font-size: 50px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+      #s3-card ul { margin-top: 30px; list-style: none; border-top: 2px solid #d8dfea; }
+      #s3-card li { font-family: "JetBrains Mono", monospace; font-size: 26px; color: #0f1a2a; padding: 14px 0; border-bottom: 2px dashed #d8dfea; }
+    </style>
+    <div id="s3-stage" class="clip" data-start="0" data-duration="4" data-track-index="0">
+      <span id="s3-l1" class="s3-line">Your cloud bills you directly.</span>
+      <span id="s3-l2" class="s3-line hi">Your cloud credits apply.</span>
+      <div id="s3-body">
+        <div id="s3-lanes">
+          <div class="s3-lane"><img class="s3-logo" src="assets/brand/aws.svg" alt="AWS" /><div class="s3-track" id="s3-aws"></div></div>
+          <div class="s3-lane"><img class="s3-logo" src="assets/brand/gcp.svg" alt="Google Cloud" /><div class="s3-track" id="s3-gcp"></div></div>
+          <div class="s3-lane"><img class="s3-logo" src="assets/brand/azure.svg" alt="Azure" /><div class="s3-track" id="s3-azure"></div></div>
+        </div>
+        <div id="s3-card">
+          <div class="k">Billed by:</div>
+          <div class="v">your cloud account</div>
+          <ul><li>VMs, one per job</li><li>Disks</li><li>Checkpoint bucket</li></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="assets/vendor/gsap.min.js"></script>
+  <script>
+    (function () {
+      const tl = gsap.timeline({ paused: true });
+      // VM squares, one per job, two per beat at 1.0, 1.5, 2.0 and 2.5 s
+      // (7.5 to 9.0 s), across the three lanes.
+      const PLAN = [["s3-aws", "s3-gcp"], ["s3-azure", "s3-aws"], ["s3-gcp", "s3-aws"], ["s3-azure", "s3-gcp"]];
+      PLAN.forEach((lanes, b) => {
+        const beat = 1.0 + 0.5 * b;
+        lanes.forEach((lane, k) => {
+          const vm = document.createElement("div");
+          vm.className = "s3-vm";
+          vm.textContent = "VM";
+          document.getElementById(lane).appendChild(vm);
+          tl.fromTo(vm, { opacity: 0, scale: 0.3 }, { opacity: 1, scale: 1, duration: 0.25, ease: "back.out(2.5)" }, beat - 0.12 + k * 0.06);
+        });
+      });
+      tl.fromTo("#s3-l1", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, 0.3);
+      tl.fromTo("#s3-l2", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, 0.8);
+      tl.fromTo("#s3-lanes", { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.4, ease: "power3.out" }, 0.5);
+      // The bill card lands on 3.0 s (9.5 s).
+      tl.fromTo("#s3-card", { opacity: 0, y: 80, rotation: 4 }, { opacity: 1, y: 0, rotation: 0, duration: 0.35, ease: "power3.in" }, 2.65);
+      tl.fromTo("#s3-card", { scale: 1.04 }, { scale: 1, duration: 0.3, ease: "back.out(3)", immediateRender: false }, 3.0);
+      window.__timelines["s3-bill"] = tl;
+    })();
+  </script>
+</template>

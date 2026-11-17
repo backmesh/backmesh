@@ -1,0 +1,37 @@
+<template id="s6-outro-template">
+  <div id="s6-root" data-composition-id="s6-outro" data-width="1920" data-height="1080" data-duration="4">
+    <style>
+      @font-face { font-family: "Bricolage Grotesque"; src: url("assets/fonts/Bricolage.woff2") format("woff2"); font-weight: 200 800; }
+      @font-face { font-family: "Inter"; src: url("assets/fonts/Inter.woff2") format("woff2"); font-weight: 100 900; }
+      @font-face { font-family: "JetBrains Mono"; src: url("assets/fonts/JetBrainsMono.woff2") format("woff2"); font-weight: 100 800; }
+      #s6-root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: "Inter", sans-serif; }
+      #s6-stage { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+      #s6-lockup { display: flex; align-items: center; gap: 30px; }
+      #s6-mark { width: 150px; height: 150px; display: block; }
+      #s6-word { font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: 128px; letter-spacing: -0.045em; color: #eef3f9; line-height: 1; }
+      #s6-line { margin-top: 56px; font-family: "Bricolage Grotesque", sans-serif; font-size: 64px; font-weight: 600; letter-spacing: -0.02em; color: #eef3f9; white-space: nowrap; }
+      #s6-line .hi { color: #7cc4f5; }
+      #s6-pill { margin-top: 60px; background: #070b11; border: 2px solid #253044; border-radius: 18px; padding: 22px 40px; font-family: "JetBrains Mono", monospace; font-size: 44px; color: #eef3f9; white-space: nowrap; }
+      #s6-pill .p { color: #9da9bc; }
+      #s6-url { margin-top: 56px; font-family: "Bricolage Grotesque", sans-serif; font-size: 72px; font-weight: 700; color: #7cc4f5; letter-spacing: -0.02em; }
+    </style>
+    <div id="s6-stage" class="clip" data-start="0" data-duration="4" data-track-index="0">
+      <div id="s6-lockup"><img id="s6-mark" src="assets/brand/mark.svg" alt="" /><span id="s6-word">backmesh</span></div>
+      <div id="s6-line">Your cloud bills you. <span class="hi">Core features are free.</span></div>
+      <div id="s6-pill"><span class="p">$ </span>brew install backmesh/tap/backmesh</div>
+      <div id="s6-url">backmesh.com</div>
+    </div>
+  </div>
+  <script src="assets/vendor/gsap.min.js"></script>
+  <script>
+    (function () {
+      const tl = gsap.timeline({ paused: true });
+      // Lands on 0.5, 1.0, 1.5 and 2.0 s (18.5 to 20.0 s), then holds 1.5 s from 20.5 s.
+      tl.fromTo("#s6-lockup", { opacity: 0, scale: 0.88 }, { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out" }, 0.25);
+      tl.fromTo("#s6-line", { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.3, ease: "power3.out" }, 0.75);
+      tl.fromTo("#s6-pill", { clipPath: "inset(0% 100% 0% 0% round 18px)" }, { clipPath: "inset(0% 0% 0% 0% round 18px)", duration: 0.4, ease: "power3.inOut" }, 1.1);
+      tl.fromTo("#s6-url", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.3, ease: "power3.out" }, 1.75);
+      window.__timelines["s6-outro"] = tl;
+    })();
+  </script>
+</template>
