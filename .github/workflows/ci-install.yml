@@ -100,13 +100,13 @@ jobs:
       actions: read # the saved state
       id-token: write # each cloud's OIDC sign-in
     env:
-      BACKMESH_VERSION: v0.3.4
+      BACKMESH_VERSION: v0.4.0
       # The release's checksums.txt line for backmesh-linux-x64.tar.gz; bump
       # both together. The install step refuses anything but a 64-character
       # digest.
-      BACKMESH_SHA256: 20e804300f93666bc7356af42b1ba8375e3b176df8d4853d580ad34834e42a4b
-      ANYCLOUD_VERSION: 0.1.77
-      ANYCLOUD_SHA256: 9d93276292e09c6c14377f829428d9503801cceaa3a630b2ec4fa89744448dbd
+      BACKMESH_SHA256: 45ee033c7bf489b824ce58a1182fc66797db1bce2c3a473360539cc6b0f3420d
+      ANYCLOUD_VERSION: 0.1.78
+      ANYCLOUD_SHA256: 5fb5ac58ae549f47738a9e10fda17735987693eeebe5f71ae578d944b36e4ba3
       CLOUDS: ${{ inputs.clouds }}
       CONTROL_PLANE: ${{ inputs.control-plane }}
       ORG: ${{ inputs.org }}
