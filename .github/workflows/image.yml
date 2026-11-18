@@ -59,7 +59,7 @@ env:
 jobs:
   build:
     if: github.event_name == 'pull_request'
-    runs-on: ${{ github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || 'backmesh-4' }}
+    runs-on: ${{ github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.BACKMESH_RUNS_ON || 'backmesh-4' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -102,7 +102,7 @@ jobs:
     if: >-
       github.event_name == 'push' &&
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
-    runs-on: ${{ startsWith(github.ref, 'refs/tags/') && 'ubuntu-24.04' || 'backmesh-4' }}
+    runs-on: ${{ startsWith(github.ref, 'refs/tags/') && 'ubuntu-24.04' || vars.BACKMESH_RUNS_ON || 'backmesh-4' }}
     permissions:
       contents: read
       packages: write
