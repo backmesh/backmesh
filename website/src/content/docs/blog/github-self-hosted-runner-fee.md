@@ -188,7 +188,8 @@ surprise.
    self-hosting still wins.
 3. **Count your fixed costs.** Self-hosting has a fixed part: a Kubernetes
    cluster for ARC, Lambda and queues for the Terraform module, or a control
-   plane such as backmesh's two always-on VMs (t3.large and t3.small on AWS), about $74–$111 a month. Add it to
+   plane such as backmesh's two always-on VMs (t3.large and t3.small on
+   AWS), about $74–$111 a month. Add it to
    the per-minute numbers.
 4. **Cut minutes you don't need.** The fee counts minutes, so minutes saved
    are fee saved. Two changes cost nothing:
