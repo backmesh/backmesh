@@ -30,8 +30,8 @@ runtime, its cost a build, and its cold start, its queueing to its start.
 | Rust       | 70 s, $0.012, 2 s      | 83 s, $0.0024, 46 s  | 49 s, $0.0027, 50 s |
 | TypeScript | 56 s, $0.006, 2 s      | 44 s, $0.0016, 42 s  | 35 s, $0.0021, 43 s |
 
-`backmesh-4` ran the builds 1.4 to 2.1× faster than `ubuntu-latest`, at 2.9
-to 5.6× less per build. At the same 2 vCPUs, `backmesh-2` was faster for
+`backmesh-4` ran the builds 1.4 to 2.1× faster than `ubuntu-latest`, at 2.8
+to 5.5× less per build. At the same 2 vCPUs, `backmesh-2` was faster for
 Docker (1.5×) and TypeScript (1.3×) but slower for Rust (0.8×), partly the
 `cargo` install on first use
 ([backmesh#22](https://github.com/backmesh/backmesh/issues/22)), and 3.8 to

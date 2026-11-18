@@ -32,7 +32,7 @@ export const GET: APIRoute = async ({ site }) => {
 
 - Linux x86-64 jobs in private repositories only: no macOS, Windows, Arm or GPU runners.
 - A job's \`runs-on\` label, such as \`backmesh-4\`, picks its size and cloud. Spot is the default; \`backmesh-od-*\` labels run on demand.
-- Builds: in our benchmarks (${link('/benchmarks/')}), a 4-vCPU \`backmesh-4\` spot VM ran Docker, Rust and TypeScript builds 1.4 to 2.1× faster than GitHub's 2-vCPU \`ubuntu-latest\`, at 2.9 to 5.6× less per build (up to 2× faster, 5× cheaper builds), before backmesh's control plane.
+- Builds: in our benchmarks (${link('/benchmarks/')}), a 4-vCPU \`backmesh-4\` spot VM ran Docker, Rust and TypeScript builds 1.4 to 2.1× faster than GitHub's 2-vCPU \`ubuntu-latest\`, at 2.8 to 5.5× less per build (up to 2× faster, 5× cheaper builds), before backmesh's control plane.
 - Compute: ${MINUTES.toLocaleString('en-US')} minutes a month of 4-vCPU Linux jobs cost ${money(headline.github)} on GitHub-hosted runners and ${money(headline.low)}–${money(headline.high)} on backmesh at spot prices, control plane included, before disks, VM boots and runners started ahead of jobs.
 - Pricing: free and open source (Apache-2.0; the cache action is MIT), with unlimited jobs and the cache included; your clouds bill you for the VMs. Premium adds Slack monitoring, logs and runtime history; talk to us at luis@backmesh.com.
 

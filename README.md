@@ -6,7 +6,7 @@ job runs on its own spot VM, which is deleted when the job ends.
 - **Up to 2× faster, 5× cheaper builds.** In our
   [build benchmarks](https://backmesh.com/benchmarks/), a `backmesh-4` spot VM ran Docker,
   Rust and TypeScript builds 1.4 to 2.1× faster than GitHub's `ubuntu-latest`,
-  at 2.9 to 5.6× less per build. Your cloud bills you, so your cloud credits
+  at 2.8 to 5.5× less per build. Your cloud bills you, so your cloud credits
   apply.
 - **Shorter waits.** backmesh learns each workflow's shape and starts runners
   ahead of its predicted jobs. Your coding agent can cue backmesh as its checks

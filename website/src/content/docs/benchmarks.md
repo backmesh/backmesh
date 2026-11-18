@@ -1,6 +1,6 @@
 ---
 title: Build benchmarks against GitHub's ubuntu-latest
-description: Docker, Rust and TypeScript builds on backmesh-2 and backmesh-4 spot VMs on AWS against GitHub-hosted ubuntu-latest, 5 rounds each on 2026-11-18. backmesh-4 ran them 1.4 to 2.1× faster at 2.9 to 5.6× less per build.
+description: Docker, Rust and TypeScript builds on backmesh-2 and backmesh-4 spot VMs on AWS against GitHub-hosted ubuntu-latest, 5 rounds each on 2026-11-18. backmesh-4 ran them 1.4 to 2.1× faster at 2.8 to 5.5× less per build.
 sidebar:
   label: Benchmarks
 ---
@@ -10,8 +10,8 @@ We built three pinned open-source projects 5 times each on GitHub's
 AWS, on 2026-11-18. The figures are medians of the 5 rounds, and every run is
 [linked below](#runs).
 
-`backmesh-4` ran the builds 1.4 to 2.1× faster than `ubuntu-latest`, at 2.9 to
-5.6× less per build. At the same 2 vCPUs, `backmesh-2` was faster for Docker
+`backmesh-4` ran the builds 1.4 to 2.1× faster than `ubuntu-latest`, at 2.8 to
+5.5× less per build. At the same 2 vCPUs, `backmesh-2` was faster for Docker
 (1.5×) and TypeScript (1.3×) but slower for Rust (0.8×), partly because
 backmesh's image installs `cargo` on first use, inside the measured time
 ([backmesh#22](https://github.com/backmesh/backmesh/issues/22)). It was cheaper
@@ -39,19 +39,19 @@ cheaper.
       <th>Docker<br /><small><a href="https://github.com/grafana/k6">k6 v0.54.0</a></small></th>
       <td><strong>148 s</strong><br />$0.018<br />2 s start</td>
       <td><strong>102 s</strong> · 1.5×<br />$0.0026 · 6.9×<br />40 s start</td>
-      <td><strong>71 s</strong> · 2.1×<br />$0.0032 · 5.6×<br />48 s start</td>
+      <td><strong>71 s</strong> · 2.1×<br />$0.0032 · 5.5×<br />48 s start</td>
     </tr>
     <tr id="rust">
       <th>Rust<br /><small><a href="https://github.com/BurntSushi/ripgrep">ripgrep 14.1.1</a></small></th>
       <td><strong>70 s</strong><br />$0.012<br />2 s start</td>
-      <td><strong>83 s</strong> · 0.8×<br />$0.0024 · 5.0×<br />46 s start</td>
+      <td><strong>83 s</strong> · 0.8×<br />$0.0024 · 5.1×<br />46 s start</td>
       <td><strong>49 s</strong> · 1.4×<br />$0.0027 · 4.4×<br />50 s start</td>
     </tr>
     <tr id="typescript">
       <th>TypeScript<br /><small><a href="https://github.com/microsoft/TypeScript">microsoft/TypeScript v5.6.3</a></small></th>
       <td><strong>56 s</strong><br />$0.006<br />2 s start</td>
       <td><strong>44 s</strong> · 1.3×<br />$0.0016 · 3.8×<br />42 s start</td>
-      <td><strong>35 s</strong> · 1.6×<br />$0.0021 · 2.9×<br />43 s start</td>
+      <td><strong>35 s</strong> · 1.6×<br />$0.0021 · 2.8×<br />43 s start</td>
     </tr>
   </tbody>
 </table>
@@ -72,12 +72,16 @@ cheaper.
 - **backmesh's cost** is the median runtime plus the median cold start, at its
   VM's spot price and its disk's. The VM boots during the cold start, so
   counting all of it slightly overstates the cost. The spot price is the middle
-  of the range of the label's AWS types in us-east-2, in the
+  of the range of the label's AWS types in us-east-2, each in its cheapest zone:
+  $0.024 to $0.0308 an hour for `backmesh-2`, $0.0497 to $0.07 for
+  `backmesh-4`. The prices are from the
   [anycloud catalog](https://github.com/anycloud-sh/catalog/blob/fc06c8852d411ca466091911e8d9629bd7e0ca9c/aws/vms.csv)
-  on 2026-11-13, as on the [cost page](/cost/): $0.024 to $0.0308 an hour for
-  `backmesh-2`, $0.0497 to $0.07 for `backmesh-4`. The disk is 100 GB of gp3 at
+  on 2026-11-13, the same snapshot as the `backmesh-4` prices on the
+  [cost page](/cost/). The disk is 100 GB of gp3 at
   4,000 IOPS and 500 MiB/s, about $0.0384 an hour. It leaves out backmesh's
   control plane, about $86 a month on AWS.
+- **Ratios** compare the unrounded runtimes and costs, so a ratio can differ
+  slightly from one worked out from the rounded figures shown.
 - **Caches.** Neither side used a build cache, except setup-node's default npm
   cache, on both.
 - **Toolchains.** `ubuntu-latest` has Rust preinstalled. backmesh's image
