@@ -27,11 +27,26 @@ figures are medians.
 | Rust       | 49 s       | 70 s          | 1.4×   | $0.0027                  | $0.012                      | 4.4×    |
 | TypeScript | 35 s       | 56 s          | 1.6×   | $0.0021                  | $0.006                      | 2.9×    |
 
+Each job's queue wait, its `created_at` to its `started_at`, on `backmesh-4`
+without a cue, in seconds:
+
+| Round | Docker | Rust | TypeScript |
+| ----- | ------ | ---- | ---------- |
+| 1     | 99     | 51   | 43         |
+| 2     | 51     | 50   | 50         |
+| 3     | 37     | 36   | 36         |
+| 4     | 43     | 50   | 43         |
+| 5     | 48     | 50   | 50         |
+
+That's a median of 50 s, from 36 to 99 s. On `ubuntu-latest` every job waited
+1 to 3 s, a median of 2 s.
+
 ## Method
 
-- **Runtime** is a job's start to its finish. Cold start, a job's queue to its
-  start, isn't in it: 2 s on GitHub, 43 to 50 s on backmesh without a cue, and
-  about 17 s with `backmesh cue` ([cue results](../cue/README.md#results)).
+- **Runtime** is a job's start to its finish. The queue wait before it isn't in
+  it: a median 2 s on GitHub, 50 s on backmesh without a cue (the table
+  above), and about 17 s with `backmesh cue`
+  ([cue results](../cue/README.md#results)).
 - **Size.** `ubuntu-latest` in a private repository has 2 vCPUs; `backmesh-4`
   has 4 vCPUs and 16 GiB.
 - **GitHub's cost** is whole minutes at $0.006 a minute.

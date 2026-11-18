@@ -30,7 +30,7 @@ import {
 const title =
   'backmesh: Free, open-source GitHub Actions runners in your AWS, GCP or Azure';
 const description =
-  'Free and open source (Apache-2.0). Self-hosted GitHub Actions runners on spot VMs in your AWS, GCP or Azure account: up to 2× faster builds at a fifth of the cost of GitHub-hosted runners in our benchmarks. Your cloud bills you, so its credits apply.';
+  'Free and open source (Apache-2.0). Self-hosted GitHub Actions runners on spot VMs in your AWS, GCP or Azure account: up to 2× faster builds at up to a fifth of the cost of GitHub-hosted runners in our benchmarks. Your cloud bills you, so its credits apply.';
 const og = new URL('/brand/og.png', Astro.site).href;
 
 // Build benchmarks, 2026-11-18: medians of 5 rounds each, backmesh-4 against
@@ -284,7 +284,7 @@ const jsonLd = {
 
     <main>
       <section class="wrap hero">
-        <h1>Up to 2× faster builds at a fifth of the cost.</h1>
+        <h1>Up to 2× faster builds at up to a fifth of the cost.</h1>
         <div class="hero-figure"><HeroDiagram /></div>
         <div class="hero-body">
           <p class="sub">
@@ -319,7 +319,10 @@ const jsonLd = {
             benchmarks.map(({ workload, project, secs, cost, faster, cheaper }) => (
               <li>
                 <b>{workload}</b>
-                <strong>{secs[0]} s</strong>
+                <strong aria-label={`${secs[0]} seconds on backmesh-4`}>
+                  {secs[0]} s
+                </strong>
+                <span class="runner">on backmesh-4, plus about 50 s for a fresh VM to boot, about 17 s when cued</span>
                 <ul>
                   <li>{project}</li>
                   <li>
@@ -343,9 +346,10 @@ const jsonLd = {
           </summary>
           <ul>
             <li>
-              Runtime is a job's start to its finish. Cold start, a job's queue
-              to its start, isn't in it: 2 s on GitHub, 43–50 s on backmesh
-              uncued, and about 17 s with <a href="#cue">backmesh cue</a>.
+              Runtime is a job's start to its finish. The wait before it, a
+              job's queue to its start, isn't in it: a median 2 s on GitHub, 50
+              s (36 to 99 s) on backmesh uncued, and about 17 s with
+              <a href="#cue">backmesh cue</a>.
             </li>
             <li>
               GitHub's <code>ubuntu-latest</code> in a private repository has 2
@@ -1078,6 +1082,11 @@ const jsonLd = {
   }
   .bench > li:last-child {
     padding-right: 0;
+  }
+  .bench .runner {
+    margin: -8px 0 18px;
+    color: var(--bm-soft);
+    font-size: 14px;
   }
   .method {
     margin-top: 32px;

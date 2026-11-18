@@ -45,7 +45,8 @@ terminal it asks nothing and names your orgs and the command to run instead.
 
 With nothing else, the control plane and runners go on the cloud your CLI is
 signed in to, near GitHub's US East. The control plane is two always-on VMs
-(t3.large and t3.small on AWS) in your account that start runners for your jobs (about $74–$111 a month).
+(t3.large and t3.small on AWS) in your account that start runners for your
+jobs (about $74–$111 a month).
 To choose, see [Control plane and runners](#control-plane-and-runners). To see
 the plan first:
 
