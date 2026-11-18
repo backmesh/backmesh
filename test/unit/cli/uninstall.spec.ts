@@ -908,6 +908,17 @@ describe('uninstall', () => {
     );
   });
 
+  it('with --keep-app, fails after deleting everything else when an older Worker removed the App', async () => {
+    const { deps, calls } = setUp();
+
+    await expect(
+      uninstall({ ...scripted, keepApp: true }, deps),
+    ).rejects.toThrow(
+      /removed its GitHub App from acme although --keep-app asked to keep it\. Everything else was uninstalled/,
+    );
+    expect(calls).toContain(DELETE_HOSTED);
+  });
+
   it('reports an App another install keeps, and a failed removal', async () => {
     const kept = setUp({
       worker: fakeWorker({

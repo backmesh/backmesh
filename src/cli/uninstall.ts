@@ -696,13 +696,24 @@ export async function uninstall(
         : `Uninstalling backmesh from ${names}; the control plane stays. ${fail}`,
   );
 
-  const removed = [];
+  const removed: UninstallResult['orgs'] = [];
   const clusterId = plane?.clusterId ?? gone?.clusterId;
   for (const org of orgs) {
     removed.push(await removeOrg(org, plane, clusterId, deps, options.keepApp));
   }
 
+  // An older Worker ignores --keep-app and removes the App anyway; said once
+  // the rest is deleted, so the run still fails.
+  const keptApp = () => {
+    const gone = removed.filter(({ appRemoved }) => appRemoved);
+    if (options.keepApp && gone.length) {
+      throw new Error(
+        `backmesh.com removed its GitHub App from ${gone.map(({ org }) => org).join(', ')} although --keep-app asked to keep it. Everything else was uninstalled; an org owner installs the App again.`,
+      );
+    }
+  };
   if (plane && !plane.whole) {
+    keptApp();
     return {
       orgs: removed,
       apiUrl: plane.url,
@@ -766,6 +777,7 @@ export async function uninstall(
       );
     }
   }
+  keptApp();
   return {
     orgs: removed,
     ...(plane

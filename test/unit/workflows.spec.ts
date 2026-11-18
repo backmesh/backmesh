@@ -172,8 +172,9 @@ describe("e2e.yml's test-org run", () => {
 
     expect(uninstall.if).toMatch(/^\$\{\{ always\(\) &&/);
     expect(uninstall.run).toMatch(
-      /backmesh uninstall --org "\$ORG" --yes --keep-app --delete-checkpoint-bucket/,
+      /flags=\(--org "\$ORG" --yes --keep-app --delete-checkpoint-bucket /,
     );
+    expect(uninstall.run).toMatch(/backmesh uninstall "\$\{flags\[@\]\}"/);
     expect(sweep.if).toMatch(/^\$\{\{ always\(\) &&/);
     expect(steps.indexOf(sweep)).toBe(steps.length - 1);
   });

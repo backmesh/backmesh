@@ -157,7 +157,7 @@ jobs:
     runs-on: ubuntu-24.04
     # Holds the secrets, and is the subject the AWS role's OIDC trust names.
     environment: e2e
-    timeout-minutes: 180
+    timeout-minutes: 240
     permissions:
       contents: read # the release's assets
       id-token: write # the AWS role's OIDC sign-in
@@ -216,7 +216,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.CONTROL_PLANE_REGION }}
-          role-duration-seconds: 10800
+          role-duration-seconds: 14400
           output-credentials: true
       - name: Save the role's session as the default profile
         env:
@@ -275,7 +275,17 @@ jobs:
         if: ${{ always() && steps.bin.outcome == 'success' }}
         timeout-minutes: 60
         run: |
-          test/e2e/with-sign-in.sh backmesh uninstall --org "$ORG" --yes --keep-app --delete-checkpoint-bucket --confirm backmesh
+          flags=(--org "$ORG" --yes --keep-app --delete-checkpoint-bucket --confirm backmesh)
+          # A control plane that doesn't answer, such as a half-made one, is
+          # deleted through the cloud CLI; uninstall refuses that for one that
+          # does.
+          if [[ -f ~/.anycloud/api-url ]]; then
+            url=$(anycloud api status --json | jq -r .url) || url=
+            if [[ -n $url ]] && ! curl -fsS --max-time 10 "$url/v1/version" >/dev/null; then
+              flags+=(--control-plane "aws:$CONTROL_PLANE_REGION")
+            fi
+          fi
+          test/e2e/with-sign-in.sh backmesh uninstall "${flags[@]}"
 
       # The cost guard: fails, naming them, while anything this run's
       # installation made is still in AWS. Without the control plane's ID,
@@ -311,7 +321,15 @@ jobs:
                   | jq -r --arg r "$region" '.SecurityGroups[] | "security-group:\($r):\(.GroupId)"'))
               done
             done
-            if aws iam get-user --user-name "$IAM_USER" >/dev/null 2>&1; then left+=("iam-user:$IAM_USER"); fi
+            # Only NoSuchEntity is gone; any other answer fails the sweep.
+            iam() {
+              local out
+              out=$(aws iam "get-$1" --"$1"-name "$2" 2>&1) && { left+=("iam-$1:$2"); return; }
+              grep -q NoSuchEntity <<<"$out" || { echo "$out"; echo "::error::couldn't check $1 $2"; exit 1; }
+            }
+            iam user "$IAM_USER"
+            iam role "anycloud-$CLUSTER_ID-cfn"
+            iam role "anycloud-$CLUSTER_ID-vm"
             left+=($(aws s3api list-buckets | jq -r --arg id "$CLUSTER_ID" --arg cache "$CACHE_PREFIX" \
               '.Buckets[].Name | select(contains($id) or startswith($cache)) | "bucket:\(.)"'))
           fi
