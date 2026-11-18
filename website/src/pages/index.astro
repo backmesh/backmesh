@@ -69,30 +69,11 @@ const benchmarks = [
   },
 ];
 // GPU list prices, not a benchmark: GitHub's linux_4_core_gpu ($0.052 a
-// minute) against the catalog's T4 prices on 2026-11-18 (/cost/#gpu): on
-// demand $0.526 on AWS and Azure; spot $0.1766 on Azure, $0.2732 on AWS.
+// minute) against the catalog's T4 prices on 2026-11-18 (/cost/#gpu): spot
+// $0.1766 on Azure to on demand $0.526 on AWS and Azure.
 const gpu = [
-  {
-    runner: 'GitHub-hosted',
-    label: 'linux_4_core_gpu',
-    price: '$3.12',
-    points: ['$0.052 a minute', '4 vCPUs, one T4, 28 GB'],
-  },
-  {
-    runner: 'backmesh on demand',
-    label: 'backmesh-gpu-od-t4',
-    price: '$0.53',
-    points: ['AWS or Azure, 4 vCPUs, one T4', 'About 6× cheaper'],
-  },
-  {
-    runner: 'backmesh spot',
-    label: 'backmesh-gpu-t4',
-    price: '$0.18–0.27',
-    points: [
-      '$0.18 on Azure, $0.27 on AWS, when capacity allows',
-      '11–18× cheaper',
-    ],
-  },
+  { runner: 'GitHub-hosted T4', price: '$3.12', points: [] },
+  { runner: 'backmesh T4', price: '$0.18–0.53', points: ['6–18× cheaper', 'Spot to on demand'] },
 ];
 const money = (v: number) => `$${Math.round(v).toLocaleString('en-US')}`;
 const range = (lo: number, hi: number) => `${money(lo)}–${money(hi)}`;
@@ -151,9 +132,8 @@ const faq = [
     q: 'Do you support GPUs?',
     short: 'NVIDIA T4 on AWS and Azure. GCP is coming.',
     points: [
-      "backmesh-gpu-t4 (spot) and backmesh-gpu-od-t4 (on demand) run on one T4 and 4 vCPUs, the shape of GitHub's GPU runner.",
       'GPU quotas are 0 on most new cloud accounts. Install and backmesh status show yours and name the one to request more of.',
-      "At list prices, about $0.53 an hour on demand and $0.18–0.27 on spot, against $3.12 for GitHub's. We haven't compared their speed.",
+      "At list prices, $0.18–0.53 an hour, spot to on demand, against $3.12 for GitHub's: 6–18× cheaper. We haven't compared their speed.",
       "A job's container sees the GPU with options: --gpus all, as on GitHub's runner.",
     ],
   },
@@ -393,18 +373,17 @@ const jsonLd = {
       <section id="gpu" class="wrap section benchmarks">
         <h2>NVIDIA T4 GPU runners, by the hour.</h2>
         <p class="lead">
-          List prices on 2026-11-18, not a benchmark: one T4 and 4 vCPUs on each.
+          List prices on 2026-11-18, not a benchmark.
         </p>
-        <ul class="plans bench">
+        <ul class="plans">
           {
-            gpu.map(({ runner, label, price, points }) => (
+            gpu.map(({ runner, price, points }) => (
               <li>
                 <b>{runner}</b>
                 <strong>
                   <a href="/cost/#gpu">{price}</a>
                   <span class="per">/h</span>
                 </strong>
-                <span class="runner"><code>{label}</code></span>
                 <ul>
                   {points.map((p) => (
                     <li>{p}</li>
@@ -414,10 +393,7 @@ const jsonLd = {
             ))
           }
         </ul>
-        <p class="caption">
-          GPU jobs started in about 5 minutes on spot in our test (capacity
-          varies); on demand doesn't wait for spot capacity.
-        </p>
+        <p class="caption">AWS and Azure. Spot jobs can wait for capacity; on demand doesn't.</p>
         <p class="method"><a href="/labels/#gpu">GPU labels →</a></p>
       </section>
 
@@ -1148,13 +1124,13 @@ const jsonLd = {
   .bench strong a {
     color: inherit;
   }
-  .bench + .caption {
+  #gpu .caption {
     margin-top: 32px;
   }
-  #gpu .bench strong {
-    font-size: 52px;
+  #gpu strong a {
+    color: inherit;
   }
-  .bench .per {
+  #gpu .per {
     color: var(--bm-soft);
     font-size: 24px;
     letter-spacing: 0;
