@@ -14,7 +14,7 @@ import { missingFeatures, type FeatureTable } from '../anycloud/features.js';
 import { anycloudControl } from '../app/anycloud.js';
 import { workerDeps, signInForKey, waitForApp } from './worker.js';
 import { checkSignIn, saveSignIn, signInAgain } from './github-sign-in.js';
-import { readApiVersion, readListener } from './status.js';
+import { readApiVersion, readDeployedListener } from './status.js';
 import { readOverride } from '../app/override.js';
 import { parseRoutes } from '../listener/routes.js';
 import { ensureCacheBuckets, withAllowedRegions } from './cache-buckets.js';
@@ -880,12 +880,14 @@ async function currentListener(
   const name = listenerName(org);
   const deployed = targeted?.listeners.find((l) => l.name === name);
   if (!deployed) return undefined;
-  const running = await readListener(deps.run, name).catch((cause: unknown) => {
-    throw new Error(
-      `${org}'s listener didn't answer, so install can't tell what it would change. Run \`backmesh status\`, then install again.`,
-      { cause },
-    );
-  });
+  const running = await readDeployedListener(deps.run, deployed).catch(
+    (cause: unknown) => {
+      throw new Error(
+        `${org}'s listener didn't answer, so install can't tell what it would change. Run \`backmesh status\`, then install again.`,
+        { cause },
+      );
+    },
+  );
   if (
     deployed.image !== release.listenerImage ||
     running.runnerImage !== release.runnerImage

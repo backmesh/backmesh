@@ -51,7 +51,7 @@ import {
   readOrgId,
 } from './installation.js';
 import { hostedApi } from './prerequisites.js';
-import { readListener } from './status.js';
+import { readDeployedListener } from './status.js';
 
 export interface RotateKeyDeps {
   env: NodeJS.ProcessEnv;
@@ -128,7 +128,9 @@ export async function rotateKey(
       `There's no listener for ${org} on ${url}; run \`backmesh install\`.`,
     );
   }
-  const running = await readListener(deps.run, name).catch(() => undefined);
+  const running = await readDeployedListener(deps.run, listener).catch(
+    () => undefined,
+  );
   if (!running) {
     throw new Error(
       `${org}'s listener didn't answer, so rotate-key can't read its install key. Run \`backmesh status\`, then try again.`,
@@ -202,10 +204,12 @@ export async function rotateKey(
     // merely that the roll command exited: the old key is revoked only
     // once the listener itself is on the new one. A single failed or
     // stale read can be a slow restart, so this retries first.
-    let confirmed: Awaited<ReturnType<typeof readListener>> | undefined;
+    let confirmed: Awaited<ReturnType<typeof readDeployedListener>> | undefined;
     for (let i = 0; i < RETRY_ATTEMPTS; i++) {
       if (i > 0) await wait(RETRY_WAIT_MS);
-      confirmed = await readListener(deps.run, name).catch(() => undefined);
+      confirmed = await readDeployedListener(deps.run, listener).catch(
+        () => undefined,
+      );
       if (
         confirmed?.installKey === signed.key &&
         confirmed.rotatingFrom === oldInstall

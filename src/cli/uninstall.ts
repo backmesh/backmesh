@@ -4,10 +4,12 @@
 import type { RunAnycloud } from '../anycloud/binary.js';
 import {
   anycloudApi,
+  anycloudExec,
   activeApiUrl,
   apiToken,
   tokenRefresh,
   type AnycloudApi,
+  type AnycloudExec,
 } from '../anycloud/client.js';
 import { ANYCLOUD_VERSION } from '../anycloud/contract.generated.js';
 import { missingFeatures, type FeatureTable } from '../anycloud/features.js';
@@ -42,9 +44,11 @@ import {
   connectionName,
   installConnection,
   installTag,
+  sessionOf,
   listenerName,
   orgOfListener,
-  readControlPool,
+  readInstallation,
+  type Listener,
 } from './installation.js';
 import { execListener, readApiVersion, readListener } from './status.js';
 import { deleteCacheBuckets } from './cache-buckets.js';
@@ -72,6 +76,7 @@ export interface UninstallDeps {
   // `ask` reads a typed line; both are undefined without a TTY.
   ui: InstallUi;
   api?: typeof anycloudApi;
+  exec?: typeof anycloudExec;
   fetch?: typeof globalThis.fetch;
   features?: FeatureTable;
   sleep?: Sleep;
@@ -83,7 +88,7 @@ export interface UninstallDeps {
 const POLL_MS = 10_000;
 // Half an hour of polls, for the drain and for the pools' VMs to go.
 const POLLS = 180;
-// `anycloud exec` can fail while the API or the Pod is briefly away.
+// `anycloud exec` can fail while the API or the listener is briefly away.
 const FAILED_READS = 3;
 
 async function poll<T>(
@@ -224,17 +229,21 @@ async function bucketDecision(
   return true;
 }
 
-// Step 2 in an org's listener Pod: a POST to its `/drain` stops it taking
+// Step 2 in an org's listener: a POST to its `/drain` stops it taking
 // jobs and drains its runner Jobs, a GET reads it until it ends. A failure
 // stops before the listener goes, so a rerun drains again.
-async function drainListener(deps: UninstallDeps, listener: string) {
+async function drainListener(
+  deps: UninstallDeps,
+  exec: AnycloudExec,
+  listener: Listener,
+) {
   const parse = ({ code, body }: { code: number; body: unknown }) => {
     if (code === 404) {
       throw new Error(
         'The listener has no drain. Run `backmesh upgrade`, then uninstall again.',
       );
     }
-    // Only a listener that never got the POST has no drain: a new Pod.
+    // Only a listener that never got the POST has no drain: a restarted one.
     if (body === null) {
       throw new Error(
         'The listener restarted during the drain, so it takes jobs again. Nothing in your clouds was deleted; run uninstall again.',
@@ -242,12 +251,12 @@ async function drainListener(deps: UninstallDeps, listener: string) {
     }
     return drainStatusSchema.parse(body);
   };
-  parse(await execListener(deps.run, listener, '/drain', { method: 'POST' }));
+  parse(await execListener(exec, listener, '/drain', { method: 'POST' }));
   let failed = 0;
   const status = (await poll(
     deps,
     () =>
-      execListener(deps.run, listener, '/drain').then(
+      execListener(exec, listener, '/drain').then(
         (reply) => ((failed = 0), parse(reply)),
         (cause: unknown) => {
           if (++failed < FAILED_READS) return undefined;
@@ -278,7 +287,6 @@ export interface UninstallResult {
   checkpointBucket?: 'kept' | 'deleted';
 }
 
-type Listener = { name: string; image: string };
 // An org to remove: its listener, when it still runs, and its install key.
 interface Org {
   org: string;
@@ -292,6 +300,7 @@ interface ControlPlane {
   url: string;
   clusterId: string;
   api: AnycloudApi;
+  exec: AnycloudExec;
   orgs: Org[];
   // Orgs an earlier run left unfinished at GitHub (`readControlPlane`).
   unfinished: string[];
@@ -313,18 +322,21 @@ interface Gone {
   clusterId?: string;
 }
 
-// Each listener's org, install key and running jobs, which fail.
-async function readOrgs(listeners: readonly Listener[], run: RunAnycloud) {
+// Each listener's org, install key and running jobs, which fail. A lost
+// VM's listener ran nothing that's left to drain.
+async function readOrgs(listeners: readonly Listener[], exec: AnycloudExec) {
   const orgs: Org[] = [];
   for (const listener of listeners) {
-    const read = await readListener(run, listener.name).catch(
-      (cause: unknown) => {
-        throw new Error(
-          `${orgOfListener(listener.name)}'s listener didn't answer, and uninstall drains its runners through it. Nothing was deleted; check \`backmesh status\` and run uninstall again.`,
-          { cause },
-        );
-      },
-    );
+    if (listener.vm?.lost && !listener.deployment) {
+      orgs.push({ org: orgOfListener(listener.name)!, listener, jobs: 0 });
+      continue;
+    }
+    const read = await readListener(exec, listener).catch((cause: unknown) => {
+      throw new Error(
+        `${orgOfListener(listener.name)}'s listener didn't answer, and uninstall drains its runners through it. Nothing was deleted; check \`backmesh status\` and run uninstall again.`,
+        { cause },
+      );
+    });
     const jobs = read.status.scaleSets.reduce(
       (sum, set) => sum + set.running,
       0,
@@ -360,18 +372,15 @@ async function readControlPlane(
     );
   }
   const token = await apiToken(deps.env, run);
-  const api = (deps.api ?? anycloudApi)(
+  const refresh = tokenRefresh(
+    deps.env,
+    run,
     url,
-    token,
-    undefined,
-    tokenRefresh(
-      deps.env,
-      run,
-      url,
-      signInAgain(workerDeps(deps, deps.ui.print)),
-    ),
+    signInAgain(workerDeps(deps, deps.ui.print)),
   );
-  const { pool, listeners } = await readControlPool(api);
+  const api = (deps.api ?? anycloudApi)(url, token, undefined, refresh);
+  const exec = (deps.exec ?? anycloudExec)(url, token, undefined, refresh);
+  const { pool, orgs: listeners } = await readInstallation(api);
   // `--org` for one of several orgs removes that org only; for the last
   // org, or without it, uninstall removes everything.
   const { org } = options;
@@ -395,7 +404,7 @@ async function readControlPlane(
     mine = listeners.filter((listener) => listener.name === name);
     whole = !listeners.some((listener) => listener.name !== name);
   }
-  const orgs = await readOrgs(mine, run);
+  const orgs = await readOrgs(mine, exec);
   // `--org`'s listener an earlier run deleted: its org, without a key.
   if (org && !orgs.length) orgs.push({ org, jobs: 0 });
   // When the control plane goes, a Secret without its listener, but
@@ -432,7 +441,7 @@ async function readControlPlane(
               d.nodePoolId === pool.id &&
               d.deletedAt === null &&
               !d.managed &&
-              !listeners.some((listener) => listener.name === d.name),
+              !listeners.some((listener) => listener.deployment?.id === d.id),
           )
           .map((d) => d.name)
       : [];
@@ -442,6 +451,7 @@ async function readControlPlane(
     url,
     clusterId,
     api,
+    exec,
     orgs,
     unfinished,
     unfinishedNoteOnly: !!org && !listeners.length,
@@ -467,7 +477,7 @@ async function cleanupTokenNow(cleanup: Cleanup, deps: UninstallDeps) {
 
 // One org, in order (owner, 2026-11-06): an admin's sign-in for the
 // cleanup token, which comes first so a refused one changes nothing; the
-// listener's drain, then its Deployment, ServiceAccount and Secret, so
+// listener's drain, then its VM, service and Secret, so
 // nothing registers the scale sets again; backmesh's GitHub side; then the
 // App's installation.
 async function removeOrg(
@@ -484,7 +494,11 @@ async function removeOrg(
   const tag = clusterId ? installTag(clusterId, cleanup.org.id) : undefined;
   const groups = tag ? `backmesh-${tag}-*` : 'backmesh-*-*';
   if (plane) {
-    if (listener) await drainListener(deps, listener.name);
+    // A lost VM's listener can't drain: its org's runners are stopped
+    // instead.
+    const lost = !!listener?.vm?.lost && !listener.deployment;
+    if (listener && !lost) await drainListener(deps, plane.exec, listener);
+    if (lost && tag) await stopRunners(plane, deps, sessionOf(tag));
     await removeListener(org, listener, plane.api, deps);
     // With the runners drained, no mint names a cache bucket, and the
     // runners' cache Secrets the listener didn't get to are orphans.
@@ -533,7 +547,7 @@ async function removeOrg(
       : `The backmesh GitHub App stays on ${login}, which its installs ${app.still_used_by.join(', ')} still use.`,
   );
   // Last: the Secret marks an org whose removal a rerun must finish.
-  // Secrets are write-only and outlive a deleted Deployment.
+  // Secrets are write-only and outlive a deleted VM.
   if (plane) {
     const name = listenerName(org);
     if ((await plane.api.listSecrets()).some((s) => s.name === name)) {
@@ -543,9 +557,10 @@ async function removeOrg(
   return { org: login, appRemoved: app.removed };
 }
 
-// Step 1 for one org: its listener's Deployment and ServiceAccount, then a
-// wait until the Deployment is gone. A rerun past the delete finds the
-// ServiceAccount gone or not. The Secret stays until the org is finished.
+// Step 1 for one org: its listener's VM and service, then a wait until the
+// VM is gone; a listener from before its VM, its Deployment and
+// ServiceAccount. A rerun past the delete finds the service gone or not.
+// The Secret stays until the org is finished.
 async function removeListener(
   org: string,
   listener: Listener | undefined,
@@ -553,13 +568,29 @@ async function removeListener(
   deps: UninstallDeps,
 ) {
   const name = listener?.name ?? listenerName(org);
-  if (listener) await deps.run(['deployment', 'delete', name]);
-  await anycloudControl(api, deps.run)
-    .removeServiceAccount(name)
-    .catch((error: unknown) => {
-      if (listener) throw error;
+  const control = anycloudControl(api, deps.run);
+  const { vm, deployment } = listener ?? {};
+  if (vm && !vm.lost) {
+    await deps.run(['terminate', vm.id]);
+    await poll(
+      deps,
+      () => api.listWorkloads({ query: { workloadType: 'vm' } }),
+      (vms) => !vms.some((w) => w.id === vm.id && !TERMINAL.has(w.state)),
+      'the listener VM to go',
+    );
+  }
+  if (deployment) await deps.run(['deployment', 'delete', name]);
+  // A rerun past the Deployment's delete finds it gone, and its
+  // ServiceAccount gone or not; an org that only ever had a VM has none.
+  if (!vm || deployment) {
+    await control.removeServiceAccount(name).catch((error: unknown) => {
+      if (deployment) throw error;
     });
-  await stopped(api, deps, [name], 'the listener to stop');
+  }
+  if (deployment) await stopped(api, deps, [name], 'the listener to stop');
+  // Idempotent, so a rerun past the VM's end still revokes its token, and
+  // an org that never had a service is fine.
+  await control.removeService(name);
 }
 
 // Waits until none of the named Deployments runs.
@@ -782,18 +813,24 @@ export async function uninstall(
         : { cloud: 'skipped' as const }),
   };
 }
-// Steps 3-5: the runners and pools once the listener is gone, then the
-// installation through its own API, which deletes itself last; the
-// connections go with it. With C28, the bucket goes only when confirmed.
-async function deleteCloudSide(plane: ControlPlane, deps: UninstallDeps) {
-  const { run } = deps;
-  // Runner VM Jobs the drain left, and terminated ones whose VM or
-  // checkpoint bucket is still going: only the hosted API releases them, so
-  // it stays until they're gone. `terminatable` lists both.
+// Runner VM Jobs the drain left (every org's, or one org's `session`), and
+// terminated ones whose VM or checkpoint bucket is still going: only the
+// hosted API releases them, so it stays until they're gone. `terminatable`
+// lists both.
+async function stopRunners(
+  plane: ControlPlane,
+  deps: UninstallDeps,
+  session?: string,
+) {
   const runners = async () =>
     (
       await plane.api.listWorkloads({
-        query: { session: 'bm-', stateClass: 'terminatable', limit: '1000' },
+        query: {
+          session: session ?? 'bm-',
+          ...(session && { sessionExact: 'true' as const }),
+          stateClass: 'terminatable',
+          limit: '1000',
+        },
       })
     ).filter(
       (job) =>
@@ -809,6 +846,14 @@ async function deleteCloudSide(plane: ControlPlane, deps: UninstallDeps) {
     }
   }
   await poll(deps, runners, (jobs) => !jobs.length, "the runners' VMs to go");
+}
+
+// Steps 3-5: the runners and pools once the listener is gone, then the
+// installation through its own API, which deletes itself last; the
+// connections go with it. With C28, the bucket goes only when confirmed.
+async function deleteCloudSide(plane: ControlPlane, deps: UninstallDeps) {
+  const { run } = deps;
+  await stopRunners(plane, deps);
   const ours = async () =>
     (await plane.api.listNodePools({ query: {} })).nodePools.filter(
       (pool) =>

@@ -5,7 +5,7 @@ import { CACHE_CAP_ENV } from '../listener/sweep.js';
 import { z } from 'zod';
 
 import type { RunAnycloud } from '../anycloud/binary.js';
-import type { AnycloudApi } from '../anycloud/client.js';
+import type { AnycloudApi, AnycloudExec } from '../anycloud/client.js';
 import {
   FEATURES,
   missingFeatures,
@@ -37,15 +37,23 @@ import {
   installTag,
   listenerName,
   orgOfListener,
-  readControlPool,
+  readInstallation,
   readOrgId,
   sessionOf,
+  type Deployment,
+  type Listener,
 } from './installation.js';
+import { inListener } from './listener-vm.js';
+import {
+  API_TOKEN_ENV,
+  LISTENER_IMAGE_ENV,
+  RUNNER_GROUP_ENV,
+} from '../listener/env.js';
 
-// The listener binds loopback only and its image has Node but no curl
-// (`docs/reference/cli/workloads.md:260-262` at v0.1.71), so `status`,
-// `upgrade` and `uninstall` call it inside its Pod. Prints the response's
-// code and JSON body, and the named variables of install's environment.
+// The listener binds loopback only and its image has Node but no curl, so
+// `status`, `upgrade` and `uninstall` call it inside its container: through
+// `docker exec` on its VM, or in a Deployment's Pod. Prints the response's
+// code and JSON body, and the named variables of its environment.
 const execSchema = z.object({
   code: z.number().int(),
   body: z.unknown(),
@@ -53,8 +61,11 @@ const execSchema = z.object({
 });
 
 export async function execListener(
-  run: RunAnycloud,
-  listener: string,
+  exec: AnycloudExec,
+  listener: {
+    vm?: { id: string; lost?: boolean; org?: string };
+    deployment?: Pick<Deployment, 'id'>;
+  },
   path: string,
   {
     method = 'GET',
@@ -62,9 +73,22 @@ export async function execListener(
   }: { method?: 'GET' | 'POST'; env?: string[] } = {},
 ) {
   const script = `fetch("http://127.0.0.1:8080${path}", { method: "${method}" }).then(async (r) => console.log(JSON.stringify({ code: r.status, body: await r.json(), env: Object.fromEntries(${JSON.stringify(env)}.map((name) => [name, process.env[name]])) })))`;
-  return execSchema.parse(
-    JSON.parse(await run(['exec', listener, `node -e '${script}'`])),
-  );
+  // A Deployment runs until `upgrade` has moved it, even with its VM made.
+  const { vm, deployment } = listener;
+  if (!deployment && vm?.lost) {
+    throw new Error(
+      `its VM ${vm.id} is gone, and anycloud doesn't replace it; run \`backmesh upgrade\` to create another, or \`backmesh uninstall --org ${vm.org}\` to finish removing it`,
+    );
+  }
+  const { code, stdout, stderr } = deployment
+    ? await exec(deployment.id, `node -e '${script}'`)
+    : await exec(vm!.id, inListener(script));
+  if (code !== 0) {
+    throw new Error(
+      stderr.trim().split('\n').at(-1) || `its exec exited ${code}`,
+    );
+  }
+  return execSchema.parse(JSON.parse(stdout));
 }
 
 export const readApiVersion = async (
@@ -77,8 +101,11 @@ export const readApiVersion = async (
 
 // The listener's `/status` (`listenerStatusSchema`), and the org, its
 // ID, runner image, install key and override install gave it.
-export async function readListener(run: RunAnycloud, listener: string) {
-  const { body, env } = await execListener(run, listener, '/status', {
+export async function readListener(
+  exec: AnycloudExec,
+  listener: Pick<Listener, 'vm' | 'deployment'>,
+) {
+  const { body, env } = await execListener(exec, listener, '/status', {
     env: [
       'ORG',
       'ORG_ID',
@@ -88,9 +115,20 @@ export async function readListener(run: RunAnycloud, listener: string) {
       RUNNERS_ENV,
       ROTATING_FROM_ENV,
       CACHE_CAP_ENV,
+      LISTENER_IMAGE_ENV,
+      RUNNER_GROUP_ENV,
+      API_TOKEN_ENV,
     ],
   });
   return {
+    // A Deployment's image is its own.
+    image: z
+      .string()
+      .parse(env[LISTENER_IMAGE_ENV] ?? listener.deployment?.image),
+    // A listener from before its VM has none: its Deployment's ID names it.
+    runnerGroup: env[RUNNER_GROUP_ENV],
+    // Its anycloud service token, absent before its VM.
+    apiToken: env[API_TOKEN_ENV],
     status: listenerStatusSchema.parse(body),
     // The listener doesn't start without it.
     org: z.string().parse(env.ORG),
@@ -111,10 +149,25 @@ export async function readListener(run: RunAnycloud, listener: string) {
   };
 }
 
+// A listener on `bm-control` read through the binary, by its Deployment's
+// name, as install, upgrade and rotate-key still roll it.
+export const readDeployedListener = (
+  run: RunAnycloud,
+  deployment: Deployment,
+) =>
+  readListener(
+    async (id, command) => ({
+      code: 0,
+      stdout: await run(['exec', id, command]),
+      stderr: '',
+    }),
+    { deployment: { ...deployment, id: deployment.name } },
+  );
+
 export interface StatusDeps {
   api: AnycloudApi;
   apiUrl: string;
-  run: RunAnycloud;
+  exec: AnycloudExec;
   fetch?: typeof globalThis.fetch;
   now?: Date;
   features?: FeatureTable;
@@ -125,7 +178,7 @@ export interface StatusDeps {
 export async function readStatus({
   api,
   apiUrl,
-  run,
+  exec,
   fetch = globalThis.fetch,
   now = new Date(),
   features = FEATURES,
@@ -135,28 +188,34 @@ export async function readStatus({
   const monthStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
   const [version, control] = await Promise.all([
     readApiVersion(apiUrl, fetch),
-    readControlPool(api),
+    readInstallation(api),
   ]);
-  const deployments = control.listeners.filter(
+  const listeners = control.orgs.filter(
     ({ name }) => !only || name === listenerName(only),
   );
-  if (only && !deployments.length) {
+  if (only && !listeners.length) {
     throw new Error(`There's no listener for ${only} on ${apiUrl}.`);
   }
   // One section per org: its listener, and its runners' month-to-date cost
   // through its own session.
   const orgs = await Promise.all(
-    deployments.map(async ({ name, id }) => {
+    listeners.map(async (entry) => {
+      const { name, vm, deployment } = entry;
       const login = orgOfListener(name)!;
-      // The install key stays out of the report, which `--json` prints, and
-      // the classes are summed up per cloud.
-      const listener = await readListener(run, name).then(
-        async ({ installKey: _, runners, ...listener }) => ({
+      // The install key and service token stay out of the report, which
+      // `--json` prints, and the classes are summed up per cloud.
+      const listener = await readListener(exec, entry).then(
+        async ({ installKey: _, apiToken: __, runners, ...listener }) => ({
           ...listener,
           runners: await runnerClouds(runners, api),
         }),
         (error: unknown) => ({ error: message(error) }),
       );
+      // Where it runs: the Deployment `upgrade` moves, with the VM a move
+      // that stopped made, else its VM.
+      const host = deployment
+        ? { deployment: deployment.name, ...(vm && { movingTo: vm.id }) }
+        : { vm: vm!.id, lost: vm!.lost };
       const org = 'org' in listener ? listener.org : login;
       // The tag needs the org's ID: the listener's, or GitHub's while it's
       // down. Neither failing here stops the other orgs' sections.
@@ -167,14 +226,16 @@ export async function readStatus({
           ('orgId' in listener && listener.orgId) ||
           (await readOrgId(login, fetch));
         const tag = installTag(clusterId, orgId);
-        runnerGroup = runnerGroupName(tag, id);
+        runnerGroup =
+          ('runnerGroup' in listener && listener.runnerGroup) ||
+          runnerGroupName(tag, deployment?.id ?? vm!.id);
         const session = sessionOf(tag);
         const cost = await api.getWorkloadCostReport({
           query: { session, sessionExact: 'true', sinceMs: String(monthStart) },
         });
         return {
           org,
-          serviceAccount: name,
+          ...host,
           session,
           runnerGroup,
           listener,
@@ -192,7 +253,7 @@ export async function readStatus({
       } catch (error) {
         return {
           org,
-          serviceAccount: name,
+          ...host,
           session: null,
           runnerGroup,
           listener,
@@ -204,13 +265,17 @@ export async function readStatus({
   );
 
   const warnings = [...control.problems];
-  if (!control.pool) warnings.push(`There's no ${CONTROL_POOL} pool.`);
   if (!orgs.length) {
     warnings.push(
-      `There's no listener on ${CONTROL_POOL}; run \`backmesh install\`.`,
+      `There's no listener on this control plane; run \`backmesh install\`.`,
     );
   }
   for (const { org, listener, ...section } of orgs) {
+    if ('deployment' in section) {
+      warnings.push(
+        `${org}'s listener still runs on ${CONTROL_POOL}; \`backmesh upgrade\` moves it to its own VM.`,
+      );
+    }
     if ('costError' in section) {
       warnings.push(
         `${org}'s runner cost couldn't be read: ${section.costError}`,
@@ -220,6 +285,12 @@ export async function readStatus({
     if (broker) {
       warnings.push(
         `${org}: the token broker has failed since ${minute(broker.since)}: ${broker.error}. The listener keeps its current token until it expires, then stops scaling.`,
+      );
+    }
+    const refused = 'status' in listener && listener.status.anycloud;
+    if (refused) {
+      warnings.push(
+        `${org}: the control plane has refused the listener's service token since ${minute(refused.since)}, so it can't start runners; a restore from a backup older than the token does this. Run \`backmesh upgrade\` to issue it a new one.`,
       );
     }
     if ('error' in listener) {
@@ -272,14 +343,6 @@ export async function readStatus({
 
   return {
     api: { url: apiUrl, version, missingFeatures: missing },
-    controlPool: control.pool && {
-      name: control.pool.name,
-      state: control.pool.state,
-      vms:
-        control.pool.capacity.readyVmCount +
-        control.pool.capacity.startingVmCount,
-      lastError: control.pool.lastError,
-    },
     orgs,
     warnings,
   };
@@ -352,21 +415,20 @@ const usd = (value: number) => `$${value.toFixed(2)}`;
 const minutes = (ms: number) => `${Math.round(ms / 60_000)} min`;
 
 export function formatStatus(report: StatusReport): string {
-  const { api, controlPool, orgs, warnings } = report;
+  const { api, orgs, warnings } = report;
   const lines = [
     `Control plane ${api.url} (${api.version})`,
     '',
     'Runners: each job gets its own VM; the job controls that VM’s Docker.',
-    ...(controlPool
-      ? [
-          `The listeners' VMs: ${controlPool.state}, ${controlPool.vms} VM${controlPool.vms === 1 ? '' : 's'}${controlPool.lastError ? `, last error: ${controlPool.lastError}` : ''}`,
-        ]
-      : []),
     '',
   ];
-  for (const { org, session, runnerGroup, listener, cost } of orgs) {
+  for (const section of orgs) {
+    const { org, session, runnerGroup, listener, cost } = section;
     lines.push(
       `${org}${session ? `, session ${session}` : ''}${runnerGroup ? `, runner group ${runnerGroup}` : ''}:`,
+      'vm' in section
+        ? `Listener VM: ${section.vm}${section.lost ? ' (gone)' : ''}`
+        : `Listener: Deployment ${section.deployment} on ${CONTROL_POOL}${section.movingTo ? `, moving to VM ${section.movingTo}` : ''}`,
     );
     if ('status' in listener && !listener.status.installed) {
       lines.push(`Listener: waiting for the App's installation on ${org}`);

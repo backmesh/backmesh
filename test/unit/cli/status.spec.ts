@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { ANYCLOUD_VERSION } from '../../../src/anycloud/contract.generated.js';
 import { formatStatus, readStatus } from '../../../src/cli/status.js';
-import { fakeApi, fakeBinary, githubOrg, versionMismatch } from './fakes.js';
+import {
+  fakeApi,
+  fakeExec,
+  githubOrg,
+  listenerVm,
+  versionMismatch,
+} from './fakes.js';
 import { formatJobs } from '../../../src/listener/status.js';
 import { runnerGroupName } from '../../../src/github/runner-group.js';
 import {
@@ -35,8 +41,12 @@ const RUNNERS = JSON.stringify(
     'aws',
   ).classes,
 );
+// Each org's listener VM, by its Secret's name.
+const vmOf = (name: string) =>
+  `bml-l8u5e-${name.slice(9).padEnd(6, '0').slice(0, 6)}`;
+const LISTENER_IMAGE = 'ghcr.io/backmesh/backmesh-listener@sha256:bb';
 // What the probe prints: `/status`'s code and body, and the environment.
-const probed = (body: object, org = 'acme') =>
+const probed = (body: object, org = 'acme', env: object = {}) =>
   JSON.stringify({
     code: 200,
     body,
@@ -44,11 +54,17 @@ const probed = (body: object, org = 'acme') =>
       ORG: org,
       BACKMESH_RUNNER_IMAGE: RUNNER_IMAGE,
       BACKMESH_RUNNERS: RUNNERS,
+      BACKMESH_LISTENER_IMAGE: LISTENER_IMAGE,
+      BACKMESH_RUNNER_GROUP: 'backmesh-l8u5e-k3j9x0',
+      ANYCLOUD_API_TOKEN: 'acsvc_secret',
+      ...env,
     },
   });
 const LISTENER = {
   org: 'acme',
   override: false,
+  image: LISTENER_IMAGE,
+  runnerGroup: 'backmesh-l8u5e-k3j9x0',
   runnerImage: RUNNER_IMAGE,
   status: {
     installed: true,
@@ -128,6 +144,12 @@ function setUp({
   listener = probed(LISTENER.status) as string | Error,
   // Other orgs' listeners on the same control plane, by name.
   others = {},
+  // Listeners still on `bm-control`, by name, that `upgrade` moves.
+  legacy = [] as string[],
+  // Listeners whose VM anycloud found gone.
+  lost = [] as string[],
+  // Legacy listeners with the VM a stopped move made.
+  moving = [] as string[],
   version = '0.1.72',
   org,
   // The control plane's quota status, or its refusal.
@@ -136,6 +158,9 @@ function setUp({
   workloads?: object[];
   listener?: string | Error;
   others?: Record<string, string | Error>;
+  legacy?: string[];
+  lost?: string[];
+  moving?: string[];
   version?: string;
   org?: string;
   quota?: object | Response;
@@ -144,20 +169,31 @@ function setUp({
     'backmesh-acme': listener,
     ...others,
   };
+  const vms = Object.keys(listeners)
+    .filter((name) => !legacy.includes(name) || moving.includes(name))
+    .map((name) =>
+      listenerVm(name.slice(9), vmOf(name), {
+        state: lost.includes(name) ? 'failed' : 'running',
+      }),
+    );
   const { api, requests } = fakeApi(
     {
       'GET /v1/quota/status': quota,
       'GET /v1/node-pools': {
-        nodePools: [pool('p1', 'bm-control'), pool('p3', 'web')],
+        nodePools: legacy.length
+          ? [pool('p1', 'bm-control'), pool('p3', 'web')]
+          : [pool('p3', 'web')],
       },
-      'GET /v1/workloads': workloads,
+      'GET /v1/workloads': [...workloads, ...vms],
+      'GET /v1/secrets': Object.keys(listeners).map((name) => ({ name })),
       'GET /v1/deployments': {
-        deployments: Object.keys(listeners).map((name) => ({
-          id: name,
+        deployments: legacy.map((name) => ({
+          id: `dep-${name}`,
           name,
           nodePoolId: 'p1',
           managed: false,
           deletedAt: null,
+          image: LISTENER_IMAGE,
         })),
       },
       'GET /v1/workload-costs': {
@@ -171,13 +207,13 @@ function setUp({
         ? quota.clone()
         : undefined,
   );
-  // `anycloud exec <listener> …` answers as that org's listener.
-  const answer = (args: string[]) => {
-    const reply = listeners[args[1]!];
-    if (reply instanceof Error) throw reply;
-    return reply ?? '';
-  };
-  const { run, calls } = fakeBinary({});
+  // `anycloud exec <VM or Deployment> …` answers as that org's listener.
+  const { exec, calls } = fakeExec((id) => {
+    const name = Object.keys(listeners).find(
+      (n) => vmOf(n) === id || `dep-${n}` === id,
+    )!;
+    return listeners[name] ?? '';
+  });
   return {
     requests,
     calls,
@@ -185,10 +221,7 @@ function setUp({
       readStatus({
         api,
         apiUrl: 'https://c1.anycloud.sh',
-        run: async (args) => {
-          await run(args);
-          return answer(args);
-        },
+        exec,
         fetch: (async (url: string) =>
           url.startsWith('https://api.github.com/')
             ? githubOrg(new URL(url).pathname)
@@ -213,7 +246,6 @@ describe('status', () => {
     const report = await read();
     expect(report).toMatchObject({
       api: { version: '0.1.72', missingFeatures: [] },
-      controlPool: { name: 'bm-control', state: 'running', vms: 1 },
       orgs: [
         {
           org: 'acme',
@@ -222,7 +254,9 @@ describe('status', () => {
               'aws us-east-2, 16 labels; quota: 640 spot vCPUs (160 backmesh-4 jobs at once), 128 on-demand vCPUs (32 backmesh-4 jobs at once)',
             ],
           },
-          serviceAccount: 'backmesh-acme',
+          vm: 'bml-l8u5e-acme00',
+          lost: false,
+          runnerGroup: 'backmesh-l8u5e-k3j9x0',
           session: expect.stringMatching(/^bm-[a-z0-9]{5}$/),
           cost: {
             since: '2026-11-01T00:00:00.000Z',
@@ -236,9 +270,12 @@ describe('status', () => {
     expect(requests).toContain(
       `GET /v1/workload-costs?session=${report.orgs[0]!.session}&sessionExact=true&sinceMs=${Date.UTC(2026, 10, 1)}`,
     );
-    expect(calls[0]).toMatch(
-      /^exec backmesh-acme node -e .*http:\/\/127\.0\.0\.1:8080\/status/,
+    expect(calls[0]![0]).toBe('bml-l8u5e-acme00');
+    expect(calls[0]![1]).toMatch(
+      /^docker exec backmesh-listener node -e .*http:\/\/127\.0\.0\.1:8080\/status/,
     );
+    // The service token and install key stay out of the report.
+    expect(JSON.stringify(report)).not.toContain('acsvc_secret');
 
     const text = formatStatus(report);
     expect(text).toContain(
@@ -372,7 +409,9 @@ describe('status', () => {
     expect(text).toContain(
       [
         'Runners: each job gets its own VM; the job controls that VM’s Docker.',
-        "The listeners' VMs: running, 1 VM",
+        '',
+        `acme, session ${report.orgs[0]!.session}, runner group backmesh-l8u5e-k3j9x0:`,
+        'Listener VM: bml-l8u5e-acme00',
       ].join('\n'),
     );
     expect(text).toContain(`Runner image: ${RUNNER_IMAGE}`);
@@ -433,9 +472,70 @@ describe('status', () => {
   it('warns when bm-control runs anything but the listener (invariant 3)', async () => {
     const { read } = setUp({
       workloads: [{ id: 'job1', workloadType: 'job', nodePoolId: 'p1' }],
+      legacy: ['backmesh-acme'],
     });
     expect((await read()).warnings).toEqual([
       'bm-control runs more than the listeners: workload job1',
+      "acme's listener still runs on bm-control; `backmesh upgrade` moves it to its own VM.",
+    ]);
+  });
+
+  it('reads a listener still on bm-control in its Pod, and names its runner group from its Deployment', async () => {
+    const { read, calls } = setUp({
+      listener: probed(LISTENER.status, 'acme', {
+        BACKMESH_LISTENER_IMAGE: undefined,
+        BACKMESH_RUNNER_GROUP: undefined,
+        ANYCLOUD_API_TOKEN: undefined,
+      }),
+      legacy: ['backmesh-acme'],
+    });
+    const report = await read();
+    expect(calls[0]![0]).toBe('dep-backmesh-acme');
+    expect(calls[0]![1]).toMatch(/^node -e /);
+    expect(report.orgs[0]).toMatchObject({
+      deployment: 'backmesh-acme',
+      runnerGroup: runnerGroupName(
+        report.orgs[0]!.session!.slice(3),
+        'dep-backmesh-acme',
+      ),
+      listener: { image: LISTENER_IMAGE },
+    });
+    expect(formatStatus(report)).toContain(
+      'Listener: Deployment backmesh-acme on bm-control',
+    );
+  });
+
+  it('reads a listener mid-move in its Pod, and names the VM the move made', async () => {
+    const { read, calls } = setUp({
+      legacy: ['backmesh-acme'],
+      moving: ['backmesh-acme'],
+    });
+    const report = await read();
+    expect(calls.map(([id]) => id)).toEqual(['dep-backmesh-acme']);
+    expect(formatStatus(report)).toContain(
+      'Listener: Deployment backmesh-acme on bm-control, moving to VM bml-l8u5e-acme00',
+    );
+  });
+
+  it('says a lost listener VM needs `backmesh upgrade`', async () => {
+    const report = await setUp({ lost: ['backmesh-acme'] }).read();
+    expect(report.warnings).toEqual([
+      "acme's listener didn't answer: its VM bml-l8u5e-acme00 is gone, and anycloud doesn't replace it; run `backmesh upgrade` to create another, or `backmesh uninstall --org acme` to finish removing it",
+    ]);
+    expect(formatStatus(report)).toContain(
+      'Listener VM: bml-l8u5e-acme00 (gone)',
+    );
+  });
+
+  it('says to reissue a service token the control plane refuses', async () => {
+    const report = await setUp({
+      listener: probed({
+        ...LISTENER.status,
+        anycloud: { since: '2026-11-05T11:00:00.000Z', error: 'HTTP 401: {}' },
+      }),
+    }).read();
+    expect(report.warnings).toEqual([
+      "acme: the control plane has refused the listener's service token since 2026-11-05 11:00Z, so it can't start runners; a restore from a backup older than the token does this. Run `backmesh upgrade` to issue it a new one.",
     ]);
   });
 
@@ -664,18 +764,16 @@ describe('status', () => {
     const text = formatStatus(all);
     expect(text.match(/^Control plane /gm)).toHaveLength(1);
     expect(text.match(/^Runners: /gm)).toHaveLength(1);
-    // Each install's own runner group, from its tag and Deployment's ID.
+    // Each install's own runner group, from its Secret.
     const acme = all.orgs[0]!;
-    expect(acme.runnerGroup).toBe(
-      runnerGroupName(acme.session!.slice(3), 'backmesh-acme'),
-    );
+    expect(acme.runnerGroup).toBe('backmesh-l8u5e-k3j9x0');
     expect(text).toContain(
       `acme, session ${acme.session}, runner group ${acme.runnerGroup}:`,
     );
     expect(text).toContain(
       `Beta, session ${all.orgs[1]!.session}, runner group ${all.orgs[1]!.runnerGroup}:`,
     );
-    expect(all.orgs[1]!.serviceAccount).toBe('backmesh-beta');
+    expect(all.orgs[1]).toMatchObject({ vm: 'bml-l8u5e-beta00' });
     expect(text).toContain(
       "Queue (1 runners; the control plane's cap is 500):",
     );
@@ -686,9 +784,7 @@ describe('status', () => {
     });
     const one = await read();
     expect(one.orgs.map(({ org }) => org)).toEqual(['Beta']);
-    expect(calls.every((call) => call.startsWith('exec backmesh-beta'))).toBe(
-      true,
-    );
+    expect(calls.every(([id]) => id === 'bml-l8u5e-beta00')).toBe(true);
     await expect(setUp({ org: 'gamma' }).read()).rejects.toThrow(
       "There's no listener for gamma on https://c1.anycloud.sh.",
     );
@@ -711,7 +807,7 @@ describe('status', () => {
   });
 
   it("takes the tag's org ID from the listener when it has one", async () => {
-    const env = { ORG: 'zeta', ORG_ID: '9' };
+    const env = { ORG: 'zeta', ORG_ID: '9', BACKMESH_LISTENER_IMAGE: 'i' };
     const { read, requests } = setUp({
       others: {
         'backmesh-zeta': JSON.stringify({
@@ -752,7 +848,7 @@ describe('status', () => {
       readStatus({
         api,
         apiUrl: 'https://c1.anycloud.sh',
-        run: fakeBinary({}).run,
+        exec: fakeExec(() => '').exec,
         fetch: async () => Response.json({ version: '0.1.73' }),
       }),
     ).rejects.toThrow(BEHIND_CONTROL_PLANE);
@@ -760,7 +856,7 @@ describe('status', () => {
       readStatus({
         api: behind('Client/API version mismatch.'),
         apiUrl: 'https://c1.anycloud.sh',
-        run: fakeBinary({}).run,
+        exec: fakeExec(() => '').exec,
         fetch: async () => Response.json({ version: '0.1.60' }),
       }),
     ).rejects.toThrow(BEHIND_CONTROL_PLANE);
@@ -771,7 +867,7 @@ describe('status', () => {
       readStatus({
         api: ahead,
         apiUrl: 'https://c1.anycloud.sh',
-        run: fakeBinary({}).run,
+        exec: fakeExec(() => '').exec,
         fetch: async () => Response.json({ version: '0.1.80' }),
       }),
     ).rejects.toThrow(AHEAD_CONTROL_PLANE);
@@ -783,7 +879,7 @@ describe('status', () => {
       readStatus({
         api,
         apiUrl: 'http://localhost:8080',
-        run: async () => '',
+        exec: fakeExec(() => '').exec,
       }),
     ).rejects.toThrow('has no backmesh installation');
   });
