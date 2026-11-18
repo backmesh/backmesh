@@ -18,6 +18,8 @@ import { INSTALL_KEY_ENV, ROTATING_FROM_ENV } from './worker.js';
 import { parseRoutes, RUNNERS_ENV } from '../listener/routes.js';
 import { where } from '../runners/classes.js';
 import {
+  KIND_NAME,
+  formatGpuQuota,
   formatQuota,
   quotaCheck,
   quotaCode,
@@ -29,6 +31,7 @@ import {
   formatJobs,
   formatPlanner,
   formatSlow,
+  kindOf,
   listenerStatusSchema,
 } from '../listener/status.js';
 import {
@@ -257,7 +260,7 @@ export async function readStatus({
           .map(({ region, limit }) => `${region} ${limit} vCPU`)
           .join(', ');
         warnings.push(
-          `${listener.org}: ${set.label} starts no runners: every runner region's ${skipped.spot ? 'spot' : 'on-demand'} quota is under one ${skipped.vcpus}-vCPU runner (${regions}). Its jobs wait at GitHub until ${quotaCode(skipped.cloud, skipped.spot)} is raised; nothing to reinstall.`,
+          `${listener.org}: ${set.label} starts no runners: every runner region's ${KIND_NAME[kindOf(skipped.spot, skipped.regions[0]?.kind)]} quota is under one ${skipped.vcpus}-vCPU runner (${regions}). Its jobs wait at GitHub until ${[...new Set(skipped.regions.map((r) => quotaCode(skipped.cloud, kindOf(skipped.spot, r.kind))))].join(' or ')} is raised; nothing to reinstall.`,
         );
       }
     }
@@ -314,11 +317,22 @@ async function runnerClouds(json: string | undefined, api: AnycloudApi) {
         readQuotaStatus(api, cloud, credentials, region),
       ).then(
         (limits) =>
-          [true, false]
-            .map((spot) =>
-              formatQuota(quotaCheck(cloud, regions, limits, spot), spot),
-            )
-            .join(', '),
+          [
+            [true, false]
+              .map((spot) =>
+                formatQuota(quotaCheck(cloud, regions, limits, spot), spot),
+              )
+              .join(', '),
+            ...(labels.some((r) => r.gpu)
+              ? [
+                  formatGpuQuota(
+                    cloud,
+                    limits,
+                    labels.filter((r) => r.gpu),
+                  ),
+                ]
+              : []),
+          ].join('; '),
         (error: unknown) => `unread (${message(error)})`,
       );
       return `${line}; quota: ${quota}`;

@@ -22,7 +22,8 @@ A job's VM is the first type in its [label's](/labels/) list that has capacity:
 | `backmesh-16` | 16   | 64 GiB | `m8i.4xlarge`, `m7a.4xlarge`, `m7i.4xlarge`, `m6a.4xlarge` |
 
 The [KVM labels](/labels/#kvm) use `m8i`, then `m7i` (`m7a` and `m6a` don't
-nest). When AWS is the control plane's cloud, its labels are plain, as above;
+nest). The [GPU labels](/labels/#gpu) use `g4dn.xlarge` (one T4, 4 vCPUs and
+16 GiB), then `g4dn.2xlarge` (the same T4, 8 vCPUs and 32 GiB). When AWS is the control plane's cloud, its labels are plain, as above;
 otherwise they name it, such as `backmesh-aws-4`.
 
 ## Regions
@@ -58,7 +59,11 @@ On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances" (`L-1216C47A`), in
 vCPUs per region. Install reads both through `aws service-quotas` and prints
 them as how many `backmesh-4` jobs fit at once. A region whose quota is at AWS's
 default 5 vCPUs gets no `backmesh-8` or `backmesh-16` runners until you raise
-it; install and [`backmesh status`](/status/) name the quota.
+it; install and [`backmesh status`](/status/) name the quota. The GPU labels
+count against "All G and VT Spot Instance Requests" (`L-3819A6DF`) and
+"Running On-Demand G and VT instances" (`L-DB2E81BA`) instead, 0 on most new
+accounts: request at least 4 vCPUs per region in the
+[Service Quotas console](https://console.aws.amazon.com/servicequotas/home/services/ec2/quotas).
 [More](/faq/#installing).
 
 ## Cost

@@ -19,7 +19,7 @@ describe('routes', () => {
 
   it('routes each label to its VM class', () => {
     const routes = parseRoutes(json);
-    expect(routes).toHaveLength(16);
+    expect(routes).toHaveLength(18);
     expect(routes[1]).toEqual({
       label: 'backmesh-4',
       code: 'a4',
@@ -57,6 +57,9 @@ describe('routes', () => {
       ['backmesh-od-4', 'b4', undefined],
       ['backmesh-kvm-4', 'k4', 'backmesh-kvm-od-4'],
       ['backmesh-kvm-od-4', 'l4', undefined],
+      // A GPU label's twin is the GPU one, not backmesh-od-4.
+      ['backmesh-gpu-t4', 'd4', 'backmesh-gpu-od-t4'],
+      ['backmesh-gpu-od-t4', 'e4', undefined],
     ]);
     // A spot class whose on-demand twin is gone keeps no on-demand label.
     const spotOnly = JSON.stringify(classes.filter((c) => c.spot));

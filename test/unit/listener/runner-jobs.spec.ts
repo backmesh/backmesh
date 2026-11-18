@@ -141,6 +141,30 @@ describe('anycloudRunnerJobs', () => {
     );
   });
 
+  it("passes a GPU class's GPUs into the runner's container", async () => {
+    const { jobs, requests } = fakeApi(() => json(202, { id: 'x' }));
+    await jobs.submit({
+      id: 'bmabc12-d4-00000000',
+      cloud: 'aws',
+      regions: ['us-east-2'],
+      credentials: 'bm-aws',
+      vmTypes: ['g4dn.xlarge'],
+      spot: true,
+      kvm: false,
+      vcpus: 4,
+      gpu: 'T4',
+      jitConfig: 'jit',
+    });
+    // The VM type picks the GPU (anycloud refuses gpuType with vmType), and
+    // `--gpus all` reaches it from the job.
+    expect(requests[0]!.body).toMatchObject({
+      cloudConfig: { vmType: ['g4dn.xlarge'] },
+      hostDocker: true,
+      dockerOptions: { network: 'host', shmSize: '8g', gpus: 'all' },
+    });
+    expect(requests[0]!.body).not.toHaveProperty('gpuType');
+  });
+
   it('leaves GCP and Azure at their default tier, with neither gp3 field', async () => {
     const { jobs, requests } = fakeApi(() => json(202, { id: 'x' }));
     const spec: RunnerSpec = {

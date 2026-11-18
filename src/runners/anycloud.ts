@@ -9,7 +9,7 @@ export interface VmTypeDetails {
   vmType: string;
   vCPUs: number | null;
   memoryGiB: number | null;
-  accelerators: unknown[] | null;
+  accelerators: { name: string; count: number }[] | null;
   capabilities?: { nestedVirtualization: boolean | null };
   regions: {
     region: string;

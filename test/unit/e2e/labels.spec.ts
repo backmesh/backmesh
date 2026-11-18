@@ -5,7 +5,13 @@ import { parseLabels } from '../../../test/e2e/labels.ts';
 describe('parseLabels', () => {
   it('parses one plain label', () => {
     expect(parseLabels('backmesh-4=aws:us-east-2')).toEqual([
-      { label: 'backmesh-4', cloud: 'aws', regions: ['us-east-2'], kvm: false },
+      {
+        label: 'backmesh-4',
+        cloud: 'aws',
+        regions: ['us-east-2'],
+        kvm: false,
+        gpu: false,
+      },
     ]);
   });
 
@@ -20,25 +26,43 @@ describe('parseLabels', () => {
         cloud: 'aws',
         regions: ['us-east-2', 'us-east-1', 'us-west-2'],
         kvm: false,
+        gpu: false,
       },
       {
         label: 'backmesh-gcp-4',
         cloud: 'gcp',
         regions: ['us-central1'],
         kvm: false,
+        gpu: false,
       },
     ]);
   });
 
   it('tolerates extra whitespace, including newlines', () => {
     expect(parseLabels('  backmesh-4=aws:us-east-2\n\n')).toEqual([
-      { label: 'backmesh-4', cloud: 'aws', regions: ['us-east-2'], kvm: false },
+      {
+        label: 'backmesh-4',
+        cloud: 'aws',
+        regions: ['us-east-2'],
+        kvm: false,
+        gpu: false,
+      },
     ]);
   });
 
   it('marks a label naming -kvm- as a KVM label', () => {
     expect(parseLabels('backmesh-kvm-4=aws:us-east-2')[0]?.kvm).toBe(true);
     expect(parseLabels('backmesh-aws-kvm-od-4=aws:us-east-2')[0]?.kvm).toBe(
+      true,
+    );
+  });
+
+  it('marks a label naming -gpu- as a GPU label', () => {
+    expect(parseLabels('backmesh-gpu-t4=aws:us-east-2')[0]).toMatchObject({
+      kvm: false,
+      gpu: true,
+    });
+    expect(parseLabels('backmesh-azure-gpu-od-t4=azure:eastus')[0]?.gpu).toBe(
       true,
     );
   });

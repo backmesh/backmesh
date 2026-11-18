@@ -38,9 +38,17 @@ the control plane's, `backmesh-gcp-4` in GCP.
 
 ## Will it work?
 
-**Which platforms does backmesh support?** Linux x86-64 only. There are no macOS, Windows, Arm or GPU
+**Which platforms does backmesh support?** Linux x86-64 only. There are no macOS, Windows or Arm
 runners. Jobs that need `/dev/kvm` use the
-[KVM labels](/labels/#kvm).
+[KVM labels](/labels/#kvm), and jobs that need an NVIDIA GPU the
+[GPU labels](/labels/#gpu) on AWS and Azure.
+
+**How do backmesh's GPU runners compare with GitHub's?** Same shape: one Tesla
+T4 and 4 vCPUs, with 16 GiB of memory on AWS to GitHub's 28 GB. At list prices
+(arithmetic, not measured; read 2026-11-18), GitHub's Linux GPU runner costs
+$0.052 a minute. `backmesh-gpu-t4` costs about $0.0046 a minute on AWS spot
+and $0.0029 on Azure spot, and `backmesh-gpu-od-t4` $0.0088 on demand: 6 to 18
+times less, before disks and boots. See [Cost](/cost/#gpu).
 
 **Can public repositories use backmesh?** Not yet. Only private repositories can use the runners. In a public repository, anyone can open a pull request whose workflow runs on a runner, and a runner's VM can reach your other instances in its cloud network. Support waits for runners with a network of their own.
 

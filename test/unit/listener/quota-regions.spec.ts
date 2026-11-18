@@ -90,8 +90,8 @@ describe('regions skipped for quota', () => {
       vcpus: 8,
       all: true,
       regions: [
-        { region: 'us-east-2', limit: 4 },
-        { region: 'us-west-1', limit: 5 },
+        { region: 'us-east-2', limit: 4, kind: 'spot' },
+        { region: 'us-west-1', limit: 5, kind: 'spot' },
       ],
     });
   });

@@ -2,7 +2,8 @@ name: E2E
 
 # The inner e2e suite: per label (e2e-labels.yml),
 # asserts the cloud and region, the runner image digest, host Docker's limits
-# and binds, /dev/kvm on KVM labels, a step's kill of every container sparing
+# and binds, /dev/kvm on KVM labels, the GPU on GPU labels (nvidia-smi,
+# `docker run --gpus all` and a CUDA kernel, timed), a step's kill of every container sparing
 # the runner, and the stop member (backmesh runs 42753183250 and
 # 42753320207). Dispatch only.
 #
@@ -37,7 +38,8 @@ on:
         description: >-
           space-separated label=cloud:region[,region…] entries to check,
           matching the installation's BACKMESH_RUNNERS; a label naming
-          "-kvm-" also gets the /dev/kvm check
+          "-kvm-" also gets the /dev/kvm check, and one naming "-gpu-" the
+          GPU check
         required: true
         default: >-
           backmesh-4=aws:us-east-2,us-east-1,us-west-2
