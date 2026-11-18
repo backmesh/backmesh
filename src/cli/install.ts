@@ -25,6 +25,7 @@ import {
 } from '../runners/anycloud.js';
 import {
   CLOUDS,
+  GPU_TYPES,
   planClasses,
   PUBLIC_VCPU_CAP,
   PUBLIC_VCPUS,
@@ -33,6 +34,7 @@ import {
   type CloudTarget,
 } from '../runners/classes.js';
 import {
+  formatGpuQuota,
   formatQuota,
   quotaCheck,
   readQuota,
@@ -160,6 +162,14 @@ export const takesRegions = (version: string, features?: FeatureTable) =>
 
 export const noKvmLine = ({ cloud }: CloudTarget, regions: readonly string[]) =>
   `${where(cloud, regions)} ${regions.length > 1 ? 'offer' : 'offers'} no KVM type with nested virtualization, so ${cloud} gets no KVM labels.`;
+
+export const noGpuLine = (
+  { cloud }: CloudTarget,
+  regions: readonly string[],
+) =>
+  cloud === 'gcp'
+    ? "gcp gets no GPU labels: anycloud can't launch a T4 VM on GCP yet."
+    : `${where(cloud, regions)} ${regions.length > 1 ? 'offer' : 'offers'} no ${GPU_TYPES[cloud].join(' or ')}, so ${cloud} gets no GPU labels.`;
 
 // The management VM and `bm-control`'s one Node: AWS's are backmesh's sizing;
 // GCP's are the nearest sizes _(inference)_. Azure's management VM
@@ -1018,24 +1028,23 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       return formatQuota(check, spot);
     });
     quotas.push(`${where(cloud, regions)} quota: ${checks.join(', ')}`);
-    const dead = startsNoRunners(
-      cloud,
-      limits,
-      classPlan.classes
-        .filter((c) => c.cloud === cloud)
-        .map((c) => ({ ...c, regions: c.regions ?? [c.region] })),
-    );
-    quotas.push(...dead);
-    noRunners.push(...dead);
-    quotas.push(
-      ...skippedRegions(
+    const mine = classPlan.classes.filter((c) => c.cloud === cloud);
+    if (cloud !== 'gcp' && mine.some((c) => c.gpu)) {
+      quotas.push(
+        `${where(cloud, regions)} ${formatGpuQuota(cloud, regions, limits)}`,
+      );
+    }
+    // A GPU label's quota is usually 0 on a new account: shown, not asked
+    // about.
+    quotas.push(...startsNoRunners(cloud, limits, mine));
+    noRunners.push(
+      ...startsNoRunners(
         cloud,
         limits,
-        classPlan.classes
-          .filter((c) => c.cloud === cloud)
-          .map((c) => ({ ...c, regions: c.regions ?? [c.region] })),
+        mine.filter((c) => !c.gpu),
       ),
     );
+    quotas.push(...skippedRegions(cloud, limits, mine));
   }
   if (problems.length) {
     throw new Error(`Can't run the runners:\n- ${problems.join('\n- ')}`);
@@ -1065,7 +1074,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       regions: regionsOf(target.cloud),
     })),
     classes: classPlan.classes.map(
-      ({ label, cloud, region, vcpus, spot, kvm, vmTypes, regions }) => ({
+      ({ label, cloud, region, vcpus, spot, kvm, vmTypes, regions, gpu }) => ({
         label,
         cloud,
         region,
@@ -1074,9 +1083,10 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         kvm,
         vmTypes,
         regions,
+        ...(gpu && { gpu }),
       }),
     ),
-    rates: runners.map(({ cloud, region }) =>
+    rates: runners.flatMap(({ cloud, region }) =>
       formatRate(
         classPlan.classes.filter((c) => c.cloud === cloud),
         classPlan.catalog.get(cloud)?.get(region) ?? [],
@@ -1084,6 +1094,9 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     ),
     noKvm: classPlan.noKvm.map((target) =>
       noKvmLine(target, regionsOf(target.cloud)),
+    ),
+    noGpu: classPlan.noGpu.map((target) =>
+      noGpuLine(target, regionsOf(target.cloud)),
     ),
     sameOwner: sharedWith.length
       ? sameOwnerLine(options.org, sharedWith)
@@ -1095,8 +1108,8 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     quotas,
   };
   const id = planId(plan);
-  [...notes, ...plan.rates, ...quotas, ...plan.noKvm].forEach((line) =>
-    ui.print(line),
+  [...notes, ...plan.rates, ...quotas, ...plan.noKvm, ...plan.noGpu].forEach(
+    (line) => ui.print(line),
   );
   ui.print(
     `Always on: 2 VMs that run backmesh (${MANAGEMENT_VM[first.cloud]} and ${CONTROL_VM[first.cloud]}) on ${first.cloud} ${first.region}, about $${CONTROL_PLANE_MONTHLY_USD[first.cloud]} a month with their disks and addresses.`,

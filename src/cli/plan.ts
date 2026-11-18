@@ -45,10 +45,12 @@ export interface InstallPlan {
     | 'kvm'
     | 'vmTypes'
     | 'regions'
+    | 'gpu'
   >[];
   // Shown, not hashed, as `quotas`.
   rates: string[];
   noKvm: string[];
+  noGpu: string[];
   // The same-owner check, as the human agrees to it; null for an org
   // alone on its control plane.
   sameOwner: string | null;

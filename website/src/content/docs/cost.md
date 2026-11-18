@@ -69,6 +69,29 @@ shows the same figures.
 Spot prices change by the hour and by zone, and other regions differ. On
 demand cost about 1.7 to 5.4 times spot on 2026-11-13, depending on the type.
 
+## GPU
+
+The [GPU labels](/labels/#gpu) by the same method, at list prices: arithmetic,
+not measured.
+
+- **GitHub-hosted:** the Linux GPU runner, `linux_4_core_gpu` (4 vCPUs, one
+  Tesla T4), $0.052 a minute
+  ([docs.github.com](https://docs.github.com/en/billing/reference/actions-runner-pricing),
+  read 2026-11-18).
+- **backmesh:** the catalog's prices on 2026-11-18, spot in the lowest zone,
+  in the same regions as above. GCP has no GPU labels.
+
+| Cloud | Type                   | Spot $/h | On-demand $/h | Spot per minute | On demand per minute |
+| ----- | ---------------------- | -------- | ------------- | --------------- | -------------------- |
+| AWS   | `g4dn.xlarge`          | 0.2732   | 0.526         | $0.0046         | $0.0088              |
+| Azure | `Standard_NC4as_T4_v3` | 0.1766   | 0.526         | $0.0029         | $0.0088              |
+
+10,000 GPU minutes a month cost $520 on GitHub (10,000 × $0.052), and on
+backmesh $46 on AWS spot (10,000 × $0.2732 ÷ 60), $29 on Azure spot and $88 on
+demand on either. The control plane is the same one the other labels use, so
+it adds nothing. Left out, as above: disks, on-demand retries, and boots,
+which are longer than the other labels' since a GPU VM's image is larger.
+
 ## Estimate your own
 
 1. Count your jobs' minutes a month at each size.

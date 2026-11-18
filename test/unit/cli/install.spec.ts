@@ -675,7 +675,7 @@ describe('install', () => {
     const routes = parseRoutes(
       JSON.parse(secret.split(' ')[2]!).values.BACKMESH_RUNNERS,
     );
-    expect(routes).toHaveLength(16);
+    expect(routes).toHaveLength(18);
     expect(routes.find((r) => r.label === 'backmesh-kvm-od-4')).toEqual({
       label: 'backmesh-kvm-od-4',
       code: 'l4',

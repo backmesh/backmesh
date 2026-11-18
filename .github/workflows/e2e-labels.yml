@@ -58,6 +58,10 @@ jobs:
         if: matrix.kvm
         run: node test/e2e/check-kvm.ts
 
+      - name: The GPU works in the job and through docker --gpus all
+        if: matrix.gpu
+        run: node test/e2e/check-gpu.ts
+
       # The runner is a container on this VM's Docker, which the image's
       # `docker` (runner/docker.sh) leaves out, as GitHub's runners aren't
       # containers. Last: a killed runner fails this job as lost.

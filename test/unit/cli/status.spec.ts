@@ -120,7 +120,12 @@ const current = (resourceKey: string, currentLimit: number) => ({
 });
 
 const QUOTA: object | Response = {
-  entries: [current('aws:l-34b43a08', 640), current('aws:l-1216c47a', 128)],
+  entries: [
+    current('aws:l-34b43a08', 640),
+    current('aws:l-1216c47a', 128),
+    current('aws:l-3819a6df', 0),
+    current('aws:l-db2e81ba', 8),
+  ],
 };
 
 function setUp({
@@ -219,7 +224,7 @@ describe('status', () => {
           org: 'acme',
           listener: {
             runners: [
-              'aws us-east-2, 16 labels; quota: 640 spot vCPUs (160 backmesh-4 jobs at once), 128 on-demand vCPUs (32 backmesh-4 jobs at once)',
+              'aws us-east-2, 18 labels; quota: 640 spot vCPUs (160 backmesh-4 jobs at once), 128 on-demand vCPUs (32 backmesh-4 jobs at once); GPU quota: 0 spot vCPUs (0 backmesh-gpu-t4 jobs at once), 8 on-demand vCPUs (2 backmesh-gpu-od-t4 jobs at once); raise EC2 "All G and VT Spot Instance Requests" (L-3819A6DF) in us-east-2 to run backmesh-gpu-t4',
             ],
           },
           serviceAccount: 'backmesh-acme',
@@ -377,7 +382,7 @@ describe('status', () => {
     );
     expect(text).toContain(`Runner image: ${RUNNER_IMAGE}`);
     expect(text).toContain(
-      'Runner VMs: aws us-east-2, 16 labels; quota: 640 spot vCPUs (160 backmesh-4 jobs at once), 128 on-demand vCPUs (32 backmesh-4 jobs at once)',
+      'Runner VMs: aws us-east-2, 18 labels; quota: 640 spot vCPUs (160 backmesh-4 jobs at once), 128 on-demand vCPUs (32 backmesh-4 jobs at once); GPU quota: 0 spot vCPUs (0 backmesh-gpu-t4 jobs at once), 8 on-demand vCPUs (2 backmesh-gpu-od-t4 jobs at once); raise EC2 "All G and VT Spot Instance Requests" (L-3819A6DF) in us-east-2 to run backmesh-gpu-t4',
     );
     expect(text).toContain('No warnings.');
     expect(text).not.toContain('\n\n\n');
@@ -407,7 +412,7 @@ describe('status', () => {
       ),
     });
     expect(formatStatus(await read())).toContain(
-      'Runner VMs: aws us-east-2, 16 labels; quota: unread (Credential "bm-aws" not found)',
+      'Runner VMs: aws us-east-2, 18 labels; quota: unread (Credential "bm-aws" not found)',
     );
     // A read the control plane made and the cloud refused.
     const { read: refused } = setUp({

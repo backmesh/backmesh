@@ -113,7 +113,7 @@ export interface RunnerVm {
 
 export type RunnerSpec = Pick<
   Route,
-  'cloud' | 'regions' | 'credentials' | 'vmTypes' | 'kvm' | 'vcpus'
+  'cloud' | 'regions' | 'credentials' | 'vmTypes' | 'kvm' | 'vcpus' | 'gpu'
 > & {
   id: string;
   spot: boolean;
@@ -300,6 +300,7 @@ export function anycloudRunnerJobs(
         spot,
         kvm,
         vcpus,
+        gpu,
         jitConfig,
         secrets,
       } = spec;
@@ -352,13 +353,18 @@ export function anycloudRunnerJobs(
         // the same path; /tmp, /var/tmp and /mnt are bound too, so a
         // `docker run -v` of a path there finds the same files on the VM
         // (runner-job.sh `share_paths`). The job already controls its one-job
-        // VM's Docker, so these give it nothing more.
+        // VM's Docker, so these give it nothing more. A GPU class's VM gets
+        // anycloud's NVIDIA base image, with the driver and the container
+        // toolkit, so its GPU passes into the runner's container, where
+        // `nvidia-smi` and CUDA work, and the job's own `docker run --gpus
+        // all` works on the VM's Docker.
         hostDocker: true,
         ...(kvm && { requireNestedVirtualization: true }),
         dockerOptions: {
           network: 'host',
           shmSize: shmSize(vcpus),
           binds: ['/tmp:/tmp', '/var/tmp:/var/tmp', '/mnt:/mnt'],
+          ...(gpu && { gpus: 'all' }),
         },
         session,
         agent: 'backmesh',

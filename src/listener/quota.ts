@@ -5,7 +5,7 @@
 // Azure limits install reads (`runners/quota.ts`); GCP's aren't read.
 import type { Log } from '../github/retry.js';
 import type { Cloud } from '../runners/classes.js';
-import type { QuotaLimits } from '../runners/quota.js';
+import type { QuotaKind, QuotaLimits } from '../runners/quota.js';
 
 // Each region's limits are read again this long after the last read; the
 // control plane caches its provider reads for 5 minutes too.
@@ -31,18 +31,18 @@ export class Quotas {
     private readonly log: Log,
   ) {}
 
-  // The regions' summed vCPU limit for spot or on-demand VMs, or undefined
-  // while any of them is unknown, or on GCP.
+  // The regions' summed vCPU limit of the kind, such as spot VMs', or
+  // undefined while any of them is unknown, or on GCP.
   limit(
     cloud: Cloud,
     credentials: string,
     regions: readonly string[],
-    spot: boolean,
+    kind: QuotaKind,
     now: number,
   ): number | undefined {
     if (cloud === 'gcp') return undefined;
     const each = regions.map((region) =>
-      this.regionLimit(cloud, credentials, region, spot, now),
+      this.regionLimit(cloud, credentials, region, kind, now),
     );
     return each.every((v) => v !== undefined)
       ? each.reduce((sum: number, v) => sum + v!, 0)
@@ -56,7 +56,7 @@ export class Quotas {
     cloud: Cloud,
     credentials: string,
     region: string,
-    spot: boolean,
+    kind: QuotaKind,
     now: number,
   ): number | undefined {
     if (cloud === 'gcp') return undefined;
@@ -65,7 +65,7 @@ export class Quotas {
       this.refresh(k, cloud, credentials, region, now);
     }
     const limits = this.known.get(k);
-    const vcpus = spot ? limits?.spot : limits?.onDemand;
+    const vcpus = limits?.[kind];
     return vcpus !== undefined && Number.isFinite(vcpus) ? vcpus : undefined;
   }
 

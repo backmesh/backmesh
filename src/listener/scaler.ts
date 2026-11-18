@@ -8,8 +8,10 @@ import { StartupBackoff } from './backoff.js';
 import type { CacheTokens } from './cache.js';
 import { BOOT_DEADLINE_MS, Failover } from './failover.js';
 import type { Quotas } from './quota.js';
+import { quotaKinds, type QuotaKind } from '../runners/quota.js';
 import {
   codeClass,
+  GPU,
   PUBLIC_VCPU_CAP,
   spotCapacity,
 } from '../runners/classes.js';
@@ -109,8 +111,13 @@ export interface ScaleSet {
   // The last reconcile held desired below TotalAssignedJobs for the cap.
   capped: boolean;
   // The last reconcile minted no more for its cloud's spot or on-demand
-  // vCPU quota.
-  quota?: { spot: boolean; limit: number; regions: readonly string[] };
+  // vCPU quota, of `kind` (`quotaKinds`).
+  quota?: {
+    spot: boolean;
+    kind: QuotaKind;
+    limit: number;
+    regions: readonly string[];
+  };
   // Its runner regions whose quota can't fit one of its runners, skipped
   // until a read shows it raised; every one of them skipped means none can
   // start.
@@ -119,7 +126,8 @@ export interface ScaleSet {
     spot: boolean;
     // One runner's vCPUs, which each skipped region's quota is under.
     vcpus: number;
-    regions: { region: string; limit: number }[];
+    // Each region's quota under one runner, of `kind`.
+    regions: { region: string; limit: number; kind: QuotaKind }[];
     // Every one of its runner regions: none can start.
     all: boolean;
   };
@@ -223,16 +231,14 @@ export class Scaler {
     };
     this.sets.set(route.code, set);
     // The first reads start now, so the first burst is capped once they
-    // answer.
-    for (const spot of [true, false]) {
-      this.deps.quotas?.limit(
-        route.cloud,
-        route.credentials,
-        route.regions,
-        spot,
-        this.now(),
-      );
-    }
+    // answer: one read has every kind's limits.
+    this.deps.quotas?.limit(
+      route.cloud,
+      route.credentials,
+      route.regions,
+      'spot',
+      this.now(),
+    );
     return set;
   }
 
@@ -620,6 +626,7 @@ export class Scaler {
         return {
           label: set.route.label,
           cloud: set.route.cloud,
+          ...(set.route.gpu && { gpu: set.route.gpu }),
           ...(set.route.retiring && { retiring: true }),
           queued: queued.length,
           starting: mine.length - queued.length - running,
@@ -642,6 +649,7 @@ export class Scaler {
             quota: {
               cloud: set.route.cloud,
               spot: set.quota.spot,
+              kind: set.quota.kind,
               limit: set.quota.limit,
               regions: [...set.quota.regions],
             },
@@ -1002,7 +1010,7 @@ export class Scaler {
     start: Start = 'reactive',
   ): Promise<string> {
     const { install, github, jobs } = this.deps;
-    const { cloud, credentials, vmTypes, kvm, vcpus, code } = set.route;
+    const { cloud, credentials, vmTypes, kvm, vcpus, gpu, code } = set.route;
     const name = runnerName(install, code);
     // The cache Secret is saved alongside: one left by a failed JIT call
     // goes with the cache's orphans (`CacheTokens.tick`).
@@ -1022,6 +1030,7 @@ export class Scaler {
         vmTypes,
         kvm,
         vcpus,
+        ...(gpu && { gpu }),
         spot,
         id: name,
         jitConfig: jit.encodedJitConfig,
@@ -1260,7 +1269,8 @@ export class Scaler {
   private quotaLeft(jobs: RunnerJob[], elsewhere: ElsewhereJob[], now: number) {
     interface Holder {
       cloud: string;
-      spot: boolean;
+      // The quotas it counts against.
+      kinds: QuotaKind[];
       vcpus: number;
       // Where it is or may launch.
       regions: readonly string[];
@@ -1271,7 +1281,7 @@ export class Scaler {
       if (!route) continue;
       holders.push({
         cloud: route.cloud,
-        spot: job.spot,
+        kinds: quotaKinds(route.cloud, job.spot, route.gpu),
         vcpus: route.vcpus,
         regions: job.region ? [job.region] : route.regions,
       });
@@ -1284,29 +1294,37 @@ export class Scaler {
       if (!of || !job.region) continue;
       holders.push({
         cloud: of.cloud,
-        spot: job.spot,
+        kinds: quotaKinds(of.cloud, job.spot, of.gpu ? GPU.model : undefined),
         vcpus: of.vcpus,
         regions: [job.region],
       });
     }
+    // The tightest of the quotas the route's runner counts against.
     const room = (route: Route, spot: boolean, regions: readonly string[]) => {
-      const limit = this.deps.quotas?.limit(
-        route.cloud,
-        route.credentials,
-        regions,
-        spot,
-        now,
-      );
-      if (limit === undefined) return undefined;
-      const used = holders
-        .filter(
-          (h) =>
-            h.cloud === route.cloud &&
-            h.spot === spot &&
-            h.regions.some((r) => regions.includes(r)),
-        )
-        .reduce((sum, h) => sum + h.vcpus, 0);
-      return { limit, room: limit - used };
+      let tightest:
+        { kind: QuotaKind; limit: number; room: number } | undefined;
+      for (const kind of quotaKinds(route.cloud, spot, route.gpu)) {
+        const limit = this.deps.quotas?.limit(
+          route.cloud,
+          route.credentials,
+          regions,
+          kind,
+          now,
+        );
+        if (limit === undefined) continue;
+        const used = holders
+          .filter(
+            (h) =>
+              h.cloud === route.cloud &&
+              h.kinds.includes(kind) &&
+              h.regions.some((r) => regions.includes(r)),
+          )
+          .reduce((sum, h) => sum + h.vcpus, 0);
+        if (!tightest || limit - used < tightest.room) {
+          tightest = { kind, limit, room: limit - used };
+        }
+      }
+      return tightest;
     };
     return {
       // The quota of the regions the runner may go to, as `mint` sends.
@@ -1323,10 +1341,17 @@ export class Scaler {
         const quota = room(route, spot, regions);
         if (!quota) return true;
         if (quota.room < route.vcpus) {
-          if (record) set.quota = { spot, limit: quota.limit, regions };
+          if (record) {
+            set.quota = { spot, kind: quota.kind, limit: quota.limit, regions };
+          }
           return false;
         }
-        holders.push({ cloud: route.cloud, spot, vcpus: route.vcpus, regions });
+        holders.push({
+          cloud: route.cloud,
+          kinds: quotaKinds(route.cloud, spot, route.gpu),
+          vcpus: route.vcpus,
+          regions,
+        });
         return true;
       },
     };
@@ -1400,19 +1425,21 @@ export class Scaler {
 
   private fitting(set: ScaleSet, spot: boolean, now: number) {
     const { route } = set;
-    const skipped: { region: string; limit: number }[] = [];
-    const fit = route.regions.filter((region) => {
-      const limit = this.deps.quotas?.regionLimit(
-        route.cloud,
-        route.credentials,
-        region,
-        spot,
-        now,
-      );
-      if (limit === undefined || limit >= route.vcpus) return true;
-      skipped.push({ region, limit });
-      return false;
-    });
+    const skipped: { region: string; limit: number; kind: QuotaKind }[] = [];
+    const fit = route.regions.filter((region) =>
+      quotaKinds(route.cloud, spot, route.gpu).every((kind) => {
+        const limit = this.deps.quotas?.regionLimit(
+          route.cloud,
+          route.credentials,
+          region,
+          kind,
+          now,
+        );
+        if (limit === undefined || limit >= route.vcpus) return true;
+        skipped.push({ region, limit, kind });
+        return false;
+      }),
+    );
     return { fit, skipped };
   }
 
