@@ -234,7 +234,8 @@ resold", and Microsoft says startup benefits "can't be shared or merged with
 multiple accounts".
 
 backmesh has limits to weigh before you move. It runs Linux x86-64 only, with
-no macOS, Windows, Arm or GPU runners. Only private repositories can use the
+no macOS, Windows or Arm runners, and NVIDIA T4 GPU runners on AWS and Azure
+only. Only private repositories can use the
 runners. Each job waits for its VM to boot, about 30 seconds on AWS and 60 to
 70 seconds on GCP and Azure. The image is Ubuntu 24.04 and lacks some of
 GitHub's preinstalled toolchains, which setup actions add.

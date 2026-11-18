@@ -68,6 +68,32 @@ const benchmarks = [
     cheaper: '2.8×',
   },
 ];
+// GPU list prices, not a benchmark: GitHub's linux_4_core_gpu ($0.052 a
+// minute) against the catalog's T4 prices on 2026-11-18 (/cost/#gpu): on
+// demand $0.526 on AWS and Azure; spot $0.1766 on Azure, $0.2732 on AWS.
+const gpu = [
+  {
+    runner: 'GitHub-hosted',
+    label: 'linux_4_core_gpu',
+    price: '$3.12',
+    points: ['$0.052 a minute', '4 vCPUs, one T4, 28 GB'],
+  },
+  {
+    runner: 'backmesh on demand',
+    label: 'backmesh-gpu-od-t4',
+    price: '$0.53',
+    points: ['AWS or Azure, 4 vCPUs, one T4', 'About 6× cheaper'],
+  },
+  {
+    runner: 'backmesh spot',
+    label: 'backmesh-gpu-t4',
+    price: '$0.18–0.27',
+    points: [
+      '$0.18 on Azure, $0.27 on AWS, when capacity allows',
+      '11–18× cheaper',
+    ],
+  },
+];
 const money = (v: number) => `$${Math.round(v).toLocaleString('en-US')}`;
 const range = (lo: number, hi: number) => `${money(lo)}–${money(hi)}`;
 const minutes = MINUTES.toLocaleString('en-US');
@@ -115,10 +141,20 @@ const faq = [
     q: 'Will backmesh work for my jobs?',
     short: 'Linux x86-64 only. Private repos only.',
     points: [
-      'No macOS, Windows, Arm or GPU runners.',
+      'No macOS, Windows or Arm runners.',
       "Each job waits for its VM to boot: about 30 s on AWS, 60–70 s on GCP and Azure. Starting runners ahead of predicted jobs, and your agent's cue, mostly hide it.",
       "A reclaimed spot VM fails its job; if reclaims were the run's only failures, backmesh reruns them, up to twice.",
       'Each job starts with an empty Docker layer cache.',
+    ],
+  },
+  {
+    q: 'Do you support GPUs?',
+    short: 'NVIDIA T4 on AWS and Azure. GCP is coming.',
+    points: [
+      "backmesh-gpu-t4 (spot) and backmesh-gpu-od-t4 (on demand) run on one T4 and 4 vCPUs, the shape of GitHub's GPU runner.",
+      'GPU quotas are 0 on most new cloud accounts. Install and backmesh status show yours and name the one to request more of.',
+      "At list prices, about $0.53 an hour on demand and $0.18–0.27 on spot, against $3.12 for GitHub's. We haven't compared their speed.",
+      "A job's container sees the GPU with options: --gpus all, as on GitHub's runner.",
     ],
   },
   {
@@ -354,6 +390,37 @@ const jsonLd = {
         <p class="method"><a href="/benchmarks/">How we measured →</a></p>
       </section>
 
+      <section id="gpu" class="wrap section benchmarks">
+        <h2>NVIDIA T4 GPU runners, by the hour.</h2>
+        <p class="lead">
+          List prices on 2026-11-18, not a benchmark: one T4 and 4 vCPUs on each.
+        </p>
+        <ul class="plans bench">
+          {
+            gpu.map(({ runner, label, price, points }) => (
+              <li>
+                <b>{runner}</b>
+                <strong>
+                  <a href="/cost/#gpu">{price}</a>
+                  <span class="per">/h</span>
+                </strong>
+                <span class="runner"><code>{label}</code></span>
+                <ul>
+                  {points.map((p) => (
+                    <li>{p}</li>
+                  ))}
+                </ul>
+              </li>
+            ))
+          }
+        </ul>
+        <p class="caption">
+          GPU jobs started in about 5 minutes on spot in our test (capacity
+          varies); on demand doesn't wait for spot capacity.
+        </p>
+        <p class="method"><a href="/labels/#gpu">GPU labels →</a></p>
+      </section>
+
       <section id="cost" class="wrap section cost">
         <h2>
           {minutes} minutes a month: {money(headline.github)} on GitHub,{' '}
@@ -472,6 +539,10 @@ const jsonLd = {
               Each label runs in one cloud. Out of spot capacity, the next VM
               type launches, never the next cloud. Use{' '}
               <code>backmesh-od-*</code> (on-demand) for jobs that shouldn't be interrupted.
+            </p>
+            <p>
+              CPU and KVM runners on AWS, GCP and Azure, and NVIDIA T4{' '}
+              <a href="/labels/#gpu">GPU runners</a> on AWS and Azure.
             </p>
             <p class="links"><a class="more" href="/labels/">Learn more</a></p>
           </div>
@@ -1076,6 +1147,17 @@ const jsonLd = {
   }
   .bench strong a {
     color: inherit;
+  }
+  .bench + .caption {
+    margin-top: 32px;
+  }
+  #gpu .bench strong {
+    font-size: 52px;
+  }
+  .bench .per {
+    color: var(--bm-soft);
+    font-size: 24px;
+    letter-spacing: 0;
   }
   .method {
     margin: 32px 0 0;
