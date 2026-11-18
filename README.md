@@ -1,15 +1,19 @@
 # backmesh
 
-CI runners for GitHub Actions in your own cloud: AWS, GCP and Azure. backmesh is built on [anycloud](https://github.com/anycloud-sh/anycloud). It installs and runs anycloud underneath, so you only use the `backmesh` CLI. Each job runs on its own VM, which goes when the job ends.
+Self-hosted GitHub Actions runners in your own AWS, GCP or Azure account. Each
+job runs on its own spot VM, which is deleted when the job ends.
 
-Status: released; [install](#install) it with one command.
+- **Lower cost.** Spot VMs cost up to 10× less than GitHub-hosted runners for
+  the same compute. Your cloud bills you, so your cloud credits apply.
+- **Faster jobs.** backmesh learns each workflow's shape and starts runners
+  ahead of its predicted jobs. Your coding agent can cue backmesh as its checks
+  start, so runners boot before the push. The cache keeps your dependencies
+  in a bucket next to the runners.
+- **Your cloud.** Your code, secrets, caches and logs stay in your accounts, and
+  no cloud keys are stored.
 
-Principles:
-
-- Your cloud, your bill.
-- Keyless cloud connections.
-- CLI only.
-- Nothing CI-specific inside anycloud: backmesh uses only anycloud's public API.
+backmesh's core features are free. See [backmesh.com](https://backmesh.com) for
+costs and the [docs](https://backmesh.com/install/).
 
 ## Install
 
@@ -19,21 +23,70 @@ On macOS or Linux:
 curl -fsSL https://backmesh.com/install.sh | sh
 ```
 
-Run it again to move to the latest release. Or use [Homebrew](https://brew.sh): `brew install backmesh/tap/backmesh`, and `brew upgrade backmesh` later.
+Or with Homebrew: `brew install backmesh/tap/backmesh`.
 
-On first use, backmesh downloads the anycloud release it pins into `~/.backmesh/bin` and checks it against the SHA-256 digest built into the binary, so there's nothing else to install.
+Then install backmesh for your GitHub org:
 
-## Status
-
-`backmesh status [--org <org>] [--json]` shows the control plane, then each org's runner VMs and queue with the reasons runners are short and its month-to-date cost, then the health checks. Under each label it also prints the p50 and p95 queue wait, startup and run time of the jobs completed in the last 24 hours, such as:
-
-```text
-  backmesh-4: 5 assigned, 2 running; runners 2 queued, 0 starting, 1 running
-    42 jobs completed in 24 h: queue p50 0 s, p95 2 s; startup p50 48 s, p95 1.6 min; run p50 4.2 min, p95 11.0 min
+```sh
+backmesh install --org acme
 ```
 
-The listener keeps that window in memory, so a restart empties it. Each completed job also writes one `job completed` JSON line to the listener's log, which `backmesh logs --org <org>` shows for as long as the listener's Pod runs.
+Or paste `set up https://backmesh.com/SKILL.md` into Claude Code, Codex or
+another coding agent.
+
+You need:
+
+- An owner of the GitHub org, who signs in and installs backmesh's GitHub App
+  during install.
+- An AWS, GCP or Azure account, with its CLI (`aws`, `gcloud` or `az`) signed
+  in on your `PATH`.
+
+Then use a label in a workflow:
+
+```yaml
+jobs:
+  test:
+    runs-on: backmesh-4
+    steps:
+      - uses: actions/checkout@v5
+      - run: make test
+```
+
+Only Linux x86-64 jobs in private repositories can use the runners. See
+[Install](https://backmesh.com/install/) for the options and
+[Labels](https://backmesh.com/labels/) for the sizes.
+
+## How it works
+
+Install creates backmesh's control plane in your account: two small always-on
+VMs, about $74–$111 a month. On one of them, a listener long-polls GitHub for
+queued jobs, so nothing needs an inbound port or a webhook. For each job, it
+starts a VM in the cheapest region with capacity, and the VM is deleted when the
+job ends. Runners can be in other clouds than the control plane. Every job gets
+automatic caches for `setup-*` tools and npm, Yarn and pnpm downloads; replace
+`actions/cache` with [`backmesh/cache`](https://backmesh.com/cache/) to keep
+your own caches in a bucket in the runner's region too. The
+[security model](https://backmesh.com/security/) says what runs where.
+
+backmesh is built on [anycloud](https://github.com/anycloud-sh/anycloud), which
+it downloads and runs for you, so you only use the `backmesh` CLI.
+
+## Contributing
+
+See [AGENTS.md](AGENTS.md). backmesh follows anycloud's
+[CONTRIBUTING.md](https://github.com/anycloud-sh/anycloud/blob/main/CONTRIBUTING.md).
+Run `yarn verify` before you open a pull request. Questions are welcome on
+[Discord](https://discord.backmesh.com).
+
+## Security
+
+Please report a vulnerability privately to
+[luis@backmesh.com](mailto:luis@backmesh.com), not in a public issue. See
+[SECURITY.md](SECURITY.md).
 
 ## Licence
 
-backmesh is licensed under the [Apache License 2.0](LICENSE), except the cache action in [`cache/`](cache/), which is under the [MIT License](cache/LICENSE). [NOTICE](NOTICE) lists the third-party code bundled in `cache/dist` and `runner/dist`; each release binary and the runner image carry their own NOTICE.
+backmesh is licensed under the [Apache License 2.0](LICENSE), except the cache
+action in [`cache/`](cache/), which is under the [MIT License](cache/LICENSE).
+[NOTICE](NOTICE) lists the third-party code bundled in `cache/dist` and
+`runner/dist`.
