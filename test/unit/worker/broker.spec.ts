@@ -480,6 +480,26 @@ describe("uninstall's cleanup", () => {
     expect((await refresh(cleanup_id)).status).toBe(401);
   });
 
+  it('with keep_app, revokes every key and leaves the installation', async () => {
+    const idle = await mintKey(env.DB, 11);
+    const { cleanup_id } = await signedIn();
+
+    const res = await call('/v1/installs/cleanup/finish', null, {
+      cleanup_id,
+      keep_app: true,
+    });
+
+    expect(await res.json()).toEqual({ removed: false, still_used_by: [] });
+    expect(upstream.installations.has(11)).toBe(true);
+    expect(upstream.calls).not.toContain(
+      'DELETE api.github.com/app/installations/7',
+    );
+    expect((await call('/v1/token', idle.key)).status).toBe(401);
+    // The next install's key mints at once.
+    expect((await mint(11)).status).toBe(200);
+    expect((await finish(cleanup_id)).status).toBe(401);
+  });
+
   it('keeps the installation while another install has gone live since', async () => {
     const { cleanup_id } = await signedIn();
     const other = await live();

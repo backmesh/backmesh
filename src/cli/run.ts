@@ -530,6 +530,10 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       '--control-plane <cloud:region>',
       "when the control plane doesn't answer, its cloud and region, to delete it through your cloud CLI",
     )
+    .option(
+      '--keep-app',
+      'leave the backmesh GitHub App installed on each org, so a later install needs no org owner',
+    )
     .action(
       async (opts: {
         org?: string;
@@ -537,6 +541,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
         deleteCheckpointBucket?: boolean;
         confirm?: string;
         controlPlane?: string;
+        keepApp?: boolean;
       }) => {
         const deps = (io.uninstallDeps ?? realUninstallDeps)(io, json);
         const result = await uninstall(
@@ -546,6 +551,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
             deleteCheckpointBucket: opts.deleteCheckpointBucket ?? false,
             confirm: opts.confirm,
             controlPlane: opts.controlPlane,
+            keepApp: opts.keepApp ?? false,
           },
           deps,
         );

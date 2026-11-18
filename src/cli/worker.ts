@@ -310,12 +310,13 @@ async function cleanupCall<T>(
   path: string,
   schema: z.ZodType<T>,
   cleanupId: string,
+  extra: object = {},
 ) {
   const answer = await reaching('the uninstall', () =>
     call(deps, path, schema, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cleanup_id: cleanupId }),
+      body: JSON.stringify({ cleanup_id: cleanupId, ...extra }),
     }),
   );
   if (!answer.data) throw new Error(answer.error);
@@ -333,12 +334,18 @@ export const refreshCleanupToken = (cleanupId: string, deps: WorkerDeps) =>
 
 // Uninstall's last step: the Worker removes backmesh's App from the org and
 // revokes its install keys, unless another install of the org still uses it.
-export const finishCleanup = (cleanupId: string, deps: WorkerDeps) =>
+// `keepApp` revokes the keys only.
+export const finishCleanup = (
+  cleanupId: string,
+  deps: WorkerDeps,
+  keepApp = false,
+) =>
   cleanupCall(
     deps,
     '/v1/installs/cleanup/finish',
     z.object({ removed: z.boolean(), still_used_by: z.array(z.string()) }),
     cleanupId,
+    keepApp ? { keep_app: true } : {},
   );
 
 // Whether the Worker still accepts the install key: false on its 401

@@ -1,26 +1,38 @@
 name: E2E
 
-# The inner e2e suite: per label,
+# The inner e2e suite: per label (e2e-labels.yml),
 # asserts the cloud and region, the runner image digest, host Docker's limits
 # and binds, /dev/kvm on KVM labels, a step's kill of every container sparing
 # the runner, and the stop member (backmesh runs 42753183250 and
-# 42753320207). Dispatch only, against an
-# existing installation: it changes nothing about it besides the stop
-# member's one runner Job, which it ends the same way a reclaim or an
+# 42753320207). Dispatch only.
+#
+# Without `version`, against our existing installation on `org`, at
+# ci-install.yml's pinned release: it changes nothing about it besides the
+# stop member's one runner Job, which it ends the same way a reclaim or an
 # `uninstall` drain would.
 #
-# `org` and `labels` are the org-level members the install, uninstall and
-# per-cloud control-plane checks will plug into once we have a test org
-# (our installations are all live): this
-# workflow and `labels`' per-entry cloud and regions are shaped so adding
-# those members later needs no rework here.
+# With `version` (a release or release candidate, such as v0.4.3-rc.1), the
+# `test-org` job installs that release fresh on AWS for `org`, the test org
+# (backmesh-dryrun), runs the label member there, then uninstalls it and
+# sweeps AWS for anything left. Install and uninstall each print a GitHub
+# device sign-in, in the run's annotations and summary, which an admin of the
+# test org approves, as for ci-install.yml. The backmesh App stays installed
+# on the test org (`uninstall --keep-app`): only an org owner can install
+# it. The owner's one-time setup is the `e2e` environment's secrets
+# (E2E_TEST_ORG_DISPATCH_TOKEN, AWS_ROLE_ARN) and the test org's e2e
+# repository with its labels.yml (the owner's setup notes). It refuses an org ANYCLOUD_API_URLS names: those are
+# live.
+
 on:
   workflow_dispatch:
     inputs:
       org:
-        description: GitHub org the installation is on (ci-install.yml's org)
+        description: GitHub org the installation is on (ci-install.yml's org), or with `version` the test org it's installed on
         required: true
         default: backmesh
+      version:
+        description: a release or release candidate (such as v0.4.3-rc.1) to install fresh on `org`, a test org, and uninstall after; empty checks our installation at ci-install.yml's pinned release
+        default: ''
       labels:
         description: >-
           space-separated label=cloud:region[,region…] entries to check,
@@ -42,15 +54,16 @@ defaults:
     shell: bash
 
 jobs:
-  # Reads the pinned release's compatibility.json (ci-install.yml's own
-  # BACKMESH_VERSION, so there's one place that names it) and turns `labels`
-  # into the matrix the label and stop jobs run over.
+  # Reads `version`'s compatibility.json, else the pinned release's
+  # (ci-install.yml's own BACKMESH_VERSION, so there's one place that names
+  # it), and turns `labels` into the matrix the label and stop jobs run over.
   plan:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
+      version: ${{ steps.pinned.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -59,9 +72,16 @@ jobs:
           node-version: '22'
           cache: ''
 
-      - name: Read ci-install.yml's pinned release
+      - name: Read the release under test
         id: pinned
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
+          if [[ -n $VERSION ]]; then
+            [[ $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] || { echo "::error::$VERSION isn't a release tag"; exit 1; }
+            echo "version=$VERSION" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
           version=$(awk -F': ' '/^ {6}BACKMESH_VERSION:/ { print $2; exit }' .github/workflows/ci-install.yml)
           [[ -n $version ]] || { echo "::error::couldn't read ci-install.yml's BACKMESH_VERSION"; exit 1; }
           echo "version=$version" >>"$GITHUB_OUTPUT"
@@ -80,49 +100,16 @@ jobs:
           COMPAT_PATH: ${{ runner.temp }}/compatibility.json
         run: echo "matrix=$(node test/e2e/plan.ts)" >>"$GITHUB_OUTPUT"
 
-  # Assertions 1-4 and the kill-all: on the label itself, so instance metadata, the VM's own
-  # Docker and /dev/kvm are all the real thing.
+  # Assertions 1-4 and the kill-all, on our own org's runners.
   label:
     needs: plan
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
-    runs-on: ${{ matrix.label }}
-    timeout-minutes: 10
+    if: ${{ !inputs.version }}
     permissions:
       contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Cloud and region match the label
-        env:
-          EXPECTED_CLOUD: ${{ matrix.cloud }}
-          EXPECTED_REGIONS: ${{ join(matrix.regions, ',') }}
-        run: node test/e2e/check-cloud-region.ts
-
-      - name: Runner image digest matches the pinned release
-        env:
-          EXPECTED_IMAGE: ${{ matrix.runnerImage }}
-        run: node test/e2e/check-image-digest.ts
-
-      - name: Host Docker applies limits and shares /tmp and $HOME
-        run: node test/e2e/check-docker-limits.ts
-
-      - name: /dev/kvm is usable
-        if: matrix.kvm
-        run: node test/e2e/check-kvm.ts
-
-      # The runner is a container on this VM's Docker, which the image's
-      # `docker` (runner/docker.sh) leaves out, as GitHub's runners aren't
-      # containers. Last: a killed runner fails this job as lost.
-      - name: A step's docker kill and rm -f of every container spare the runner
-        run: |
-          [[ -x /usr/local/libexec/backmesh/docker ]] \
-            || { echo "::error::this runner image has no docker wrapper (runner/docker.sh), so the step would kill its runner"; exit 1; }
-          for _ in 1 2; do docker run -d mirror.gcr.io/library/busybox:1.37 sleep 300; done
-          docker kill $(docker ps -q)
-          docker rm -f $(docker ps -aq)
-          [[ -z $(docker ps -aq) ]] || { echo "::error::docker rm -f left containers"; docker ps -a; exit 1; }
+    uses: ./.github/workflows/e2e-labels.yml
+    with:
+      matrix: ${{ needs.plan.outputs.matrix }}
+      ref: ${{ github.sha }}
 
   # Assertion 5, the stop member: orchestrated from a GitHub-hosted runner,
   # since the label's own runner Job is what gets terminated mid-job.
@@ -132,9 +119,11 @@ jobs:
   # concurrency group) never races another label's. After the label jobs,
   # pass or fail: on a new cloud connection their burst can hold boots for
   # many minutes, past the stop member's 5-minute runner wait.
+  # Our own org only, for now: it dispatches ci-install.yml, whose
+  # environment is our installations'. The test org's stop member comes later.
   stop:
     needs: [plan, label]
-    if: ${{ !cancelled() && needs.plan.result == 'success' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && !inputs.version }}
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -158,3 +147,194 @@ jobs:
 
       - name: 'Stop member: terminate the runner Job, GitHub must fail the job within 15 s'
         run: node test/e2e/run-stop-member.ts
+
+  # A fresh install of `version` on the test org, on AWS, the label member on
+  # its runners, then the uninstall and a sweep, whatever came before them.
+  # On GitHub's runners: it makes the runners it tests.
+  test-org:
+    needs: plan
+    if: ${{ inputs.version }}
+    runs-on: ubuntu-24.04
+    # Holds the secrets, and is the subject the AWS role's OIDC trust names.
+    environment: e2e
+    timeout-minutes: 240
+    permissions:
+      contents: read # the release's assets
+      id-token: write # the AWS role's OIDC sign-in
+    env:
+      ORG: ${{ inputs.org }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      CONTROL_PLANE_REGION: us-east-2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+          cache: ''
+
+      - name: Refuse a live org
+        env:
+          URLS: ${{ vars.ANYCLOUD_API_URLS }}
+        run: |
+          echo "STARTED=$(date -u +%FT%TZ)" >>"$GITHUB_ENV"
+          jq -e --arg org "${ORG,,}" '[keys[] | ascii_downcase] | index($org) == null' <<<"$URLS" >/dev/null \
+            || { echo "::error::$ORG has a live installation (ANYCLOUD_API_URLS); version installs only on a test org"; exit 1; }
+
+      # The release's own checksums; the binary embeds compatibility.json,
+      # whose anycloud backmesh runs its own copy of.
+      - name: Install the release's backmesh and anycloud
+        id: bin
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin" && cd "$RUNNER_TEMP/bin"
+          gh release download "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --pattern backmesh-linux-x64.tar.gz --pattern checksums.txt --pattern compatibility.json
+          grep ' backmesh-linux-x64.tar.gz$' checksums.txt | sha256sum -c -
+          tar -xzf backmesh-linux-x64.tar.gz backmesh
+          anycloud=$(jq -er .anycloud compatibility.json)
+          rm backmesh-linux-x64.tar.gz checksums.txt compatibility.json
+          gh release download "v$anycloud" --repo anycloud-sh/releases \
+            --pattern anycloud-linux-x64.tar.gz --pattern checksums.txt
+          grep ' anycloud-linux-x64.tar.gz$' checksums.txt | sha256sum -c -
+          tar -xzf anycloud-linux-x64.tar.gz anycloud
+          rm anycloud-linux-x64.tar.gz checksums.txt
+          # A release before it can't uninstall without taking the App.
+          ./backmesh uninstall --help | grep -q -- --keep-app \
+            || { echo "::error::$VERSION has no uninstall --keep-app, which this needs"; exit 1; }
+          install -D -m 755 anycloud ~/.backmesh/bin/"$anycloud"/anycloud
+          echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
+          echo "ANYCLOUD_DIR=$HOME/.anycloud" >>"$GITHUB_ENV"
+          echo "BACKMESH_ANYCLOUD_DIR=$HOME/.anycloud" >>"$GITHUB_ENV"
+
+      # Install generates the runners' AWS identity as this role, and
+      # uninstall deletes it as the same; anycloud generates only from a
+      # named profile, so the session is saved as the default one.
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        id: aws
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.CONTROL_PLANE_REGION }}
+          role-duration-seconds: 14400
+          output-credentials: true
+      - name: Save the role's session as the default profile
+        env:
+          KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
+          SECRET: ${{ steps.aws.outputs.aws-secret-access-key }}
+          SESSION: ${{ steps.aws.outputs.aws-session-token }}
+        run: |
+          mkdir -p ~/.aws
+          printf '[default]\naws_access_key_id = %s\naws_secret_access_key = %s\naws_session_token = %s\n' \
+            "$KEY_ID" "$SECRET" "$SESSION" >~/.aws/credentials
+          chmod 600 ~/.aws/credentials
+
+      # A maintainer who is an admin of the test org approves install's
+      # GitHub sign-in from the run's annotations or summary
+      # (with-sign-in.sh); the same sign-in is the control plane's.
+      - name: backmesh install
+        id: install
+        timeout-minutes: 90
+        env:
+          BACKMESH_UNSUPPORTED_CI_OVERRIDE: anycloud-ci
+        run: |
+          placement=(--control-plane "aws:$CONTROL_PLANE_REGION" --runners aws)
+          plan=$(backmesh install --org "$ORG" "${placement[@]}" --plan --json) || { echo "$plan"; exit 1; }
+          id=$(tail -n1 <<<"$plan" | jq -er .planId) || { echo "$plan"; exit 1; }
+          test/e2e/with-sign-in.sh backmesh install --org "$ORG" "${placement[@]}" --yes --plan-id "$id"
+
+      # The control plane's ID, for the sweep, also after a failed install
+      # that got as far as creating it.
+      - name: The control plane
+        if: ${{ always() && steps.bin.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "ORG_ID=$(gh api "orgs/$ORG" --jq .id)" >>"$GITHUB_ENV"
+          [[ -f ~/.anycloud/api-url ]] || { echo "No control plane was created"; exit 0; }
+          url=$(anycloud api status --json | jq -r .url)
+          id=$(sed -nE 's|^https://([a-z0-9-]+)\.anycloud\.sh/?$|\1|p' <<<"$url")
+          echo "Control plane $url"
+          echo "CLUSTER_ID=$id" >>"$GITHUB_ENV"
+
+      # The label member, through the test org's own repository, whose
+      # runners these are. backmesh#26's GPU labels need only their entries
+      # in `labels`, once e2e-labels.yml has its GPU step.
+      - name: The label member on the test org's runners
+        env:
+          GH_TOKEN: ${{ secrets.E2E_TEST_ORG_DISPATCH_TOKEN }}
+          TEST_ORG_REPO: ${{ inputs.org }}/e2e
+          MATRIX: ${{ needs.plan.outputs.matrix }}
+          REF: ${{ github.sha }}
+        run: node test/e2e/run-test-org-labels.ts
+
+      # Always, after anything that may have made something, cancelled too:
+      # everything but the App, and the checkpoint bucket with the rest. Its
+      # GitHub sign-in is approved as install's is.
+      - name: backmesh uninstall
+        if: ${{ always() && steps.bin.outcome == 'success' }}
+        timeout-minutes: 60
+        run: |
+          flags=(--org "$ORG" --yes --keep-app --delete-checkpoint-bucket --confirm backmesh)
+          # A control plane that doesn't answer, such as a half-made one, is
+          # deleted through the cloud CLI; uninstall refuses that for one that
+          # does.
+          if [[ -f ~/.anycloud/api-url ]]; then
+            url=$(anycloud api status --json | jq -r .url) || url=
+            if [[ -n $url ]] && ! curl -fsS --max-time 10 "$url/v1/version" >/dev/null; then
+              flags+=(--control-plane "aws:$CONTROL_PLANE_REGION")
+            fi
+          fi
+          test/e2e/with-sign-in.sh backmesh uninstall "${flags[@]}"
+
+      # The cost guard: fails, naming them, while anything this run's
+      # installation made is still in AWS. Without the control plane's ID,
+      # only an anycloud stack created since the run started can be told
+      # apart from others' in the account.
+      - name: Sweep AWS for anything left
+        if: ${{ always() && steps.aws.outcome == 'success' }}
+        env:
+          MATRIX: ${{ needs.plan.outputs.matrix }}
+        run: |
+          left=()
+          aws() { command aws --no-cli-pager --output json "$@"; }
+          stacks() {
+            aws cloudformation list-stacks --region "$CONTROL_PLANE_REGION" \
+              --query 'StackSummaries[?StackStatus!=`DELETE_COMPLETE`]' \
+              | jq -r --arg started "$STARTED" "$@"
+          }
+          if [[ -z ${CLUSTER_ID:-} ]]; then
+            left+=($(stacks '.[] | select((.StackName | startswith("anycloud-")) and .CreationTime >= $started) | "stack:\(.StackName)"'))
+          else
+            eval "$(node test/e2e/sweep-names.ts)"
+            left+=($(stacks --arg stack "$STACK" '.[] | select(.StackName == $stack) | "stack:\(.StackName)"'))
+            regions=$( (echo "$CONTROL_PLANE_REGION"; jq -r '.include[] | select(.cloud == "aws") | .regions[]' <<<"$MATRIX") | sort -u)
+            for region in $regions; do
+              for tag in "anycloud_cluster=$CLUSTER_ID" "anycloud_owner_api=$OWNER_API"; do
+                filter="Name=tag:${tag%%=*},Values=${tag#*=}"
+                left+=($(aws ec2 describe-instances --region "$region" --filters "$filter" \
+                  Name=instance-state-name,Values=pending,running,stopping,stopped,shutting-down \
+                  | jq -r --arg r "$region" '.Reservations[].Instances[] | "instance:\($r):\(.InstanceId)"'))
+                left+=($(aws ec2 describe-volumes --region "$region" --filters "$filter" \
+                  | jq -r --arg r "$region" '.Volumes[] | "volume:\($r):\(.VolumeId)"'))
+                left+=($(aws ec2 describe-security-groups --region "$region" --filters "$filter" \
+                  | jq -r --arg r "$region" '.SecurityGroups[] | "security-group:\($r):\(.GroupId)"'))
+              done
+            done
+            # Only NoSuchEntity is gone; any other answer fails the sweep.
+            iam() {
+              local out
+              out=$(aws iam "get-$1" --"$1"-name "$2" 2>&1) && { left+=("iam-$1:$2"); return; }
+              grep -q NoSuchEntity <<<"$out" || { echo "$out"; echo "::error::couldn't check $1 $2"; exit 1; }
+            }
+            iam user "$IAM_USER"
+            iam role "anycloud-$CLUSTER_ID-cfn"
+            iam role "anycloud-$CLUSTER_ID-vm"
+            left+=($(aws s3api list-buckets | jq -r --arg id "$CLUSTER_ID" --arg cache "$CACHE_PREFIX" \
+              '.Buckets[].Name | select(contains($id) or startswith($cache)) | "bucket:\(.)"'))
+          fi
+          if ((${#left[@]})); then
+            printf '::error title=Left in AWS::%s\n' "${left[@]}"
+            exit 1
+          fi
+          echo "Nothing of this run's installation is left in AWS."
