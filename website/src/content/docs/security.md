@@ -7,8 +7,8 @@ description: What runs where, what reaches backmesh, the GitHub App's permission
 
 Everything backmesh runs is in your own accounts:
 
-- **backmesh's control plane**, two small always-on VMs in the first cloud you
-  install, with a checkpoint bucket for its backups.
+- **backmesh's control plane**, two always-on VMs (t3.large and t3.small on
+  AWS) in the first cloud you install, with a checkpoint bucket for its backups.
 - **The listener**, which scales runners, alone on one of those VMs. It
   long-polls GitHub, so nothing needs an inbound port or a webhook.
 - **The runners**: each job gets its own spot or on-demand VM, which is deleted
@@ -42,7 +42,10 @@ SHA-256 digest, so it needs network access to GitHub's release downloads.
 Install creates the control plane and each cloud's role through your signed-in
 cloud CLI, as you, so that identity needs the rights to create them:
 
-- **AWS:** a CloudFormation stack with an IAM role and OIDC provider.
+- **AWS:** a CloudFormation stack with an IAM role and OIDC provider. The
+  role's rights are anycloud's
+  [AWS access policy](https://github.com/anycloud-sh/anycloud/blob/main/src/shared/cloud-policies/aws-anycloud-access.json),
+  plus `ec2:ModifyVolume` from backmesh v0.4.2.
 - **GCP:** a custom role, a service account, and a workload identity pool and
   provider with their IAM bindings, plus turning on the Compute, IAM, IAM
   Credentials and Security Token Service APIs.

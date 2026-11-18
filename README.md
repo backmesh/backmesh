@@ -3,8 +3,11 @@
 Self-hosted GitHub Actions runners in your own AWS, GCP or Azure account. Each
 job runs on its own spot VM, which is deleted when the job ends.
 
-- **Lower cost.** Spot VMs cost up to 10× less than GitHub-hosted runners for
-  the same compute. Your cloud bills you, so your cloud credits apply.
+- **Up to 2× faster builds at a fifth of the cost.** In our
+  [build benchmarks](benchmarks/builds/), a `backmesh-4` spot VM ran Docker,
+  Rust and TypeScript builds 1.4 to 2.1× faster than GitHub's `ubuntu-latest`,
+  at 2.9 to 5.6× less per build. Your cloud bills you, so your cloud credits
+  apply.
 - **Faster jobs.** backmesh learns each workflow's shape and starts runners
   ahead of its predicted jobs. Your coding agent can cue backmesh as its checks
   start, so runners boot before the push. The cache keeps your dependencies
@@ -40,6 +43,8 @@ You need:
   during install.
 - An AWS, GCP or Azure account, with its CLI (`aws`, `gcloud` or `az`) signed
   in on your `PATH`.
+- If the org restricts OAuth apps, an owner grants backmesh access at sign-in
+  ([how](https://backmesh.com/faq/#installing)).
 
 Then use a label in a workflow:
 
@@ -58,8 +63,8 @@ Only Linux x86-64 jobs in private repositories can use the runners. See
 
 ## How it works
 
-Install creates backmesh's control plane in your account: two small always-on
-VMs, about $74–$111 a month. On one of them, a listener long-polls GitHub for
+Install creates backmesh's control plane in your account: two always-on VMs (t3.large and t3.small on AWS),
+about $74–$111 a month. On one of them, a listener long-polls GitHub for
 queued jobs, so nothing needs an inbound port or a webhook. For each job, it
 starts a VM in the cheapest region with capacity, and the VM is deleted when the
 job ends. Runners can be in other clouds than the control plane. Every job gets

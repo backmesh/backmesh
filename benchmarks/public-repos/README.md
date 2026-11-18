@@ -1,9 +1,10 @@
 # Public-repos live check
 
+For maintainers: `--public-repos` is not supported for customers yet.
+
 The paid live check for public-repository support. It runs on a public repo whose org has an install with `--public-repos`, from a
 second GitHub account's fork. It needs a second account, so it's a runbook,
-not an E2E member. Recommended to run right after the move, on the `backmesh`
-org's install, with the owner's OK first, since it's paid.
+not an E2E member.
 
 ## Setup
 

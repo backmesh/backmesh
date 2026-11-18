@@ -30,8 +30,39 @@ import {
 const title =
   'backmesh: Free, open-source GitHub Actions runners in your AWS, GCP or Azure';
 const description =
-  'Free and open source (Apache-2.0). Each GitHub Actions job runs on its own spot VM in your AWS, GCP or Azure account, at up to 10× less compute cost. Your cloud bills you, so its credits apply.';
+  'Free and open source (Apache-2.0). Self-hosted GitHub Actions runners on spot VMs in your AWS, GCP or Azure account: up to 2× faster builds at a fifth of the cost of GitHub-hosted runners in our benchmarks. Your cloud bills you, so its credits apply.';
 const og = new URL('/brand/og.png', Astro.site).href;
+
+// Build benchmarks, 2026-11-18: medians of 5 rounds each, backmesh-4 against
+// GitHub's ubuntu-latest (benchmarks/builds/README.md has the method).
+const BENCH_URL =
+  'https://github.com/backmesh/backmesh/tree/main/benchmarks/builds';
+const benchmarks = [
+  {
+    workload: 'Docker build',
+    project: 'grafana/k6 v0.54.0 image',
+    secs: [71, 148],
+    cost: ['$0.0032', '$0.018'],
+    faster: '2.1×',
+    cheaper: '5.6×',
+  },
+  {
+    workload: 'Rust',
+    project: 'ripgrep 14.1.1, cargo build --release',
+    secs: [49, 70],
+    cost: ['$0.0027', '$0.012'],
+    faster: '1.4×',
+    cheaper: '4.4×',
+  },
+  {
+    workload: 'TypeScript',
+    project: 'TypeScript v5.6.3, npm ci and hereby local',
+    secs: [35, 56],
+    cost: ['$0.0021', '$0.006'],
+    faster: '1.6×',
+    cheaper: '2.9×',
+  },
+];
 const money = (v: number) => `$${Math.round(v).toLocaleString('en-US')}`;
 const range = (lo: number, hi: number) => `${money(lo)}–${money(hi)}`;
 const minutes = MINUTES.toLocaleString('en-US');
@@ -253,12 +284,13 @@ const jsonLd = {
 
     <main>
       <section class="wrap hero">
-        <h1>Self-hosted GitHub Actions runners for up to 10× less.</h1>
+        <h1>Up to 2× faster builds at a fifth of the cost.</h1>
         <div class="hero-figure"><HeroDiagram /></div>
         <div class="hero-body">
           <p class="sub">
-            Each job runs on its own spot VM in your AWS, GCP or Azure account.
-            Your cloud bills you, so your cloud credits apply.
+            Self-hosted GitHub Actions runners: each job runs on its own spot VM
+            in your AWS, GCP or Azure account. Your cloud bills you, so your
+            cloud credits apply.
           </p>
           <AgentPrompt />
           <p class="free">Free and open source (Apache-2.0), no credit card.</p>
@@ -275,6 +307,70 @@ const jsonLd = {
       <div class="wrap trust-wrap">
         <TrustStrip />
       </div>
+
+      <section id="benchmarks" class="wrap section benchmarks">
+        <h2>Builds against GitHub's ubuntu-latest.</h2>
+        <p class="lead">
+          Median of 5 runs each, a <code>backmesh-4</code> spot VM on AWS
+          against GitHub-hosted <code>ubuntu-latest</code>.
+        </p>
+        <ul class="plans bench">
+          {
+            benchmarks.map(({ workload, project, secs, cost, faster, cheaper }) => (
+              <li>
+                <b>{workload}</b>
+                <strong>{secs[0]} s</strong>
+                <ul>
+                  <li>{project}</li>
+                  <li>
+                    {secs[1]} s on GitHub-hosted: {faster} faster
+                  </li>
+                  <li>
+                    {cost[0]} a build, against {cost[1]}: {cheaper} cheaper
+                  </li>
+                </ul>
+              </li>
+            ))
+          }
+        </ul>
+        <details class="method">
+          <summary>
+            <span class="q">
+              <b>How we measured</b>
+              <span>Private repository, 2026-11-18</span>
+            </span>
+            <span class="toggle" aria-hidden="true" />
+          </summary>
+          <ul>
+            <li>
+              Runtime is a job's start to its finish. Cold start, a job's queue
+              to its start, isn't in it: 2 s on GitHub, 43–50 s on backmesh
+              uncued, and about 17 s with <a href="#cue">backmesh cue</a>.
+            </li>
+            <li>
+              GitHub's <code>ubuntu-latest</code> in a private repository has 2
+              vCPUs, and <code>backmesh-4</code> has 4. GitHub bills whole
+              minutes, at $0.006 a minute.
+            </li>
+            <li>
+              backmesh's cost is its spot VM in us-east-2, mid-range of $0.0497
+              to $0.07 an hour, and its 100 GB disk at 4,000 IOPS and 500 MiB/s,
+              counted from boot. It leaves out the control plane, about $86 a
+              month on AWS.
+            </li>
+            <li>
+              Neither side used a build cache, except setup-node's default npm
+              cache on both. On backmesh, the Rust job's <code>cargo</code> is
+              Ubuntu's package, installed on first use within the measured
+              time.
+            </li>
+            <li>
+              The workflow and results are in
+              <a href={BENCH_URL}>benchmarks/builds</a>.
+            </li>
+          </ul>
+        </details>
+      </section>
 
       <section id="cost" class="wrap section cost">
         <h2>
@@ -967,6 +1063,37 @@ const jsonLd = {
     }
     .plans strong {
       font-size: 52px;
+    }
+  }
+
+  /* Benchmarks: the pricing cards, three across. */
+  .bench {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .bench > li + li {
+    padding: 26px 24px 0;
+  }
+  .bench > li:first-child {
+    padding-right: 24px;
+  }
+  .bench > li:last-child {
+    padding-right: 0;
+  }
+  .method {
+    margin-top: 32px;
+  }
+  @media (max-width: 960px) {
+    .bench {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .bench > li,
+    .bench > li + li {
+      padding: 24px 0 8px;
+      border-left: 0;
+    }
+    .bench > li + li {
+      margin-top: 24px;
+      border-top: 1px solid var(--bm-hair);
     }
   }
 

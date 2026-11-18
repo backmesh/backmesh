@@ -28,8 +28,9 @@ in apps, now archived at
 GitHub Actions runners.
 
 **How does backmesh compare with GitHub-hosted runners?** A workflow changes only its
-`runs-on`. Its jobs run on spot VMs in your accounts, so compute costs up to 10×
-less and your cloud credits apply. Each job waits for its VM to boot, and only
+`runs-on`. Its jobs run on spot VMs in your accounts. In our
+[build benchmarks](/#benchmarks), builds ran up to 2× faster at a fifth of the
+cost, and your cloud credits apply. Each job waits for its VM to boot, and only
 Linux x86-64 jobs in private repositories can use the runners.
 
 **Which clouds does backmesh run on?** AWS, Google Cloud (GCP) and Azure. One installation can use
@@ -71,11 +72,12 @@ VM, so no image layers carry over.
 
 ## Installing
 
-**Can I install backmesh when my org restricts OAuth apps?** Yes, once an org
-owner approves backmesh at
-`https://github.com/organizations/<org>/settings/oauth_application_policy`. An
-org with OAuth app access restrictions, the default for a new org, refuses
-install's sign-in until then.
+**Can I install backmesh when my org restricts OAuth apps?** Yes. An org with
+OAuth app access restrictions, the default for a new org, refuses install's
+sign-in until backmesh is approved. On GitHub's consent screen at sign-in, an
+org owner clicks **Grant** next to the org. Anyone else clicks **Request**,
+and an owner then approves it at
+`https://github.com/organizations/<org>/settings/oauth_application_policy`.
 
 **Where does backmesh put its control plane?** With several cloud CLIs signed in and no
 `--control-plane`, install picks the first of AWS, GCP and Azure, and the plan
