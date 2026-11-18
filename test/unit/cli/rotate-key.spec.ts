@@ -344,6 +344,11 @@ describe('rotateKey', () => {
       'deployment upgrade#1',
       'deployment upgrade#2',
     ]);
+    // Both keep the listener's half-vCPU share of `bm-control`.
+    expect(calls.filter((c) => c.startsWith('deployment upgrade'))).toEqual([
+      `deployment upgrade backmesh-acme --image ${IMAGE} --secret backmesh-acme --cpus 0.5 --wait`,
+      `deployment upgrade backmesh-acme --image ${IMAGE} --secret backmesh-acme --cpus 0.5 --wait`,
+    ]);
     expect(noInstallIds(lines)).toBe(true);
     expect(lines).toEqual([
       `Signing in as an admin of acme to mint a new install key.`,

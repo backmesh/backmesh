@@ -14,7 +14,8 @@ export const CONTROL_POOL = 'bm-control';
 // and roll. Without it anycloud sizes a replica to a whole vCPU's share of
 // the Node's memory, so a second org's listener stays Pending. At 0.5 a
 // listener requests 512 MiB on AWS's and GCP's 2 GiB Node, 921 MiB on
-// Azure's 4 GiB one, so at least two orgs fit on each.
+// Azure's 4 GiB one, so at least two orgs fit on each. The Pod is
+// Guaranteed, so that memory and the 0.5 CPU are its limits as well.
 export const LISTENER_CPUS = '0.5';
 
 // The hosted API's URL is `https://<cluster-id>.anycloud.sh`
