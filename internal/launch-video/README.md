@@ -4,8 +4,8 @@ Source for the backmesh launch video, built with
 [HyperFrames](https://hyperframes.heygen.com/) HTML compositions, after
 anycloud's `internal/launch-video/`.
 
-`hyperframes/` is the cut (35.4 s). `index.html` holds the scene schedule, the
-crossfades, the navbar lockup and the sound-effect cues;
+`hyperframes/` is the cut (20.0 s, five scenes). `index.html` holds the
+scene schedule, the crossfades and the sound-effect cues;
 `compositions/frames/` holds one sub-composition per scene. `storyboard.md`
 lists the scenes, their on-screen copy and where on the landing page each
 claim comes from.
@@ -15,9 +15,10 @@ them directly. They follow the landing page (`website/src/pages/index.astro`)
 in its order and in its design, "C3": one column, white and ink with one
 cerulean (`website/src/styles/tokens.css`), Schibsted Grotesk and Fragment
 Mono, the hybrid-A lockup (the wordmark and a cursor of three stacked squares,
-`website/public/brand/lockup-*.svg`) and the monochrome cloud logos
-(`website/src/assets/clouds/`). The scenes sit on the light ground; the end
-card is the page's one dark closing band.
+`website/public/brand/lockup-dark.svg`, on the end card) and the monochrome
+cloud logos (`website/src/assets/clouds/`). Each scene is a headline and one
+figure, with no sub-lines or captions. The scenes sit on the light ground; the
+end card is the page's one dark closing band.
 
 The repository holds text only. Fonts, GSAP and the sound effects are fetched
 into the cut's git-ignored `assets/` folder; the brand files are copied there
@@ -40,7 +41,7 @@ an argument: `npm run render -- renders/out.mp4`. To edit the cut, run
 `npx hyperframes@0.8.134 preview` inside `hyperframes/`, and
 `npx hyperframes@0.8.134 check` before rendering.
 
-`npm run encode -- launch-2026-11-v2` writes `renders/web/launch-2026-11-v2/`:
+`npm run encode -- launch-2026-11-v5` writes `renders/web/launch-2026-11-v5/`:
 AV1 and H.264 at 1080p and 720p, a poster from the last second, and
 `SHA256SUMS`. Pass another input as a second argument. FFmpeg needs
 `libaom-av1`, `libopus` and `libx264`.
@@ -59,18 +60,14 @@ folder per version.
 Every line on screen is the landing page's own words, or a number it
 computes; `storyboard.md` maps each one to its section.
 
-- **Benchmarks.** Scene 3's times, waits, costs and ratios are the page's
-  `benchmarks` array (2026-11-18, medians of 5 rounds each, `backmesh-4` on
-  AWS against `ubuntu-latest`); `website/src/content/docs/benchmarks.md` has
-  the method and the runs. The hero's "Up to 2× faster, 5× cheaper builds"
-  rounds them as the page does.
+- **Benchmarks.** Scene 2's seconds are the page's `benchmarks` array
+  (2026-11-18, medians of 5 rounds each, `backmesh-4` on AWS against
+  `ubuntu-latest`); `website/src/content/docs/benchmarks.md` has the method
+  and the runs. The hero's "Up to 2× faster, 5× cheaper builds" is the
+  page's headline over them.
 - **Cost.** "$1,800 on GitHub, $191–$365 on backmesh" and the per-cloud bars
   are `website/src/cost.ts` (`headline`, `totals`), rounded as the page rounds
   them, with its catalog date, 2026-11-13.
-- **Licence and billing.** "Free and open source (Apache-2.0), no credit card"
-  and "backmesh is free and open source; you pay your clouds for the VMs" are
-  the hero's and the pricing section's words; they match the site's about
-  text (`website/src/about.ts`).
 
 ## Assets
 
@@ -80,12 +77,12 @@ computes; `storyboard.md` maps each one to its section.
 | Fragment Mono 400, latin            | `@fontsource/fragment-mono@5.3.0` (npm, via jsDelivr), the version `website/` pins                      | SIL OFL 1.1                                                            |
 | GSAP 3.14.2                         | `gsap` npm package (via jsDelivr)                                                                       | [GSAP Standard License](https://gsap.com/standard-license) (no charge) |
 | Impact and interface sounds         | `latent-spaces/brag@cb89b9f`, `skills/brag/assets/sfx/`, credited there to [Kenney](https://kenney.nl/) | CC0 (Kenney); the brag repository is MIT                               |
-| Lockups, cloud logos                | `website/public/brand/lockup-{light,dark}.svg`, `website/src/assets/clouds/` in this repository         | backmesh; the cloud marks are their owners' trademarks                 |
+| Lockup, cloud logos                 | `website/public/brand/lockup-dark.svg`, `website/src/assets/clouds/` in this repository                 | backmesh; the cloud marks are their owners' trademarks                 |
 
 ## Music
 
 The cut has no music. It carries only the CC0 sound effects above, quietly,
-one per landing. To add a bed, place a track you hold a licence for as an
+one per scene. To add a bed, place a track you hold a licence for as an
 `<audio>` element in `hyperframes/index.html` (anycloud's
 `internal/launch-video/hyperframes/index.html` shows the fades) and record its source and licence
 here.

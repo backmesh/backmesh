@@ -18,11 +18,7 @@ c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280 gsap@3.14.2/dis
 # audio in the cut: there is no music bed (README.md, "Music").
 base https://raw.githubusercontent.com/latent-spaces/brag/cb89b9f44309b0bf4e3cb89e685fadf80c7999ed/skills/brag/assets/sfx/
 b0a4dea90eed47accf50b768beff1166f2f1486fb139e4d025b2427637624bca impact/impactSoft_medium_004.ogg hyperframes/assets/sfx/
-d21d0f0b782445db579d11e2506b24cd1ac9d664ee33aeaf807761aa7b6fd710 interface/bong_001.ogg hyperframes/assets/sfx/
-adcd1f4adc35f1b41bc1b5bbefeff7aa44f2f3f0d96d3199b544140c7c1e761c interface/click_002.ogg hyperframes/assets/sfx/
-2fa929138bc3a0f432696588f66eac94b8f6d463905ec8808c6461ce4b054292 interface/click_003.ogg hyperframes/assets/sfx/
 692ee3a6f1821402ca649ff735bee9591dc4846c8098fc7d6a90fd15fa57c1af interface/drop_001.ogg hyperframes/assets/sfx/
 4ac4d1cef7e936965cbf795852ca2020300b9e2ba7daa59f2bf4f1f7bf416218 interface/drop_002.ogg hyperframes/assets/sfx/
 43d086d50f90493a98cd2e09aa6dbf150d164f1578e1ec768d21cb185571ad87 interface/drop_003.ogg hyperframes/assets/sfx/
-f703b6b1c62dae1c246a46d5c2442802588f68be2df4d17e0d65cf7e0dbfc826 interface/select_008.ogg hyperframes/assets/sfx/
 3b74efad87f1e69dbd1d05c5ad952ab90859b5a3d11da6ec5bd79b4f03b42afa interface/switch_001.ogg hyperframes/assets/sfx/

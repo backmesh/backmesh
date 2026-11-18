@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Downloads the binary assets listed in assets.txt into the cut's git-ignored
 // assets/ folder, verifying every SHA-256, then copies the website's brand
-// files: the light and dark lockups and the monochrome cloud logos,
+// files: the dark lockup and the monochrome cloud logos,
 // recoloured to the ink colour because an <img> does not inherit
 // currentColor.
 
@@ -57,9 +57,10 @@ for (const line of readFileSync(join(root, 'assets.txt'), 'utf8').split('\n')) {
 const website = join(root, '../../website');
 const brand = join(root, 'hyperframes/assets/brand');
 mkdirSync(brand, { recursive: true });
-for (const lockup of ['lockup-light.svg', 'lockup-dark.svg']) {
-  copyFileSync(join(website, 'public/brand', lockup), join(brand, lockup));
-}
+copyFileSync(
+  join(website, 'public/brand/lockup-dark.svg'),
+  join(brand, 'lockup-dark.svg'),
+);
 for (const cloud of ['aws', 'gcp', 'azure']) {
   const svg = readFileSync(
     join(website, `src/assets/clouds/${cloud}.svg`),
