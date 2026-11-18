@@ -4,9 +4,8 @@ import type { AnycloudApi } from '../anycloud/client.js';
 // The anycloud calls the app makes. Callers pass the pinned binary and the
 // API client; tests pass fakes. Secrets go through the API (`PUT
 // /secrets/{name}`, `GET /secrets`), so a value is never in argv or an exec
-// error. The rest go through the CLI (`deployments.md:175-182` on anycloud
-// main; `--service-account` per RFC 0049 § C29), whose arguments hold nothing
-// secret. A service token comes back on stdout, never through argv.
+// error. The rest go through the CLI, whose arguments hold nothing secret.
+// A service token comes back on stdout, never through argv.
 export function anycloudControl(api: AnycloudApi, run: RunAnycloud) {
   const cli = async (...args: string[]) => void (await run(args));
   const token = async (args: string[]) =>
@@ -29,9 +28,8 @@ export function anycloudControl(api: AnycloudApi, run: RunAnycloud) {
       token(['api', 'token', 'rotate', '--service', service]),
     removeService: (service: string) =>
       cli('api', 'access', 'remove', '--service', service),
-    // C29 (RFC 0049 release 1): a Deployment's ServiceAccount as an API member.
-    addServiceAccount: (deployment: string) =>
-      cli('api', 'access', 'add', '--service-account', deployment),
+    // C29 (RFC 0049 release 1): a Deployment's ServiceAccount, which a
+    // listener from before its VM has.
     removeServiceAccount: (deployment: string) =>
       cli('api', 'access', 'remove', '--service-account', deployment),
   };

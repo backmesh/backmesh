@@ -43,9 +43,10 @@ creates:
   trusts only your control plane, so no Azure keys are stored.
 - **Cache buckets**, through that connection: one per runner region,
   `bm-cache-<id>-<region>`, for the [cache](/cache/).
-- **The control plane**, when Azure is its cloud: a `Standard_D2s_v5` VM and a
-  `Standard_B2s` VM for the listener, with their disks and public addresses,
-  and a checkpoint bucket for its backups.
+- **The control plane**, when Azure is its cloud: a `Standard_D2s_v5` VM, with
+  its disk and public address, and a checkpoint bucket for its backups; and
+  each org's listener on its own `Standard_B2s` VM, with its disk and public
+  address.
 
 [Uninstall](/uninstall/) deletes the VMs and buckets. It asks before deleting
 the checkpoint bucket, and leaves the role connection's setup for you to

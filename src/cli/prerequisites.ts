@@ -5,8 +5,10 @@
 // with `waitForApp` (`worker.ts`) once its install key is known.
 import {
   anycloudApi,
+  anycloudExec,
   apiTarget,
   type AnycloudApi,
+  type AnycloudExec,
 } from '../anycloud/client.js';
 import {
   missingFeatures,
@@ -160,12 +162,14 @@ export async function hostedApi(
     run: (args: string[]) => Promise<string>;
     fetch?: typeof globalThis.fetch;
     api?: typeof anycloudApi;
+    exec?: typeof anycloudExec;
     signInScopes?: SignInScopes;
   },
   print: (line: string) => void,
 ): Promise<{
   url: string;
   api: AnycloudApi;
+  exec: AnycloudExec;
   // The same API with another release's client header.
   as: (clientVersion: string) => AnycloudApi;
 }> {
@@ -178,6 +182,7 @@ export async function hostedApi(
   return {
     url,
     api: client(url, token, undefined, refresh),
+    exec: (deps.exec ?? anycloudExec)(url, token, undefined, refresh),
     as: (clientVersion) =>
       client(url, token, undefined, refresh, clientVersion),
   };

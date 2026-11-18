@@ -3,10 +3,13 @@ import { describe, expect, it } from 'vitest';
 import {
   changed,
   changeLines,
+  rollListener,
   runnerChanges,
   routesJson,
   targetsOf,
+  type RunningListener,
 } from '../../../src/cli/converge.js';
+import { fakeExec } from './fakes.js';
 import { parseRoutes, type Route } from '../../../src/listener/routes.js';
 import { planClasses } from '../../../src/runners/classes.js';
 import { CATALOG, catalogs } from '../runners/fixtures.js';
@@ -89,5 +92,123 @@ describe('converge', () => {
         (r: Route) => r.retiring,
       ),
     ).toBe(false);
+  });
+});
+
+describe('rollListener', () => {
+  const RUNNING: RunningListener = {
+    name: 'backmesh-acme',
+    org: 'acme',
+    orgId: 7,
+    vm: 'bml-l8u5e-abc123',
+    identity: {
+      install: 'l8u5e',
+      runnerGroup: 'backmesh-l8u5e-k3j9x0',
+      apiUrl: 'https://c1.anycloud.sh',
+      apiToken: 'acapi_old',
+    },
+    image: 'listener@1',
+    runnerImage: 'runner@1',
+    runners: '[]',
+  };
+  const NEXT = {
+    image: 'listener@2',
+    runnerImage: 'runner@2',
+    runners: '[1]',
+    installKey: 'bmk_new',
+    apiToken: 'acapi_new',
+  };
+  // The env file each roll writes, decoded from its command.
+  const written = (command: string) =>
+    Buffer.from(/printf %s '([^']+)'/.exec(command)![1]!, 'base64').toString();
+  const STATUS = JSON.stringify({ code: 200, body: {}, env: {} });
+
+  function setUp(fails: (command: string) => boolean = () => false) {
+    const saved: Record<string, string>[] = [];
+    const control = {
+      saveSecret: async (_: string, values: Record<string, string>) =>
+        void saved.push(values),
+    };
+    const { exec, calls } = fakeExec((_, command) =>
+      fails(command)
+        ? { code: 1, stdout: '', stderr: 'Error: pull access denied' }
+        : STATUS,
+    );
+    const roll = () =>
+      rollListener(RUNNING, NEXT, {
+        control,
+        exec,
+        again: 'upgrade',
+        wait: async () => undefined,
+      });
+    return { saved, calls, roll };
+  }
+
+  it('saves the Secret, writes it to the VM, restarts the listener and waits for it', async () => {
+    const { saved, calls, roll } = setUp();
+    await roll();
+    expect(saved).toEqual([
+      {
+        ORG: 'acme',
+        ORG_ID: '7',
+        BACKMESH_INSTALL: 'l8u5e',
+        BACKMESH_LISTENER_IMAGE: 'listener@2',
+        BACKMESH_RUNNER_GROUP: 'backmesh-l8u5e-k3j9x0',
+        ANYCLOUD_API_URL: 'https://c1.anycloud.sh',
+        ANYCLOUD_API_TOKEN: 'acapi_new',
+        BACKMESH_RUNNER_IMAGE: 'runner@2',
+        BACKMESH_INSTALL_KEY: 'bmk_new',
+        BACKMESH_RUNNERS: '[1]',
+      },
+    ]);
+    expect(calls.map(([id]) => id)).toEqual([RUNNING.vm, RUNNING.vm]);
+    expect(written(calls[0]![1])).toBe(
+      Object.entries(saved[0]!)
+        .map(([k, v]) => `${k}=${v}\n`)
+        .join(''),
+    );
+    expect(calls[1]![1]).toContain('8080/status');
+  });
+
+  it('goes back to the old image and runners on a failed roll, keeping the new key and token', async () => {
+    const { saved, calls, roll } = setUp((command) =>
+      command.includes('printf') ? written(command).includes('@2') : false,
+    );
+    await expect(roll()).rejects.toThrow(
+      "acme's listener's roll to listener@2 failed, and it's back on listener@1. Run upgrade again.",
+    );
+    expect(saved[1]).toMatchObject({
+      BACKMESH_LISTENER_IMAGE: 'listener@1',
+      BACKMESH_RUNNER_IMAGE: 'runner@1',
+      BACKMESH_RUNNERS: '[]',
+      BACKMESH_INSTALL_KEY: 'bmk_new',
+      ANYCLOUD_API_TOKEN: 'acapi_new',
+    });
+    expect(calls).toHaveLength(3);
+  });
+
+  it('fails when the restarted listener never answers', async () => {
+    const saved: unknown[] = [];
+    const { exec, calls } = fakeExec((_, command) =>
+      command.includes('8080/status') ? new Error('No such container') : '',
+    );
+    await expect(
+      rollListener(
+        RUNNING,
+        {
+          ...NEXT,
+          image: RUNNING.image,
+          runnerImage: RUNNING.runnerImage!,
+          runners: RUNNING.runners!,
+        },
+        {
+          control: { saveSecret: async () => void saved.push(1) },
+          exec,
+          wait: async () => undefined,
+        },
+      ),
+    ).rejects.toThrow("acme's listener's roll to listener@1 failed.");
+    // One roll and 24 reads: nothing to go back to.
+    expect(calls).toHaveLength(25);
   });
 });

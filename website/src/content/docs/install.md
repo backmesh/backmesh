@@ -43,8 +43,9 @@ else signs you in and lists the orgs you're an admin of to pick from. Without a
 terminal it asks nothing and names your orgs and the command to run instead.
 
 With nothing else, the control plane and runners go on the cloud your CLI is
-signed in to, near GitHub's US East. The control plane is two small always-on
-VMs in your account that start runners for your jobs (about $74–$111 a month).
+signed in to, near GitHub's US East. The control plane is a small always-on
+VM in your account, and each org's listener, which starts runners for your
+jobs, another (together about $74–$111 a month for one org).
 To choose, see [Control plane and runners](#control-plane-and-runners). To see
 the plan first:
 

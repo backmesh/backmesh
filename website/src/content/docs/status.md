@@ -11,7 +11,7 @@ It shows the shared control plane once, then one section for each org on it.
 `--org` shows only that org's. It shows:
 
 - **Runners**: that each job gets its own VM and controls that VM's Docker,
-  the listeners' VM state and count, and each org's runner VMs: their cloud,
+  each org's listener VM, and its runner VMs: their cloud,
   regions, number of labels and vCPU quotas summed over the regions, read by
   the control plane with that cloud's connection, so no cloud CLI is needed;
   a quota it can't read shows as unread, with why.
@@ -36,8 +36,10 @@ It shows the shared control plane once, then one section for each org on it.
 - **Telemetry**: a line when the listener's events can't reach backmesh.com,
   and how many wait to be sent. Jobs aren't affected. See
   [Telemetry](/telemetry/).
-- **Checks**: whether the listeners' VM runs anything but the orgs' listeners,
-  whether each listener can get GitHub tokens from backmesh.com, and other
+- **Checks**: whether a listener's VM is gone, which `backmesh upgrade`
+  creates again; whether the control plane refuses a listener's token, such
+  as after a restore from an older backup, which `backmesh upgrade` replaces;
+  whether each listener can get GitHub tokens from backmesh.com; and other
   warnings.
 
 ```text

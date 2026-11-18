@@ -32,7 +32,7 @@
 // sign-in, roll or confirm didn't finish, or a confirmed roll's revoke
 // didn't.
 import type { RunAnycloud } from '../anycloud/binary.js';
-import type { anycloudApi } from '../anycloud/client.js';
+import type { anycloudApi, anycloudExec } from '../anycloud/client.js';
 import { anycloudControl } from '../app/anycloud.js';
 import {
   workerDeps,
@@ -44,25 +44,30 @@ import {
 import { rollListener } from './converge.js';
 import { UsageError } from './errors.js';
 import { keyFrom, type SignInScopes } from './github-sign-in.js';
+import { z } from 'zod';
+
 import {
   clusterIdOf,
+  CONTROL_POOL,
+  installTag,
   listenerName,
-  readControlPool,
+  readInstallation,
   readOrgId,
 } from './installation.js';
+import { OVERRIDE } from '../app/override.js';
 import { hostedApi } from './prerequisites.js';
-import { readDeployedListener } from './status.js';
+import { readListener } from './status.js';
 
 export interface RotateKeyDeps {
   env: NodeJS.ProcessEnv;
   run: RunAnycloud;
-  // For the listener's roll (`deployment upgrade --wait`).
   runLong: RunAnycloud;
   print: (line: string) => void;
   fetch?: typeof globalThis.fetch;
   wait?: (ms: number) => Promise<void>;
   signInScopes?: SignInScopes;
   api?: typeof anycloudApi;
+  exec?: typeof anycloudExec;
 }
 
 export interface RotateKeyOptions {
@@ -118,19 +123,24 @@ export async function rotateKey(
   const wait =
     deps.wait ??
     ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
-  const { url, api } = await hostedApi(deps, print);
-  clusterIdOf(url);
+  const { url, api, exec } = await hostedApi(deps, print);
+  const clusterId = clusterIdOf(url);
   const name = listenerName(org);
-  const { listeners } = await readControlPool(api);
-  const listener = listeners.find((l) => l.name === name);
+  const listener = (await readInstallation(api)).orgs.find(
+    (l) => l.name === name,
+  );
   if (!listener) {
     throw new UsageError(
       `There's no listener for ${org} on ${url}; run \`backmesh install\`.`,
     );
   }
-  const running = await readDeployedListener(deps.run, listener).catch(
-    () => undefined,
-  );
+  const vm = listener.vm?.lost ? undefined : listener.vm?.id;
+  if (!vm) {
+    throw new UsageError(
+      `${org}'s listener ${listener.vm ? 'VM is gone' : `still runs on ${CONTROL_POOL}`}; run \`backmesh upgrade\` first, then rotate-key.`,
+    );
+  }
+  const running = await readListener(exec, listener).catch(() => undefined);
   if (!running) {
     throw new Error(
       `${org}'s listener didn't answer, so rotate-key can't read its install key. Run \`backmesh status\`, then try again.`,
@@ -155,7 +165,15 @@ export async function rotateKey(
     name,
     org,
     orgId,
-    image: listener.image,
+    vm,
+    identity: {
+      install: installTag(clusterId, orgId),
+      runnerGroup: z.string().parse(running.runnerGroup),
+      apiUrl: url,
+      apiToken: z.string().parse(running.apiToken),
+      override: running.override ? OVERRIDE : undefined,
+    },
+    image: running.image,
     runnerImage,
     runners,
     cacheCapGb: running.cacheCapGb,
@@ -198,18 +216,16 @@ export async function rotateKey(
     await rollListener(
       base,
       { ...base, installKey: signed.key, rotatingFrom: oldInstall },
-      { control, runLong: deps.runLong },
+      { control, exec, wait },
     );
     // Confirmed from the listener's own environment, read fresh, not
     // merely that the roll command exited: the old key is revoked only
     // once the listener itself is on the new one. A single failed or
     // stale read can be a slow restart, so this retries first.
-    let confirmed: Awaited<ReturnType<typeof readDeployedListener>> | undefined;
+    let confirmed: Awaited<ReturnType<typeof readListener>> | undefined;
     for (let i = 0; i < RETRY_ATTEMPTS; i++) {
       if (i > 0) await wait(RETRY_WAIT_MS);
-      confirmed = await readDeployedListener(deps.run, listener).catch(
-        () => undefined,
-      );
+      confirmed = await readListener(exec, listener).catch(() => undefined);
       if (
         confirmed?.installKey === signed.key &&
         confirmed.rotatingFrom === oldInstall
@@ -260,7 +276,7 @@ export async function rotateKey(
   const already = await revoke(oldInstall, newKey, token);
   if (already && running.rotatingFrom) {
     // The resumed rotation had already finished in an earlier run: the
-    // marker was only stale, left behind because the Pod hadn't restarted
+    // marker was only stale, left behind because the listener hadn't restarted
     // since that run cleared it. Start a fresh rotation from the key
     // actually running now, instead of reporting success having rotated
     // nothing.
@@ -282,7 +298,7 @@ export async function rotateKey(
   await rollListener(
     base,
     { ...base, installKey: newKey },
-    { control, runLong: deps.runLong },
+    { control, exec, wait },
   ).catch(() => {});
   return { org };
 }

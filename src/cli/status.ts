@@ -4,7 +4,6 @@
 import { CACHE_CAP_ENV } from '../listener/sweep.js';
 import { z } from 'zod';
 
-import type { RunAnycloud } from '../anycloud/binary.js';
 import type { AnycloudApi, AnycloudExec } from '../anycloud/client.js';
 import {
   FEATURES,
@@ -148,21 +147,6 @@ export async function readListener(
       Number(env[CACHE_CAP_ENV]) > 0 ? Number(env[CACHE_CAP_ENV]) : undefined,
   };
 }
-
-// A listener on `bm-control` read through the binary, by its Deployment's
-// name, as install, upgrade and rotate-key still roll it.
-export const readDeployedListener = (
-  run: RunAnycloud,
-  deployment: Deployment,
-) =>
-  readListener(
-    async (id, command) => ({
-      code: 0,
-      stdout: await run(['exec', id, command]),
-      stderr: '',
-    }),
-    { deployment: { ...deployment, id: deployment.name } },
-  );
 
 export interface StatusDeps {
   api: AnycloudApi;

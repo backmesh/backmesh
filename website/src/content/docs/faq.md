@@ -75,8 +75,10 @@ VM type backmesh's labels use, narrowed to the ones your account allows.
 run install with the other org and the same `--control-plane`. An admin of that
 org signs in, and install adds only that org's listener. Its plan says the org
 joins the others' control plane, and that every org on it must have the same
-owner: their runners use the same cloud connections, and each org's listener
-can read the others' install keys. Agreeing to the plan agrees to that. Run it
+owner: their runners use the same cloud connections, and each org's listener,
+on its own VM, holds a control plane token that can reach the others' install
+keys. Agreeing to the plan agrees to that, and each org adds its own small
+listener VM to the bill. Run it
 from the machine that installed the first org, so the plan can see them. From
 another machine, install finds them only once it reaches the control plane, and
 stops before adding the org, for a new plan; at a terminal, it asks instead.

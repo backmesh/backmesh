@@ -14,9 +14,10 @@ export const GITHUB_4_CORE_PER_MIN = 0.012;
  * Disks are left out: each runner's 100 GB disk adds about $0.01 an hour on
  * AWS. `bootS` is the VM boot each job pays, as measured (coordinator,
  * 2026-11-07): about 30 s on AWS, 60–70 s on GCP and Azure. `controlPlane` is
- * the fixed monthly cost while runners have no VM: the management VM and
- * bm-control with their disks and public addresses, as install prints it
- * (src/cli/install.ts CONTROL_PLANE_MONTHLY_USD). */
+ * the fixed monthly cost while runners have no VM: the management VM and one
+ * org's listener VM with their disks and public addresses, as install prints
+ * it (src/cli/install.ts MANAGEMENT_MONTHLY_USD and src/cli/listener-vm.ts
+ * LISTENER_VM_MONTHLY_USD). */
 export const CATALOG_DATE = '2026-11-13';
 const clouds = [
   {

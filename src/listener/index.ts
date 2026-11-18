@@ -1,5 +1,5 @@
-// The listener's entry point: the scale-set count loop, run as
-// an org's `backmesh-<org>` Deployment on `bm-control`.
+// The listener's entry point: the scale-set count loop, run as a container
+// on the org's own listener VM (`cli/listener-vm.ts`).
 import { readFile } from 'node:fs/promises';
 import { hostname } from 'node:os';
 
@@ -19,7 +19,7 @@ import {
   InstallationTokens,
 } from '../github/installation-token.js';
 import { retryingFetch, type Log } from '../github/retry.js';
-import { runnerGroupName } from '../github/runner-group.js';
+import { isOurRunnerGroup } from '../github/runner-group.js';
 import { apiUrl, Telemetry } from './telemetry.js';
 import { ListenerControl, serve } from './control.js';
 import { CacheTokens } from './cache.js';
@@ -36,6 +36,12 @@ import { anycloudRunnerJobs, runnerVm } from './runner-jobs.js';
 import { Quotas } from './quota.js';
 import { readQuotaStatus } from '../runners/quota.js';
 import { Scaler } from './scaler.js';
+import {
+  API_TOKEN_ENV,
+  API_URL_ENV,
+  RUNNER_GROUP_ENV,
+  STANDBY_ENV,
+} from './env.js';
 
 const log: Log = (entry) =>
   process.stdout.write(
@@ -48,23 +54,22 @@ function env(name: string): string {
   return value;
 }
 
-// The release Secret and install's environment. anycloud sets the API URL
-// and the projected token's path in every Deployment (`deployment-objects.ts`,
-// `pool-objects.ts`).
+// The org's Secret, which install and upgrade write to the VM.
 const org = env('ORG');
 const install = env('BACKMESH_INSTALL');
 if (!/^[a-z0-9]{5}$/.test(install)) {
   throw new Error('BACKMESH_INSTALL must be 5 lowercase letters or digits.');
 }
-const runnerGroup = runnerGroupName(install, env('ANYCLOUD_DEPLOYMENT_ID'));
+const runnerGroup = env(RUNNER_GROUP_ENV);
+if (!isOurRunnerGroup(install)(runnerGroup)) {
+  throw new Error(`${RUNNER_GROUP_ENV} isn't this install's runner group.`);
+}
 // The install key the Worker knows this install by, and
 // mints this org's installation tokens for.
 const installKey = env('BACKMESH_INSTALL_KEY');
 const { version }: { version: string } = JSON.parse(
   await readFile(new URL('../../package.json', import.meta.url), 'utf8'),
 );
-// The anycloud-api audience token (`pool-objects.ts`).
-const tokenFile = env('ANYCLOUD_API_TOKEN_FILE');
 // The runner classes, in the Secret so `upgrade` can change them.
 const routes = parseRoutes(env(RUNNERS_ENV));
 // `install --public-repos`: the group
@@ -81,21 +86,56 @@ const tokens = new InstallationTokens(
   { url: apiUrl(), installKey, org },
   retryingFetch(globalThis.fetch, { log, max: 1, attemptTimeoutMs: 10_000 }),
 );
+// Since when the control plane has refused the service token, such as after
+// a restore from a backup older than its last rotation; null once it takes
+// it again.
+let refused: { since: string; error: string } | null = null;
 const control = new ListenerControl({
   broker: () => tokens.unreachable,
   notInstalled: () => tokens.notInstalled,
+  anycloud: () => refused,
 });
-// Loopback only: `backmesh status`, `upgrade` and `uninstall` reach it through
-// `anycloud exec`. Up first, so they work while the App
-// isn't installed or the runner group can't be made.
-const server = serve(control);
 
 const shutdown = new AbortController();
 process.once('SIGTERM', () => shutdown.abort());
 // Ends the sessions on shutdown or for `uninstall`'s drain.
 shutdown.signal.addEventListener('abort', () => control.sessions.abort());
+const stopped = () =>
+  new Promise((resolve) =>
+    shutdown.signal.addEventListener('abort', resolve, { once: true }),
+  );
+
+// The listener's service token, which `backmesh upgrade` replaces.
+const api = anycloudApi(
+  env(API_URL_ENV),
+  env(API_TOKEN_ENV),
+  async (request, init) => {
+    const response = await globalThis.fetch(request, init);
+    if (response.status === 401) {
+      refused ??= {
+        since: new Date().toISOString(),
+        error: `HTTP 401: ${await response.clone().text()}`.slice(0, 300),
+      };
+    } else if (response.ok) refused = null;
+    return response;
+  },
+);
+
+// In standby, one read before `/status` answers, so it reports a refused
+// token.
+const standby = !!process.env[STANDBY_ENV];
+if (standby) {
+  await api
+    .listWorkloads({ query: { workloadType: 'vm', limit: '1' } })
+    .catch(() => undefined);
+}
+// Loopback only: `backmesh status`, `upgrade` and `uninstall` reach it through
+// `anycloud exec` and `docker exec`. Up first, so they work while the App
+// isn't installed or the runner group can't be made.
+const server = serve(control);
 
 const listening = control.listen(async (signal) => {
+  if (standby) return void (await stopped());
   await waitForToken(tokens, log, signal);
   const octokit = installationOctokit(tokens, fetch);
   const actions = new ActionsClient({
@@ -105,11 +145,6 @@ const listening = control.listen(async (signal) => {
     signal: shutdown.signal,
     log,
   });
-  // C29: the Pod's projected ServiceAccount token, re-read per request
-  // because the kubelet rotates it.
-  const api = anycloudApi(env('ANYCLOUD_API_URL'), async () =>
-    (await readFile(tokenFile, 'utf8')).trim(),
-  );
   const orgId = async (signal?: AbortSignal) =>
     (await octokit.request('GET /orgs/{org}', { org, request: { signal } }))
       .data.id;
@@ -270,13 +305,9 @@ const listening = control.listen(async (signal) => {
 
 try {
   await listening;
-  // Exiting would restart the Pod, and a new listener would recreate the
+  // Exiting would restart the container, and a new listener would recreate the
   // scale sets, so a drained one waits for uninstall to delete it.
-  if (control.drainStarted && !shutdown.signal.aborted) {
-    await new Promise((resolve) =>
-      shutdown.signal.addEventListener('abort', resolve, { once: true }),
-    );
-  }
+  if (control.drainStarted && !shutdown.signal.aborted) await stopped();
 } finally {
   server.close();
 }

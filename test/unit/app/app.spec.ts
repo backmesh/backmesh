@@ -170,16 +170,6 @@ describe('the hosted API token', () => {
 });
 
 describe('anycloudControl', () => {
-  it('registers and removes the listener ServiceAccount (C29)', async () => {
-    const { anycloud, calls } = fakeAnycloud();
-    await anycloud.addServiceAccount('backmesh');
-    await anycloud.removeServiceAccount('backmesh');
-    expect(calls).toEqual([
-      ['api', 'access', 'add', '--service-account', 'backmesh'],
-      ['api', 'access', 'remove', '--service-account', 'backmesh'],
-    ]);
-  });
-
   it("issues, rotates and removes the listener's service token, read from stdout", async () => {
     let n = 0;
     const { anycloud, calls } = fakeAnycloud([], [], (args) =>

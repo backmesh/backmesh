@@ -59,7 +59,7 @@ Only Linux x86-64 jobs in private repositories can use the runners. See
 ## How it works
 
 Install creates backmesh's control plane in your account: two small always-on
-VMs, about $74–$111 a month. On one of them, a listener long-polls GitHub for
+VMs, about $74–$111 a month for one org. On one of them, a listener long-polls GitHub for
 queued jobs, so nothing needs an inbound port or a webhook. For each job, it
 starts a VM in the cheapest region with capacity, and the VM is deleted when the
 job ends. Runners can be in other clouds than the control plane. Every job gets

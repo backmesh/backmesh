@@ -7,17 +7,21 @@ description: What runs where, what reaches backmesh, the GitHub App's permission
 
 Everything backmesh runs is in your own accounts:
 
-- **backmesh's control plane**, two small always-on VMs in the first cloud you
+- **backmesh's control plane**, a small always-on VM in the first cloud you
   install, with a checkpoint bucket for its backups.
-- **The listener**, which scales runners, alone on one of those VMs. It
-  long-polls GitHub, so nothing needs an inbound port or a webhook.
+- **The listener**, which scales runners, alone on a small always-on VM of its
+  own for each org. It long-polls GitHub, so nothing needs an inbound port or a
+  webhook. It's never on the control plane's VM, which keeps the control
+  plane's keys away from the code that reads GitHub's messages.
 - **The runners**: each job gets its own spot or on-demand VM, which is deleted
   when the job ends.
 
 Your cloud credentials, code, secrets, caches, logs and runners stay in your
 accounts. Install connects each cloud with a role from your own cloud CLI session, so no
-cloud keys are stored. The listener's identity is a short-lived token bound to
-its own container, not a stored token.
+cloud keys are stored. The listener's identity is a control plane token that
+only it holds, issued by your control plane for that listener alone and kept on
+its VM; `backmesh upgrade` issues a new one whenever the control plane refuses
+it.
 
 One credential that reaches your org isn't in your accounts: the private key of
 backmesh's GitHub App, which backmesh holds. Whoever holds it can register
@@ -203,5 +207,5 @@ its own VM; the job controls that VM's Docker. Jobs from every repository in the
 org use the same labels, so only run code you'd trust your org's members to
 run. Jobs on the [KVM labels](/labels/#kvm) also get `/dev/kvm`.
 
-The listener runs on a control plane VM, which runs no job. Per-repository
+The listener runs on its own VM, which runs no job. Per-repository
 runner groups are planned.

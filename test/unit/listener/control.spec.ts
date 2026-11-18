@@ -36,9 +36,12 @@ const LOST = {
   installUrl: 'https://github.com/apps/backmesh/installations/new',
 };
 
+const REFUSED = { since: '2026-11-04T12:41:00.000Z', error: 'HTTP 401: {}' };
+
 const controlDeps = (): ControlDeps => ({
   broker: () => OUTAGE,
   notInstalled: () => LOST,
+  anycloud: () => REFUSED,
 });
 
 const until = async (check: () => Promise<boolean>) => {
@@ -57,6 +60,7 @@ describe('ListenerControl', () => {
         actionsPermission: null,
         broker: OUTAGE,
         notInstalled: LOST,
+        anycloud: REFUSED,
         runners: 0,
         cap: 500,
         scaleSets: [],

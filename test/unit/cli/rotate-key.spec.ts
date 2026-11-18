@@ -9,11 +9,13 @@ import {
   rotateKey,
   type RotateKeyDeps,
 } from '../../../src/cli/rotate-key.js';
-import { readDeployedListener } from '../../../src/cli/status.js';
+import { readListener } from '../../../src/cli/status.js';
 import {
   fakeApi,
   fakeBinary,
+  fakeExec,
   fakeWorker,
+  listenerVm,
   githubOrg,
   INSTALL_KEY,
   SIGNED_IN,
@@ -35,12 +37,29 @@ const NEW_KEY = `bmk_${NEW_INSTALL}${'ef'.repeat(16)}`;
 const NEWER_INSTALL = '12'.repeat(16);
 const NEWER_KEY = `bmk_${NEWER_INSTALL}${'34'.repeat(16)}`;
 const OLD_INSTALL = INSTALL_KEY.slice(4, 36);
+const VM = 'bml-l8u5e-aaaaaa';
+const GROUP = 'backmesh-l8u5e-k3j9x0';
+const TOKEN = 'acapi_service';
+// The values a roll's command writes, base64 in it (`rollCommand`).
+const rolledValues = (command: string) => {
+  const b64 = /printf %s '([^']*)' \| base64 -d/.exec(command)?.[1];
+  if (b64 === undefined) return undefined;
+  return Object.fromEntries(
+    Buffer.from(b64, 'base64')
+      .toString()
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const i = line.indexOf('=');
+        return [line.slice(0, i), line.slice(i + 1)];
+      }),
+  );
+};
 
 // Shared, mutable state across one or more `rotateKey` calls, standing in
 // for the control plane: the Secret (what a `PUT /v1/secrets` call wrote)
-// and the listener Pod's own environment (what `exec` reads), which only
-// moves to match the Secret once a `deployment upgrade` call actually
-// succeeds — never on a failed one, and never just because the Secret was
+// and the listener's own environment (what a `/status` exec reads), which
+// only moves to match once a roll's exec actually succeeds — never on a failed one, and never just because the Secret was
 // saved (clearing the marker is a plain Secret save, no roll). This is what
 // makes a true rerun (the same `deps` simply called again, no new fixture)
 // meaningful to test.
@@ -48,33 +67,36 @@ function fixture({
   // 'down': the listener doesn't answer; 'no-key': no install key yet;
   // 'before-vm-jobs': no runner classes Secret.
   listener = 'ok' as 'ok' | 'down' | 'no-key' | 'before-vm-jobs',
+  // Where it runs: its VM, a VM anycloud found gone, or still a
+  // Deployment on `bm-control`.
+  host = 'vm' as 'vm' | 'lost' | 'deployment',
   missing = false,
   revokes,
   installs,
-  // A roll that reports success without the Pod actually picking up the
-  // new Secret (a stuck rollout `--wait` didn't catch) — permanently,
-  // unless `catchUpAt` is also given.
+  // A roll that reports success without the listener actually picking up
+  // the new values — permanently, unless `catchUpAt` is also given.
   stuck = false,
-  // 1-indexed, across every `exec` call this fixture ever makes (including
-  // a later `rotateKey` call reusing it): from here on, the Pod's env
-  // reflects the Secret's current values regardless of `stuck`, modelling
-  // an eventual restart a later rerun's own read catches.
+  // 1-indexed, across every `/status` read this fixture ever makes
+  // (including a later `rotateKey` call reusing it): from here on, the
+  // listener's env reflects the Secret's current values regardless of
+  // `stuck`, modelling an eventual restart a later rerun's own read
+  // catches.
   catchUpAt,
-  // 1-indexed, across every `deployment upgrade` call this fixture ever
-  // makes: which one throws.
-  failDeployAt,
-  // Seeds the Pod as already mid-rotation, as if an earlier process had
+  // 1-indexed, across every roll this fixture ever makes: which one fails.
+  failRollAt,
+  // Seeds the listener as already mid-rotation, as if an earlier process had
   // minted `newKey` and rolled it, recording `oldInstall` to revoke —
   // standing in for "a previous `rotateKey` run got this far".
   preRotating,
 }: {
   listener?: 'ok' | 'down' | 'no-key' | 'before-vm-jobs';
+  host?: 'vm' | 'lost' | 'deployment';
   missing?: boolean;
   revokes?: (Response | Error)[];
   installs?: (Response | Error)[];
   stuck?: boolean;
   catchUpAt?: number;
-  failDeployAt?: number;
+  failRollAt?: number;
   preRotating?: { newKey: string; oldInstall: string };
 } = {}) {
   const calls: string[] = [];
@@ -86,82 +108,100 @@ function fixture({
   let secretKey = podKey;
   let secretRotatingFrom = podRotatingFrom;
   let execs = 0;
-  let deploys = 0;
+  let rolls = 0;
   const binary = fakeBinary({
     'api status --json': JSON.stringify({ url: HOSTED }),
     'api token': 't0ken',
   });
   const run = async (args: string[]) => {
-    const line = args.join(' ');
-    calls.push(line);
-    if (args[0] === 'exec' && args[1] === 'backmesh-acme') {
-      execs++;
-      order.push(`exec#${execs}`);
-      if (listener === 'down') throw new Error('exec failed');
-      if (catchUpAt !== undefined && execs >= catchUpAt) {
-        podKey = secretKey;
-        podRotatingFrom = secretRotatingFrom;
-      }
-      return JSON.stringify({
-        code: 200,
-        env: {
-          ORG: 'acme',
-          ORG_ID: '7',
-          BACKMESH_RUNNER_IMAGE: RUNNER_IMAGE,
-          ...(podKey && { BACKMESH_INSTALL_KEY: podKey }),
-          ...(listener !== 'before-vm-jobs' && { BACKMESH_RUNNERS: RUNNERS }),
-          ...(podRotatingFrom && { BACKMESH_ROTATING_FROM: podRotatingFrom }),
-        },
-        body: {
-          installed: true,
-          broker: null,
-          runners: 0,
-          cap: 500,
-          scaleSets: [],
-        },
-      });
-    }
-    if (args[0] === 'deployment' && args[1] === 'upgrade') {
-      deploys++;
-      order.push(`deployment upgrade#${deploys}`);
-      if (failDeployAt === deploys) {
-        throw new Error(`rollout #${deploys} failed`);
+    calls.push(args.join(' '));
+    return binary.run(args);
+  };
+  const id = host === 'deployment' ? 'dep-acme' : VM;
+  const { exec } = fakeExec((target, command) => {
+    if (target !== id) return new Error('Workload or Deployment not found');
+    const values = rolledValues(command);
+    if (values) {
+      rolls++;
+      calls.push(`roll ${target}`);
+      order.push(`roll#${rolls}`);
+      if (failRollAt === rolls) {
+        return { code: 1, stdout: '', stderr: `rollout #${rolls} failed\n` };
       }
       if (!stuck) {
-        podKey = secretKey;
-        podRotatingFrom = secretRotatingFrom;
+        podKey = values.BACKMESH_INSTALL_KEY;
+        podRotatingFrom = values.BACKMESH_ROTATING_FROM;
       }
       return '';
     }
-    return binary.run(args);
-  };
+    execs++;
+    order.push(`exec#${execs}`);
+    if (listener === 'down') return new Error('exec failed');
+    if (catchUpAt !== undefined && execs >= catchUpAt) {
+      podKey = secretKey;
+      podRotatingFrom = secretRotatingFrom;
+    }
+    return JSON.stringify({
+      code: 200,
+      env: {
+        ORG: 'acme',
+        ORG_ID: '7',
+        BACKMESH_RUNNER_IMAGE: RUNNER_IMAGE,
+        BACKMESH_LISTENER_IMAGE: IMAGE,
+        BACKMESH_RUNNER_GROUP: GROUP,
+        ANYCLOUD_API_TOKEN: TOKEN,
+        ...(podKey && { BACKMESH_INSTALL_KEY: podKey }),
+        ...(listener !== 'before-vm-jobs' && { BACKMESH_RUNNERS: RUNNERS }),
+        ...(podRotatingFrom && { BACKMESH_ROTATING_FROM: podRotatingFrom }),
+      },
+      body: {
+        installed: true,
+        broker: null,
+        runners: 0,
+        cap: 500,
+        scaleSets: [],
+      },
+    });
+  });
+  const onPool = host === 'deployment' && !missing;
   const routes = {
     'GET /v1/node-pools': {
-      nodePools: [
-        {
-          id: 'np-1',
-          name: 'bm-control',
-          state: 'running',
-          allowPrivilegedJobs: false,
-          cloudProvider: 'AWS',
-          region: 'us-east-2',
-        },
-      ],
+      nodePools: onPool
+        ? [
+            {
+              id: 'np-1',
+              name: 'bm-control',
+              state: 'running',
+              allowPrivilegedJobs: false,
+              cloudProvider: 'AWS',
+              region: 'us-east-2',
+            },
+          ]
+        : [],
     },
     'GET /v1/deployments': {
-      deployments: missing
-        ? []
-        : [
+      deployments: onPool
+        ? [
             {
+              id: 'dep-acme',
               name: 'backmesh-acme',
               managed: false,
               nodePoolId: 'np-1',
               deletedAt: null,
               image: IMAGE,
             },
-          ],
+          ]
+        : [],
     },
-    'GET /v1/workloads': [],
+    'GET /v1/workloads':
+      missing || host === 'deployment'
+        ? []
+        : [
+            listenerVm('acme', VM, {
+              state: host === 'lost' ? 'failed' : 'running',
+            }),
+          ],
+    'GET /v1/secrets': [{ name: 'backmesh-acme', createdAt: 1, updatedAt: 1 }],
     'PUT /v1/secrets/backmesh-acme': (body: string) => {
       order.push('secret');
       const { values } = JSON.parse(body) as {
@@ -192,6 +232,7 @@ function fixture({
     print: (line) => lines.push(line),
     signInScopes: async () => ['read:org', 'read:packages'],
     api: () => api,
+    exec: () => exec,
     fetch: async (url, init) => {
       const path = new URL(String(url)).pathname;
       if (path === '/v1/installs/revoke') order.push('revoke');
@@ -211,6 +252,7 @@ function fixture({
     worker,
     order,
     api,
+    exec,
     secretKey: () => secretKey,
     secretRotatingFrom: () => secretRotatingFrom,
     // What the listener's own environment (not just the Secret) shows —
@@ -219,8 +261,7 @@ function fixture({
   };
 }
 
-const rolled = (calls: string[]) =>
-  calls.some((c) => c.startsWith('deployment upgrade backmesh-acme'));
+const rolled = (calls: string[]) => calls.includes(`roll ${VM}`);
 // No raw install IDs (32 hex characters) in any user-visible line.
 const noInstallIds = (lines: string[]) =>
   lines.every((l) => !/[0-9a-f]{32}/.test(l));
@@ -329,7 +370,7 @@ describe('rotateKey', () => {
       { key: NEW_KEY, install: OLD_INSTALL, token: SIGNED_IN },
     ]);
     const secretIndex = order.indexOf('secret');
-    const confirmIndex = order.indexOf('exec#2');
+    const confirmIndex = order.indexOf('exec#3');
     const revokeIndex = order.indexOf('revoke');
     expect(secretIndex).toBeLessThan(confirmIndex);
     expect(confirmIndex).toBeLessThan(revokeIndex);
@@ -339,15 +380,17 @@ describe('rotateKey', () => {
     // The listener's own environment is clean too (a real roll, not just a
     // Secret save), so a later rerun or `upgrade` never finds it stale.
     expect(podRotatingFrom()).toBeUndefined();
-    // Two rolls: the mint's, then the marker-clearing one.
-    expect(order.filter((e) => e.startsWith('deployment upgrade'))).toEqual([
-      'deployment upgrade#1',
-      'deployment upgrade#2',
+    // Two rolls on its VM: the mint's, then the marker-clearing one, each
+    // after its Secret's save.
+    expect(order.filter((e) => /^(roll|secret)/.test(e))).toEqual([
+      'secret',
+      'roll#1',
+      'secret',
+      'roll#2',
     ]);
-    // Both keep the listener's half-vCPU share of `bm-control`.
-    expect(calls.filter((c) => c.startsWith('deployment upgrade'))).toEqual([
-      `deployment upgrade backmesh-acme --image ${IMAGE} --secret backmesh-acme --cpus 0.5 --wait`,
-      `deployment upgrade backmesh-acme --image ${IMAGE} --secret backmesh-acme --cpus 0.5 --wait`,
+    expect(calls.filter((c) => c.startsWith('roll'))).toEqual([
+      `roll ${VM}`,
+      `roll ${VM}`,
     ]);
     expect(noInstallIds(lines)).toBe(true);
     expect(lines).toEqual([
@@ -361,8 +404,8 @@ describe('rotateKey', () => {
   it('succeeds silently when the clearing roll itself fails (the rotation is already complete)', async () => {
     const { deps, worker, lines, secretRotatingFrom, podRotatingFrom } =
       fixture({
-        // The 2nd `deployment upgrade` is the marker-clearing roll.
-        failDeployAt: 2,
+        // The 2nd roll is the marker-clearing one.
+        failRollAt: 2,
       });
 
     const result = await rotateKey(deps, { org: 'acme' });
@@ -381,8 +424,8 @@ describe('rotateKey', () => {
       `Rolling acme's listener onto the new key.`,
       `acme's listener runs on the new key; revoking the old install.`,
     ]);
-    // The clearing roll's own first save still landed (the Pod recreate
-    // is what failed), so the Secret is clean; the Pod's own env is what's
+    // The clearing roll's own first save still landed (the restart is
+    // what failed), so the Secret is clean; the listener's own env is what's
     // left stale, which is harmless: a later run finds the old install
     // already revoked and starts fresh (the "resuming" tests above cover
     // that path).
@@ -400,7 +443,7 @@ describe('rotateKey', () => {
 
   it('wraps a roll failure the same way, naming no duplicate image, lowercased and with no double period', async () => {
     const { deps, secretKey, secretRotatingFrom } = fixture({
-      failDeployAt: 1,
+      failRollAt: 1,
     });
 
     const error = (await rotateKey(deps, { org: 'acme' }).catch(
@@ -523,9 +566,9 @@ describe('rotateKey', () => {
     });
 
     it("finishes the SAME rotation on a rerun after the listener didn't confirm in time, once it later catches up", async () => {
-      // Stuck through the first run's 3 confirm reads (exec#2,3,4); caught
-      // up by exec#5, the rerun's own first read.
-      const first = fixture({ stuck: true, catchUpAt: 5 });
+      // Stuck through the first run's start read and 3 confirm reads
+      // (exec#2-5); caught up by exec#6, the rerun's own first read.
+      const first = fixture({ stuck: true, catchUpAt: 6 });
 
       await expect(rotateKey(first.deps, { org: 'acme' })).rejects.toThrow(
         /didn't come up on the new key/,
@@ -613,14 +656,29 @@ describe('rotateKey', () => {
       // through unexamined — the exact call this fix depends on, so a
       // clean marker here means upgrade carries through nothing.
       const name = 'backmesh-acme';
-      const [deployment] = (await f.api.listDeployments({ query: {} }))
-        .deployments;
-      const running = await readDeployedListener(f.deps.run, deployment!);
+      const running = await readListener(f.exec, {
+        vm: {
+          id: VM,
+          name,
+          org: 'acme',
+          cloud: 'aws',
+          region: 'us-east-1',
+          lost: false,
+          others: [],
+        },
+      });
       const control = anycloudControl(f.api, f.deps.run);
       const base = {
         name,
         org: 'acme',
         orgId: 7,
+        vm: VM,
+        identity: {
+          install: 'l8u5e',
+          runnerGroup: GROUP,
+          apiUrl: HOSTED,
+          apiToken: TOKEN,
+        },
         image: IMAGE,
         runnerImage: RUNNER_IMAGE,
         runners: RUNNERS,
@@ -632,7 +690,7 @@ describe('rotateKey', () => {
           installKey: running.installKey!,
           rotatingFrom: running.rotatingFrom,
         },
-        { control, runLong: f.deps.runLong, again: 'upgrade' },
+        { control, exec: f.exec, again: 'upgrade', wait: async () => {} },
       );
       expect(f.podRotatingFrom()).toBeUndefined();
 
@@ -650,6 +708,21 @@ describe('rotateKey', () => {
     const { deps } = fixture({ missing: true });
 
     await expect(rotateKey(deps, { org: 'acme' })).rejects.toThrow(UsageError);
+  });
+
+  it('refuses a listener whose VM is gone, or still on bm-control: upgrade first', async () => {
+    for (const host of ['lost', 'deployment'] as const) {
+      const { deps, worker, calls } = fixture({ host });
+      const error = await rotateKey(deps, { org: 'acme' }).catch(
+        (e: unknown) => e,
+      );
+      expect(error).toBeInstanceOf(UsageError);
+      expect((error as Error).message).toBe(
+        `acme's listener ${host === 'lost' ? 'VM is gone' : 'still runs on bm-control'}; run \`backmesh upgrade\` first, then rotate-key.`,
+      );
+      expect(worker.calls).toEqual([]);
+      expect(rolled(calls)).toBe(false);
+    }
   });
 
   it("refuses when the listener doesn't answer", async () => {
