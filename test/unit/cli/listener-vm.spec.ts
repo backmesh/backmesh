@@ -160,7 +160,11 @@ describe('listListenerVms', () => {
       vm('bml-q2w3e-lost01', true),
       vm('bml-z1z1z-term01', true),
     ]);
-    expect(requests[0]).toBe('GET /v1/workloads?workloadType=vm&limit=1000');
+    // Running VMs on their own first, so ended ones can't page them out.
+    expect(requests.slice(0, 2)).toEqual([
+      'GET /v1/workloads?workloadType=vm&stateClass=terminatable&limit=1000',
+      'GET /v1/workloads?workloadType=vm&limit=1000',
+    ]);
   });
 
   it("names an org's other running VMs, and reads no Secrets while every VM runs", async () => {
@@ -173,7 +177,27 @@ describe('listListenerVms', () => {
     expect(await listListenerVms(api)).toMatchObject([
       { id: 'bml-l8u5e-abc123', others: ['bml-l8u5e-def456'] },
     ]);
-    expect(requests).toHaveLength(1);
+    expect(requests.some((r) => r.startsWith('GET /v1/secrets'))).toBe(false);
+  });
+
+  it('finds a running VM that the newest 1,000 VMs page out', async () => {
+    const ended = Array.from({ length: 1000 }, (_, i) =>
+      listenerVm('beta', `bml-q2w3e-${String(i).padStart(6, '0')}`, {
+        state: 'terminated',
+      }),
+    );
+    const { api } = fakeApi({ 'GET /v1/secrets': [] }, (request) => {
+      const { pathname, searchParams } = new URL(request.url);
+      if (pathname !== '/v1/workloads') return undefined;
+      return Response.json(
+        searchParams.get('stateClass')
+          ? [listenerVm('acme', 'bml-l8u5e-abc123')]
+          : ended,
+      );
+    });
+    expect(await listListenerVms(api)).toMatchObject([
+      { id: 'bml-l8u5e-abc123', lost: false },
+    ]);
   });
 });
 
@@ -230,6 +254,12 @@ describe('the VM commands', () => {
         /^run -d --name backmesh-listener --restart=always .*--env-file \S+\/backmesh\/listener\.env ghcr\.io\/backmesh\/backmesh-listener@sha256:11$/,
       ),
     ]);
+  });
+
+  it('refuses a value that spans lines, which the env file can’t hold', () => {
+    expect(() => rollCommand({ ORG: 'acme', BAD: 'a\nb' })).toThrow(
+      "The listener's BAD spans lines.",
+    );
   });
 
   it('writes a roll’s values whole, quotes and all, and restarts on them', () => {

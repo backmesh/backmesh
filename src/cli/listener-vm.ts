@@ -92,18 +92,35 @@ export interface ListenerVm {
 
 /**
  * Each org's listener VM: its running one, else, while its Secret remains,
- * its last one, ended. At most 1,000 VMs, the API's one page.
+ * its last one, ended. Running VMs are listed on their own, a short list, so
+ * an account's many ended VMs can't push one off the API's 1,000-row page;
+ * an ended one is looked for in the newest 1,000 only for an org with none
+ * running.
  */
 export async function listListenerVms(api: AnycloudApi): Promise<ListenerVm[]> {
-  const vms = (
-    await api.listWorkloads({ query: { workloadType: 'vm', limit: '1000' } })
-  ).filter((vm) => VM_ID.test(vm.id));
-  const live = (vm: (typeof vms)[number]) => !TERMINAL.has(vm.state);
+  const list = async (stateClass?: 'terminatable') =>
+    (
+      await api.listWorkloads({
+        query: {
+          workloadType: 'vm',
+          ...(stateClass && { stateClass }),
+          limit: '1000',
+        },
+      })
+    ).filter((vm) => VM_ID.test(vm.id));
+  const live = (vm: { state: string }) => !TERMINAL.has(vm.state);
+  const running = (await list('terminatable')).filter(live);
+  const ended = (await list()).filter(
+    (vm) =>
+      !live(vm) &&
+      !running.some((r) => r.secretNames?.join() === vm.secretNames?.join()),
+  );
   // An ended VM counts while its org's Secret remains: uninstall deletes the
   // Secret last.
-  const saved = vms.every(live)
-    ? new Set<string>()
-    : new Set((await api.listSecrets({ query: {} })).map((s) => s.name));
+  const saved = ended.length
+    ? new Set((await api.listSecrets({ query: {} })).map((s) => s.name))
+    : new Set<string>();
+  const vms = [...running, ...ended];
   const byOrg = new Map<string, (typeof vms)[number][]>();
   for (const vm of vms) {
     const name = vm.secretNames?.find((s) => orgOfListener(s));
@@ -156,9 +173,13 @@ export const startCommand = () =>
   ].join('\n');
 
 // `values` replace the env file, written whole through base64 so no value
-// is parsed by the shell.
-export const rollCommand = (values: Record<string, string>) =>
-  [
+// is parsed by the shell. The file takes one line per value.
+export const rollCommand = (values: Record<string, string>) => {
+  const multiline = Object.keys(values).find((key) =>
+    /[\r\n]/.test(values[key]!),
+  );
+  if (multiline) throw new Error(`The listener's ${multiline} spans lines.`);
+  return [
     'set -e',
     `mkdir -p ${DIR}`,
     `chmod 700 ${DIR}`,
@@ -171,6 +192,7 @@ export const rollCommand = (values: Record<string, string>) =>
     )} | base64 -d > ${ENV_FILE}`,
     ...restart,
   ].join('\n');
+};
 
 // `node -e <script>` in the listener's container, which binds loopback only.
 export const inListener = (script: string) =>
