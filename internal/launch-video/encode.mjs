@@ -2,7 +2,7 @@
 // Turns a render into the five web files a page plays:
 //   node encode.mjs <version> [input.mp4]
 // Writes renders/web/<version>/ with a SHA256SUMS file (see README.md,
-// "Publish a cut").
+// "Publish the cut").
 
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';

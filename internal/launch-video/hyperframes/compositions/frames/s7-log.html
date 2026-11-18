@@ -4,32 +4,32 @@
       @font-face { font-family: "Schibsted Grotesk"; src: url("assets/fonts/SchibstedGrotesk.woff2") format("woff2"); font-weight: 400 900; }
       @font-face { font-family: "Fragment Mono"; src: url("assets/fonts/FragmentMono.woff2") format("woff2"); font-weight: 400; }
       #s7-root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: "Schibsted Grotesk", sans-serif; color: #2c3036; }
-      #s7-stage { position: absolute; inset: 0; display: flex; justify-content: center; padding-top: 230px; }
+      #s7-stage { position: absolute; inset: 0; display: flex; justify-content: center; padding-top: 150px; }
       #s7-col { width: 1600px; }
       #s7-h2 { font-weight: 700; font-size: 80px; line-height: 1.08; letter-spacing: -0.03em; color: #15171a; }
       /* The page's Capture: a title, a hairline, the text, no window. */
       #s7-cap { margin-top: 80px; }
       #s7-title { margin-bottom: 18px; font: 400 25px/1.5 "Fragment Mono", monospace; color: #5f6670; }
-      #s7-pre { padding: 8px 0 8px 36px; border-left: 3px solid #e6e8eb; font: 400 31px/1.8 "Fragment Mono", monospace; color: #2c3036; }
+      #s7-pre { padding: 8px 0 8px 36px; border-left: 3px solid #e6e8eb; font: 400 34px/1.7 "Fragment Mono", monospace; color: #2c3036; }
       .s7-l { display: block; white-space: pre; }
       .s7-l .hi { color: #0e6ba8; }
-      #s7-cite { margin-top: 30px; font-size: 25px; line-height: 1.5; color: #5f6670; }
     </style>
     <div id="s7-stage" class="clip" data-start="0" data-duration="3.6" data-track-index="0">
       <div id="s7-col">
         <h2 id="s7-h2">Every job log ends with what it used.</h2>
         <div id="s7-cap">
           <div id="s7-title">Job log</div>
-          <!-- Verbatim from backmesh CI run 42915065644, job verify (README.md, "Job log"); only the highlights are added. -->
+          <!-- The page's captures.summary (website/src/captures.ts), word for word. -->
           <div id="s7-pre">
-            <span class="s7-l">backmesh: resources over 61 s, sampled every 5 s; Docker containers not counted</span>
-            <span class="s7-l">  Memory  <span class="hi">peak 1.7 GiB</span>, page cache excluded; 0 OOM kills</span>
-            <span class="s7-l">  CPU     <span class="hi">average 2.09 cores</span>, peak 3.30</span>
-            <span class="s7-l">          waiting for CPU 4.7 s, avg10 peak 12.03 %</span>
-            <span class="s7-l">  Disk    work directory <span class="hi">peak 0.6 GiB</span>, every 30 s; Docker storage not counted</span>
+            <span class="s7-l">backmesh: resources over 312 s,</span>
+            <span class="s7-l">sampled every 5 s</span>
+            <span class="s7-l">  Memory  <span class="hi">peak 9.8 GiB of 15.5 GiB</span>,</span>
+            <span class="s7-l">          0 OOM kills</span>
+            <span class="s7-l">  CPU     average 2.41 cores,</span>
+            <span class="s7-l">          peak 3.91 of 3.98</span>
+            <span class="s7-l">  Disk    work directory peak 3.4 GiB</span>
           </div>
         </div>
-        <p id="s7-cite">From backmesh's own CI: a verify job on backmesh-4, AWS, Nov 10 2026.</p>
       </div>
     </div>
   </div>
@@ -43,8 +43,7 @@
       tl.fromTo("#s7-pre", { borderLeftColor: "rgba(230, 232, 235, 0)" }, { borderLeftColor: "rgba(230, 232, 235, 1)", duration: 0.3 }, 0.7);
       // One line at a time, as the runner prints them.
       root.querySelectorAll(".s7-l").forEach((line, i) =>
-        tl.fromTo(line, { opacity: 0, x: -12 }, { opacity: 1, x: 0, duration: 0.22, ease: "power2.out" }, 0.9 + 0.26 * i));
-      tl.fromTo("#s7-cite", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 2.2);
+        tl.fromTo(line, { opacity: 0, x: -12 }, { opacity: 1, x: 0, duration: 0.22, ease: "power2.out" }, 0.9 + 0.2 * i));
       window.__timelines["s7-log"] = tl;
     })();
   </script>

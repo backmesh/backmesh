@@ -67,10 +67,6 @@ computes; `storyboard.md` maps each one to its section.
 - **Cost.** "$1,800 on GitHub, $191–$365 on backmesh" and the per-cloud bars
   are `website/src/cost.ts` (`headline`, `totals`), rounded as the page rounds
   them, with its catalog date, 2026-11-13.
-- **Job log.** The resource summary in scene 7 is verbatim from backmesh's own
-  CI, not the page's abridged, illustrative capture:
-  run 42915065644, job `verify`, in the archived private repository, on `backmesh-4` (AWS), commit `9894a6df8cf6225b695de4df540ace5757e5aaf4`,
-  2026-11-10. Only its colour highlights are added.
 - **Licence and billing.** "Free and open source (Apache-2.0), no credit card"
   and "backmesh is free and open source; you pay your clouds for the VMs" are
   the hero's and the pricing section's words; they match the site's about

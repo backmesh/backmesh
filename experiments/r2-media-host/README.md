@@ -4,9 +4,9 @@ Creates the launch video's media host, the `backmesh-media` R2 bucket behind
 `media.backmesh.com` (maintainer approval for the launch video, 2026-11-10), after
 anycloud's `experiments/cloudflare-r2-media-check`. `run.ts` says what it
 does. It uploads nothing: publishing a cut needs the maintainers' approval of the
-cut, its music and its place on the site (`internal/launch-video/README.md`).
+cut and its place on the site (`internal/launch-video/README.md`).
 
-`spike.yml` takes no arguments, so the mode is the `MODE` constant in
+`spike.yml` passes the experiment no arguments, so the mode is the `MODE` constant in
 `run.ts`, committed:
 
 - `check` is read-only and sends only GET requests: whether the token

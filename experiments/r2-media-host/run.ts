@@ -1,9 +1,9 @@
 // The launch video's media host: the backmesh-media R2 bucket behind
 // media.backmesh.com (internal/launch-video/README.md), after anycloud's
 // experiments/cloudflare-r2-media-check. Dispatched through spike.yml, whose
-// publish environment gives it the Cloudflare token. spike.yml takes no
-// arguments, so MODE below is committed: each dispatched SHA states what it
-// did.
+// publish environment gives it the Cloudflare token. spike.yml passes the
+// experiment no arguments, so MODE below is committed: each dispatched SHA
+// states what it did.
 //
 // MODE 'check' (read-only, GET requests only): whether the token verifies,
 // can list R2 buckets and read the backmesh.com zone, and whether the bucket,
