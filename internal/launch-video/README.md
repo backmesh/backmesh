@@ -1,8 +1,7 @@
 # Launch video
 
 Source for the backmesh launch video, built with
-[HyperFrames](https://hyperframes.heygen.com/) HTML compositions, after
-anycloud's `internal/launch-video/`.
+[HyperFrames](https://hyperframes.heygen.com/) HTML compositions.
 
 `hyperframes/` is the cut (20.0 s, five scenes). `index.html` holds the
 scene schedule, the crossfades and the sound-effect cues;
@@ -83,6 +82,5 @@ computes; `storyboard.md` maps each one to its section.
 
 The cut has no music. It carries only the CC0 sound effects above, quietly,
 one per scene. To add a bed, place a track you hold a licence for as an
-`<audio>` element in `hyperframes/index.html` (anycloud's
-`internal/launch-video/hyperframes/index.html` shows the fades) and record its source and licence
+`<audio>` element in `hyperframes/index.html` with `data-volume` and a GSAP volume fade, and record its source and licence
 here.
