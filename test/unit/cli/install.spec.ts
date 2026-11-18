@@ -259,13 +259,7 @@ function setUp(
       // Node is created at the baseline.
       if (args[0] === 'aws' && args[1] === 'ec2') {
         return {
-          'describe-instances': JSON.stringify([
-            {
-              Tags: [{ Key: 'Name', Value: 'anycloud-cluster-c1' }],
-              Root: '/dev/sda1',
-              Devices: [{ Name: '/dev/sda1', Volume: 'vol-api' }],
-            },
-          ]),
+          'describe-instances': JSON.stringify(['vol-api']),
           'describe-volumes': JSON.stringify([
             {
               VolumeId: 'vol-api',
@@ -341,6 +335,21 @@ const tokenFor = (login: string) =>
   });
 
 describe('install', () => {
+  it("finishes when EC2 refuses to lower the management VM's disk, and says so", async () => {
+    const { deps, lines } = setUp();
+    const command = deps.command;
+    deps.command = async (args) => {
+      if (args[2] === 'modify-volume') throw new Error('UnauthorizedOperation');
+      return command(args);
+    };
+    const result = await install(asked, deps);
+
+    expect(result).toMatchObject({ apiUrl: HOSTED });
+    expect(lines).toContain(
+      "Couldn't lower vol-api from 8000 IOPS and 125 MiB/s; lower it to 3000 IOPS and 125 MiB/s in the EC2 console.",
+    );
+  });
+
   it("hands the listener --cache-cap in its Secret, each repository's cache in GB", async () => {
     const { deps, requests } = setUp();
     await install({ ...asked, cacheCapGb: 25 }, deps);
@@ -430,9 +439,13 @@ describe('install', () => {
       ]),
     );
     // ...which the new control plane's disks then are.
-    expect(commands).toContainEqual(
+    expect(commands.filter((c) => c.startsWith('aws ec2'))).toEqual([
+      'aws ec2 describe-instances --filters Name=tag:Name,Values=anycloud-cluster-c1 Name=instance-state-name,Values=pending,running,stopping,stopped --query Reservations[].Instances[].BlockDeviceMappings[?DeviceName==`/dev/sda1`].Ebs.VolumeId[] --region us-east-2 --output json',
+      expect.stringMatching(
+        /^aws ec2 describe-volumes --volume-ids vol-api --query /,
+      ),
       'aws ec2 modify-volume --volume-id vol-api --iops 3000 --throughput 125 --region us-east-2 --output json',
-    );
+    ]);
     expect(lines).toContain(
       'Lowered vol-api from 8000 IOPS and 125 MiB/s to 3000 IOPS and 125 MiB/s.',
     );
@@ -1164,7 +1177,7 @@ describe('install', () => {
     expect(lines).toContain(
       "No changes: acme's listener already runs this plan.",
     );
-    // Its disks are `upgrade`'s.
+    // Its disks are left as they are.
     expect(commands.filter((c) => c.startsWith('aws ec2'))).toEqual([]);
   });
 

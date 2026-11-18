@@ -23,17 +23,9 @@ It plans each org's labels again from the release's catalog, with each
 cloud's [regions](/install/#regions) recomputed the same way install's are —
 the fixed candidate list, narrowed to what your account allows — never kept
 from an earlier run, so a region that's added or an account policy that
-changes reaches an existing org on its next `upgrade`. It reads no regions
-through your cloud CLI. To add a cloud, run `backmesh install`.
-
-On AWS, `upgrade` then lowers the control plane's two disks to gp3's baseline,
-3,000 IOPS and 125 MiB/s, in place through your signed-in AWS CLI, with no
-restart. Installations from before backmesh v0.4.2 have faster disks, which cost about $85 a month
-more. Lowering them needs `ec2:DescribeInstances`, `ec2:DescribeVolumes` and
-`ec2:ModifyVolume`. Without them, or within 6 hours
-of a disk's last change, `upgrade` says so and finishes; run it again later. On an
-installation from before v0.4.2, a `bm-control` VM that anycloud replaces comes
-back at the faster, dearer disk until the next `upgrade` lowers it.
+changes reaches an existing org on its next `upgrade`. It reads nothing
+through your cloud CLI, so it needs no cloud sign-in. To add a cloud, run
+`backmesh install`.
 
 Pass `--runners <cloud>` (repeatable) to list every cloud the runners keep: a
 cloud you leave out is removed. Its labels stop taking jobs, its runners
