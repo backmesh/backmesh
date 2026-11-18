@@ -27,9 +27,10 @@ import {
   per1000,
 } from '../cost';
 
-const title = 'backmesh: Self-hosted GitHub Actions runners for up to 10× less';
+const title =
+  'backmesh: Free, open-source GitHub Actions runners in your AWS, GCP or Azure';
 const description =
-  'Each GitHub Actions job runs on its own spot VM in your AWS, GCP or Azure account, at up to 10× less compute cost. Your cloud bills you, so its credits apply.';
+  'Free and open source (Apache-2.0). Each GitHub Actions job runs on its own spot VM in your AWS, GCP or Azure account, at up to 10× less compute cost. Your cloud bills you, so its credits apply.';
 const og = new URL('/brand/og.png', Astro.site).href;
 const money = (v: number) => `$${Math.round(v).toLocaleString('en-US')}`;
 const range = (lo: number, hi: number) => `${money(lo)}–${money(hi)}`;
@@ -115,6 +116,7 @@ const jsonLd = {
       url: site,
       logo: new URL('/brand/icon-512.png', site).href,
       email: 'luis@backmesh.com',
+      sameAs: ['https://github.com/backmesh'],
     },
     {
       '@type': 'SoftwareApplication',
@@ -123,6 +125,9 @@ const jsonLd = {
       description: SUMMARY,
       applicationCategory: 'DeveloperApplication',
       operatingSystem: 'macOS, Linux',
+      license: 'https://www.apache.org/licenses/LICENSE-2.0',
+      isAccessibleForFree: true,
+      sameAs: ['https://github.com/backmesh/backmesh'],
       publisher: { '@id': `${site}#organization` },
       offers: {
         '@type': 'Offer',
@@ -208,6 +213,7 @@ const jsonLd = {
         <a href="#cost">Cost</a>
         <a href="#pricing">Pricing</a>
         <a href="#faq">FAQ</a>
+        <a href="/blog/">Blog</a>
         <a href="/install/">Docs</a>
         <a
           id="github"
@@ -256,7 +262,7 @@ const jsonLd = {
             Your cloud bills you, so your cloud credits apply.
           </p>
           <AgentPrompt />
-          <p class="free">Core features free, no credit card.</p>
+          <p class="free">Free and open source (Apache-2.0), no credit card.</p>
           <div class="ctas">
             <a class="more" href="/install/">Install manually</a>
             <a class="more" href="#cost">See the costs</a>
@@ -300,7 +306,10 @@ const jsonLd = {
         />
         <div class="cost-foot">
           <p class="caption">
-            {caption} <a href="#faq">What does backmesh cost?</a>
+            {caption} <a href="#faq">What does backmesh cost?</a> Or work out
+            your own bill with the <a href="/calculator/">cost calculator</a>, by
+            cloud: <a href="/aws/">AWS</a>, <a href="/gcp/">GCP</a>,{' '}
+            <a href="/azure/">Azure</a>.
           </p>
           <div
             class="receipt"
@@ -351,13 +360,14 @@ const jsonLd = {
       <section id="pricing" class="wrap section pricing">
         <h2>Pricing</h2>
         <p class="lead">
-          backmesh's core features are free; you pay your clouds for the VMs.
+          backmesh is free and open source; you pay your clouds for the VMs.
         </p>
         <ul class="plans">
           <li>
             <b>Free</b>
             <strong>$0</strong>
             <ul>
+              <li>Open source, Apache-2.0</li>
               <li>Unlimited jobs</li>
               <li>Cache included</li>
               <li>No credit card required</li>
@@ -497,6 +507,13 @@ const jsonLd = {
       </a>
       <div class="links">
         <a href="/install/">Install</a>
+        <a href="/aws/">AWS</a>
+        <a href="/gcp/">GCP</a>
+        <a href="/azure/">Azure</a>
+        <a href="/calculator/">Cost calculator</a>
+        <a href="/compare/open-source-runner-managers/">Compare</a>
+        <a href="/blog/">Blog</a>
+        <a href="/changelog/">Changelog</a>
         <a href="/security/">Security model</a>
         <a href="/faq/">FAQ</a>
         <a href="#pricing">Pricing</a>
@@ -655,6 +672,7 @@ const jsonLd = {
       font-size: 13px;
     }
     nav a[href='#faq'],
+    nav a[href='/blog/'],
     #github {
       display: none;
     }

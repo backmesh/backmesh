@@ -27,7 +27,7 @@ export const GET: APIRoute = async ({ site }) => {
 - Linux x86-64 jobs in private repositories only: no macOS, Windows, Arm or GPU runners.
 - A job's \`runs-on\` label, such as \`backmesh-4\`, picks its size and cloud. Spot is the default; \`backmesh-od-*\` labels run on demand.
 - Compute: ${MINUTES.toLocaleString('en-US')} minutes a month of 4-vCPU Linux jobs cost ${money(headline.github)} on GitHub-hosted runners and ${money(headline.low)}–${money(headline.high)} on backmesh at spot prices, control plane included, before disks, VM boots and runners started ahead of jobs.
-- Pricing: the core features are free, with unlimited jobs and the cache included. Premium adds Slack monitoring, logs and runtime history; talk to us at luis@backmesh.com.
+- Pricing: free and open source (Apache-2.0; the cache action is MIT), with unlimited jobs and the cache included; your clouds bill you for the VMs. Premium adds Slack monitoring, logs and runtime history; talk to us at luis@backmesh.com.
 
 ## Agents
 

@@ -18,7 +18,24 @@ export const sidebar = [
     items: ['aws', 'gcp', 'azure'],
   },
   {
+    label: 'Compare',
+    items: ['compare/open-source-runner-managers'],
+  },
+  {
+    label: 'Blog',
+    items: ['blog', 'blog/github-self-hosted-runner-fee'],
+  },
+  {
     label: 'Reference',
-    items: ['security', 'telemetry', 'cost', 'faq', 'terms', 'privacy'],
+    items: [
+      'security',
+      'telemetry',
+      'cost',
+      'calculator',
+      'changelog',
+      'faq',
+      'terms',
+      'privacy',
+    ],
   },
 ];

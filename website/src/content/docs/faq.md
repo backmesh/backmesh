@@ -1,6 +1,9 @@
 ---
 title: FAQ
 description: What backmesh is, and its platforms, installing, start times, isolation, capacity and cost.
+head:
+  - tag: title
+    content: 'backmesh FAQ: open source, platforms, start times, security and cost'
 ---
 
 ## What is backmesh?
@@ -8,6 +11,21 @@ description: What backmesh is, and its platforms, installing, start times, isola
 **What is backmesh?** backmesh runs self-hosted GitHub Actions runners on spot VMs in
 your own AWS, GCP and Azure accounts. One `backmesh install` sets it up for a
 GitHub org. Each job then gets its own VM, which is deleted when the job ends.
+
+**Is backmesh open source?** Yes. backmesh is free and open source under the
+Apache License 2.0, and its cache action is under the MIT License. The source
+is at [backmesh/backmesh](https://github.com/backmesh/backmesh). backmesh
+charges no license or per-minute fee; your clouds bill you for the VMs.
+
+**Did backmesh have paid plans?** Early releases did: v0.2.0 and v0.3.0 had
+paid plans with a trial. v0.3.2 removed them, and v0.4.0 made backmesh open
+source. The [changelog](/changelog/) has each release.
+
+**Was backmesh an LLM API proxy?** Earlier, yes. Before it ran GitHub Actions
+runners, the backmesh name was used for a backend that protected LLM API keys
+in apps, now archived at
+[backmesh/llm-proxy](https://github.com/backmesh/llm-proxy). backmesh now runs
+GitHub Actions runners, and the earlier product's pages redirect here.
 
 **How does backmesh compare with GitHub-hosted runners?** A workflow changes only its
 `runs-on`. Its jobs run on spot VMs in your accounts, so compute costs up to 10×
@@ -131,8 +149,8 @@ every repository share.
 
 ## What does it cost?
 
-**backmesh's price:** the core features are free, with no credit card required
-and no cap on jobs.
+**backmesh's price:** backmesh is free and open source, with no credit card
+required and no cap on jobs.
 Premium adds Slack monitoring, logs and runtime history; see
 [pricing](/#pricing).
 

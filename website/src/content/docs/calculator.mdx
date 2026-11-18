@@ -1,0 +1,35 @@
+---
+title: GitHub Actions cost calculator
+description: Enter your monthly minutes to compare GitHub-hosted runners with backmesh's spot VMs in your own AWS, GCP or Azure account, from dated list and spot prices.
+lastUpdated: 2026-11-18
+head:
+  - tag: title
+    content: 'GitHub Actions cost calculator: GitHub-hosted vs your own AWS, GCP or Azure | backmesh'
+---
+
+import Calculator from '../../components/Calculator.astro';
+
+Enter how many minutes of 4-vCPU Linux jobs you run a month. The table shows
+what they cost on GitHub-hosted runners and on backmesh's spot VMs in each
+cloud. backmesh itself is free; the backmesh rows are what your cloud bills.
+
+<Calculator />
+
+## Where the numbers come from
+
+The figures are the same ones the landing page uses, and
+[Cost](/cost/) shows how they're computed, with every input and its date.
+Your GitHub minutes are on your org's billing page, under Actions usage.
+
+Two things move the backmesh range. Spot prices change by the hour, and the
+range spans the VM types a job may get. Shorter jobs pay for more VM boots per
+minute of work: about 30 seconds per job on AWS and 60 to 70 seconds on GCP
+and Azure.
+
+The calculator leaves out GitHub's included usage, which is $18 a month on
+Team and $300 on Enterprise Cloud. Subtract it from the GitHub-hosted row if
+your org uses it on these jobs.
+
+GitHub announced, then postponed, a $0.002 per minute fee for self-hosted
+runners. If it returns, add $0.002 per minute to the backmesh rows; see
+[GitHub's self-hosted runner fee](/blog/github-self-hosted-runner-fee/).
