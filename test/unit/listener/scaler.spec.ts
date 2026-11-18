@@ -4,6 +4,7 @@ import { Planner } from '../../../src/listener/prewarm.js';
 import { codeOf } from '../../../src/listener/routes.js';
 import {
   COMPLETED_GRACE_MS,
+  REQUEUE_HOLD_MS,
   type Scaler,
 } from '../../../src/listener/scaler.js';
 import {
@@ -320,6 +321,28 @@ describe('Scaler', () => {
     expect(anycloud.terminated).toEqual([c, a]);
     expect(github.calls.slice(-2)).toEqual([`remove ${c}`, `remove ${a}`]);
     expect([...anycloud.live.keys()]).toEqual([b]);
+  });
+
+  it('keeps a still-launching runner while GitHub offers a dropped job again', async () => {
+    const { anycloud, clock, scaler, sets } = setup();
+    sets[0]!.statistics = assigned(1);
+    await scaler.reconcile();
+    const [id] = anycloud.submitted.map((spec) => spec.id);
+    // No runner took the job within GitHub's 5 minutes: it ends with none,
+    // and the assigned count dips before GitHub offers it again.
+    clock.now = 300_000;
+    scaler.observe(sets[0]!, message('JobCompleted', { result: 'canceled' }));
+    sets[0]!.statistics = assigned(0);
+    await scaler.reconcile();
+    expect(anycloud.terminated).toEqual([]);
+    sets[0]!.statistics = assigned(1);
+    await scaler.reconcile();
+    expect(anycloud.submitted.map((spec) => spec.id)).toEqual([id]);
+    // A job that really went is scaled down once the hold ends.
+    sets[0]!.statistics = assigned(0);
+    clock.now += REQUEUE_HOLD_MS;
+    await scaler.reconcile();
+    expect(anycloud.terminated).toEqual([id]);
   });
 
   it('keeps a runner GitHub refuses to remove', async () => {

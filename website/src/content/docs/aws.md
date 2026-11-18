@@ -22,8 +22,8 @@ A job's VM is the first type in its [label's](/labels/) list that has capacity:
 | `backmesh-16` | 16   | 64 GiB | `m8i.4xlarge`, `m7a.4xlarge`, `m7i.4xlarge`, `m6a.4xlarge` |
 
 The [KVM labels](/labels/#kvm) use `m8i`, then `m7i` (`m7a` and `m6a` don't
-nest). The [GPU labels](/labels/#gpu) use `g4dn.xlarge`: one T4, 4 vCPUs and
-16 GiB. When AWS is the control plane's cloud, its labels are plain, as above;
+nest). The [GPU labels](/labels/#gpu) use `g4dn.xlarge` (one T4, 4 vCPUs and
+16 GiB), then `g4dn.2xlarge` (the same T4, 8 vCPUs and 32 GiB). When AWS is the control plane's cloud, its labels are plain, as above;
 otherwise they name it, such as `backmesh-aws-4`.
 
 ## Regions

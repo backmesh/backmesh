@@ -33,7 +33,7 @@ describe('class rate', () => {
     const { classes } = planClasses([TARGETS[0]], catalogs(), 'aws');
     expect(formatRate(classes, CATALOG.aws)).toEqual([
       'aws us-east-2: no VM while idle; while its job runs, a backmesh-4 VM costs about $0.05–0.07 an hour on spot and $0.17–0.23 on demand, plus its disk, and the other sizes scale with their vCPUs',
-      'aws us-east-2: a backmesh-gpu-t4 VM (g4dn.xlarge) costs about $0.27 an hour on spot and $0.53 on demand, plus its disk',
+      'aws us-east-2: a backmesh-gpu-t4 VM (g4dn.xlarge, g4dn.2xlarge) costs about $0.27–0.37 an hour on spot and $0.53–0.75 on demand, plus its disk',
     ]);
     const elsewhere = classes.map((c) => ({ ...c, regions: ['eu-west-1'] }));
     expect(formatRate(elsewhere, CATALOG.aws)[0]).toContain(

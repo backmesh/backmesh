@@ -81,16 +81,18 @@ not measured.
 - **backmesh:** the catalog's prices on 2026-11-18, spot in the lowest zone,
   in the same regions as above. GCP has no GPU labels.
 
-| Cloud | Type                   | Spot $/h | On-demand $/h | Spot per minute | On demand per minute |
-| ----- | ---------------------- | -------- | ------------- | --------------- | -------------------- |
-| AWS   | `g4dn.xlarge`          | 0.2732   | 0.526         | $0.0046         | $0.0088              |
-| Azure | `Standard_NC4as_T4_v3` | 0.1766   | 0.526         | $0.0029         | $0.0088              |
+| Cloud | Type                                     | Spot $/h | On-demand $/h | Spot per minute | On demand per minute |
+| ----- | ---------------------------------------- | -------- | ------------- | --------------- | -------------------- |
+| AWS   | `g4dn.xlarge`                            | 0.2732   | 0.526         | $0.0046         | $0.0088              |
+| AWS   | `g4dn.2xlarge`, when no `xlarge` is free | 0.3696   | 0.752         | $0.0062         | $0.0125              |
+| Azure | `Standard_NC4as_T4_v3`                   | 0.1766   | 0.526         | $0.0029         | $0.0088              |
 
 10,000 GPU minutes a month cost $520 on GitHub (10,000 × $0.052), and on
 backmesh $46 on AWS spot (10,000 × $0.2732 ÷ 60), $29 on Azure spot and $88 on
-demand on either. The control plane is the same one the other labels use, so
+demand on either, at each cloud's first type. The control plane is the same one the other labels use, so
 it adds nothing. Left out, as above: disks, on-demand retries, and boots,
-which are longer than the other labels' since a GPU VM's image is larger.
+which are longer than the other labels': a GPU VM boots a larger image and
+pulls the runner's image after it, about 90 seconds more.
 
 ## Estimate your own
 

@@ -63,18 +63,26 @@ const SPOT_CODES = [0, 2, 4, 5];
 const GPU_CODES = [5, 6];
 
 /**
- * The GPU classes' types, as GitHub's GPU runner: one NVIDIA T4 and 4 vCPUs
- * (owner, 2026-11-18). AWS's `g4dn.xlarge` has 16 GiB of memory to GitHub's
- * 28, at 70 % of `g4dn.2xlarge`'s price; Azure's matches GitHub's. GCP has
- * none: anycloud 0.1.78's GCP catalog leaves T4 out
+ * The GPU classes' types, in launch order, as GitHub's GPU runner: one
+ * NVIDIA T4 and 4 vCPUs (owner, 2026-11-18). AWS's `g4dn.xlarge` has 16 GiB
+ * of memory to GitHub's 28, at 70 % of `g4dn.2xlarge`'s price, which follows
+ * it with the same T4: with one type, a spot capacity refusal in all three
+ * regions left anycloud no untried target, so v0.4.3-rc.1's runner backed
+ * off 12 min before it launched (coordinator, 2026-11-18). Azure's matches
+ * GitHub's. GCP has none: anycloud 0.1.78's GCP catalog leaves T4 out
  * (`INTENTIONALLY_EXCLUDED_ACCELERATORS`, `src/shared/catalog/gcp.ts`), and
  * `n1` isn't a GPU series it launches (`gcp-machine-capabilities.ts`).
  */
 export const GPU_TYPES: Record<Cloud, string[]> = {
-  aws: ['g4dn.xlarge'],
+  aws: ['g4dn.xlarge', 'g4dn.2xlarge'],
   gcp: [],
   azure: ['Standard_NC4as_T4_v3'],
 };
+/**
+ * The GPU classes' shape. Quota checks count each runner at these 4 vCPUs,
+ * so a region with room for one `g4dn.xlarge` keeps the label; a
+ * `g4dn.2xlarge` fallback uses 8 of it.
+ */
 export const GPU = { model: 'T4', vcpus: 4 } as const;
 
 /** `backmesh-public-<n>`'s sizes: the home cloud's spot, no KVM. */
@@ -308,8 +316,8 @@ export function planClasses(
       ),
     );
     if (!classes.some((c) => c.kvm)) plan.noKvm.push(target);
-    // The GPU classes: their types' regions that offer one T4 with the
-    // class's vCPUs. Among the runner regions, Azure's catalog offers its
+    // The GPU classes: their types' regions that offer one T4 with at
+    // least the class's vCPUs. Among the runner regions, Azure's catalog offers its
     // type only in those anycloud's GPU image reaches
     // (`AZURE_GPU_COMMUNITY_IMAGE_REGIONS`, `src/shared/catalog/azure-gpu-map.ts`
     // at 0.1.78). A cloud with none gets no GPU labels, and install says so.
@@ -317,7 +325,7 @@ export function planClasses(
       const type = findVmType(details, vmType);
       const [one, ...more] = type?.accelerators ?? [];
       return (
-        type?.vCPUs === GPU.vcpus &&
+        (type?.vCPUs ?? 0) >= GPU.vcpus &&
         one?.name === GPU.model &&
         one.count === 1 &&
         !more.length
