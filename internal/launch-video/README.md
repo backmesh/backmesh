@@ -36,7 +36,7 @@ npm run render
 
 `fetch-assets` downloads every file in `assets.txt` and fails on any SHA-256
 mismatch. The render writes `renders/launch.mp4`; pass another output path as
-an argument: `npm run render -- out.mp4`. To edit the cut, run
+an argument: `npm run render -- renders/out.mp4`. To edit the cut, run
 `npx hyperframes@0.8.134 preview` inside `hyperframes/`, and
 `npx hyperframes@0.8.134 check` before rendering.
 
@@ -87,5 +87,5 @@ computes; `storyboard.md` maps each one to its section.
 The cut has no music. It carries only the CC0 sound effects above, quietly,
 one per landing. To add a bed, place a track you hold a licence for as an
 `<audio>` element in `hyperframes/index.html` (anycloud's
-`hyperframes/index.html` shows the fades) and record its source and licence
+`internal/launch-video/hyperframes/index.html` shows the fades) and record its source and licence
 here.
