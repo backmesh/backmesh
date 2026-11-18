@@ -11,6 +11,8 @@ Keep this file small and durable.
   for code quality, pull requests, size estimates and justification tables, and
   code review.
 - Run `yarn verify` (lint, format check, typecheck, tests) before pushing.
+- [CONTRIBUTING.md](CONTRIBUTING.md) adds what is specific to backmesh, such as
+  live-testing an unreleased build with a `vX.Y.Z-rc.N` release candidate.
 - backmesh uses only anycloud's public API and CLI. Nothing CI-specific goes into
   anycloud; a gap there is an anycloud issue, not a backmesh workaround inside it.
 - Never run local cloud CLIs (`aws`, `gcloud`, `az`) or a local anycloud API
