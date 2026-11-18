@@ -1306,15 +1306,22 @@ describe("upgrade lowers the control plane's AWS disks to gp3's baseline", () =>
   const INSTANCES = JSON.stringify([
     {
       Tags: tags({ Name: 'anycloud-cluster-c1', anycloud_cluster: 'c1' }),
-      Volumes: ['vol-api'],
+      Root: '/dev/sda1',
+      // A data volume besides the root is never changed.
+      Devices: [
+        { Name: '/dev/sda1', Volume: 'vol-api' },
+        { Name: '/dev/sdf', Volume: 'vol-data' },
+      ],
     },
     {
       Tags: tags({ anycloud_resource: 'np-1', anycloud_cluster: 'c1' }),
-      Volumes: ['vol-control'],
+      Root: '/dev/sda1',
+      Devices: [{ Name: '/dev/sda1', Volume: 'vol-control' }],
     },
     {
       Tags: tags({ anycloud_resource: 'np-2', anycloud_cluster: 'c1' }),
-      Volumes: ['vol-other'],
+      Root: '/dev/sda1',
+      Devices: [{ Name: '/dev/sda1', Volume: 'vol-other' }],
     },
   ]);
   const volume = (VolumeId: string, Iops: number, Throughput: number) => ({
@@ -1352,8 +1359,18 @@ describe("upgrade lowers the control plane's AWS disks to gp3's baseline", () =>
       ]),
     );
     expect('disks' in result && result.disks).toEqual([
-      { volumeId: 'vol-api', iops: 8000, throughput: 125, lowered: true },
-      { volumeId: 'vol-control', iops: 8000, throughput: 1000, lowered: true },
+      {
+        volumeId: 'vol-api',
+        fromIops: 8000,
+        fromThroughput: 125,
+        lowered: true,
+      },
+      {
+        volumeId: 'vol-control',
+        fromIops: 8000,
+        fromThroughput: 1000,
+        lowered: true,
+      },
     ]);
   });
 
@@ -1403,9 +1420,46 @@ describe("upgrade lowers the control plane's AWS disks to gp3's baseline", () =>
 
     expect(commands).toHaveLength(1);
     expect(lines).toContain(
-      "Couldn't read the control plane's disks with the AWS CLI, so they keep their speed; run `backmesh upgrade` again once `aws` is signed in to its account.",
+      "Couldn't read the control plane's disks with the AWS CLI, so they keep their speed; run `backmesh upgrade` signed in to the control plane's AWS account with ec2:DescribeInstances and ec2:DescribeVolumes.",
     );
     expect('disks' in result && result.disks).toEqual([]);
+  });
+
+  it("names the connection's account when the AWS CLI is signed in to another", async () => {
+    const { deps, commands, lines } = setUp({
+      aws: { 'describe-instances': '[]' },
+    });
+    const run = deps.run;
+    deps.run = async (args) =>
+      args.join(' ') === 'credentials list --json'
+        ? JSON.stringify([
+            {
+              name: 'bm-aws',
+              kind: 'role',
+              roleArn: 'arn:aws:iam::123456789012:role/anycloud-bm-aws',
+            },
+          ])
+        : run(args);
+    const result = await upgrade(deps);
+
+    expect(commands).toHaveLength(1);
+    expect(lines).toContain(
+      'Found no control-plane VM for c1 in this AWS account and us-east-2, so its disks keep their speed; run `backmesh upgrade` signed in to AWS account 123456789012.',
+    );
+    expect('disks' in result && result.disks).toEqual([]);
+  });
+
+  it('says in the plan that it lowers the disks, and changes none', async () => {
+    const { deps, commands, lines } = setUp({
+      version: RELEASE.anycloud,
+      aws: { 'describe-instances': INSTANCES, 'describe-volumes': BEFORE },
+    });
+    await upgrade(deps, { plan: true });
+
+    expect(lines).toContain(
+      "On AWS, upgrade also lowers the control plane's disks to gp3's baseline, 3000 IOPS and 125 MiB/s, where they're faster.",
+    );
+    expect(commands).toEqual([]);
   });
 
   it("leaves another cloud's control plane to its own disks", async () => {

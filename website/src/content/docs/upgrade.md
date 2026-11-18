@@ -31,7 +31,9 @@ On AWS, `upgrade` then lowers the control plane's two disks to gp3's baseline,
 restart. Installations from before backmesh v0.4.2 have faster disks, which cost about $85 a month
 more. Lowering them needs `ec2:DescribeInstances`, `ec2:DescribeVolumes` and
 `ec2:ModifyVolume`. Without them, or within 6 hours
-of a disk's last change, `upgrade` says so and finishes; run it again later.
+of a disk's last change, `upgrade` says so and finishes; run it again later. On an
+installation from before v0.4.2, a `bm-control` VM that anycloud replaces comes
+back at the faster, dearer disk until the next `upgrade` lowers it.
 
 Pass `--runners <cloud>` (repeatable) to list every cloud the runners keep: a
 cloud you leave out is removed. Its labels stop taking jobs, its runners

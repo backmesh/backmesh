@@ -86,7 +86,7 @@ import {
   controlPlaneOf,
   type NodePool,
 } from './installation.js';
-import { lowerControlDisks } from './control-disks.js';
+import { controlPlaneAccount, lowerControlDisks } from './control-disks.js';
 
 export const CLUSTER = 'backmesh';
 
@@ -1390,6 +1390,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     await lowerControlDisks(
       clusterId,
       first.region,
+      await controlPlaneAccount(deps.run, clusterId),
       running,
       deps.command,
       ui.print,

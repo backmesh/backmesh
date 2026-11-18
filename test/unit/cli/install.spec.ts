@@ -262,7 +262,8 @@ function setUp(
           'describe-instances': JSON.stringify([
             {
               Tags: [{ Key: 'Name', Value: 'anycloud-cluster-c1' }],
-              Volumes: ['vol-api'],
+              Root: '/dev/sda1',
+              Devices: [{ Name: '/dev/sda1', Volume: 'vol-api' }],
             },
           ]),
           'describe-volumes': JSON.stringify([

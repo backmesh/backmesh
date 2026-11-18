@@ -23,7 +23,11 @@ import {
   targetsOf,
 } from './converge.js';
 import { keyFrom, type SignInScopes } from './github-sign-in.js';
-import { lowerControlDisks } from './control-disks.js';
+import {
+  controlPlaneAccount,
+  LOWER_DISKS_PLAN_LINE,
+  lowerControlDisks,
+} from './control-disks.js';
 import {
   clusterIdOf,
   controlPlaneOf,
@@ -319,7 +323,11 @@ export async function upgrade(
   // 2026-11-09).
   const noRunners = await noRunnerLines(planned, api);
   noRunners.forEach((line) => print(line));
-  if (planOnly) return { planId: id, ...upgradePlan };
+  const where = await controlPlaneOf(run, url, pool);
+  if (planOnly) {
+    if (where?.cloud === 'aws') print(LOWER_DISKS_PLAN_LINE);
+    return { planId: id, ...upgradePlan };
+  }
   if (agreed && agreed !== id) {
     throw new PlanChanged(
       `The plan changed since ${agreed}; it's ${id} now. Show it with \`backmesh upgrade --plan\` and agree to it again.`,
@@ -493,12 +501,12 @@ export async function upgrade(
     );
   }
   // Last, as it changes no runner and its failure ends nothing.
-  const where = await controlPlaneOf(run, url, pool);
   const disks =
     where?.cloud === 'aws'
       ? await lowerControlDisks(
           clusterIdOf(url),
           where.region,
+          await controlPlaneAccount(run, clusterIdOf(url)),
           pool,
           deps.command,
           print,
