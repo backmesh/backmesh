@@ -1,9 +1,10 @@
 // The control plane's AWS disks at gp3's baseline, 3,000 IOPS and 125 MiB/s
 // (owner, 2026-11-18): its t3 VMs can't sustain more, and AWS bills
-// provisioned IOPS and MiB/s monthly. Installs before it have the
-// management VM at 8,000 IOPS and `bm-control`'s Node at anycloud's `high`
-// tier, 8,000 IOPS and 1,000 MiB/s, about $85 a month together. `upgrade`
-// lowers them in place through the user's AWS CLI, with no restart.
+// provisioned IOPS and MiB/s monthly. anycloud 0.1.78 makes the management
+// VM at 8,000 IOPS, and installs before it have `bm-control`'s Node at
+// anycloud's `high` tier, 8,000 IOPS and 1,000 MiB/s: about $85 a month
+// together. `install` and `upgrade` lower them in place through the user's
+// AWS CLI, with no restart.
 import type { RunCommand } from '../runners/regions.js';
 import type { NodePool } from './installation.js';
 
@@ -72,7 +73,7 @@ export async function lowerControlDisks(
       .filter(
         (instance) =>
           tag(instance, 'Name') === `anycloud-cluster-${clusterId}` ||
-          (!!pool && tag(instance, 'anycloud_resource') === pool.id),
+          (!!pool?.id && tag(instance, 'anycloud_resource') === pool.id),
       )
       .flatMap((instance) => instance.Volumes ?? []);
     volumes = ids.length

@@ -28,7 +28,7 @@ through your cloud CLI. To add a cloud, run `backmesh install`.
 
 On AWS, `upgrade` then lowers the control plane's two disks to gp3's baseline,
 3,000 IOPS and 125 MiB/s, in place through your signed-in AWS CLI, with no
-restart. Older installations have faster disks, which cost about $85 a month
+restart. Installations from before backmesh v0.4.2 have faster disks, which cost about $85 a month
 more. Lowering them needs `ec2:DescribeInstances`, `ec2:DescribeVolumes` and
 `ec2:ModifyVolume`. Without them, or within 6 hours
 of a disk's last change, `upgrade` says so and finishes; run it again later.

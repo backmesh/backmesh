@@ -123,7 +123,7 @@ export async function deviceToken(env: Env, device_code: string) {
 export class AppRestricted extends Error {
   constructor(org: string, command: string) {
     super(
-      `${org} restricts third-party apps: an org owner approves backmesh at https://github.com/organizations/${org}/settings/oauth_application_policy, then run ${command} again.`,
+      `${org} restricts third-party apps. Run ${command} again, and on GitHub's sign-in page click Grant next to ${org} if you're an org owner, or Request if not. An org owner then approves the request at https://github.com/organizations/${org}/settings/oauth_application_policy, and you run ${command} once more.`,
     );
   }
 }

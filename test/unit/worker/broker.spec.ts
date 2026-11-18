@@ -363,12 +363,12 @@ describe("uninstall's cleanup", () => {
     expect(signIn.status).toBe(403);
     expect(await signIn.json()).toEqual({
       error:
-        'acme restricts third-party apps: an org owner approves backmesh at https://github.com/organizations/acme/settings/oauth_application_policy, then run install again.',
+        "acme restricts third-party apps. Run install again, and on GitHub's sign-in page click Grant next to acme if you're an org owner, or Request if not. An org owner then approves the request at https://github.com/organizations/acme/settings/oauth_application_policy, and you run install once more.",
     });
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({
       error:
-        'acme restricts third-party apps: an org owner approves backmesh at https://github.com/organizations/acme/settings/oauth_application_policy, then run uninstall again.',
+        "acme restricts third-party apps. Run uninstall again, and on GitHub's sign-in page click Grant next to acme if you're an org owner, or Request if not. An org owner then approves the request at https://github.com/organizations/acme/settings/oauth_application_policy, and you run uninstall once more.",
     });
     expect(upstream.mints).toEqual([]);
     expect(await auditRows()).toContainEqual(
