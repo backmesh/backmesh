@@ -24,7 +24,7 @@ jobs:
   deploy:
     # Each backmesh job has its own VM, so a token-holding job may run there.
     # Only the guard and deploy steps see the token.
-    runs-on: backmesh-4
+    runs-on: ${{ vars.BACKMESH_RUNS_ON || 'backmesh-4' }}
     environment: publish
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}

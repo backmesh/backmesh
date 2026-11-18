@@ -28,7 +28,7 @@ jobs:
   test:
     # GitHub-hosted under release.yml and for a fork's pull request, as
     # image.yml's jobs are.
-    runs-on: ${{ (startsWith(github.ref, 'refs/tags/') || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || 'backmesh-4' }}
+    runs-on: ${{ (startsWith(github.ref, 'refs/tags/') || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || vars.BACKMESH_RUNS_ON || 'backmesh-4' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # GitHub's image has it; backmesh's runner image doesn't.

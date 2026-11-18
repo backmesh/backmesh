@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   report:
-    runs-on: backmesh-2
+    runs-on: ${{ vars.BACKMESH_RUNS_ON || 'backmesh-2' }}
     environment: publish
     timeout-minutes: 10
     steps:

@@ -57,6 +57,8 @@ function evaluate(expression: string, context: Context): unknown {
   )) {
     expr = expr.replaceAll(name, JSON.stringify(v));
   }
+  // Repository variables are unset here: runs-on's defaults are what it tests.
+  expr = expr.replace(/\bvars\.[A-Z_]+/g, "''");
   expr = expr.replaceAll('!=', '!==').replace(/([^!=])==/g, '$1===');
   const startsWith = (s: string, prefix: string) => s.startsWith(prefix);
   return new Function('startsWith', `'use strict'; return (${expr});`)(
