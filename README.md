@@ -79,7 +79,7 @@ it downloads and runs for you, so you only use the `backmesh` CLI.
 
 ## Contributing
 
-See [AGENTS.md](AGENTS.md). backmesh follows anycloud's
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md). backmesh follows anycloud's
 [CONTRIBUTING.md](https://github.com/anycloud-sh/anycloud/blob/main/CONTRIBUTING.md).
 Run `yarn verify` before you open a pull request. Questions are welcome on
 [Discord](https://discord.backmesh.com).
