@@ -259,8 +259,7 @@ a base Linux x64 runner, from their pricing pages on 2026-11-18:
 Namespace's 2-vCPU price is for 4 GB of memory and its 4-vCPU price for 8 GB.
 Depot includes 2,000 minutes on its $20 plan and 20,000 on its $200 plan.
 These services also sell faster caches and Docker builds. The trade-off is
-that your code and secrets run on their machines, and vendors do close:
-BuildJet stopped running jobs on 2026-03-31.
+that your code and secrets run on their machines.
 
 ### Self-hosted runners in your own cloud
 

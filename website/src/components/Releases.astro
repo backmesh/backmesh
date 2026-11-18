@@ -1,21 +1,6 @@
 ---
-// The changelog: every release note in docs/releases, newest first, with the
-// date its release was published on backmesh/backmesh-releases.
+// The changelog: every release note in docs/releases, newest first.
 import type { MarkdownInstance } from 'astro';
-
-/** Publish dates (UTC) from github.com/backmesh/backmesh-releases/releases.
- * Add a line when a release ships; a release missing here shows no date. */
-const PUBLISHED: Record<string, string> = {
-  'v0.4.1': '2026-11-18',
-  'v0.4.0': '2026-11-17',
-  'v0.3.4': '2026-11-16',
-  'v0.3.3': '2026-11-13',
-  'v0.3.2': '2026-11-12',
-  'v0.3.1': '2026-11-10',
-  'v0.3.0': '2026-11-10',
-  'v0.2.1': '2026-11-07',
-  'v0.2.0': '2026-11-07',
-};
 
 const files = import.meta.glob<MarkdownInstance<Record<string, never>>>(
   '../../../docs/releases/*.md',
@@ -36,10 +21,7 @@ const releases = Object.entries(files)
 {
   releases.map(({ version, Content }) => (
     <section>
-      <h2 id={version}>
-        backmesh {version}
-        {PUBLISHED[version] && <small> · {PUBLISHED[version]}</small>}
-      </h2>
+      <h2 id={version}>backmesh {version}</h2>
       <p>
         <a
           href={`https://github.com/backmesh/backmesh-releases/releases/tag/${version}`}
@@ -51,11 +33,3 @@ const releases = Object.entries(files)
     </section>
   ))
 }
-
-<style>
-  h2 small {
-    color: var(--sl-color-gray-3);
-    font-size: var(--sl-text-base);
-    font-weight: 400;
-  }
-</style>

@@ -25,7 +25,7 @@ source. The [changelog](/changelog/) has each release.
 runners, the backmesh name was used for a backend that protected LLM API keys
 in apps, now archived at
 [backmesh/llm-proxy](https://github.com/backmesh/llm-proxy). backmesh now runs
-GitHub Actions runners, and the earlier product's pages redirect here.
+GitHub Actions runners.
 
 **How does backmesh compare with GitHub-hosted runners?** A workflow changes only its
 `runs-on`. Its jobs run on spot VMs in your accounts, so compute costs up to 10×

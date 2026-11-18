@@ -13,20 +13,21 @@ head:
   - tag: script
     attrs:
       type: application/ld+json
-    content: '{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the difference between backmesh and RunsOn?","acceptedAnswer":{"@type":"Answer","text":"Both run each GitHub Actions job on a fresh spot VM in your own cloud account. RunsOn is AWS only, supports Linux x64 and arm64, Windows and GPU, and charges a yearly license for commercial use. backmesh runs on AWS, GCP and Azure, supports Linux x86-64 only in private repositories, and is free under Apache-2.0."}},{"@type":"Question","name":"Is there a RunsOn alternative for GCP or Azure?","acceptedAnswer":{"@type":"Answer","text":"Yes. RunsOn runs on AWS only. backmesh runs each job on its own spot VM in a GCP project or an Azure subscription as well as an AWS account, and one install can use several clouds."}},{"@type":"Question","name":"Is RunsOn open source?","acceptedAnswer":{"@type":"Answer","text":"Partly. Its public repository holds MIT-licensed CloudFormation assets and supporting files, and the RunsOn server and agent are commercially licensed. It is free for non-profit, open-source and personal non-commercial projects. The Sponsorship plan includes the full server and agent source."}},{"@type":"Question","name":"How much does a RunsOn license cost?","acceptedAnswer":{"@type":"Answer","text":"Per its pricing page on 2026-11-18, per legal entity per year: Starter €300 under 50,000 jobs a month, Growth €900 under 200,000, Scale €1,800 under 500,000, and Sponsorship €3,600 with no job limit. In US dollars that is $350, $1,050, $2,100 and $4,200. AWS bills the instances separately."}},{"@type":"Question","name":"Which is cheaper for 150,000 minutes of 4-vCPU jobs on AWS?","acceptedAnswer":{"@type":"Answer","text":"They come out close. From each side''s published prices, RunsOn is about $231 a month with a Starter license and its control plane, and backmesh about $235 to $286 with disks and its control plane. GitHub-hosted 4-core runners cost $1,800 for the same minutes."}},{"@type":"Question","name":"Does RunsOn support Windows, arm64 and GPU runners?","acceptedAnswer":{"@type":"Answer","text":"Yes. RunsOn runs Linux x64 and arm64, Windows Server 2022 and 2025, and NVIDIA and AMD GPU instances. Neither RunsOn nor backmesh runs macOS. backmesh runs Linux x86-64 only."}},{"@type":"Question","name":"Which starts jobs faster?","acceptedAnswer":{"@type":"Answer","text":"RunsOn publishes a median wait of 15 to 21 seconds from queued to running on AWS, and under 6 seconds with hot warm pools. A backmesh VM boots in about 30 seconds on AWS and 60 to 70 seconds on GCP and Azure, and backmesh starts runners ahead of predicted jobs and of pushes its coding agent cue."}},{"@type":"Question","name":"Can I run RunsOn and backmesh side by side?","acceptedAnswer":{"@type":"Answer","text":"Yes. Both pick up jobs by their runs-on label, so each job goes to the one its label names, and workflows can move one at a time."}}]}'
+    content: '{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the difference between backmesh and RunsOn?","acceptedAnswer":{"@type":"Answer","text":"Both run each GitHub Actions job on a fresh spot VM in your own cloud account. RunsOn is AWS only, supports Linux x64 and arm64, Windows and GPU, and charges a yearly license for commercial use. backmesh runs on AWS, GCP and Azure, supports Linux x86-64 only in private repositories, and is free under Apache-2.0."}},{"@type":"Question","name":"Is there a RunsOn alternative for GCP or Azure?","acceptedAnswer":{"@type":"Answer","text":"Yes. RunsOn runs on AWS only. backmesh runs each job on its own spot VM in a GCP project or an Azure subscription as well as an AWS account, and one install can use several clouds."}},{"@type":"Question","name":"Is RunsOn open source?","acceptedAnswer":{"@type":"Answer","text":"Partly. Its public repository holds MIT-licensed CloudFormation assets and supporting files, and the RunsOn server and agent are commercially licensed. It is free for non-profit, open-source and personal non-commercial projects. The Sponsorship plan includes the full server and agent source."}},{"@type":"Question","name":"How much does a RunsOn license cost?","acceptedAnswer":{"@type":"Answer","text":"Per its pricing page on 2026-11-18, per legal entity per year: Starter €300 under 50,000 jobs a month, Growth €900 under 200,000, Scale €1,800 under 500,000, and Sponsorship €3,600 with no job limit. In US dollars that is $350, $1,050, $2,100 and $4,200. AWS bills the instances separately."}},{"@type":"Question","name":"Which is cheaper for 150,000 minutes of 4-vCPU jobs on AWS?","acceptedAnswer":{"@type":"Answer","text":"They come out close. From each side''s published prices, RunsOn is about $231 a month with a Starter license and its control plane, and backmesh about $235 to $286 with disks and its control plane. GitHub-hosted 4-core runners cost $1,800 for the same minutes."}},{"@type":"Question","name":"Does RunsOn support Windows, arm64 and GPU runners?","acceptedAnswer":{"@type":"Answer","text":"Yes. RunsOn runs Linux x64 and arm64, Windows, and GPU instances. Neither RunsOn nor backmesh runs macOS. backmesh runs Linux x86-64 only."}},{"@type":"Question","name":"Which starts jobs faster?","acceptedAnswer":{"@type":"Answer","text":"RunsOn publishes its queue times on AWS in its benchmarks, and its warm pools cut the wait further. A backmesh VM boots in about 30 seconds on AWS and 60 to 70 seconds on GCP and Azure, and backmesh starts runners ahead of predicted jobs and of pushes its coding agent cue."}},{"@type":"Question","name":"Can I run RunsOn and backmesh side by side?","acceptedAnswer":{"@type":"Answer","text":"Yes. Both pick up jobs by their runs-on label, so each job goes to the one its label names, and workflows can move one at a time."}}]}'
 ---
 
 backmesh and RunsOn both run each GitHub Actions job on a fresh spot VM in
 your own cloud account, and your cloud bills you for the compute. RunsOn is
 AWS only, runs Linux, Windows, arm64 and GPU jobs, and charges a yearly
-license for commercial use, from €300. backmesh runs on AWS, GCP and Azure,
+license for commercial use, from €300 per its
+[pricing page](https://runs-on.com/pricing/). backmesh runs on AWS, GCP and Azure,
 runs only Linux x86-64 jobs in private repositories, and is free under
 Apache-2.0 for any use. On AWS, the monthly bills come out close.
 
-All RunsOn figures below come from [runs-on.com](https://runs-on.com/) and
-[github.com/runs-on/runs-on](https://github.com/runs-on/runs-on), read on
-2026-11-18. Claims about customers and benchmarks are RunsOn's own, and are
-labelled that way. backmesh publishes this page, so it names backmesh's limits
+Everything about RunsOn below comes from [runs-on.com](https://runs-on.com/)
+and [github.com/runs-on/runs-on](https://github.com/runs-on/runs-on), read on
+2026-11-18, and its prices from its [pricing page](https://runs-on.com/pricing/).
+backmesh publishes this page, so it names backmesh's limits
 next to each strength.
 
 ## At a glance
@@ -35,8 +36,6 @@ next to each strength.
 | ------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | License             | Server and agent commercial; repo's CloudFormation assets MIT         | Apache-2.0; the cache action MIT                                                   |
 | Price               | Free for non-commercial use; €300 to €3,600 a year for commercial use | Free for all use                                                                   |
-| Latest release      | v3.6.2, 2026-11-13                                                    | v0.4.1, 2026-11-18                                                                 |
-| Public repo since   | 2023-12-09, 1,421 GitHub stars                                        | 2026-11-16                                                                         |
 | Clouds              | AWS                                                                   | AWS, GCP, Azure                                                                    |
 | Install             | One CloudFormation stack, or a Terraform / OpenTofu module            | `backmesh install --org <org>` through your `aws`, `gcloud` or `az` CLI            |
 | Control plane       | A Fargate service in your account, "from about $7 a month"            | Two small VMs in your account, about $86 a month on AWS, $74 on GCP, $111 on Azure |
@@ -44,7 +43,7 @@ next to each strength.
 | Spot                | Default, with on-demand fallback                                      | Default; `backmesh-od-*` labels run on demand                                      |
 | Operating systems   | Linux x64 and arm64, Windows, GPU; no macOS                           | Linux x86-64 only                                                                  |
 | Public repositories | Supported, in a separate environment per RunsOn's security docs       | Not yet: private repositories only                                                 |
-| Runner image        | AMIs built from GitHub's full runner images, refreshed every 15 days  | Ubuntu 24.04 with GitHub's apt packages; toolchains from setup actions             |
+| Runner image        | AMIs built from GitHub's full runner images                           | Ubuntu 24.04 with GitHub's apt packages; toolchains from setup actions             |
 
 ## How each one works
 
@@ -136,17 +135,16 @@ repositories yet.
 ## Spot and interruptions
 
 Both run spot by default. RunsOn tries spot first and launches on demand when
-spot capacity is unavailable, which its docs put at a 2 to 3 second delay on
-Flex. A job that loses its spot instance mid-run is retried once on an
+spot capacity is unavailable. A job that loses its spot instance mid-run is retried once on an
 on-demand instance by default, and a circuit breaker moves the stack to on
 demand when interruptions spike.
 
 backmesh falls back to the next VM type in the label's list, then another
 region, when a cloud refuses for capacity. When no type has capacity, jobs
 wait at GitHub. When spot reclaims were a run's only failures, it reruns those jobs
-once the run finishes, preferring on demand, up to twice. After 2 reclaims in
-15 minutes on a cloud, it starts that cloud's spot jobs on demand for 30
-minutes. `backmesh-od-*` labels run on demand every time.
+once the run finishes, preferring on demand, up to twice. After 2 reclaims
+within 15 minutes on a cloud's spot VMs, it starts that cloud's spot jobs on
+demand for 30 minutes; KVM labels count their reclaims apart. `backmesh-od-*` labels run on demand every time.
 
 ## Caching
 
@@ -155,9 +153,8 @@ into a bucket in your account.
 
 - RunsOn's Magic Cache points `actions/cache` and the `setup-*` actions'
   caches at S3 in your VPC with no change to cache steps. A job adds
-  `extras=s3-cache` to its label and a `runs-on/action@v2` step. RunsOn sets no size cap. RunsOn's
-  benchmark shows a 4 GB restore in 17 seconds against 41 seconds on
-  GitHub-hosted at 4 vCPU.
+  `extras=s3-cache` to its label and a `runs-on/action@v2` step. RunsOn sets
+  no size cap.
 - RunsOn also offers Docker layer caching through an ephemeral ECR registry in
   your account, and sticky disks: an EBS volume snapshotted after each job
   and restored before the next, for caches that are slow to archive.
@@ -173,11 +170,10 @@ today.
 
 ## Start times
 
-RunsOn publishes its numbers on AWS. In its burst benchmark, 15 jobs queued at
-once, the median wait from queued to running was 15 to 21 seconds across 29 x64
-runner types. Its warm pools docs list Linux queue times under 25 seconds cold,
-under 15 seconds from a stopped pool and under 6 seconds from a hot pool, which
-bills for running instances.
+RunsOn publishes its queue times on AWS in its
+[benchmarks](https://runs-on.com/benchmarks/), from an open harness. It also
+offers warm pools of stopped or running instances, which cut the wait and bill
+for the instances they keep.
 
 A backmesh VM boots in about 30 seconds on AWS and 60 to 70 seconds on GCP and
 Azure. backmesh learns each workflow's shape and starts runners ahead of a
@@ -185,9 +181,7 @@ run's later jobs. A coding agent can run `backmesh cue --in <seconds>` when its
 pre-push checks start, so runners for the run's first jobs boot before the
 push.
 
-RunsOn also publishes [benchmarks](https://runs-on.com/benchmarks/) of 9
-providers and 94 runners, last run on 2026-11-16 from an open harness. backmesh
-hasn't published comparable benchmarks.
+backmesh hasn't published comparable benchmarks.
 
 ## Upkeep
 
@@ -205,7 +199,8 @@ ubuntu-latest](/from-ubuntu-latest/).
 
 ## What it costs
 
-RunsOn's bill has three lines, per its pricing page: the license, EC2 and EBS,
+RunsOn's bill has three lines, per its
+[pricing page](https://runs-on.com/pricing/): the license, EC2 and EBS,
 and the control plane. backmesh's has two: VMs with their disks, and the
 control plane. Neither marks up compute.
 
@@ -262,16 +257,15 @@ jobs the same way; see [where it stands](/blog/github-self-hosted-runner-fee/).
 Pick RunsOn if you're on AWS and need Windows, arm64 or GPU runners, want to
 choose instance families, RAM and disks per job, or run heavy Docker builds
 that benefit from a layer cache or sticky disks. It's the more mature of the
-two, with releases since 2023, published benchmarks, warm pools, GitHub
-Enterprise Server support, and, per RunsOn, 1,200+ companies and 5M+ jobs a
-day. It also runs public repositories, and its license is free for
+two, with published benchmarks, warm pools and GitHub Enterprise Server
+support. It also runs public repositories, and its license is free for
 non-commercial and open-source projects.
 
 Pick backmesh if your runners belong on GCP or Azure, or on more than one
 cloud from one install. Pick it if you want no license fee and no job-count
 tiers for commercial use, under Apache-2.0, or if your coding agents push
 often and `backmesh cue` would start runners before they do. It's a new
-project, its public repository dates from 2026-11-16, and it runs only Linux
+project, and it runs only Linux
 x86-64 jobs in private repositories, with no Docker layer cache between jobs.
 
 ## Moving between them
@@ -303,7 +297,8 @@ are commercially licensed. It's free for non-profit, open-source and personal
 non-commercial projects. The Sponsorship plan includes the full server and
 agent source.
 
-**How much does a RunsOn license cost?** Per its pricing page on 2026-11-18,
+**How much does a RunsOn license cost?** Per its
+[pricing page](https://runs-on.com/pricing/) on 2026-11-18,
 per legal entity per year: Starter €300 under 50,000 jobs a month, Growth €900
 under 200,000, Scale €1,800 under 500,000, and Sponsorship €3,600 with no job
 limit. In US dollars that's $350, $1,050, $2,100 and $4,200. AWS bills the
@@ -316,12 +311,12 @@ disks and its control plane. GitHub-hosted 4-core runners cost $1,800 for the
 same minutes.
 
 **Does RunsOn support Windows, arm64 and GPU runners?** Yes. RunsOn runs Linux
-x64 and arm64, Windows Server 2022 and 2025, and NVIDIA and AMD GPU instances.
+x64 and arm64, Windows, and GPU instances.
 Neither RunsOn nor backmesh runs macOS. backmesh runs Linux x86-64 only.
 
-**Which starts jobs faster?** RunsOn publishes a median wait of 15 to 21
-seconds from queued to running on AWS, and under 6 seconds with hot warm
-pools. A backmesh VM boots in about 30 seconds on AWS and 60 to 70 seconds on
+**Which starts jobs faster?** RunsOn publishes its queue times on AWS in its
+[benchmarks](https://runs-on.com/benchmarks/), and its warm pools cut the wait
+further. A backmesh VM boots in about 30 seconds on AWS and 60 to 70 seconds on
 GCP and Azure, and backmesh starts runners ahead of predicted jobs and of
 pushes its coding agent cues.
 
