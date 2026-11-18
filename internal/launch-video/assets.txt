@@ -1,0 +1,24 @@
+# Render-time assets for the cut. `npm run fetch-assets` downloads each line,
+# checks its SHA-256, and writes it under every destination (paths relative to
+# this folder; a destination ending in "/" gets the source path appended).
+#
+#   base <url>                                 prefix for the lines that follow
+#   <sha256> <source path> <destination>...
+
+# Schibsted Grotesk (variable) and Fragment Mono (SIL OFL 1.1), the website's
+# fonts, from the @fontsource packages it pins.
+base https://cdn.jsdelivr.net/npm/
+4c8b93f431d462c696e12b9d6a033feb3394d36e66e781357c496b95d8a75e05 @fontsource-variable/schibsted-grotesk@5.3.0/files/schibsted-grotesk-latin-wght-normal.woff2 hyperframes/assets/fonts/SchibstedGrotesk.woff2
+44c4e39bff5e76652a24a872cbebabccbcfb20f62c4633b27c1f2745cba86b56 @fontsource/fragment-mono@5.3.0/files/fragment-mono-latin-400-normal.woff2 hyperframes/assets/fonts/FragmentMono.woff2
+
+# GSAP (GSAP Standard "no charge" licence), from the gsap npm package.
+c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280 gsap@3.14.2/dist/gsap.min.js hyperframes/assets/vendor/gsap.min.js
+
+# Kenney sound effects (CC0), as bundled in the brag skill (MIT). The only
+# audio in the cut: there is no music bed (README.md, "Music").
+base https://raw.githubusercontent.com/latent-spaces/brag/cb89b9f44309b0bf4e3cb89e685fadf80c7999ed/skills/brag/assets/sfx/
+b0a4dea90eed47accf50b768beff1166f2f1486fb139e4d025b2427637624bca impact/impactSoft_medium_004.ogg hyperframes/assets/sfx/
+692ee3a6f1821402ca649ff735bee9591dc4846c8098fc7d6a90fd15fa57c1af interface/drop_001.ogg hyperframes/assets/sfx/
+4ac4d1cef7e936965cbf795852ca2020300b9e2ba7daa59f2bf4f1f7bf416218 interface/drop_002.ogg hyperframes/assets/sfx/
+43d086d50f90493a98cd2e09aa6dbf150d164f1578e1ec768d21cb185571ad87 interface/drop_003.ogg hyperframes/assets/sfx/
+3b74efad87f1e69dbd1d05c5ad952ab90859b5a3d11da6ec5bd79b4f03b42afa interface/switch_001.ogg hyperframes/assets/sfx/
