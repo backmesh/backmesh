@@ -20,6 +20,12 @@ export const GET: APIRoute = async ({ site }) => {
       }),
     ].join('\n'),
   );
+  const posts = [...docs.values()]
+    .filter((d) => d.id.startsWith('blog/'))
+    .sort((a, b) => +(b.data.date ?? 0) - +(a.data.date ?? 0))
+    .map(
+      (d) => `- [${d.data.title}](${link(`/${d.id}/`)}): ${d.data.description}`,
+    );
   const text = `# backmesh
 
 > ${SUMMARY}
@@ -34,6 +40,10 @@ export const GET: APIRoute = async ({ site }) => {
 - [SKILL.md](${link('/SKILL.md')}): how a coding agent installs backmesh, moves jobs onto its runners and cues each push.
 
 ${sections.join('\n\n')}
+
+## Blog
+
+${posts.join('\n')}
 
 ## Optional
 

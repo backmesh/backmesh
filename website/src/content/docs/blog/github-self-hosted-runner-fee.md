@@ -1,7 +1,12 @@
 ---
 title: "GitHub's self-hosted runner fee: where it stands"
 description: GitHub announced a $0.002 per minute fee for self-hosted runners in private repos, then postponed it. What is in effect in November 2026, what GitHub-hosted runners cost now, what the fee would add at different volumes, and how to prepare.
+date: 2026-11-18
 lastUpdated: 2026-11-18
+authors: backmesh
+tags:
+  - GitHub pricing
+excerpt: GitHub announced a $0.002 per minute fee on self-hosted runners in December 2025 and postponed it a day later. Where it stands in November 2026, what GitHub-hosted runners cost now, what the fee would add by runner size, and who it would reach.
 head:
   - tag: title
     content: 'GitHub self-hosted runner fee ($0.002/min): status in 2026 | backmesh'
@@ -202,7 +207,7 @@ surprise.
 To try your own numbers on GitHub-hosted runners and spot VMs in AWS, GCP and
 Azure, use the [cost calculator](/calculator/). To compare the free,
 open-source ways to run self-hosted runners, see
-[Open-source runner managers](/compare/open-source-runner-managers/).
+[ARC vs terraform-aws-github-runner vs backmesh](/blog/arc-vs-terraform-aws-github-runner-vs-backmesh/).
 
 ## Questions
 
