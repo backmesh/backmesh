@@ -46,6 +46,7 @@ const RELEASED: FeatureTable = {
   'role-apply': '0.1.0',
   c28: '0.1.0',
   'vm-job-regions': undefined,
+  'service-tokens': '0.1.0',
 };
 const DELETE_HOSTED = 'cluster delete c1 --delete-buckets --confirm c1 --json';
 
@@ -69,6 +70,7 @@ function setUp({
   listener = true,
   legacy = false,
   lost = false,
+  duplicate = false,
   orgs = ['acme'],
   secrets = orgs,
   others = [],
@@ -88,6 +90,8 @@ function setUp({
   legacy?: boolean;
   // anycloud found the listeners' VMs gone.
   lost?: boolean;
+  // acme has a second running listener VM.
+  duplicate?: boolean;
   // The orgs whose listeners run.
   orgs?: string[];
   // The orgs whose `backmesh-<org>` Secret exists.
@@ -229,6 +233,13 @@ function setUp({
                   : 'running',
             }),
           )
+        : []),
+      ...(duplicate
+        ? [
+            listenerVm('acme', 'bml-l8u5e-dup000', {
+              state: deleted.has('bml-l8u5e-dup000') ? 'terminated' : 'running',
+            }),
+          ]
         : []),
       ...runners.flatMap((id) => {
         const phase = phases.get(id) ?? 0;
@@ -1055,6 +1066,24 @@ describe('uninstall', () => {
     );
     // The Secret, the org's record that it isn't finished, stays.
     expect(calls).not.toContain('secrets delete backmesh-acme');
+  });
+
+  it("terminates an org's other listener VMs before the drain, then its own", async () => {
+    const { deps, calls } = setUp({ duplicate: true });
+    await uninstall(scripted, deps);
+    expect(changes(calls).slice(0, 4)).toEqual([
+      'POST /v1/installs/cleanup',
+      'terminate bml-l8u5e-dup000',
+      'exec backmesh-acme POST /drain',
+      'terminate bml-l8u5e-acme00',
+    ]);
+  });
+
+  it('revokes no service with an anycloud that has no service tokens', async () => {
+    const { deps, calls } = setUp();
+    deps.features = { ...RELEASED, 'service-tokens': undefined };
+    await uninstall(scripted, deps);
+    expect(calls).not.toContain('api access remove --service backmesh-acme');
   });
 
   it('removes one org of several and keeps the control plane', async () => {

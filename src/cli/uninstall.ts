@@ -44,6 +44,7 @@ import {
   connectionName,
   installConnection,
   installTag,
+  readOrgId,
   sessionOf,
   listenerName,
   orgOfListener,
@@ -323,12 +324,18 @@ interface Gone {
 }
 
 // Each listener's org, install key and running jobs, which fail. A lost
-// VM's listener ran nothing that's left to drain.
-async function readOrgs(listeners: readonly Listener[], exec: AnycloudExec) {
+// VM's listener can't say: its org's runner Jobs, which uninstall stops,
+// are counted through its session.
+async function readOrgs(
+  listeners: readonly Listener[],
+  exec: AnycloudExec,
+  runnerJobs: (org: string) => Promise<number>,
+) {
   const orgs: Org[] = [];
   for (const listener of listeners) {
     if (listener.vm?.lost && !listener.deployment) {
-      orgs.push({ org: orgOfListener(listener.name)!, listener, jobs: 0 });
+      const org = orgOfListener(listener.name)!;
+      orgs.push({ org, listener, jobs: await runnerJobs(org) });
       continue;
     }
     const read = await readListener(exec, listener).catch((cause: unknown) => {
@@ -404,7 +411,18 @@ async function readControlPlane(
     mine = listeners.filter((listener) => listener.name === name);
     whole = !listeners.some((listener) => listener.name !== name);
   }
-  const orgs = await readOrgs(mine, exec);
+  const orgs = await readOrgs(mine, exec, async (login) => {
+    const orgId = await readOrgId(login, deps.fetch, deps.env).catch(
+      () => undefined,
+    );
+    if (orgId === undefined) return 0;
+    const session = sessionOf(installTag(clusterId, orgId));
+    return (
+      await api.listWorkloads({
+        query: { session, sessionExact: 'true', stateClass: 'terminatable' },
+      })
+    ).filter((job) => !TERMINAL.has(job.state)).length;
+  });
   // `--org`'s listener an earlier run deleted: its org, without a key.
   if (org && !orgs.length) orgs.push({ org, jobs: 0 });
   // When the control plane goes, a Secret without its listener, but
@@ -494,6 +512,10 @@ async function removeOrg(
   const tag = clusterId ? installTag(clusterId, cleanup.org.id) : undefined;
   const groups = tag ? `backmesh-${tag}-*` : 'backmesh-*-*';
   if (plane) {
+    // An org's other listener VMs go before the drain, so none takes a job
+    // or registers the scale sets again meanwhile.
+    if (listener?.vm?.others.length)
+      await terminateVms(plane.api, deps, listener.vm.others);
     // A lost VM's listener can't drain: its org's runners are stopped
     // instead.
     const lost = !!listener?.vm?.lost && !listener.deployment;
@@ -570,15 +592,7 @@ async function removeListener(
   const name = listener?.name ?? listenerName(org);
   const control = anycloudControl(api, deps.run);
   const { vm, deployment } = listener ?? {};
-  if (vm && !vm.lost) {
-    await deps.run(['terminate', vm.id]);
-    await poll(
-      deps,
-      () => api.listWorkloads({ query: { workloadType: 'vm' } }),
-      (vms) => !vms.some((w) => w.id === vm.id && !TERMINAL.has(w.state)),
-      'the listener VM to go',
-    );
-  }
+  if (vm && !vm.lost) await terminateVms(api, deps, [vm.id]);
   if (deployment) await deps.run(['deployment', 'delete', name]);
   // A rerun past the Deployment's delete finds it gone, and its
   // ServiceAccount gone or not; an org that only ever had a VM has none.
@@ -587,10 +601,30 @@ async function removeListener(
       if (deployment) throw error;
     });
   }
+  // A rerun past the delete doesn't wait again: the first run drained it.
   if (deployment) await stopped(api, deps, [name], 'the listener to stop');
   // Idempotent, so a rerun past the VM's end still revokes its token, and
-  // an org that never had a service is fine.
-  await control.removeService(name);
+  // an org that never had a service is fine. An anycloud without service
+  // tokens never issued one.
+  if (
+    !missingFeatures(ANYCLOUD_VERSION, ['service-tokens'], deps.features).length
+  )
+    await control.removeService(name);
+}
+
+// Terminates listener VMs and waits until each has ended.
+async function terminateVms(
+  api: AnycloudApi,
+  deps: UninstallDeps,
+  ids: readonly string[],
+) {
+  for (const id of ids) await deps.run(['terminate', id]);
+  await poll(
+    deps,
+    () => api.listWorkloads({ query: { workloadType: 'vm' } }),
+    (vms) => !vms.some((w) => ids.includes(w.id) && !TERMINAL.has(w.state)),
+    ids.length > 1 ? 'the listener VMs to go' : 'the listener VM to go',
+  );
 }
 
 // Waits until none of the named Deployments runs.

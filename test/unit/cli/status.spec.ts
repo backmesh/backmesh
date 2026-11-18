@@ -233,6 +233,7 @@ function setUp({
           c26: undefined,
           'role-connections': undefined,
           'vm-job-regions': undefined,
+          'service-tokens': '0.1.0',
           'role-apply': undefined,
           c28: undefined,
         },
