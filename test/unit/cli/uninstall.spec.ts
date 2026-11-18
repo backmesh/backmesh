@@ -20,6 +20,7 @@ import {
   fakeOrg,
   fakeWorker,
   INSTALL_KEY,
+  SIGNED_IN,
 } from './fakes.js';
 
 const HOSTED = 'https://c1.anycloud.sh';
@@ -872,6 +873,54 @@ describe('uninstall', () => {
     expect(lines).toContain(
       "The backmesh GitHub App isn't installed on acme, so backmesh can't reach its runners there. Check the org's Actions settings for runner groups backmesh-l8u5e-*.",
     );
+  });
+
+  it('with --keep-app, deletes everything else and asks the Worker to keep the App', async () => {
+    const { deps, calls, lines, worker } = setUp({
+      worker: fakeWorker({
+        finishes: [Response.json({ removed: false, still_used_by: [] })],
+      }),
+    });
+
+    const result = await uninstall({ ...scripted, keepApp: true }, deps);
+
+    expect(changes(calls)).toEqual([
+      'POST /v1/installs/cleanup',
+      'exec backmesh-acme POST /drain',
+      'deployment delete backmesh-acme',
+      'api access remove --service-account backmesh-acme',
+      ...GITHUB_DELETES,
+      'POST /v1/installs/cleanup/finish',
+      'secrets delete backmesh-acme',
+      'node-pool delete np-1',
+      'node-pool delete np-2',
+      DELETE_HOSTED,
+    ]);
+    expect(worker.bodies.at(-1)).toEqual({
+      cleanup_id: CLEANUP_ID,
+      keep_app: true,
+    });
+    expect(result).toMatchObject({
+      orgs: [{ org: 'acme', appRemoved: false }],
+      cloud: 'deleted',
+    });
+    expect(lines).toContain(
+      'The backmesh GitHub App stays on acme, as --keep-app asked.',
+    );
+  });
+
+  it('signs in with BACKMESH_SIGN_IN_TOKEN, with no device code', async () => {
+    const { deps, lines, worker } = setUp();
+    deps.env.BACKMESH_SIGN_IN_TOKEN = SIGNED_IN;
+
+    await uninstall(scripted, deps);
+
+    expect(worker.calls).toEqual([
+      'POST /v1/installs/cleanup',
+      'POST /v1/installs/cleanup/finish',
+    ]);
+    expect(worker.bodies[0]).toEqual({ github_token: SIGNED_IN, org: 'acme' });
+    expect(lines.join('\n')).not.toContain('login/device');
   });
 
   it('reports an App another install keeps, and a failed removal', async () => {

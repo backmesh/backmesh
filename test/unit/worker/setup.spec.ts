@@ -232,4 +232,14 @@ describe('Worker setup', () => {
     expect(w.cf.secrets).not.toHaveProperty('GITHUB_APP_PRIVATE_KEY_NEXT');
     expect(w.writes).toContain('wrangler secret delete');
   });
+
+  it('stores the OAuth client secret only while it is set', async () => {
+    const w = world();
+
+    await w.run(true, { ...ENV, BILLING_GITHUB_CLIENT_SECRET: 'cs' });
+    expect(w.cf.secrets.GITHUB_CLIENT_SECRET).toBe('cs');
+
+    await w.run(true);
+    expect(w.cf.secrets).not.toHaveProperty('GITHUB_CLIENT_SECRET');
+  });
 });

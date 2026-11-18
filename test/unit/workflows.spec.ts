@@ -16,8 +16,10 @@ const TRIGGERS = [
 ];
 
 type Permissions = Record<string, string>;
+type Step = { name?: string; if?: string; run?: string };
 type Job = {
   if?: string;
+  steps?: Step[];
   'runs-on'?: string;
   uses?: string;
   environment?: unknown;
@@ -139,5 +141,40 @@ describe('the workflows', () => {
   it('keep a same-repository pull request on backmesh', () => {
     const jobs = onPullRequest.flatMap((f) => started(f, SAME_REPO));
     for (const { job, runsOn } of jobs) expect(runsOn, job).toBe('backmesh-4');
+  });
+});
+
+describe("e2e.yml's test-org run", () => {
+  const e2e = read('e2e.yml');
+  const runs = (version: string) =>
+    Object.entries(e2e.jobs)
+      .filter(
+        ([, job]) =>
+          job.if === undefined ||
+          /cancelled\(\)/.test(job.if) ||
+          evaluate(unwrap(job.if)!, { 'inputs.version': version }),
+      )
+      .map(([name]) => name);
+
+  it("runs only on a dispatch with a version, and our org's members only without", () => {
+    expect(runs('')).not.toContain('test-org');
+    expect(runs('')).toContain('label');
+    expect(runs('v0.4.3-rc.1')).toContain('test-org');
+    expect(runs('v0.4.3-rc.1')).not.toContain('label');
+    expect(e2e.jobs.stop!.if).toMatch(/&& !inputs\.version/);
+  });
+
+  it('always uninstalls, keeping the App, and always sweeps', () => {
+    const steps = e2e.jobs['test-org']!.steps!;
+    const step = (name: string) => steps.find((s) => s.name === name)!;
+    const uninstall = step('backmesh uninstall');
+    const sweep = step('Sweep AWS for anything left');
+
+    expect(uninstall.if).toMatch(/^\$\{\{ always\(\) &&/);
+    expect(uninstall.run).toMatch(
+      /backmesh uninstall --org "\$ORG" --yes --keep-app --delete-checkpoint-bucket/,
+    );
+    expect(sweep.if).toMatch(/^\$\{\{ always\(\) &&/);
+    expect(steps.indexOf(sweep)).toBe(steps.length - 1);
   });
 });

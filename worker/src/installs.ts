@@ -117,6 +117,58 @@ export async function deviceToken(env: Env, device_code: string) {
   return answer.access_token;
 }
 
+// A sign-in made ahead of time, for CI with nobody to enter a device code:
+// the CLI's GITHUB_TOKEN, from an earlier device sign-in, in place of a new
+// one. Taken only when GitHub confirms backmesh's own OAuth app issued it, as
+// a device code's token is; a token from any other app proves nothing to
+// backmesh. Without the client secret every one is refused.
+export async function issuedToken(env: Env, token: string) {
+  if (!env.GITHUB_CLIENT_SECRET) {
+    const error =
+      'backmesh.com takes no GitHub token in place of a sign-in yet; unset GITHUB_TOKEN to sign in with a device code.';
+    return Response.json({ error }, { status: 400 });
+  }
+  const res = await fetch(
+    `https://api.github.com/applications/${env.GITHUB_CLIENT_ID}/token`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Basic ${btoa(`${env.GITHUB_CLIENT_ID}:${env.GITHUB_CLIENT_SECRET}`)}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'backmesh',
+      },
+      body: JSON.stringify({ access_token: token }),
+      signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
+    },
+  );
+  // 404: not a live token of backmesh's app.
+  if (res.status === 404 || res.status === 422) {
+    const error =
+      "GitHub doesn't know GITHUB_TOKEN as a backmesh sign-in; sign in again with a device code and use that token.";
+    return Response.json({ error }, { status: 401 });
+  }
+  if (!res.ok) {
+    throw new GitHubError(`GitHub /applications/token: ${res.status}`);
+  }
+  return token;
+}
+
+// The signed-in user's token from a request body's `github_token`
+// (`issuedToken`) or `device_code` (`deviceToken`), the answer to send, or
+// undefined when it has neither.
+export async function signedInToken(
+  env: Env,
+  {
+    github_token,
+    device_code,
+  }: { github_token?: unknown; device_code?: unknown },
+) {
+  if (typeof github_token === 'string') return issuedToken(env, github_token);
+  if (typeof device_code === 'string') return deviceToken(env, device_code);
+  return undefined;
+}
+
 // An org whose OAuth app access restrictions, the default for a new org,
 // haven't approved backmesh's sign-in: GitHub answers 403. `command`
 // is what the user runs again.
@@ -207,25 +259,25 @@ export async function relaySignIn(request: Request, env: Env) {
     : Response.json({ github_token: token });
 }
 
-// POST /v1/installs { org, device_code, install? }: 202 while the user
-// hasn't finished, then the key and the token once they have, if they're an
-// admin of the org. `install`, the install's ID when signing in again, gets
-// a new key.
+// POST /v1/installs { org, device_code | github_token, install? }: 202 while
+// the user hasn't finished, then the key and the token once they have, if
+// they're an admin of the org. `install`, the install's ID when signing in
+// again, gets a new key.
 export async function createInstall(request: Request, env: Env) {
-  const { org, device_code, install } = (await request
-    .json()
-    .catch(() => ({}))) as {
+  const body = (await request.json().catch(() => ({}))) as {
     org?: unknown;
     device_code?: unknown;
+    github_token?: unknown;
     install?: unknown;
   };
-  if (typeof org !== 'string' || typeof device_code !== 'string') {
+  const { org, install } = body;
+  const token = typeof org === 'string' && (await signedInToken(env, body));
+  if (!token) {
     return Response.json(
       { error: 'org and device_code are required' },
       { status: 400 },
     );
   }
-  const token = await deviceToken(env, device_code);
   if (token instanceof Response) return token;
   // Checked here, returned to the signer, and never stored.
   const admin = await orgAdmin(token, org);

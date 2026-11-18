@@ -14,11 +14,11 @@ import {
 import type { Env } from './index.js';
 import {
   AppRestricted,
-  deviceToken,
   keyInstall,
   orgAdmin,
   rememberLogin,
   sha256,
+  signedInToken,
 } from './installs.js';
 
 const HOUR = 3_600_000;
@@ -189,7 +189,7 @@ async function cleanupToken(
   });
 }
 
-// POST /v1/installs/cleanup { device_code, org }, with the install key as
+// POST /v1/installs/cleanup { device_code | github_token, org }, with the install key as
 // the bearer when the CLI could read it: an admin of `org` signs
 // in through the device flow, polled here (202 while pending). The key, if
 // sent, must be the org's; its own last mint doesn't count as live, and it's
@@ -200,16 +200,18 @@ async function cleanupToken(
 // account.id must be that org (installationOf).
 export async function cleanup(request: Request, env: Env) {
   const record = recorder(env, request);
-  const { device_code, org } = (await request.json().catch(() => ({}))) as {
+  const body = (await request.json().catch(() => ({}))) as {
     device_code?: unknown;
+    github_token?: unknown;
     org?: unknown;
   };
-  if (typeof device_code !== 'string' || typeof org !== 'string') {
+  const { org } = body;
+  const signedIn = typeof org === 'string' && (await signedInToken(env, body));
+  if (!signedIn) {
     await record('bad_request');
     const error = 'device_code and org are required';
     return Response.json({ error }, { status: 400 });
   }
-  const signedIn = await deviceToken(env, device_code);
   if (signedIn instanceof Response) {
     if (signedIn.status !== 202) await record('signin_failed');
     return signedIn;
@@ -266,10 +268,12 @@ export async function cleanup(request: Request, env: Env) {
   });
 }
 
-// The unexpired, unfinished cleanup a body's `cleanup_id` names, or null.
+// The unexpired, unfinished cleanup a body's `cleanup_id` names, or null,
+// and whether the body asks to keep the App.
 async function cleanupOf(env: Env, request: Request) {
-  const { cleanup_id } = (await request.json().catch(() => ({}))) as {
+  const { cleanup_id, keep_app } = (await request.json().catch(() => ({}))) as {
     cleanup_id?: unknown;
+    keep_app?: unknown;
   };
   if (typeof cleanup_id !== 'string') return null;
   const row = await env.DB.prepare(
@@ -278,7 +282,7 @@ async function cleanupOf(env: Env, request: Request) {
   )
     .bind(await sha256(cleanup_id), Date.now())
     .first<{ org: number; install: string | null; login: string }>();
-  return row && { ...row, id: cleanup_id };
+  return row && { ...row, id: cleanup_id, keepApp: keep_app === true };
 }
 const unknownCleanup = () =>
   Response.json(
@@ -294,11 +298,12 @@ export async function cleanupRefresh(request: Request, env: Env) {
   return cleanupToken(env, request, cleanup, cleanup.login);
 }
 
-// POST /v1/installs/cleanup/finish { cleanup_id }: uninstall's last step.
-// Deletes the org's installation of the App and revokes all its installs'
-// keys, unless another install of the org is live, which it names; the
-// cleanup's own install was revoked at the sign-in. One already gone
-// counts as done.
+// POST /v1/installs/cleanup/finish { cleanup_id, keep_app? }: uninstall's
+// last step. Deletes the org's installation of the App and revokes all its
+// installs' keys, unless another install of the org is live, which it names;
+// the cleanup's own install was revoked at the sign-in. One already gone
+// counts as done. `keep_app` (`uninstall --keep-app`) revokes the keys and
+// leaves the installation, which only an org owner can make again.
 export async function cleanupFinish(request: Request, env: Env) {
   const cleanup = await cleanupOf(env, request);
   if (!cleanup) return unknownCleanup();
@@ -314,7 +319,9 @@ export async function cleanupFinish(request: Request, env: Env) {
   const live = await liveInstalls(env, org, cleanup.install);
   let installation: number | undefined;
   if (!live.length) {
-    installation = (await installationOf(env, org))?.id;
+    installation = cleanup.keepApp
+      ? undefined
+      : (await installationOf(env, org))?.id;
     if (installation) {
       const res = await app(env, `/app/installations/${installation}`, {
         method: 'DELETE',
@@ -324,7 +331,7 @@ export async function cleanupFinish(request: Request, env: Env) {
         throw new GitHubError(`GitHub kept the installation: ${res.status}`);
       }
     }
-    await forget(env, org);
+    if (!cleanup.keepApp) await forget(env, org);
     await env.DB.prepare('UPDATE installs SET revoked = 1 WHERE org = ?')
       .bind(org)
       .run();
@@ -332,9 +339,12 @@ export async function cleanupFinish(request: Request, env: Env) {
   await env.DB.prepare('UPDATE cleanups SET finished = 1 WHERE id = ?')
     .bind(await sha256(cleanup.id))
     .run();
-  await record(live.length ? 'ok_still_used' : 'ok', installation);
+  await record(
+    live.length ? 'ok_still_used' : cleanup.keepApp ? 'ok_kept_app' : 'ok',
+    installation,
+  );
   return Response.json({
-    removed: !live.length,
+    removed: !live.length && !cleanup.keepApp,
     still_used_by: live.map((l) => l.install),
   });
 }

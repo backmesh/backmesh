@@ -13,6 +13,12 @@ export const INSTALL_KEY_ENV = 'BACKMESH_INSTALL_KEY';
 // old install) instead of starting another and orphaning this one.
 export const ROTATING_FROM_ENV = 'BACKMESH_ROTATING_FROM';
 export const API_URL_ENV = 'BACKMESH_API_URL';
+// An org admin's backmesh sign-in made ahead of time (a `gho_` token from
+// backmesh's device sign-in), which install's key and uninstall's cleanup
+// use in place of a device code: for CI with nobody at the keyboard, such
+// as our e2e's test org. Opt-in, apart from GITHUB_TOKEN, so a CI that sets
+// that for the control plane still signs in an admin with a device code.
+export const SIGN_IN_TOKEN_ENV = 'BACKMESH_SIGN_IN_TOKEN';
 const API_URL = 'https://api.backmesh.com';
 
 export interface WorkerDeps {
@@ -139,6 +145,35 @@ async function deviceFlow<T>(
   }
 }
 
+type Credential = { device_code: string } | { github_token: string };
+// SIGN_IN_TOKEN_ENV's token when set, else `deviceFlow`. The Worker checks
+// it as it would a device code's; a 429 is waited out.
+async function signInAhead<T>(
+  deps: WorkerDeps,
+  why: string,
+  poll: (credential: Credential) => Promise<T | 'pending' | 'slow_down'>,
+  controlPlane?: boolean,
+): Promise<T> {
+  const token = deps.env[SIGN_IN_TOKEN_ENV]?.trim();
+  if (!token) {
+    return deviceFlow(
+      deps,
+      why,
+      (device_code) => poll({ device_code }),
+      controlPlane,
+    );
+  }
+  const wait =
+    deps.wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  for (let attempt = 1; attempt <= 12; attempt++) {
+    const answer = await poll({ github_token: token });
+    if (answer === 'pending') break;
+    if (answer !== 'slow_down') return answer;
+    await wait(10_000);
+  }
+  throw new Error(`backmesh.com didn't take ${SIGN_IN_TOKEN_ENV}.`);
+}
+
 // Names the Worker in an outage, which isn't a refusal.
 async function reaching<T>(what: string, request: () => Promise<T>) {
   try {
@@ -166,14 +201,14 @@ export function signInForKey(
   why = `once, as an admin of ${org}, so backmesh can connect to it`,
 ): Promise<{ key: string; token: string }> {
   return reaching('the GitHub sign-in', () =>
-    deviceFlow(
+    signInAhead(
       deps,
       why,
-      async (device_code) => {
+      async (credential) => {
         const answer = await call(deps, '/v1/installs', installSchema, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ org, device_code, install }),
+          body: JSON.stringify({ org, ...credential, install }),
         });
         // 403: not an org admin; 400: the code expired or was denied.
         if (answer.status === 429) return 'slow_down';
@@ -283,17 +318,17 @@ export function signInForCleanup(
   deps: WorkerDeps,
 ): Promise<Cleanup> {
   return reaching('the GitHub sign-in', () =>
-    deviceFlow(
+    signInAhead(
       deps,
       `as an admin of ${org}, so backmesh removes itself from ${org}`,
-      async (device_code) => {
+      async (credential) => {
         const answer = await call(deps, '/v1/installs/cleanup', cleanupSchema, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(key && { Authorization: `Bearer ${key}` }),
           },
-          body: JSON.stringify({ device_code, org }),
+          body: JSON.stringify({ ...credential, org }),
         });
         if (!answer.data) throw new Error(answer.error);
         if ('pending' in answer.data) {
@@ -310,12 +345,13 @@ async function cleanupCall<T>(
   path: string,
   schema: z.ZodType<T>,
   cleanupId: string,
+  extra: object = {},
 ) {
   const answer = await reaching('the uninstall', () =>
     call(deps, path, schema, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cleanup_id: cleanupId }),
+      body: JSON.stringify({ cleanup_id: cleanupId, ...extra }),
     }),
   );
   if (!answer.data) throw new Error(answer.error);
@@ -333,12 +369,18 @@ export const refreshCleanupToken = (cleanupId: string, deps: WorkerDeps) =>
 
 // Uninstall's last step: the Worker removes backmesh's App from the org and
 // revokes its install keys, unless another install of the org still uses it.
-export const finishCleanup = (cleanupId: string, deps: WorkerDeps) =>
+// `keepApp` revokes the keys only.
+export const finishCleanup = (
+  cleanupId: string,
+  deps: WorkerDeps,
+  keepApp = false,
+) =>
   cleanupCall(
     deps,
     '/v1/installs/cleanup/finish',
     z.object({ removed: z.boolean(), still_used_by: z.array(z.string()) }),
     cleanupId,
+    keepApp ? { keep_app: true } : {},
   );
 
 // Whether the Worker still accepts the install key: false on its 401

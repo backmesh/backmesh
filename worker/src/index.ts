@@ -54,6 +54,9 @@ export interface Env {
   // One Relay Durable Object per org, for cues (cue.ts).
   RELAY: RelayNamespace;
   GITHUB_CLIENT_ID: string;
+  // The OAuth app's secret, only for checking a GitHub token sent in place
+  // of a device code (`issuedToken`). Unset, every such token is refused.
+  GITHUB_CLIENT_SECRET?: string;
   // The backmesh App: its ID, URL slug and PKCS#8 private key, and
   // the next key during a rotation, which signs once set. Unset until the
   // App exists, when the broker routes answer 503.

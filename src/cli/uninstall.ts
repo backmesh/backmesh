@@ -60,6 +60,9 @@ export interface UninstallOptions {
   // the cloud side through the user's cloud CLI when the control plane
   // doesn't answer.
   controlPlane?: string;
+  // Leaves the GitHub App on each org, for an org whose next install comes
+  // with nobody to click Install, such as our e2e's test org.
+  keepApp?: boolean;
 }
 
 export interface UninstallDeps {
@@ -475,6 +478,7 @@ async function removeOrg(
   plane: ControlPlane | undefined,
   clusterId: string | undefined,
   deps: UninstallDeps,
+  keepApp = false,
 ) {
   const { ui } = deps;
   const worker = workerDeps(deps, ui.print);
@@ -519,7 +523,7 @@ async function removeOrg(
       `The backmesh GitHub App isn't installed on ${login}, so backmesh can't reach its runners there. Check the org's Actions settings for runner groups ${groups}.`,
     );
   }
-  const app = await finishCleanup(cleanup.cleanup_id, worker).catch(
+  const app = await finishCleanup(cleanup.cleanup_id, worker, keepApp).catch(
     (cause: unknown) => {
       throw new Error(
         `backmesh couldn't remove its GitHub App from ${login}: ${cause instanceof Error ? cause.message : String(cause)}. Run \`backmesh uninstall --org ${login}\` again.`,
@@ -530,7 +534,9 @@ async function removeOrg(
   ui.print(
     app.removed
       ? `Removed the backmesh GitHub App from ${login}.`
-      : `The backmesh GitHub App stays on ${login}, which its installs ${app.still_used_by.join(', ')} still use.`,
+      : app.still_used_by.length
+        ? `The backmesh GitHub App stays on ${login}, which its installs ${app.still_used_by.join(', ')} still use.`
+        : `The backmesh GitHub App stays on ${login}, as --keep-app asked.`,
   );
   // Last: the Secret marks an org whose removal a rerun must finish.
   // Secrets are write-only and outlive a deleted Deployment.
@@ -693,7 +699,7 @@ export async function uninstall(
   const removed = [];
   const clusterId = plane?.clusterId ?? gone?.clusterId;
   for (const org of orgs) {
-    removed.push(await removeOrg(org, plane, clusterId, deps));
+    removed.push(await removeOrg(org, plane, clusterId, deps, options.keepApp));
   }
 
   if (plane && !plane.whole) {

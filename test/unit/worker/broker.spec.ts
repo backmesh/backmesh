@@ -135,6 +135,33 @@ describe('POST /v1/token', () => {
     expect(await res.json()).toMatchObject({ token: 'ghs_7' });
   });
 
+  it("mints a key from a backmesh sign-in's token in place of a device code", async () => {
+    env.GITHUB_CLIENT_SECRET = 'secret';
+    upstream.memberships.set('alice', [
+      { id: 11, login: 'acme', role: 'admin' },
+    ]);
+    upstream.installations.set(11, { id: 7, login: 'acme', permissions: ALL });
+
+    const signedIn = await call('/v1/installs', null, {
+      org: 'acme',
+      github_token: 'token-alice',
+    });
+    const { key, github_token } = (await signedIn.json()) as {
+      key: string;
+      github_token: string;
+    };
+
+    expect(github_token).toBe('token-alice');
+    expect(await (await call('/v1/token', key)).json()).toMatchObject({
+      token: 'ghs_7',
+    });
+    const refused = await call('/v1/installs', null, {
+      org: 'acme',
+      github_token: 'gho_another_apps',
+    });
+    expect(refused.status).toBe(401);
+  });
+
   it('answers 409 with the install link until the App is installed', async () => {
     const res = await mint(11);
 
@@ -322,6 +349,27 @@ describe("uninstall's cleanup", () => {
     expect(JSON.stringify(await auditRows())).not.toContain('token-alice');
   });
 
+  it("takes a backmesh sign-in's token in place of a device code, and no other app's", async () => {
+    env.GITHUB_CLIENT_SECRET = 'secret';
+    const asToken = (github_token: string) =>
+      call('/v1/installs/cleanup', null, { github_token, org: 'acme' });
+
+    expect(await (await asToken('token-alice')).json()).toMatchObject({
+      token: 'ghs_7',
+      org: { id: 11, login: 'acme' },
+    });
+    expect(upstream.calls).toContain(
+      'POST api.github.com/applications/client/token',
+    );
+    const other = await asToken('gho_another_apps');
+    expect(other.status).toBe(401);
+    expect(await asToken('token-bob')).toHaveProperty('status', 403);
+
+    // Without the client secret, no token counts.
+    delete env.GITHUB_CLIENT_SECRET;
+    expect((await asToken('token-alice')).status).toBe(400);
+  });
+
   it('refuses a member who is not an admin, and an org the admin has no role in', async () => {
     const asBob = await cleanup('bob');
     const otherOrg = await cleanup('alice', 'globex');
@@ -478,6 +526,26 @@ describe("uninstall's cleanup", () => {
     // Once only.
     expect((await finish(cleanup_id)).status).toBe(401);
     expect((await refresh(cleanup_id)).status).toBe(401);
+  });
+
+  it('with keep_app, revokes every key and leaves the installation', async () => {
+    const idle = await mintKey(env.DB, 11);
+    const { cleanup_id } = await signedIn();
+
+    const res = await call('/v1/installs/cleanup/finish', null, {
+      cleanup_id,
+      keep_app: true,
+    });
+
+    expect(await res.json()).toEqual({ removed: false, still_used_by: [] });
+    expect(upstream.installations.has(11)).toBe(true);
+    expect(upstream.calls).not.toContain(
+      'DELETE api.github.com/app/installations/7',
+    );
+    expect((await call('/v1/token', idle.key)).status).toBe(401);
+    // The next install's key mints at once.
+    expect((await mint(11)).status).toBe(200);
+    expect((await finish(cleanup_id)).status).toBe(401);
   });
 
   it('keeps the installation while another install has gone live since', async () => {
