@@ -384,25 +384,29 @@ export function formatQuota(check: QuotaCheck, spot: boolean): string {
 /**
  * The GPU labels' quota line for install's plan and `backmesh status`, such as
  * "GPU quota: 0 spot vCPUs, 8 on-demand vCPUs (2 backmesh-gpu-od-t4 jobs at
- * once); raise ... to run backmesh-gpu-t4". A new account usually has none
- * (AWS's G and VT and Azure's NCASv3_T4 default to 0), so it's shown, never
- * refused: the GPU labels' jobs wait at GitHub until it's raised.
+ * once); raise ... to run backmesh-gpu-t4", over each label's own regions. A
+ * new account usually has none (AWS's G and VT and Azure's NCASv3_T4 default
+ * to 0), so it's shown, never refused: the GPU labels' jobs wait at GitHub
+ * until it's raised.
  */
 export function formatGpuQuota(
   cloud: Exclude<Cloud, 'gcp'>,
-  regions: readonly string[],
   limits: ReadonlyMap<string, QuotaLimits>,
+  labels: readonly {
+    label: string;
+    spot: boolean;
+    regions: readonly string[];
+  }[],
 ): string {
-  const kinds = (['gpuSpot', 'gpuOnDemand'] as const).filter(
-    (kind) => QUOTA[kind][cloud],
-  );
   const parts: string[] = [];
   const raise: string[] = [];
-  for (const kind of kinds) {
-    const label = kind === 'gpuSpot' ? 'backmesh-gpu-t4' : 'backmesh-gpu-od-t4';
+  for (const { label, spot, regions } of labels) {
+    const kind = spot ? 'gpuSpot' : 'gpuOnDemand';
+    // Azure's spot GPU VMs count against the spot vCPUs, shown already.
+    if (!QUOTA[kind][cloud]) continue;
     const read = regions.flatMap((r) => limitOf(limits, r, kind) ?? []);
     const vcpus = read.reduce((sum, v) => sum + v, 0);
-    const name = kind === 'gpuSpot' ? 'spot' : 'on-demand';
+    const name = spot ? 'spot' : 'on-demand';
     parts.push(
       read.length
         ? `${vcpus} ${name} vCPUs (${Math.floor(vcpus / GPU.vcpus)} ${label} jobs at once)`

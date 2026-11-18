@@ -327,12 +327,8 @@ async function runnerClouds(json: string | undefined, api: AnycloudApi) {
               ? [
                   formatGpuQuota(
                     cloud,
-                    [
-                      ...new Set(
-                        labels.flatMap((r) => (r.gpu ? r.regions : [])),
-                      ),
-                    ],
                     limits,
+                    labels.filter((r) => r.gpu),
                   ),
                 ]
               : []),

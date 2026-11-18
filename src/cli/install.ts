@@ -1031,7 +1031,11 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     const mine = classPlan.classes.filter((c) => c.cloud === cloud);
     if (cloud !== 'gcp' && mine.some((c) => c.gpu)) {
       quotas.push(
-        `${where(cloud, regions)} ${formatGpuQuota(cloud, regions, limits)}`,
+        `${where(cloud, regions)} ${formatGpuQuota(
+          cloud,
+          limits,
+          mine.filter((c) => c.gpu),
+        )}`,
       );
     }
     // A GPU label's quota is usually 0 on a new account: shown, not asked

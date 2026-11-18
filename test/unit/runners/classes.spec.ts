@@ -255,11 +255,13 @@ describe('runner classes', () => {
     ).toHaveLength(2);
   });
 
-  it("keeps Azure's GPU class to the regions anycloud's GPU image reaches, and drops a T4 in the wrong shape", () => {
+  it('keeps a GPU class to the regions whose catalog offers its type, and drops a T4 in the wrong shape', () => {
     const t4 = CATALOG.azure.find((t) => t.vmType === 'Standard_NC4as_T4_v3')!;
+    // Azure's catalog offers it only where anycloud's GPU image is, so
+    // westus has none.
     const regions = new Map([
       ['westus2', CATALOG.azure],
-      ['westus', CATALOG.azure],
+      ['westus', CATALOG.azure.filter((t) => t !== t4)],
       ['eastus', CATALOG.azure],
     ]);
     const { classes } = planClasses(
