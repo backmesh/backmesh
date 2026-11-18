@@ -74,6 +74,7 @@ import {
 } from '../runners/regions.js';
 import {
   CONTROL_POOL,
+  LISTENER_CPUS,
   clusterIdOf,
   connectionName,
   installConnection,
@@ -1367,7 +1368,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     };
     await deps.runLong([
       ...['deployment', 'create', name, release.listenerImage],
-      ...['--node-pool', CONTROL_POOL],
+      ...['--node-pool', CONTROL_POOL, '--cpus', LISTENER_CPUS],
       ...['--secret', name],
       ...Object.entries(env).flatMap(([key, value]) => [
         '-e',

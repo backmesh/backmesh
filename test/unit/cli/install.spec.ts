@@ -346,7 +346,7 @@ describe('install', () => {
       `credentials new ${BM.aws} --provider aws --role --apply --json`,
       'api access add --service-account backmesh-acme',
       expect.stringMatching(
-        /^deployment create backmesh-acme ghcr\.io\/backmesh\/backmesh-listener@sha256:b+ --node-pool bm-control --secret backmesh-acme -e BACKMESH_INSTALL=[a-z0-9]{5} --wait$/,
+        /^deployment create backmesh-acme ghcr\.io\/backmesh\/backmesh-listener@sha256:b+ --node-pool bm-control --cpus 0\.5 --secret backmesh-acme -e BACKMESH_INSTALL=[a-z0-9]{5} --wait$/,
       ),
     ]);
     // The org, runner image and classes are in a Secret that `upgrade` can
@@ -1358,7 +1358,7 @@ describe('install', () => {
       expect.arrayContaining(['backmesh-4', 'backmesh-gcp-4']),
     );
     expect(calls).toContain(
-      `deployment upgrade backmesh-acme --image ${images.listenerImage} --secret backmesh-acme --wait`,
+      `deployment upgrade backmesh-acme --image ${images.listenerImage} --secret backmesh-acme --cpus 0.5 --wait`,
     );
     expect(calls.some((c) => c.startsWith('deployment create'))).toBe(false);
     expect(lines).toContain("Rolling acme's listener with the new settings.");

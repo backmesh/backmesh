@@ -17,6 +17,7 @@ import {
   type RunnerClass,
 } from '../runners/classes.js';
 import { INSTALL_KEY_ENV, ROTATING_FROM_ENV } from './worker.js';
+import { LISTENER_CPUS } from './installation.js';
 import { CACHE_CAP_ENV } from '../listener/sweep.js';
 
 /** The org's listener as it runs: its Deployment's image and its Secret. */
@@ -282,7 +283,8 @@ export async function rollListener(
   const rollTo = (image: string) =>
     deps.runLong([
       ...['deployment', 'upgrade', name],
-      ...['--image', image, '--secret', name, '--wait'],
+      ...['--image', image, '--secret', name],
+      ...['--cpus', LISTENER_CPUS, '--wait'],
     ]);
   // Rotate-key's two calls always roll to the image they're already on,
   // with the same runner image and classes too: there's genuinely nothing

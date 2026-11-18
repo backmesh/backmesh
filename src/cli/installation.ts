@@ -10,6 +10,12 @@ import { ANYCLOUD_VERSION } from '../anycloud/contract.generated.js';
 import { CLOUDS, type Cloud } from '../runners/classes.js';
 
 export const CONTROL_POOL = 'bm-control';
+// Each listener's CPU share of `bm-control`'s one Node, set on every create
+// and roll. Without it anycloud sizes a replica to a whole vCPU's share of
+// the Node's memory, so a second org's listener stays Pending. At 0.5 a
+// listener requests 512 MiB on AWS's and GCP's 2 GiB Node, 921 MiB on
+// Azure's 4 GiB one, so at least two orgs fit on each.
+export const LISTENER_CPUS = '0.5';
 
 // The hosted API's URL is `https://<cluster-id>.anycloud.sh`
 // (`docs/reference/cli/cluster.md:90` at v0.1.71).

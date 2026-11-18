@@ -328,7 +328,7 @@ describe('upgrade', () => {
     expect(mutations(calls)).toEqual([
       'api upgrade',
       'api status --watch --json',
-      `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --wait`,
+      `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --cpus 0.5 --wait`,
     ]);
     expect(requests).toContain(
       `PUT /v1/secrets/backmesh-acme ${JSON.stringify({ values: { ORG: 'acme', ORG_ID: '7', BACKMESH_RUNNER_IMAGE: RELEASE.runnerImage, BACKMESH_INSTALL_KEY: INSTALL_KEY, BACKMESH_RUNNERS: RUNNERS } })}`,
@@ -410,8 +410,8 @@ describe('upgrade', () => {
       'api upgrade',
       'exec backmesh-acme',
       'exec backmesh-beta',
-      `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --wait`,
-      `deployment upgrade backmesh-beta --image ${RELEASE.listenerImage} --secret backmesh-beta --wait`,
+      `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --cpus 0.5 --wait`,
+      `deployment upgrade backmesh-beta --image ${RELEASE.listenerImage} --secret backmesh-beta --cpus 0.5 --wait`,
     ]);
     expect(requests).toContain(
       `PUT /v1/secrets/backmesh-beta ${JSON.stringify({ values: { ORG: 'beta', ORG_ID: '8', BACKMESH_RUNNER_IMAGE: RELEASE.runnerImage, BACKMESH_INSTALL_KEY: INSTALL_KEY, BACKMESH_RUNNERS: RUNNERS } })}`,
@@ -504,7 +504,7 @@ describe('upgrade', () => {
     const result = await upgrade(deps);
     expect(asked).toEqual(['Proceed?']);
     expect(mutations(calls)).toEqual([
-      `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --wait`,
+      `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --cpus 0.5 --wait`,
     ]);
     expect(
       requests.findLast((r) => r.startsWith('PUT /v1/secrets/')),
@@ -556,7 +556,7 @@ describe('upgrade', () => {
       ),
     ).toHaveLength(1);
     expect(mutations(calls)).toEqual([
-      `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --wait`,
+      `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --cpus 0.5 --wait`,
     ]);
     expect(
       requests.findLast((r) => r.startsWith('PUT /v1/secrets/')),
@@ -640,7 +640,7 @@ describe('upgrade', () => {
       const { deps, calls } = twoToOne();
       await upgrade(deps, { yes: true, planId });
       expect(mutations(calls)).toContain(
-        `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --wait`,
+        `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --cpus 0.5 --wait`,
       );
 
       // --plan-id alone still asks, and needs a terminal for it.
@@ -956,7 +956,7 @@ describe('upgrade', () => {
       `failed, and it's back on ${OLD_LISTENER}. Run upgrade again.`,
     );
     expect(calls).toContain(
-      `deployment upgrade backmesh-acme --image ${OLD_LISTENER} --secret backmesh-acme --wait`,
+      `deployment upgrade backmesh-acme --image ${OLD_LISTENER} --secret backmesh-acme --cpus 0.5 --wait`,
     );
     // The old listener gets its own runner image back, before its roll.
     const release = requests.filter((r) =>
@@ -1167,7 +1167,7 @@ describe('upgrade', () => {
         calls.findIndex((c) => c.startsWith('exec')),
       );
       expect(mutations(calls)).toContain(
-        `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --wait`,
+        `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --cpus 0.5 --wait`,
       );
     });
 
@@ -1243,7 +1243,7 @@ describe('upgrade', () => {
       expect(again.calls).not.toContain('api upgrade');
       expect(result).toMatchObject({ controlPlane: { upgraded: false } });
       expect(mutations(again.calls)).toContain(
-        `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --wait`,
+        `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --cpus 0.5 --wait`,
       );
     });
 
