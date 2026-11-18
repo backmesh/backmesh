@@ -123,7 +123,7 @@ describe('GPU quota', () => {
       'us-east-2: GPU spot quota 0 vCPU, skipped; raise L-3819A6DF to use it',
       'us-east-2: GPU on-demand quota 0 vCPU, skipped; raise L-DB2E81BA to use it',
     ]);
-    expect(formatGpuQuota('aws', ['us-east-1', 'us-east-2'], limits)).toBe(
+    expect(formatGpuQuota('aws', limits, classes)).toBe(
       'GPU quota: 0 spot vCPUs (0 backmesh-gpu-t4 jobs at once), 8 on-demand vCPUs (2 backmesh-gpu-od-t4 jobs at once); raise EC2 "All G and VT Spot Instance Requests" (L-3819A6DF) in us-east-1, us-east-2 to run backmesh-gpu-t4',
     );
   });
@@ -148,8 +148,19 @@ describe('GPU quota', () => {
         /^backmesh-gpu-t4 .*"Total Regional Low-priority vCPUs"/,
       ),
     ]);
-    expect(formatGpuQuota('azure', ['eastus'], new Map([['eastus', {}]]))).toBe(
-      'GPU quota: on-demand vCPUs unread, and its spot VMs count against the spot vCPUs above; raise "Standard NCASv3_T4 Family vCPUs" in eastus to run backmesh-gpu-od-t4',
+    // Another cloud than the control plane's names it in its labels.
+    expect(
+      formatGpuQuota(
+        'azure',
+        new Map([['eastus', {}]]),
+        GPU.map((c) => ({
+          ...c,
+          label: c.label.replace('backmesh-', 'backmesh-azure-'),
+          regions: ['eastus'],
+        })),
+      ),
+    ).toBe(
+      'GPU quota: on-demand vCPUs unread, and its spot VMs count against the spot vCPUs above; raise "Standard NCASv3_T4 Family vCPUs" in eastus to run backmesh-azure-gpu-od-t4',
     );
   });
 

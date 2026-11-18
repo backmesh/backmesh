@@ -77,22 +77,6 @@ export const GPU_TYPES: Record<Cloud, string[]> = {
 };
 export const GPU = { model: 'T4', vcpus: 4 } as const;
 
-/**
- * The runner regions a GPU class may use: anycloud's Azure GPU base image is
- * only replicated to some (`AZURE_GPU_COMMUNITY_IMAGE_REGIONS`,
- * `src/shared/catalog/azure-gpu-map.ts` at 0.1.78), and it refuses the others.
- */
-const GPU_REGIONS: Partial<Record<Cloud, readonly string[]>> = {
-  azure: [
-    'eastus',
-    'centralus',
-    'eastus2',
-    'southcentralus',
-    'westus2',
-    'westus3',
-  ],
-};
-
 /** `backmesh-public-<n>`'s sizes: the home cloud's spot, no KVM. */
 export const PUBLIC_VCPUS = [2, 4] as const;
 /** The vCPUs they may hold at once. */
@@ -325,8 +309,10 @@ export function planClasses(
     );
     if (!classes.some((c) => c.kvm)) plan.noKvm.push(target);
     // The GPU classes: their types' regions that offer one T4 with the
-    // class's vCPUs, among those the cloud's GPU image reaches. A cloud with
-    // none gets no GPU labels, and install says so.
+    // class's vCPUs. Among the runner regions, Azure's catalog offers its
+    // type only in those anycloud's GPU image reaches
+    // (`AZURE_GPU_COMMUNITY_IMAGE_REGIONS`, `src/shared/catalog/azure-gpu-map.ts`
+    // at 0.1.78). A cloud with none gets no GPU labels, and install says so.
     const gpuFits = (details: readonly VmTypeDetails[], vmType: string) => {
       const type = findVmType(details, vmType);
       const [one, ...more] = type?.accelerators ?? [];
@@ -338,10 +324,7 @@ export function planClasses(
       );
     };
     const gpuRegions = byRegion.flatMap(([region, details]) =>
-      GPU_TYPES[target.cloud].some((t) => gpuFits(details, t)) &&
-      (GPU_REGIONS[target.cloud]?.includes(region) ?? true)
-        ? [region]
-        : [],
+      GPU_TYPES[target.cloud].some((t) => gpuFits(details, t)) ? [region] : [],
     );
     const gpu = gpuRegions.length
       ? [true, false].map((spot): RunnerClass => ({
