@@ -49,6 +49,10 @@ cloud CLI, as you, so that identity needs the rights to create them:
 - **Azure:** a custom role, a resource group with a managed identity and its
   federated credential, and a role assignment.
 
+On AWS, `backmesh upgrade` lowers the control plane's disks through your AWS
+CLI too, which needs `ec2:DescribeInstances`, `ec2:DescribeVolumes` and
+`ec2:ModifyVolume` ([Upgrade](/upgrade/)).
+
 No cloud keys are saved, and nothing else needs installing. A re-run that only
 adds or changes runners on another cloud needs just that cloud's CLI and
 rights: the control plane's cloud is untouched once a run finds its control

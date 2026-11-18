@@ -1278,6 +1278,8 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         minVmCount: 1,
         maxVmCount: 1,
         allowPrivilegedJobs: false,
+        // gp3's baseline, not anycloud's default `high` (control-disks.ts).
+        ...(first.cloud === 'aws' && { osDiskTier: 'medium' as const }),
       },
     });
   }

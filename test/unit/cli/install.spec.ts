@@ -385,6 +385,8 @@ describe('install', () => {
         allowPrivilegedJobs: false,
         minVmCount: 1,
         maxVmCount: 1,
+        // gp3's baseline 3,000 IOPS and 125 MiB/s.
+        osDiskTier: 'medium',
       }),
     ]);
     expect(result).toMatchObject({
@@ -1760,6 +1762,13 @@ describe('install', () => {
     await install({ ...options, controlPlane: 'gcp:us-central1' }, gcp.deps);
     expect(gcp.calls).toContain(
       `credentials new ${BM.gcp} --provider gcp --gcloud-account ci@p1.iam.gserviceaccount.com --project-id p1 --generate`,
+    );
+    // Only AWS's disks have provisioned speed to lower.
+    const pool = gcp.requests.find((r) =>
+      r.startsWith('POST /v1/node-pools '),
+    )!;
+    expect(JSON.parse(pool.slice(pool.indexOf('{')))).not.toHaveProperty(
+      'osDiskTier',
     );
   });
 

@@ -90,8 +90,11 @@ function setUp({
   rotatingFrom,
   // bm-aws's cache buckets, when an install made them.
   cacheBuckets,
+  // The user's AWS CLI's answers by `aws ec2` command; an Error fails it.
+  aws = {},
 }: {
   cacheBuckets?: string[];
+  aws?: Record<string, string | Error>;
   catalog?: typeof CATALOG.aws;
   beta?: boolean;
   runners?: string | null;
@@ -242,12 +245,23 @@ function setUp({
     installs,
     tokens: beta ? [token('acme'), token('beta')] : [token('acme')],
   });
+  const commands: string[] = [];
   const deps: UpgradeDeps = {
     // No saved anycloud files, whatever this machine holds.
     env: { BACKMESH_ANYCLOUD_DIR: mkdtempSync(join(tmpdir(), 'backmesh-')) },
     signInScopes: async () => ['read:org', 'read:packages'],
     run,
     runLong: run,
+    command: async (args) => {
+      commands.push(args.join(' '));
+      const answers: Record<string, string | Error> = {
+        'describe-instances': '[]',
+        ...aws,
+      };
+      const answer = answers[args[2]!] ?? '{}';
+      if (answer instanceof Error) throw answer;
+      return answer;
+    },
     release: async () => RELEASE,
     status: async () => STATUS,
     print: (line) => lines.push(line),
@@ -272,7 +286,7 @@ function setUp({
       c28: undefined,
     },
   };
-  return { deps, calls, requests, lines, worker, routes };
+  return { deps, calls, commands, requests, lines, worker, routes };
 }
 
 const rolledAny = (calls: string[]) =>
@@ -1281,5 +1295,124 @@ describe('upgrade', () => {
     await expect(upgrade(deps)).rejects.toThrow();
     expect(mutations(calls)).toEqual([]);
     expect(requests.filter((r) => !r.startsWith('GET'))).toEqual([]);
+  });
+});
+
+describe("upgrade lowers the control plane's AWS disks to gp3's baseline", () => {
+  const tags = (tags: Record<string, string>) =>
+    Object.entries(tags).map(([Key, Value]) => ({ Key, Value }));
+  // The management VM, bm-control's Node and another pool's VM, all tagged
+  // with the cluster, as anycloud tags them.
+  const INSTANCES = JSON.stringify([
+    {
+      Tags: tags({ Name: 'anycloud-cluster-c1', anycloud_cluster: 'c1' }),
+      Volumes: ['vol-api'],
+    },
+    {
+      Tags: tags({ anycloud_resource: 'np-1', anycloud_cluster: 'c1' }),
+      Volumes: ['vol-control'],
+    },
+    {
+      Tags: tags({ anycloud_resource: 'np-2', anycloud_cluster: 'c1' }),
+      Volumes: ['vol-other'],
+    },
+  ]);
+  const volume = (VolumeId: string, Iops: number, Throughput: number) => ({
+    VolumeId,
+    VolumeType: 'gp3',
+    Iops,
+    Throughput,
+  });
+  // What install made before the baseline (owner, 2026-11-18).
+  const BEFORE = JSON.stringify([
+    volume('vol-api', 8000, 125),
+    volume('vol-control', 8000, 1000),
+  ]);
+  const ec2 = (commands: string[]) =>
+    commands.map((c) =>
+      c.replace(/^aws ec2 /, '').replace(/ --query .*? --region/, ' --region'),
+    );
+
+  it("lowers the management VM's and bm-control's volumes in place, and no other", async () => {
+    const { deps, commands, lines } = setUp({
+      aws: { 'describe-instances': INSTANCES, 'describe-volumes': BEFORE },
+    });
+    const result = await upgrade(deps);
+
+    expect(ec2(commands)).toEqual([
+      'describe-instances --filters Name=tag:anycloud_cluster,Values=c1 Name=instance-state-name,Values=pending,running,stopping,stopped --region us-east-2 --output json',
+      'describe-volumes --volume-ids vol-api vol-control --region us-east-2 --output json',
+      'modify-volume --volume-id vol-api --iops 3000 --throughput 125 --region us-east-2 --output json',
+      'modify-volume --volume-id vol-control --iops 3000 --throughput 125 --region us-east-2 --output json',
+    ]);
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        'Lowered vol-api from 8000 IOPS and 125 MiB/s to 3000 IOPS and 125 MiB/s.',
+        'Lowered vol-control from 8000 IOPS and 1000 MiB/s to 3000 IOPS and 125 MiB/s.',
+      ]),
+    );
+    expect('disks' in result && result.disks).toEqual([
+      { volumeId: 'vol-api', iops: 8000, throughput: 125, lowered: true },
+      { volumeId: 'vol-control', iops: 8000, throughput: 1000, lowered: true },
+    ]);
+  });
+
+  it('changes nothing on volumes already at the baseline', async () => {
+    const { deps, commands, lines } = setUp({
+      aws: {
+        'describe-instances': INSTANCES,
+        'describe-volumes': JSON.stringify([
+          volume('vol-api', 3000, 125),
+          volume('vol-control', 3000, 125),
+        ]),
+      },
+    });
+    const result = await upgrade(deps);
+
+    expect(commands.some((c) => c.includes('modify-volume'))).toBe(false);
+    expect(lines.filter((l) => /vol-/.test(l))).toEqual([]);
+    expect('disks' in result && result.disks).toEqual([]);
+  });
+
+  it('still succeeds when EC2 refuses a change, such as within 6 hours of the last one, and says so', async () => {
+    const { deps, lines } = setUp({
+      aws: {
+        'describe-instances': INSTANCES,
+        'describe-volumes': BEFORE,
+        'modify-volume': new Error(
+          "An error occurred (IncorrectModificationState) when calling the ModifyVolume operation: You've reached the maximum modification rate per volume limit. Wait at least 6 hours between modifications per EBS volume.",
+        ),
+      },
+    });
+    const result = await upgrade(deps);
+
+    expect(lines).toContain(
+      "Couldn't lower vol-control from 8000 IOPS and 1000 MiB/s: EC2 refuses a change within 6 hours of a volume's last one, or without ec2:ModifyVolume. Run `backmesh upgrade` again later.",
+    );
+    expect('disks' in result && result.disks).toMatchObject([
+      { volumeId: 'vol-api', lowered: false },
+      { volumeId: 'vol-control', lowered: false },
+    ]);
+  });
+
+  it("still succeeds when the AWS CLI can't read the account, and says so", async () => {
+    const { deps, commands, lines } = setUp({
+      aws: { 'describe-instances': new Error('Unable to locate credentials') },
+    });
+    const result = await upgrade(deps);
+
+    expect(commands).toHaveLength(1);
+    expect(lines).toContain(
+      "Couldn't read the control plane's disks with the AWS CLI, so they keep their speed; run `backmesh upgrade` again once `aws` is signed in to its account.",
+    );
+    expect('disks' in result && result.disks).toEqual([]);
+  });
+
+  it("leaves another cloud's control plane to its own disks", async () => {
+    const { deps, commands, routes } = setUp();
+    routes['GET /v1/node-pools'].nodePools[0]!.cloudProvider = 'GCP';
+    await upgrade(deps);
+
+    expect(commands).toEqual([]);
   });
 });
