@@ -43,8 +43,8 @@ That's a median of 50 s, from 36 to 99 s. On `ubuntu-latest` every job waited
 
 ## Method
 
-- **Runtime** is a job's start to its finish. The queue wait before it isn't in
-  it: a median 2 s on GitHub, 50 s on backmesh without a cue (the table
+- **Runtime** is a job's start to its finish. The wait before the job starts,
+  from its queueing, isn't in it: a median 2 s on GitHub, 50 s on backmesh without a cue (the table
   above), and about 17 s with `backmesh cue`
   ([cue results](../cue/README.md#results)).
 - **Size.** `ubuntu-latest` in a private repository has 2 vCPUs; `backmesh-4`

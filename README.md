@@ -64,14 +64,15 @@ Only Linux x86-64 jobs in private repositories can use the runners. See
 ## How it works
 
 Install creates backmesh's control plane in your account: two always-on VMs
-(t3.large and t3.small on AWS), about $74–$111 a month. On one of them, a listener long-polls GitHub for
-queued jobs, so nothing needs an inbound port or a webhook. For each job, it
-starts a VM in the cheapest region with capacity, and the VM is deleted when the
-job ends. Runners can be in other clouds than the control plane. Every job gets
-automatic caches for `setup-*` tools and npm, Yarn and pnpm downloads; replace
-`actions/cache` with [`backmesh/cache`](https://backmesh.com/cache/) to keep
-your own caches in a bucket in the runner's region too. The
-[security model](https://backmesh.com/security/) says what runs where.
+(t3.large and t3.small on AWS), about $74–$111 a month. On one of them, a
+listener long-polls GitHub for queued jobs, so nothing needs an inbound port or
+a webhook. For each job, it starts a VM in the cheapest region with capacity,
+and the VM is deleted when the job ends. Runners can be in other clouds than the
+control plane. Every job gets automatic caches for `setup-*` tools and npm, Yarn
+and pnpm downloads; replace `actions/cache` with
+[`backmesh/cache`](https://backmesh.com/cache/) to keep your own caches in a
+bucket in the runner's region too. The [security
+model](https://backmesh.com/security/) says what runs where.
 
 backmesh is built on [anycloud](https://github.com/anycloud-sh/anycloud), which
 it downloads and runs for you, so you only use the `backmesh` CLI.

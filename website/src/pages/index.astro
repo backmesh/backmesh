@@ -319,10 +319,13 @@ const jsonLd = {
             benchmarks.map(({ workload, project, secs, cost, faster, cheaper }) => (
               <li>
                 <b>{workload}</b>
-                <strong aria-label={`${secs[0]} seconds on backmesh-4`}>
-                  {secs[0]} s
+                <strong>
+                  {secs[0]} s<span class="sr-only"> seconds</span>
                 </strong>
-                <span class="runner">on backmesh-4, plus about 50 s for a fresh VM to boot, about 17 s when cued</span>
+                <span class="runner"
+                  >on backmesh-4, plus about 50 s before the job starts, about
+                  17 s when cued</span
+                >
                 <ul>
                   <li>{project}</li>
                   <li>
@@ -346,8 +349,8 @@ const jsonLd = {
           </summary>
           <ul>
             <li>
-              Runtime is a job's start to its finish. The wait before it, a
-              job's queue to its start, isn't in it: a median 2 s on GitHub, 50
+              Runtime is a job's start to its finish. The wait before the job
+              starts, from its queueing, isn't in it: a median 2 s on GitHub, 50
               s (36 to 99 s) on backmesh uncued, and about 17 s with
               <a href="#cue">backmesh cue</a>.
             </li>
@@ -1082,6 +1085,14 @@ const jsonLd = {
   }
   .bench > li:last-child {
     padding-right: 0;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
   .bench .runner {
     margin: -8px 0 18px;
