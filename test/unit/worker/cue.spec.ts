@@ -325,7 +325,7 @@ describe('sign-ins', () => {
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({
       error:
-        'acme restricts third-party apps: an org owner approves backmesh at https://github.com/organizations/acme/settings/oauth_application_policy, then run cue again.',
+        "acme restricts third-party apps. An org owner: run cue again and click Grant next to acme on GitHub's sign-in page. Anyone else: run cue again and click Request there, have an org owner approve it at https://github.com/organizations/acme/settings/oauth_application_policy, then run cue once more.",
     });
   });
 

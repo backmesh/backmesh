@@ -73,10 +73,12 @@ VM, so no image layers carry over.
 
 **Can I install backmesh when my org restricts OAuth apps?** Yes. An org with
 OAuth app access restrictions, the default for a new org, refuses install's
-sign-in until backmesh is approved. On GitHub's consent screen at sign-in, an
-org owner clicks **Grant** next to the org. Anyone else clicks **Request**,
-and an owner then approves it at
-`https://github.com/organizations/<org>/settings/oauth_application_policy`.
+sign-in until backmesh is allowed. On GitHub's sign-in page, an org owner clicks
+**Grant** next to the org. Anyone else clicks **Request**, and an org owner
+approves it at
+`https://github.com/organizations/<org>/settings/oauth_application_policy`;
+backmesh isn't listed there until someone has requested it. Then run install
+again.
 
 **Where does backmesh put its control plane?** With several cloud CLIs signed in and no
 `--control-plane`, install picks the first of AWS, GCP and Azure, and the plan

@@ -85,6 +85,7 @@ import {
   readOrgId,
   controlPlaneOf,
 } from './installation.js';
+import { lowerManagementDisk } from './control-disks.js';
 
 export const CLUSTER = 'backmesh';
 
@@ -1225,6 +1226,18 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   } else {
     ui.print(`Creating the control plane on ${first.cloud} ${first.region}.`);
     url = await bootstrapCluster(first, deps);
+    // The management VM's disk at gp3's baseline until anycloud's template
+    // makes it so; `bm-control`'s comes from its tier (control-disks.ts).
+    // A resumed `cluster create` lowers it too.
+    if (first.cloud === 'aws') {
+      await lowerManagementDisk(
+        clusterIdOf(url),
+        first.region,
+        now.find((target) => target.cloud === 'aws')?.account,
+        deps.command,
+        ui.print,
+      );
+    }
   }
   await deps.run(['api', 'use', url]);
   // `cluster create` may have resumed a control plane on another release,
@@ -1278,6 +1291,8 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         minVmCount: 1,
         maxVmCount: 1,
         allowPrivilegedJobs: false,
+        // gp3's baseline, not anycloud's default `high` (control-disks.ts).
+        ...(first.cloud === 'aws' && { osDiskTier: 'medium' as const }),
       },
     });
   }

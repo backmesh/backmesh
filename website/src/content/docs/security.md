@@ -42,8 +42,10 @@ SHA-256 digest, so it needs network access to GitHub's release downloads.
 Install creates the control plane and each cloud's role through your signed-in
 cloud CLI, as you, so that identity needs the rights to create them:
 
-- **AWS:** a CloudFormation stack with an IAM role and OIDC provider. The
-  role's rights are anycloud v0.1.78's
+- **AWS:** a CloudFormation stack with an IAM role and OIDC provider, plus
+  `ec2:DescribeInstances`, `ec2:DescribeVolumes` and `ec2:ModifyVolume`, which
+  lower the management VM's disk to gp3's baseline speed. The role's rights
+  are anycloud v0.1.78's
   [AWS access policy](https://github.com/anycloud-sh/anycloud/blob/46d43a2973452151bd8ac4d964babc1955fdeb88/src/shared/cloud-policies/aws-anycloud-access.json).
 - **GCP:** a custom role, a service account, and a workload identity pool and
   provider with their IAM bindings, plus turning on the Compute, IAM, IAM
