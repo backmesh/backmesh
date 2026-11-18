@@ -325,7 +325,8 @@ interface Gone {
 
 // Each listener's org, install key and running jobs, which fail. A lost
 // VM's listener can't say: its org's runner Jobs, which uninstall stops,
-// are counted through its session.
+// are counted through its session, idle runners included, and as none when
+// GitHub doesn't give the org's ID.
 async function readOrgs(
   listeners: readonly Listener[],
   exec: AnycloudExec,
@@ -621,7 +622,15 @@ async function terminateVms(
   for (const id of ids) await deps.run(['terminate', id]);
   await poll(
     deps,
-    () => api.listWorkloads({ query: { workloadType: 'vm' } }),
+    // Running VMs on their own, so a missing one has really ended.
+    () =>
+      api.listWorkloads({
+        query: {
+          workloadType: 'vm',
+          stateClass: 'terminatable',
+          limit: '1000',
+        },
+      }),
     (vms) => !vms.some((w) => ids.includes(w.id) && !TERMINAL.has(w.state)),
     ids.length > 1 ? 'the listener VMs to go' : 'the listener VM to go',
   );
@@ -694,7 +703,9 @@ export async function uninstall(
   const orgs = plane?.orgs ?? [{ org: options.org!, jobs: 0 }];
   const names = orgs.map(({ org }) => org).join(', ') || 'no org';
   const running = orgs.reduce((sum, { jobs }) => sum + jobs, 0);
-  const fail = `${running} running job${running === 1 ? '' : 's'} will fail.`;
+  // An org's other listener VMs, which status warns about, go too.
+  const extra = orgs.flatMap(({ listener }) => listener?.vm?.others ?? []);
+  const fail = `${running} running job${running === 1 ? '' : 's'} will fail.${extra.length ? ` The extra listener VM${extra.length === 1 ? '' : 's'} ${extra.join(', ')} ${extra.length === 1 ? 'goes' : 'go'} too.` : ''}`;
   // With the control plane gone, its cloud side goes through the user's
   // cloud CLI, given its cloud and region and the ID its URL names.
   const seedDelete = gone?.clusterId && seed ? gone.clusterId : undefined;

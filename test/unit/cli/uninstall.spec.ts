@@ -20,6 +20,7 @@ import {
   fakeExec,
   fakeOrg,
   fakeWorker,
+  githubOrg,
   INSTALL_KEY,
   listenerVm,
 } from './fakes.js';
@@ -315,6 +316,9 @@ function setUp({
         bearers.push(new Headers(init?.headers).get('authorization'));
         return worker.fetch(url, init);
       }
+      // GitHub's public org read (`readOrgId`).
+      if (host === 'api.github.com' && /^\/orgs\/[^/]+$/.test(pathname))
+        return githubOrg(pathname);
       if (host !== 'c1.anycloud.sh') {
         if (method === 'DELETE') calls.push(`github DELETE ${pathname}`);
         // One GitHub org fake answers for every org.
@@ -1039,8 +1043,13 @@ describe('uninstall', () => {
   });
 
   it('removes an org whose listener VM is gone: no drain, its runners stopped instead, and the VM left to anycloud', async () => {
-    const { deps, calls } = setUp({ lost: true, runners: ['bmabc12-a4-x'] });
+    const { deps, calls, lines } = setUp({
+      lost: true,
+      runners: ['bmabc12-a4-x'],
+    });
     await uninstall(scripted, deps);
+    // Counted through the org's session, as the listener can't say.
+    expect(lines[0]).toMatch(/1 running job will fail/);
     expect(
       calls.filter((c) => /^(terminate|api access|github DELETE)/.test(c)),
     ).toEqual([
@@ -1069,8 +1078,11 @@ describe('uninstall', () => {
   });
 
   it("terminates an org's other listener VMs before the drain, then its own", async () => {
-    const { deps, calls } = setUp({ duplicate: true });
+    const { deps, calls, lines } = setUp({ duplicate: true });
     await uninstall(scripted, deps);
+    expect(lines[0]).toContain(
+      'The extra listener VM bml-l8u5e-dup000 goes too.',
+    );
     expect(changes(calls).slice(0, 4)).toEqual([
       'POST /v1/installs/cleanup',
       'terminate bml-l8u5e-dup000',
