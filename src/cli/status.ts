@@ -29,6 +29,7 @@ import {
   formatPlanner,
   formatSlow,
   listenerStatusSchema,
+  tokenRefused,
 } from '../listener/status.js';
 import {
   CONTROL_POOL,
@@ -276,10 +277,12 @@ export async function readStatus({
         `${org}: the token broker has failed since ${minute(broker.since)}: ${broker.error}. The listener keeps its current token until it expires, then stops scaling.`,
       );
     }
-    const refused = 'status' in listener && listener.status.anycloud;
-    if (refused) {
+    const anycloud = 'status' in listener && listener.status.anycloud;
+    if (anycloud) {
       warnings.push(
-        `${org}: the control plane has refused the listener's service token since ${minute(refused.since)}, so it can't start runners; a restore from a backup older than the token does this. Run \`backmesh upgrade\` to issue it a new one.`,
+        tokenRefused(anycloud)
+          ? `${org}: the control plane has refused the listener's service token since ${minute(anycloud.since)}, so it can't start runners; a restore from a backup older than the token does this. Run \`backmesh upgrade\` to issue it a new one.`
+          : `${org}: the listener hasn't reached the control plane since ${minute(anycloud.since)}: ${anycloud.error}.`,
       );
     }
     if (

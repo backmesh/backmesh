@@ -518,6 +518,21 @@ describe('status', () => {
     );
   });
 
+  it("says a standby listener that can't reach the control plane, without blaming its token", async () => {
+    const report = await setUp({
+      listener: probed({
+        ...LISTENER.status,
+        anycloud: {
+          since: '2026-11-05T11:00:00.000Z',
+          error: 'TypeError: fetch failed',
+        },
+      }),
+    }).read();
+    expect(report.warnings).toEqual([
+      "acme: the listener hasn't reached the control plane since 2026-11-05 11:00Z: TypeError: fetch failed.",
+    ]);
+  });
+
   it('says a listener left in standby takes no jobs until `backmesh upgrade`', async () => {
     const report = await setUp({
       listener: probed(LISTENER.status, 'acme', { BACKMESH_STANDBY: '1' }),

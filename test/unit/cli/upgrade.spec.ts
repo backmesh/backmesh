@@ -1545,7 +1545,7 @@ describe('upgrade', () => {
         return false;
       };
       await expect(upgrade(deps)).rejects.toThrow(
-        /can't use its service token \(HTTP 401: \{\}\), so its Deployment keeps running/,
+        /can't use the control plane \(HTTP 401: \{\}\), so its Deployment keeps running/,
       );
       expect(calls.filter((c) => c.startsWith('deployment'))).toEqual([]);
       expect(calls).not.toContain('node-pool delete np-1');
@@ -1556,7 +1556,11 @@ describe('upgrade', () => {
       const acme = hosts.get(VM.acme!)!;
       acme.env = { ...acme.env, BACKMESH_STANDBY: '1' };
       await upgrade(deps);
-      expect(mutations(calls)).toEqual([ROLL]);
+      // The move's last step too.
+      expect(mutations(calls)).toEqual([
+        ROLL,
+        'api access remove --service-account backmesh-acme',
+      ]);
       expect(acme.env).not.toHaveProperty('BACKMESH_STANDBY');
     });
 

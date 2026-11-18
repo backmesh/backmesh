@@ -181,6 +181,11 @@ export const listenerStatusSchema = z.object({
 });
 export type ListenerStatus = z.infer<typeof listenerStatusSchema>;
 
+// `anycloud` is a refused token when the control plane answered 401; in
+// standby, any other failure to reach it is recorded too.
+export const tokenRefused = (anycloud: ListenerStatus['anycloud']) =>
+  !!anycloud?.error.startsWith('HTTP 401');
+
 // The part the scaler reports.
 export type ScaleSetsStatus = Omit<
   ListenerStatus,

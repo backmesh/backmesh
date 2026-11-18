@@ -24,7 +24,8 @@ without it; one whose token the control plane refuses, such as after a
 restore from an older backup, gets a new token. An install from before each
 listener had its own VM moves each org's listener onto one, keeping its
 runner group and labels; the old listener keeps running until the new one
-has checked its settings and token. The old shared listener pool is deleted
+has checked its settings and token. If a move stops part way, running
+`upgrade` again finishes it. The old shared listener pool is deleted
 once it's empty. Moving one org asks nothing, since its VM costs about what
 the pool did; moving several asks, with their VMs' total.
 

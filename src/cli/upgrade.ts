@@ -38,7 +38,7 @@ import {
   type Roll,
 } from './converge.js';
 import { STANDBY_ENV } from '../listener/env.js';
-import { listenerStatusSchema } from '../listener/status.js';
+import { listenerStatusSchema, tokenRefused } from '../listener/status.js';
 import {
   createListenerVm,
   createVm,
@@ -55,6 +55,7 @@ import {
   CONTROL_POOL,
   installConnection,
   installTag,
+  listenerName,
   orgOfListener,
   readInstallation,
   readOrgId,
@@ -559,7 +560,7 @@ export async function upgrade(
     // The control plane refuses its token, such as after a restore from an
     // older backup: a new one, which the roll writes.
     const apiToken =
-      running.status.anycloud || !running.apiToken
+      tokenRefused(running.status.anycloud) || !running.apiToken
         ? await control.rotateServiceToken(name)
         : undefined;
     // install.ts's re-run has its own roll condition (no image change to
@@ -606,6 +607,8 @@ export async function upgrade(
       { ...next, apiToken },
       { control, exec, again: 'upgrade', wait: deps.wait },
     );
+    // The last step of the move that left it in standby.
+    if (running.standby) await forgetServiceAccount(control, org, print);
   }
   // `bm-control` once no listener is left on it.
   const left = (await readInstallation(api)).orgs.some((o) => o.deployment);
@@ -756,24 +759,32 @@ async function moveToVm(
   }
   await rollListenerVm(exec, vm, { ...values, [STANDBY_ENV]: '1' });
   const { body } = await answering(exec, { org, vm }, deps.wait);
-  const refused = listenerStatusSchema.parse(body).anycloud;
-  if (refused) {
+  const failed = listenerStatusSchema.parse(body).anycloud;
+  if (failed) {
     throw new Error(
-      `${org}'s listener on ${vm} can't use its service token (${refused.error}), so its Deployment keeps running; run \`backmesh upgrade\` again.`,
+      `${org}'s listener on ${vm} can't use the control plane (${failed.error}), so its Deployment keeps running; run \`backmesh upgrade\` again.`,
     );
   }
   await stop();
   await rollListenerVm(exec, vm, values);
   await answering(exec, { org, vm }, deps.wait);
-  // Inert once its Deployment is gone: no Pod holds its token.
-  await control
-    .removeServiceAccount(name)
+  await forgetServiceAccount(control, org, deps.print);
+}
+
+// A moved listener's ServiceAccount access entry, inert once its
+// Deployment is gone: no Pod holds its token.
+const forgetServiceAccount = (
+  control: AnycloudControl,
+  org: string,
+  print: (line: string) => void,
+) =>
+  control
+    .removeServiceAccount(listenerName(org))
     .catch((error: unknown) =>
-      deps.print(
+      print(
         `${org}'s old ${CONTROL_POOL} access entry wasn't removed (${error instanceof Error ? error.message : String(error)}); with its Deployment gone nothing holds its token.`,
       ),
     );
-}
 
 // The connection install made for `cloud` on this control plane.
 async function connectionOf(cloud: Cloud, url: string, deps: UpgradeDeps) {
