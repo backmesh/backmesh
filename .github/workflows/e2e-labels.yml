@@ -1,8 +1,8 @@
 name: E2E labels
 
 # e2e.yml's label member: assertions 1-4 and the kill-all, on the label
-# itself, so instance metadata, the VM's own Docker and /dev/kvm are all the
-# real thing. Called by e2e.yml for our own org, and by the test org's
+# itself, so instance metadata, the VM's own Docker, /dev/kvm and a GPU
+# label's GPU are all the real thing. Called by e2e.yml for our own org, and by the test org's
 # backmesh-dryrun/e2e, whose runners only its own repositories reach
 # (e2e.yml's `test-org` job dispatches it). The checks come from
 # backmesh/backmesh at `ref` either way: a caller in another repository
