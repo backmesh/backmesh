@@ -1,12 +1,12 @@
 ---
 title: 'ARC vs terraform-aws-github-runner vs backmesh: open-source GitHub Actions runners compared'
-description: Three free, open-source ways to run autoscaling self-hosted GitHub Actions runners, compared on how they work, setup, clouds, isolation, spot, caching, start times, upkeep and cost, with a worked monthly bill.
+description: Three free, open-source ways to run autoscaling self-hosted GitHub Actions runners, compared on how they work, setup, clouds, isolation, spot, caching, start times, upkeep and cost, with monthly bills at five volumes.
 date: 2026-11-18
 lastUpdated: 2026-11-18
 authors: backmesh
 tags:
   - Comparisons
-excerpt: Actions Runner Controller, terraform-aws-github-runner and backmesh are all free and open source. They differ in what you run to get runners. A side-by-side on setup, clouds, isolation, spot, caching, start times, upkeep and a worked monthly bill.
+excerpt: Actions Runner Controller, terraform-aws-github-runner and backmesh are all free and open source. They differ in what you run to get runners. A side-by-side on setup, clouds, isolation, spot, caching, start times, upkeep and monthly bills at five volumes.
 head:
   - tag: title
     content: 'ARC vs terraform-aws-github-runner vs backmesh (2026): open-source GitHub Actions runners compared | backmesh'
@@ -183,18 +183,26 @@ part that differs:
 | What it is    | A Kubernetes cluster: [EKS](https://aws.amazon.com/eks/pricing/) and [GKE](https://cloud.google.com/kubernetes-engine/pricing) charge $0.10 per cluster per hour, plus nodes kept running | Lambda calls and SQS messages | Two small always-on VMs with their disks |
 | About a month | $73 for the EKS fee, before nodes; GKE's free tier covers one zonal or Autopilot cluster                                                                                                  | Usually a few dollars         | $86 on AWS, $74 on GCP, $111 on Azure    |
 
-A worked month: 150,000 minutes of 4-vCPU Linux jobs on AWS spot. backmesh's
-[cost inputs](/cost/) put 4-vCPU spot VMs in us-east-2 at about $0.050 to
-$0.070 an hour on 2026-11-13, or about $124 to $175 for those minutes. All
-three tools would pay roughly that for the compute itself, since all three can
-run spot. The fixed part then decides the total:
+Monthly bills for 4-vCPU Linux jobs on AWS spot, from these inputs:
+backmesh's [cost inputs](/cost/) put 4-vCPU spot VMs in us-east-2 at about
+$0.050 to $0.070 an hour on 2026-11-13, and all three tools would pay roughly
+that for the compute itself, since all three can run spot. To that, ARC adds
+the $73 EKS fee and the nodes it runs on, the Terraform module a few dollars,
+taken here as $5, and backmesh its $86 control plane. GitHub-hosted 4-core
+runners cost $0.012 a minute.
 
-| On AWS, 150,000 4-vCPU minutes | Compute   | Fixed               | Total, about            |
-| ------------------------------ | --------- | ------------------- | ----------------------- |
-| GitHub-hosted 4-core           | $1,800    | none                | $1,800                  |
-| ARC on EKS                     | $124–$175 | $73 + nodes for ARC | $197–$248 + nodes       |
-| terraform-aws-github-runner    | $124–$175 | a few dollars       | $130–$180               |
-| backmesh                       | $124–$175 | $86                 | $210–$261, before disks |
+| 4-vCPU minutes a month | GitHub-hosted | ARC on EKS          | terraform-aws-github-runner | backmesh    |
+| ---------------------- | ------------- | ------------------- | --------------------------- | ----------- |
+| 10,000                 | $120          | $81–$85 + nodes     | $13–$17                     | $94–$98     |
+| 50,000                 | $600          | $114–$131 + nodes   | $46–$63                     | $127–$144   |
+| 150,000                | $1,800        | $197–$248 + nodes   | $129–$180                   | $210–$261   |
+| 500,000                | $6,000        | $487–$656 + nodes   | $419–$588                   | $500–$669   |
+| 1,000,000              | $12,000       | $901–$1,240 + nodes | $833–$1,172                 | $914–$1,253 |
+
+terraform-aws-github-runner is the cheapest at every volume, because it
+scales to zero. backmesh costs $81 more each month at any volume, and $13
+more than ARC on EKS before ARC's nodes, so backmesh isn't the cheapest of
+the three at any volume here.
 
 These leave out disks, boot time and engineering time. For ARC, the nodes that
 run ARC's controller and listener, and any spare capacity for pods to land on,
