@@ -14,11 +14,11 @@ import {
 import type { Env } from './index.js';
 import {
   AppRestricted,
+  deviceToken,
   keyInstall,
   orgAdmin,
   rememberLogin,
   sha256,
-  signedInToken,
 } from './installs.js';
 
 const HOUR = 3_600_000;
@@ -189,7 +189,7 @@ async function cleanupToken(
   });
 }
 
-// POST /v1/installs/cleanup { device_code | github_token, org }, with the install key as
+// POST /v1/installs/cleanup { device_code, org }, with the install key as
 // the bearer when the CLI could read it: an admin of `org` signs
 // in through the device flow, polled here (202 while pending). The key, if
 // sent, must be the org's; its own last mint doesn't count as live, and it's
@@ -200,18 +200,16 @@ async function cleanupToken(
 // account.id must be that org (installationOf).
 export async function cleanup(request: Request, env: Env) {
   const record = recorder(env, request);
-  const body = (await request.json().catch(() => ({}))) as {
+  const { device_code, org } = (await request.json().catch(() => ({}))) as {
     device_code?: unknown;
-    github_token?: unknown;
     org?: unknown;
   };
-  const { org } = body;
-  const signedIn = typeof org === 'string' && (await signedInToken(env, body));
-  if (!signedIn) {
+  if (typeof device_code !== 'string' || typeof org !== 'string') {
     await record('bad_request');
     const error = 'device_code and org are required';
     return Response.json({ error }, { status: 400 });
   }
+  const signedIn = await deviceToken(env, device_code);
   if (signedIn instanceof Response) {
     if (signedIn.status !== 202) await record('signin_failed');
     return signedIn;

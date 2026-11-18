@@ -20,7 +20,6 @@ import {
   fakeOrg,
   fakeWorker,
   INSTALL_KEY,
-  SIGNED_IN,
 } from './fakes.js';
 
 const HOSTED = 'https://c1.anycloud.sh';
@@ -907,20 +906,6 @@ describe('uninstall', () => {
     expect(lines).toContain(
       'The backmesh GitHub App stays on acme, as --keep-app asked.',
     );
-  });
-
-  it('signs in with BACKMESH_SIGN_IN_TOKEN, with no device code', async () => {
-    const { deps, lines, worker } = setUp();
-    deps.env.BACKMESH_SIGN_IN_TOKEN = SIGNED_IN;
-
-    await uninstall(scripted, deps);
-
-    expect(worker.calls).toEqual([
-      'POST /v1/installs/cleanup',
-      'POST /v1/installs/cleanup/finish',
-    ]);
-    expect(worker.bodies[0]).toEqual({ github_token: SIGNED_IN, org: 'acme' });
-    expect(lines.join('\n')).not.toContain('login/device');
   });
 
   it('reports an App another install keeps, and a failed removal', async () => {

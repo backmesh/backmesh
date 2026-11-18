@@ -57,5 +57,4 @@ jobs:
           BILLING_GITHUB_APP_ID: ${{ vars.BILLING_GITHUB_APP_ID || secrets.BILLING_GITHUB_APP_ID }}
           BILLING_GITHUB_APP_PRIVATE_KEY: ${{ secrets.BILLING_GITHUB_APP_PRIVATE_KEY }}
           BILLING_GITHUB_APP_PRIVATE_KEY_NEXT: ${{ secrets.BILLING_GITHUB_APP_PRIVATE_KEY_NEXT }}
-          BILLING_GITHUB_CLIENT_SECRET: ${{ secrets.BILLING_GITHUB_CLIENT_SECRET }}
         run: node worker/scripts/setup.ts $([[ $MODE == apply ]] && echo --apply)

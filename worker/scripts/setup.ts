@@ -26,13 +26,11 @@ export const REQUIRED = [
 const APP = ['BILLING_GITHUB_APP_ID', 'BILLING_GITHUB_APP_PRIVATE_KEY'];
 // During a rotation, the next key, which the Worker signs with once set.
 const NEXT_KEY = 'BILLING_GITHUB_APP_PRIVATE_KEY_NEXT';
-// The OAuth app's client secret, optional: only for checking a sign-in's
-// token sent in place of a device code (`issuedToken`); unset, the Worker
-// takes none.
-const CLIENT_SECRET = 'BILLING_GITHUB_CLIENT_SECRET';
 // Retired secrets, deleted where a Worker still has them: the billing
-// Worker's.
+// Worker's, and the OAuth client secret only connect links' web flow used
+// (owner, 2026-11-12: device flow only).
 const RETIRED = [
+  'GITHUB_CLIENT_SECRET',
   'STRIPE_SECRET_KEY',
   'STRIPE_WEBHOOK_SECRET',
   'STRIPE_PORTAL_CONFIGURATION',
@@ -192,14 +190,12 @@ export async function setup({ env, apply, fetch, wrangler, log }: Deps) {
     pending.GITHUB_APP_PRIVATE_KEY = env.BILLING_GITHUB_APP_PRIVATE_KEY!;
   }
   if (env[NEXT_KEY]) pending.GITHUB_APP_PRIVATE_KEY_NEXT = env[NEXT_KEY];
-  if (env[CLIENT_SECRET]) pending.GITHUB_CLIENT_SECRET = env[CLIENT_SECRET];
   plan(`set the Worker secrets ${Object.keys(pending).sort().join(', ')}`);
   if (apply) wrangler(['secret', 'bulk', ...config], JSON.stringify(pending));
   // Once a rotation is promoted, the Worker stops signing with the old next
   // key, which it would otherwise prefer, and no retired secret stays.
   const stale = [
     ...(env[NEXT_KEY] ? [] : ['GITHUB_APP_PRIVATE_KEY_NEXT']),
-    ...(env[CLIENT_SECRET] ? [] : ['GITHUB_CLIENT_SECRET']),
     ...RETIRED,
   ].filter((name) => secrets.includes(name));
   for (const name of stale) {

@@ -216,7 +216,7 @@ export class Upstream {
     const auth = new Headers(init.headers).get('Authorization') ?? '';
     const user = auth.replace('Bearer token-', '');
     const form = new URLSearchParams(
-      typeof init.body === 'string' && !init.body.startsWith('{')
+      typeof init.body === 'string'
         ? init.body
         : (init.body as URLSearchParams),
     );
@@ -277,18 +277,6 @@ export class Upstream {
         access_token: `token-${form.get('code') ?? form.get('device_code')}`,
         scope: this.oauthScope,
       });
-    }
-    // backmesh's OAuth app's token check: the device sign-ins' tokens only.
-    if (path === '/applications/client/token') {
-      const { access_token } = JSON.parse(String(init.body)) as {
-        access_token: string;
-      };
-      const ok =
-        auth === `Basic ${btoa('client:secret')}` &&
-        access_token.startsWith('token-');
-      return ok
-        ? Response.json({ token: access_token })
-        : new Response('', { status: 404 });
     }
     if (path === '/user') {
       return Response.json({ id: this.userId(user), login: user });

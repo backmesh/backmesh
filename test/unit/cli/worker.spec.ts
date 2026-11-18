@@ -10,7 +10,6 @@ function signIn(
   installs: (Response | Error)[],
   install?: string,
   signIns?: (Response | Error)[],
-  env: NodeJS.ProcessEnv = {},
 ) {
   const worker = fakeWorker({ installs, signIns });
   const waits: number[] = [];
@@ -18,7 +17,7 @@ function signIn(
   const key = signInForKey(
     'acme',
     {
-      env,
+      env: {},
       fetch: worker.fetch,
       print: (line) => lines.push(line),
       wait: async (ms) => void waits.push(ms),
@@ -106,42 +105,6 @@ describe('signInForKey', () => {
 
     expect((await key).key).toBe(INSTALL_KEY);
     expect(waits).toEqual([5_000, 10_000]);
-  });
-});
-
-describe('signInForKey with BACKMESH_SIGN_IN_TOKEN', () => {
-  const env = { BACKMESH_SIGN_IN_TOKEN: SIGNED_IN };
-
-  it('sends the token in place of a device code, and prints no code', async () => {
-    const limited = Response.json({ error: 'slow down' }, { status: 429 });
-    const { key, lines, worker, waits } = signIn(
-      [limited, issued],
-      undefined,
-      undefined,
-      env,
-    );
-
-    expect(await key).toEqual({ key: INSTALL_KEY, token: SIGNED_IN });
-    expect(worker.devices).toEqual([]);
-    expect(worker.bodies).toEqual([
-      { org: 'acme', github_token: SIGNED_IN },
-      { org: 'acme', github_token: SIGNED_IN },
-    ]);
-    expect(waits).toEqual([10_000]);
-    expect(lines).toEqual([]);
-  });
-
-  it("refuses with the Worker's reason, and never falls back to a device code", async () => {
-    const error = "GitHub doesn't know GITHUB_TOKEN as a backmesh sign-in";
-    const { key, worker } = signIn(
-      [Response.json({ error }, { status: 401 })],
-      undefined,
-      undefined,
-      env,
-    );
-
-    await expect(key).rejects.toThrow(error);
-    expect(worker.devices).toEqual([]);
   });
 });
 

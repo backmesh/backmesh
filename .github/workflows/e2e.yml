@@ -13,13 +13,14 @@ name: E2E
 #
 # With `version` (a release or release candidate, such as v0.4.3-rc.1), the
 # `test-org` job installs that release fresh on AWS for `org`, the test org
-# (backmesh-dryrun), with nobody at the keyboard, runs the label member there,
-# then uninstalls it and sweeps AWS for anything left. The backmesh App
-# stays installed on the test org (`uninstall --keep-app`): only an org owner
-# can install it. The owner's one-time setup is the `e2e` environment's
-# secrets (E2E_TEST_ORG_GITHUB_TOKEN, E2E_TEST_ORG_DISPATCH_TOKEN,
-# AWS_ROLE_ARN) and the test org's e2e repository with its labels.yml (the
-# owner's setup notes). It refuses an org ANYCLOUD_API_URLS names: those are
+# (backmesh-dryrun), runs the label member there, then uninstalls it and
+# sweeps AWS for anything left. Install and uninstall each print a GitHub
+# device sign-in, in the run's annotations and summary, which an admin of the
+# test org approves, as for ci-install.yml. The backmesh App stays installed
+# on the test org (`uninstall --keep-app`): only an org owner can install
+# it. The owner's one-time setup is the `e2e` environment's secrets
+# (E2E_TEST_ORG_DISPATCH_TOKEN, AWS_ROLE_ARN) and the test org's e2e
+# repository with its labels.yml (the owner's setup notes). It refuses an org ANYCLOUD_API_URLS names: those are
 # live.
 
 on:
@@ -199,10 +200,9 @@ jobs:
           grep ' anycloud-linux-x64.tar.gz$' checksums.txt | sha256sum -c -
           tar -xzf anycloud-linux-x64.tar.gz anycloud
           rm anycloud-linux-x64.tar.gz checksums.txt
-          # A release before these can't run unattended, nor uninstall
-          # without taking the App with it.
+          # A release before it can't uninstall without taking the App.
           ./backmesh uninstall --help | grep -q -- --keep-app \
-            || { echo "::error::$VERSION has no uninstall --keep-app or sign-in token, which this needs"; exit 1; }
+            || { echo "::error::$VERSION has no uninstall --keep-app, which this needs"; exit 1; }
           install -D -m 755 anycloud ~/.backmesh/bin/"$anycloud"/anycloud
           echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
           echo "ANYCLOUD_DIR=$HOME/.anycloud" >>"$GITHUB_ENV"
@@ -229,36 +229,19 @@ jobs:
             "$KEY_ID" "$SECRET" "$SESSION" >~/.aws/credentials
           chmod 600 ~/.aws/credentials
 
-      # An admin of the test org signed in once, ahead of time: the token is
-      # the control plane's sign-in and stands in for install's and
-      # uninstall's device codes. The App is already on the org, so install
-      # never waits for it; if it asks, the run stops.
+      # A maintainer who is an admin of the test org approves install's
+      # GitHub sign-in from the run's annotations or summary
+      # (with-sign-in.sh); the same sign-in is the control plane's.
       - name: backmesh install
         id: install
+        timeout-minutes: 90
         env:
           BACKMESH_UNSUPPORTED_CI_OVERRIDE: anycloud-ci
-          GITHUB_TOKEN: ${{ secrets.E2E_TEST_ORG_GITHUB_TOKEN }}
-          BACKMESH_SIGN_IN_TOKEN: ${{ secrets.E2E_TEST_ORG_GITHUB_TOKEN }}
         run: |
           placement=(--control-plane "aws:$CONTROL_PLANE_REGION" --runners aws)
           plan=$(backmesh install --org "$ORG" "${placement[@]}" --plan --json) || { echo "$plan"; exit 1; }
           id=$(tail -n1 <<<"$plan" | jq -er .planId) || { echo "$plan"; exit 1; }
-          log=$RUNNER_TEMP/install.log
-          backmesh install --org "$ORG" "${placement[@]}" --yes --plan-id "$id" >"$log" 2>&1 &
-          pid=$!
-          tail -f --pid="$pid" "$log" &
-          while kill -0 "$pid" 2>/dev/null; do
-            sleep 5
-            if grep -Eq 'login/device|installs the backmesh GitHub App' "$log"; then
-              kill "$pid" 2>/dev/null || true
-              wait
-              echo "::error::install asked for a person: a device sign-in or the App's install on $ORG"
-              exit 1
-            fi
-          done
-          wait "$pid" && code=0 || code=$?
-          wait
-          exit "$code"
+          test/e2e/with-sign-in.sh backmesh install --org "$ORG" "${placement[@]}" --yes --plan-id "$id"
 
       # The control plane's ID, for the sweep, also after a failed install
       # that got as far as creating it.
@@ -286,15 +269,13 @@ jobs:
         run: node test/e2e/run-test-org-labels.ts
 
       # Always, after anything that may have made something, cancelled too:
-      # everything but the App, and the checkpoint bucket with the rest.
+      # everything but the App, and the checkpoint bucket with the rest. Its
+      # GitHub sign-in is approved as install's is.
       - name: backmesh uninstall
         if: ${{ always() && steps.bin.outcome == 'success' }}
         timeout-minutes: 60
-        env:
-          GITHUB_TOKEN: ${{ secrets.E2E_TEST_ORG_GITHUB_TOKEN }}
-          BACKMESH_SIGN_IN_TOKEN: ${{ secrets.E2E_TEST_ORG_GITHUB_TOKEN }}
         run: |
-          backmesh uninstall --org "$ORG" --yes --keep-app --delete-checkpoint-bucket --confirm backmesh
+          test/e2e/with-sign-in.sh backmesh uninstall --org "$ORG" --yes --keep-app --delete-checkpoint-bucket --confirm backmesh
 
       # The cost guard: fails, naming them, while anything this run's
       # installation made is still in AWS. Without the control plane's ID,
