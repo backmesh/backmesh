@@ -25,6 +25,7 @@ interface Volume {
 export async function lowerManagementDisk(
   clusterId: string,
   region: string,
+  account: string | undefined,
   command: RunCommand,
   print: (line: string) => void,
 ): Promise<void> {
@@ -51,15 +52,20 @@ export async function lowerManagementDisk(
       '--query',
       'Reservations[].Instances[].BlockDeviceMappings[?DeviceName==`/dev/sda1`].Ebs.VolumeId[]',
     );
-    volumes = ids.length
-      ? await aws<Volume[]>(
-          'describe-volumes',
-          '--volume-ids',
-          ...ids,
-          '--query',
-          'Volumes[].{VolumeId:VolumeId,VolumeType:VolumeType,Iops:Iops,Throughput:Throughput}',
-        )
-      : [];
+    // Signed in to another account or region, the search finds nothing.
+    if (!ids.length) {
+      print(
+        `Found no management VM for ${clusterId} in this AWS account and ${region}, so its disk keeps its speed; sign in to ${account ? `AWS account ${account}` : "the control plane's AWS account"} and lower its root volume ${baseline} in the EC2 console.`,
+      );
+      return;
+    }
+    volumes = await aws<Volume[]>(
+      'describe-volumes',
+      '--volume-ids',
+      ...ids,
+      '--query',
+      'Volumes[].{VolumeId:VolumeId,VolumeType:VolumeType,Iops:Iops,Throughput:Throughput}',
+    );
   } catch {
     print(
       `Couldn't read the management VM's disk with the AWS CLI, so it keeps its speed; lower its root volume ${baseline} in the EC2 console.`,

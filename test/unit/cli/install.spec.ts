@@ -335,6 +335,37 @@ const tokenFor = (login: string) =>
   });
 
 describe('install', () => {
+  it("finishes when the AWS CLI can't read the management VM's disk, and says so", async () => {
+    const { deps, commands, lines } = setUp();
+    const command = deps.command;
+    deps.command = async (args) => {
+      if (args[2] === 'describe-instances')
+        throw new Error('UnauthorizedOperation');
+      return command(args);
+    };
+    const result = await install(asked, deps);
+
+    expect(result).toMatchObject({ apiUrl: HOSTED });
+    expect(commands.some((c) => c.includes('modify-volume'))).toBe(false);
+    expect(lines).toContain(
+      "Couldn't read the management VM's disk with the AWS CLI, so it keeps its speed; lower its root volume to 3000 IOPS and 125 MiB/s in the EC2 console.",
+    );
+  });
+
+  it('names the account to sign in to when it finds no management VM', async () => {
+    const { deps, commands, lines } = setUp();
+    const command = deps.command;
+    deps.command = async (args) =>
+      args[2] === 'describe-instances' ? '[]' : command(args);
+    const result = await install(asked, deps);
+
+    expect(result).toMatchObject({ apiUrl: HOSTED });
+    expect(commands.some((c) => c.includes('describe-volumes'))).toBe(false);
+    expect(lines).toContain(
+      'Found no management VM for c1 in this AWS account and us-east-2, so its disk keeps its speed; sign in to AWS account 123456789012 and lower its root volume to 3000 IOPS and 125 MiB/s in the EC2 console.',
+    );
+  });
+
   it("finishes when EC2 refuses to lower the management VM's disk, and says so", async () => {
     const { deps, lines } = setUp();
     const command = deps.command;
