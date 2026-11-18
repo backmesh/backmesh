@@ -331,7 +331,7 @@ costs from backmesh's [cost inputs](/cost/) (2026-11-13). Jobs: 1,500 × 3 × 5 
 | GCP   | 0.0899–0.1165 | $148–$192             | $40–$61      | $74           | $263–$327 |
 
 For example, AWS's low end is $86 + 99,000 × $0.0497 ÷ 60 + 27,000 × 30 s ×
-$0.0497 ÷ 3,600 = $179.19. These figures leave out disks, about $0.01 an
+$0.0497 ÷ 3,600 = $179.19. These figures leave out disks, about $0.038 an
 hour per runner on AWS, and runners started ahead that no job takes. In this
 example the workflow changes cut the bill from $2,160 to $1,188, and the
 runner change cut the rest to about $178–$327.

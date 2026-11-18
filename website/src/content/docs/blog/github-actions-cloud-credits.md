@@ -202,11 +202,11 @@ To run your own minutes and sizes, use the [cost calculator](/calculator/).
 Any self-hosted runner that registers with your GitHub org and runs in your
 cloud account puts CI on your cloud bill. Three free, open-source options:
 
-| Option                                                                                           | Where it runs          | What you operate                       |
-| ------------------------------------------------------------------------------------------------ | ---------------------- | -------------------------------------- |
-| [Actions Runner Controller](https://github.com/actions/actions-runner-controller)                | Any Kubernetes cluster | The cluster and its node pools         |
-| [terraform-aws-github-runner](https://github.com/github-aws-runners/terraform-aws-github-runner) | AWS                    | Terraform, Lambda functions and queues |
-| [backmesh](https://github.com/backmesh/backmesh)                                                 | AWS, GCP and Azure     | Two small VMs it installs              |
+| Option                                                                                           | Where it runs          | What you operate                                             |
+| ------------------------------------------------------------------------------------------------ | ---------------------- | ------------------------------------------------------------ |
+| [Actions Runner Controller](https://github.com/actions/actions-runner-controller)                | Any Kubernetes cluster | The cluster and its node pools                               |
+| [terraform-aws-github-runner](https://github.com/github-aws-runners/terraform-aws-github-runner) | AWS                    | Terraform, Lambda functions and queues                       |
+| [backmesh](https://github.com/backmesh/backmesh)                                                 | AWS, GCP and Azure     | Two always-on VMs it installs (t3.large and t3.small on AWS) |
 
 Commercial runner managers that run machines in your own cloud account
 include RunsOn and WarpBuild BYOC. Check each one's supported clouds and
@@ -257,7 +257,7 @@ GitHub's preinstalled toolchains, which setup actions add.
   `CPUS_ALL_REGIONS` defaults to 32 vCPUs, eight 4-vCPU jobs at once. Raise
   quotas before you move a busy repo.
 - VM prices leave out disks, egress and NAT. Each backmesh runner
-  has a 100 GB disk, about $0.01 an hour on AWS. Cache, artifact and image
+  has a 100 GB disk, about $0.038 an hour on AWS. Cache, artifact and image
   pushes that leave the cloud bill as egress. If your network sends runners
   through a NAT gateway, that bills per hour and per GB.
 - GitHub announced a $0.002 per minute charge
