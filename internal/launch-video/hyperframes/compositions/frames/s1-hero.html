@@ -1,17 +1,17 @@
 <template id="s1-hero-template">
-  <div id="s1-root" data-composition-id="s1-hero" data-width="1920" data-height="1080" data-duration="8.4">
+  <div id="s1-root" data-composition-id="s1-hero" data-width="1920" data-height="1080" data-duration="7.6">
     <style>
       @font-face { font-family: "Schibsted Grotesk"; src: url("assets/fonts/SchibstedGrotesk.woff2") format("woff2"); font-weight: 400 900; }
       @font-face { font-family: "Fragment Mono"; src: url("assets/fonts/FragmentMono.woff2") format("woff2"); font-weight: 400; }
       #s1-root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: "Schibsted Grotesk", sans-serif; color: #2c3036; }
       /* The page's hero: words left, the diagram right. */
-      #s1-stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 96px; padding: 60px 120px 0; }
-      #s1-copy { width: 700px; flex: 0 0 700px; }
+      #s1-stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 80px; padding: 60px 100px 0; }
+      #s1-copy { width: 750px; flex: 0 0 750px; }
       #s1-h1 { font-weight: 700; font-size: 92px; line-height: 1.02; letter-spacing: -0.036em; color: #15171a; }
       #s1-h1 span { display: inline-block; }
       #s1-sub { margin-top: 44px; font-size: 32px; line-height: 1.45; color: #2c3036; text-wrap: balance; }
       #s1-sub span { display: block; text-wrap: balance; }
-      #s1-free { margin-top: 30px; font-size: 30px; font-weight: 600; color: #15171a; }
+      #s1-free { margin-top: 30px; font-size: 28px; white-space: nowrap; font-weight: 600; color: #15171a; }
       #s1-fig { width: 820px; flex: 0 0 820px; }
       #s1-flow { width: 820px; height: 732px; display: block; overflow: visible; }
       .s1-lbl { fill: #15171a; font: 600 16px "Schibsted Grotesk", sans-serif; letter-spacing: -0.01em; }
@@ -28,11 +28,11 @@
       .s1-tok { opacity: 0; }
       .s1-tok rect { fill: #0e6ba8; stroke: #ffffff; stroke-width: 2.5; }
     </style>
-    <div id="s1-stage" class="clip" data-start="0" data-duration="8.4" data-track-index="0">
+    <div id="s1-stage" class="clip" data-start="0" data-duration="7.6" data-track-index="0">
       <div id="s1-copy">
-        <h1 id="s1-h1"><span>Self-hosted</span> <span>GitHub</span> <span>Actions</span> <span>runners</span> <span>for</span> <span>up</span> <span>to</span> <span>10×</span> <span>less.</span></h1>
-        <p id="s1-sub"><span id="s1-sub-a">Each job runs on its own spot VM in your AWS, GCP or Azure account.</span><span id="s1-sub-b">Your cloud bills you, so your cloud credits apply.</span></p>
-        <p id="s1-free">Core features free, no credit card.</p>
+        <h1 id="s1-h1"><span>Up</span> <span>to</span> <span>2×</span> <span>faster,</span> <span>5×&nbsp;cheaper</span> <span>builds.</span></h1>
+        <p id="s1-sub"><span id="s1-sub-a">Self-hosted GitHub Actions runners: each job runs on its own spot VM in your AWS, GCP or Azure account.</span><span id="s1-sub-b">Your cloud bills you, so your cloud credits apply.</span></p>
+        <p id="s1-free">Free and open source (Apache-2.0), no credit card.</p>
       </div>
       <div id="s1-fig">
         <!-- The page's hero diagram (website/src/components/HeroDiagram.astro, flow.ts), in its own 560 x 500 units. -->
@@ -81,7 +81,7 @@
       const G = { DROP: 280, QY: 44, QP: 28, TS: 14, BOX_Y: 132, BOX_H: 66, PY: 262, PW: 172, PX: [0, 194, 388], COLS: 5, ROWS: 5, SS: 22, SG: 8, PAD: 18, HEAD: 44,
         PATTERN: [0, 1, 2, 0, 2, 1, 2, 0, 1],
         ORDER: [12, 3, 21, 7, 16, 0, 19, 9, 24, 5, 14, 2, 22, 10, 17, 6, 1, 20, 13, 4, 23, 8, 15, 11, 18] };
-      const T0 = 1.5, STEP = 0.2, TRAVEL = 1.5, BOOT = 0.4, JOBS = 24;
+      const T0 = 1.5, STEP = 0.2, TRAVEL = 1.5, BOOT = 0.4, JOBS = 21;
       const job = (k) => {
         const c = G.PATTERN[k % 9];
         const before = G.PATTERN.slice(0, k % 9).filter((v) => v === c).length;

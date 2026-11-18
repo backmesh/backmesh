@@ -4,7 +4,7 @@ Source for the backmesh launch video, built with
 [HyperFrames](https://hyperframes.heygen.com/) HTML compositions, after
 anycloud's `internal/launch-video/`.
 
-`hyperframes/` is the cut (34.5 s). `index.html` holds the scene schedule, the
+`hyperframes/` is the cut (35.4 s). `index.html` holds the scene schedule, the
 crossfades, the navbar lockup and the sound-effect cues;
 `compositions/frames/` holds one sub-composition per scene. `storyboard.md`
 lists the scenes, their on-screen copy and where on the landing page each
@@ -59,16 +59,22 @@ folder per version.
 Every line on screen is the landing page's own words, or a number it
 computes; `storyboard.md` maps each one to its section.
 
+- **Benchmarks.** Scene 3's times, waits, costs and ratios are the page's
+  `benchmarks` array (2026-11-18, medians of 5 rounds each, `backmesh-4` on
+  AWS against `ubuntu-latest`); `website/src/content/docs/benchmarks.md` has
+  the method and the runs. The hero's "Up to 2× faster, 5× cheaper builds"
+  rounds them as the page does.
 - **Cost.** "$1,800 on GitHub, $191–$365 on backmesh" and the per-cloud bars
   are `website/src/cost.ts` (`headline`, `totals`), rounded as the page rounds
   them, with its catalog date, 2026-11-13.
-- **Job log.** The resource summary in scene 6 is verbatim from backmesh's own
+- **Job log.** The resource summary in scene 7 is verbatim from backmesh's own
   CI, not the page's abridged, illustrative capture:
   run 42915065644, job `verify`, in the archived private repository, on `backmesh-4` (AWS), commit `9894a6df8cf6225b695de4df540ace5757e5aaf4`,
   2026-11-10. Only its colour highlights are added.
-- **Billing.** "Core features free, no credit card" and "you pay your clouds
-  for the VMs" are the hero's and the pricing section's words; they match the
-  site's about text (`website/src/about.ts`).
+- **Licence and billing.** "Free and open source (Apache-2.0), no credit card"
+  and "backmesh is free and open source; you pay your clouds for the VMs" are
+  the hero's and the pricing section's words; they match the site's about
+  text (`website/src/about.ts`).
 
 ## Assets
 
