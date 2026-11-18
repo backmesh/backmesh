@@ -8,6 +8,8 @@ name: Release
 # install from, and the cache action to backmesh/cache. A vX.Y.Z-rc.N tag is a
 # qualification build: a prerelease in this repository only, with no notes
 # file, no mirror and no formula; its images are public as for any release.
+# An rc may be tagged on a pull request's head, so a change is live-checked
+# before it merges (owner, 2026-11-18); a release's own tag must be on main.
 on:
   push:
     tags: ['v*']
@@ -34,7 +36,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       # Before anything publishes. The CLI reports the tag's version.
-      - name: Check the tag is package.json's X.Y.Z version, on main, with notes
+      - name: Check the tag is package.json's X.Y.Z version, on main unless an rc, with notes
         id: tag
         run: |
           version=$(jq -r .version package.json)
@@ -44,7 +46,7 @@ jobs:
           [[ $GITHUB_REF_NAME =~ ^v[0-9.]+-rc\.[0-9]+$ ]] && rc=true
           [[ ${GITHUB_REF_NAME%-rc.*} == "v$version" && ($rc == true || $GITHUB_REF_NAME == "v$version") ]] \
             || { echo "::error::$GITHUB_REF_NAME isn't package.json's v$version or v$version-rc.N"; exit 1; }
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
+          [[ $rc == true ]] || git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
             || { echo "::error::$GITHUB_REF_NAME isn't on main"; exit 1; }
           # The owner approves notes for customer releases only.
           [[ $rc == true || -s docs/releases/$GITHUB_REF_NAME.md ]] \
