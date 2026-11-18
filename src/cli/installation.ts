@@ -8,6 +8,7 @@ import { z } from 'zod';
 import type { AnycloudApi } from '../anycloud/client.js';
 import { ANYCLOUD_VERSION } from '../anycloud/contract.generated.js';
 import { CLOUDS, type Cloud } from '../runners/classes.js';
+import { listListenerVms, type ListenerVm } from './listener-vm.js';
 
 export const CONTROL_POOL = 'bm-control';
 // Each listener's CPU share of `bm-control`'s one Node, set on every create
@@ -134,7 +135,7 @@ export const sessionOf = (tag: string) => `bm-${tag}`;
 export type NodePool = Awaited<
   ReturnType<AnycloudApi['listNodePools']>
 >['nodePools'][number];
-type Deployment = Awaited<
+export type Deployment = Awaited<
   ReturnType<AnycloudApi['listDeployments']>
 >['deployments'][number];
 
@@ -272,4 +273,49 @@ export async function controlPlaneOf(
     }
   }
   return undefined;
+}
+
+/**
+ * An org's listener: on its VM, or still a Deployment on `bm-control` that
+ * `upgrade` moves to one. Both while a move is under way.
+ */
+export interface Listener {
+  // `backmesh-<org>`.
+  name: string;
+  vm?: ListenerVm;
+  deployment?: Deployment;
+}
+
+export interface Installation extends ControlPool {
+  // Every org's listener, by name.
+  orgs: Listener[];
+}
+
+// `bm-control` first, whose read maps a control plane on another anycloud
+// to its message.
+export async function readInstallation(
+  api: AnycloudApi,
+): Promise<Installation> {
+  const control = await readControlPool(api);
+  const vms = await listListenerVms(api);
+  const names = [
+    ...new Set([...vms, ...control.listeners].map(({ name }) => name)),
+  ].sort();
+  return {
+    ...control,
+    problems: [
+      ...control.problems,
+      ...vms
+        .filter((vm) => vm.others.length)
+        .map(
+          (vm) =>
+            `${vm.org} has more than one listener VM: ${[vm.id, ...vm.others].join(', ')}; two listeners contend for its runner group, so terminate all but one`,
+        ),
+    ],
+    orgs: names.map((name) => ({
+      name,
+      vm: vms.find((vm) => vm.name === name),
+      deployment: control.listeners.find((d) => d.name === name),
+    })),
+  };
 }

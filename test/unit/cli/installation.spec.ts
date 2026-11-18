@@ -6,9 +6,10 @@ import {
   listenerName,
   orgOfListener,
   readControlPool,
+  readInstallation,
   readOrgId,
 } from '../../../src/cli/installation.js';
-import { fakeApi, githubOrg } from './fakes.js';
+import { fakeApi, githubOrg, listenerVm } from './fakes.js';
 
 describe('the installation’s identity', () => {
   it('takes the cluster ID from the hosted API’s URL', () => {
@@ -183,6 +184,49 @@ describe('readControlPool (invariant 3)', () => {
     expect(control.problems).toEqual([
       'A Deployment named backmesh-gamma runs outside bm-control, on node pool p2',
       'bm-control runs more than the listeners: Deployment web, Deployment backmesh-beta (managed)',
+    ]);
+  });
+});
+
+describe('readInstallation', () => {
+  it("lists each org's listener on its VM, one still on bm-control, and one mid-move with both", async () => {
+    const deployment = (name: string) => ({
+      id: `dep-${name}`,
+      name,
+      nodePoolId: 'p1',
+      managed: false,
+      deletedAt: null,
+    });
+    const { api } = fakeApi({
+      'GET /v1/node-pools': {
+        nodePools: [
+          {
+            id: 'p1',
+            name: 'bm-control',
+            state: 'running',
+            allowPrivilegedJobs: false,
+          },
+        ],
+      },
+      'GET /v1/deployments': {
+        deployments: [deployment('backmesh-beta'), deployment('backmesh-zeta')],
+      },
+      'GET /v1/workloads': [
+        listenerVm('acme', 'bml-l8u5e-abc123'),
+        listenerVm('acme', 'bml-l8u5e-def456'),
+        listenerVm('zeta', 'bml-q2w3e-abc123'),
+      ],
+    });
+    const { orgs, problems } = await readInstallation(api);
+    expect(problems).toEqual([
+      'acme has more than one listener VM: bml-l8u5e-abc123, bml-l8u5e-def456; two listeners contend for its runner group, so terminate all but one',
+    ]);
+    expect(
+      orgs.map(({ name, vm, deployment }) => [name, vm?.id, deployment?.id]),
+    ).toEqual([
+      ['backmesh-acme', 'bml-l8u5e-abc123', undefined],
+      ['backmesh-beta', undefined, 'dep-backmesh-beta'],
+      ['backmesh-zeta', 'bml-q2w3e-abc123', 'dep-backmesh-zeta'],
     ]);
   });
 });

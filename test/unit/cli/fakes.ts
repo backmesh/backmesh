@@ -1,6 +1,10 @@
 import { vi } from 'vitest';
 
-import { anycloudApi } from '../../../src/anycloud/client.js';
+import {
+  anycloudApi,
+  type AnycloudExec,
+  type ExecResult,
+} from '../../../src/anycloud/client.js';
 import {
   adminRoutes,
   fakeGitHub,
@@ -85,6 +89,43 @@ export function fakeApi(
     clientVersion,
   );
   return { api, requests };
+}
+
+// An org's listener VM as `GET /v1/workloads` lists it.
+export const listenerVm = (
+  org: string,
+  id: string,
+  {
+    state = 'running',
+    startedAt = 0,
+    cloudProvider = 'AWS',
+    region = 'us-east-1',
+  } = {},
+) => ({
+  id,
+  workloadType: 'vm',
+  state,
+  startedAt,
+  cloudProvider,
+  region,
+  secretNames: [`backmesh-${org}`],
+});
+
+// `anycloud exec`'s API route: `answer` gives each call's output, or its
+// result with an exit code, or throws; every call is recorded.
+export function fakeExec(
+  answer: (id: string, command: string) => string | ExecResult | Error,
+) {
+  const calls: [string, string][] = [];
+  const exec: AnycloudExec = async (id, command) => {
+    calls.push([id, command]);
+    const reply = answer(id, command);
+    if (reply instanceof Error) throw reply;
+    return typeof reply === 'string'
+      ? { code: 0, stdout: reply, stderr: '' }
+      : reply;
+  };
+  return { exec, calls };
 }
 
 // The anycloud binary: answers by the longest matching argument prefix and

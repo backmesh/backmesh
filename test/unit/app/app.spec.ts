@@ -7,7 +7,12 @@ import { readOverride } from '../../../src/app/override.js';
 
 // Records CLI arguments and API requests, the latter as `METHOD path body`.
 // Each PUT answers the next of `puts` (0 drops the connection), then 204.
-function fakeAnycloud(secrets: string[] = [], puts: number[] = []) {
+function fakeAnycloud(
+  secrets: string[] = [],
+  puts: number[] = [],
+  // The binary's answer to each call: its stdout, or its failure.
+  answer: (args: string[]) => string = () => '',
+) {
   const calls: string[][] = [];
   const requests: string[] = [];
   const api = anycloudApi('https://c1.anycloud.sh', 't0ken', async (req) => {
@@ -33,7 +38,7 @@ function fakeAnycloud(secrets: string[] = [], puts: number[] = []) {
   });
   const anycloud = anycloudControl(api, async (args) => {
     calls.push(args);
-    return '';
+    return answer(args);
   });
   return { anycloud, calls, requests };
 }
@@ -173,6 +178,45 @@ describe('anycloudControl', () => {
       ['api', 'access', 'add', '--service-account', 'backmesh'],
       ['api', 'access', 'remove', '--service-account', 'backmesh'],
     ]);
+  });
+
+  it("issues, rotates and removes the listener's service token, read from stdout", async () => {
+    let n = 0;
+    const { anycloud, calls } = fakeAnycloud([], [], (args) =>
+      args.includes('--json') ? JSON.stringify({ token: `acsvc_${++n}` }) : '',
+    );
+    expect(await anycloud.issueServiceToken('backmesh-acme')).toBe('acsvc_1');
+    expect(await anycloud.rotateServiceToken('backmesh-acme')).toBe('acsvc_2');
+    await anycloud.removeService('backmesh-acme');
+    await anycloud.removeServiceAccount('backmesh-acme');
+    expect(calls).toEqual([
+      ['api', 'access', 'add', '--service', 'backmesh-acme', '--json'],
+      ['api', 'token', 'rotate', '--service', 'backmesh-acme', '--json'],
+      ['api', 'access', 'remove', '--service', 'backmesh-acme'],
+      ['api', 'access', 'remove', '--service-account', 'backmesh-acme'],
+    ]);
+  });
+
+  it('rotates a service that already exists, and keeps the add’s refusal otherwise', async () => {
+    const { anycloud, calls } = fakeAnycloud([], [], (args) => {
+      if (args[1] === 'access') {
+        throw new Error(
+          'api access failed: backmesh-acme exists (API_ACCESS_SERVICE_EXISTS)',
+        );
+      }
+      return JSON.stringify({ token: 'acsvc_9' });
+    });
+    expect(await anycloud.issueServiceToken('backmesh-acme')).toBe('acsvc_9');
+    expect(calls.map((c) => c[1])).toEqual(['access', 'token']);
+
+    // Any other refusal, such as a sign-in or a version, rotates nothing.
+    const { anycloud: refused, calls: tried } = fakeAnycloud([], [], () => {
+      throw new Error('only the owner issues service tokens');
+    });
+    await expect(refused.issueServiceToken('backmesh-acme')).rejects.toThrow(
+      'only the owner',
+    );
+    expect(tried.map((c) => c[1])).toEqual(['access']);
   });
 });
 
