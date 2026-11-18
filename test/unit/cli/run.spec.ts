@@ -50,7 +50,6 @@ async function run(...argv: string[]) {
       env: {},
       run: never,
       runLong: never,
-      command: never,
       release: never,
       status: never,
       print: () => undefined,
@@ -137,7 +136,6 @@ describe('backmesh CLI', () => {
     };
     vi.mocked(upgrade).mockResolvedValueOnce({
       controlPlane: { from: '0.2.0', to: '0.2.0', upgraded: false },
-      disks: [],
       listeners: [{ org: 'acme', image: 'l', rolled: false }],
       runnerImage: 'r',
       status,

@@ -24,13 +24,7 @@ import {
 } from './converge.js';
 import { keyFrom, type SignInScopes } from './github-sign-in.js';
 import {
-  controlPlaneAccount,
-  LOWER_DISKS_PLAN_LINE,
-  lowerControlDisks,
-} from './control-disks.js';
-import {
   clusterIdOf,
-  controlPlaneOf,
   installTag,
   orgOfListener,
   readControlPool,
@@ -52,15 +46,12 @@ import {
   startsNoRunners,
 } from '../runners/quota.js';
 import { anycloudRunners } from '../runners/anycloud.js';
-import type { RunCommand } from '../runners/regions.js';
 
 export interface UpgradeDeps {
   env: NodeJS.ProcessEnv;
   run: RunAnycloud;
   // For `api upgrade`, `api status --watch` and `deployment upgrade --wait`.
   runLong: RunAnycloud;
-  // The user's AWS CLI, which lowers the control plane's disks.
-  command: RunCommand;
   release: () => Promise<Compatibility>;
   status: () => Promise<StatusReport>;
   print: (line: string) => void;
@@ -208,7 +199,7 @@ export async function upgrade(
     );
   }
   const apiUpgraded = await upgradeApi(from, release.anycloud, deps);
-  const { pool, listeners } = await readControlPool(api);
+  const { listeners } = await readControlPool(api);
   if (!listeners.length) {
     throw new UsageError(
       `There's no listener on ${url}; run \`backmesh install\`.`,
@@ -323,11 +314,7 @@ export async function upgrade(
   // 2026-11-09).
   const noRunners = await noRunnerLines(planned, api);
   noRunners.forEach((line) => print(line));
-  const where = await controlPlaneOf(run, url, pool);
-  if (planOnly) {
-    if (where?.cloud === 'aws') print(LOWER_DISKS_PLAN_LINE);
-    return { planId: id, ...upgradePlan };
-  }
+  if (planOnly) return { planId: id, ...upgradePlan };
   if (agreed && agreed !== id) {
     throw new PlanChanged(
       `The plan changed since ${agreed}; it's ${id} now. Show it with \`backmesh upgrade --plan\` and agree to it again.`,
@@ -500,21 +487,8 @@ export async function upgrade(
       { control, runLong: deps.runLong, again: 'upgrade' },
     );
   }
-  // Last, as it changes no runner and its failure ends nothing.
-  const disks =
-    where?.cloud === 'aws'
-      ? await lowerControlDisks(
-          clusterIdOf(url),
-          where.region,
-          await controlPlaneAccount(run, clusterIdOf(url)),
-          pool,
-          deps.command,
-          print,
-        )
-      : [];
   return {
     controlPlane: { from, to: release.anycloud, upgraded: apiUpgraded },
-    disks,
     listeners: rolled,
     runnerImage: release.runnerImage,
     status: await deps.status(),

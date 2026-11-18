@@ -1,22 +1,13 @@
 // The control plane's AWS disks at gp3's baseline, 3,000 IOPS and 125 MiB/s
 // (owner, 2026-11-18): its t3 VMs can't sustain more, and AWS bills
-// provisioned IOPS and MiB/s monthly. anycloud 0.1.78 makes the management
-// VM at 8,000 IOPS, and installs before it have `bm-control`'s Node at
-// anycloud's `high` tier, 8,000 IOPS and 1,000 MiB/s: about $85 a month
-// together. `install` and `upgrade` lower them in place through the user's
-// AWS CLI, with no restart.
-import type { RunAnycloud } from '../anycloud/binary.js';
+// provisioned IOPS and MiB/s monthly. `bm-control` is created at that tier;
+// anycloud 0.1.78 makes the management VM at 8,000 IOPS, about $25 a month
+// more, so install lowers it in place through the user's AWS CLI, with no
+// restart.
 import type { RunCommand } from '../runners/regions.js';
-import { installConnection, type NodePool } from './installation.js';
 
 const GP3_BASELINE_IOPS = 3_000;
 const GP3_BASELINE_MIBPS = 125;
-
-interface Instance {
-  Tags?: { Key: string; Value: string }[];
-  Root?: string;
-  Devices?: { Name: string; Volume?: string }[];
-}
 
 interface Volume {
   VolumeId: string;
@@ -25,48 +16,19 @@ interface Volume {
   Throughput: number;
 }
 
-interface LoweredDisk {
-  volumeId: string;
-  fromIops: number;
-  fromThroughput: number;
-  // Whether EC2 took the change; false when it refused it, such as within
-  // 6 hours of the volume's last change.
-  lowered: boolean;
-}
-
-/** The plan's line for an AWS control plane, which `upgrade` lowers last. */
-export const LOWER_DISKS_PLAN_LINE = `On AWS, upgrade also lowers the control plane's disks to gp3's baseline, ${GP3_BASELINE_IOPS} IOPS and ${GP3_BASELINE_MIBPS} MiB/s, where they're faster.`;
-
 /**
- * The AWS account of the control plane's connection, from its role ARN, so a
- * search that finds no VM can name the account to sign in to; undefined for
- * a key connection or a failed read.
+ * Lowers the management VM's gp3 root volume, `anycloud-cluster-<id>`'s
+ * `/dev/sda1` (anycloud's seed template), to the baseline, and leaves one
+ * already there alone. A failed read or change is printed, and install goes
+ * on.
  */
-export async function controlPlaneAccount(
-  run: RunAnycloud,
-  clusterId: string,
-): Promise<string | undefined> {
-  const listed = await run(['credentials', 'list', '--json'])
-    .then((out) => JSON.parse(out) as { name: string; roleArn?: string }[])
-    .catch(() => []);
-  return installConnection('aws', clusterId, listed)?.roleArn?.split(':')[4];
-}
-
-/**
- * Lowers the management VM's and `bm-control`'s gp3 root volumes to the
- * baseline, and leaves ones already there alone. anycloud tags both with
- * the cluster: the management VM is `anycloud-cluster-<id>` and a pool's
- * VMs carry its ID. A failed read or change is printed, and the command
- * goes on.
- */
-export async function lowerControlDisks(
+export async function lowerManagementDisk(
   clusterId: string,
   region: string,
   account: string | undefined,
-  pool: NodePool | undefined,
   command: RunCommand,
   print: (line: string) => void,
-): Promise<LoweredDisk[]> {
+): Promise<void> {
   const aws = async <T>(...args: string[]) =>
     JSON.parse(
       await command([
@@ -79,51 +41,37 @@ export async function lowerControlDisks(
         'json',
       ]),
     ) as T;
+  const baseline = `to ${GP3_BASELINE_IOPS} IOPS and ${GP3_BASELINE_MIBPS} MiB/s`;
   let volumes: Volume[];
   try {
-    const instances = await aws<Instance[]>(
+    const ids = await aws<string[]>(
       'describe-instances',
       '--filters',
-      `Name=tag:anycloud_cluster,Values=${clusterId}`,
+      `Name=tag:Name,Values=anycloud-cluster-${clusterId}`,
       'Name=instance-state-name,Values=pending,running,stopping,stopped',
       '--query',
-      'Reservations[].Instances[].{Tags:Tags,Root:RootDeviceName,Devices:BlockDeviceMappings[].{Name:DeviceName,Volume:Ebs.VolumeId}}',
-    );
-    const tag = (instance: Instance, key: string) =>
-      instance.Tags?.find((t) => t.Key === key)?.Value;
-    const control = instances.filter(
-      (instance) =>
-        tag(instance, 'Name') === `anycloud-cluster-${clusterId}` ||
-        (!!pool?.id && tag(instance, 'anycloud_resource') === pool.id),
+      'Reservations[].Instances[].BlockDeviceMappings[?DeviceName==`/dev/sda1`].Ebs.VolumeId[]',
     );
     // Signed in to another account or region, the search finds nothing.
-    if (!control.length) {
+    if (!ids.length) {
       print(
-        `Found no control-plane VM for ${clusterId} in this AWS account and ${region}, so its disks keep their speed; run \`backmesh upgrade\` signed in to ${account ? `AWS account ${account}` : "the control plane's AWS account"}.`,
+        `Found no management VM for ${clusterId} in this AWS account and ${region}, so its disk keeps its speed; sign in to ${account ? `AWS account ${account}` : "the control plane's AWS account"} and lower its root volume ${baseline} in the EC2 console.`,
       );
-      return [];
+      return;
     }
-    const ids = control.flatMap((instance) =>
-      (instance.Devices ?? [])
-        .filter((device) => device.Name === instance.Root && device.Volume)
-        .map((device) => device.Volume!),
+    volumes = await aws<Volume[]>(
+      'describe-volumes',
+      '--volume-ids',
+      ...ids,
+      '--query',
+      'Volumes[].{VolumeId:VolumeId,VolumeType:VolumeType,Iops:Iops,Throughput:Throughput}',
     );
-    volumes = ids.length
-      ? await aws<Volume[]>(
-          'describe-volumes',
-          '--volume-ids',
-          ...ids,
-          '--query',
-          'Volumes[].{VolumeId:VolumeId,VolumeType:VolumeType,Iops:Iops,Throughput:Throughput}',
-        )
-      : [];
   } catch {
     print(
-      `Couldn't read the control plane's disks with the AWS CLI, so they keep their speed; run \`backmesh upgrade\` signed in to ${account ? `AWS account ${account}` : "the control plane's AWS account"} with ec2:DescribeInstances and ec2:DescribeVolumes.`,
+      `Couldn't read the management VM's disk with the AWS CLI, so it keeps its speed; lower its root volume ${baseline} in the EC2 console.`,
     );
-    return [];
+    return;
   }
-  const lowered: LoweredDisk[] = [];
   for (const volume of volumes) {
     if (
       volume.VolumeType !== 'gp3' ||
@@ -133,7 +81,7 @@ export async function lowerControlDisks(
       continue;
     }
     const was = `${volume.Iops} IOPS and ${volume.Throughput} MiB/s`;
-    const ok = await aws(
+    await aws(
       'modify-volume',
       '--volume-id',
       volume.VolumeId,
@@ -142,25 +90,11 @@ export async function lowerControlDisks(
       '--throughput',
       String(GP3_BASELINE_MIBPS),
     ).then(
-      () => true,
-      () => {
+      () => print(`Lowered ${volume.VolumeId} from ${was} ${baseline}.`),
+      () =>
         print(
-          `Couldn't lower ${volume.VolumeId} from ${was}: EC2 refuses a change within 6 hours of a volume's last one, or without ec2:ModifyVolume. Run \`backmesh upgrade\` again later.`,
-        );
-        return false;
-      },
+          `Couldn't lower ${volume.VolumeId} from ${was}; lower it ${baseline} in the EC2 console.`,
+        ),
     );
-    if (ok) {
-      print(
-        `Lowered ${volume.VolumeId} from ${was} to ${GP3_BASELINE_IOPS} IOPS and ${GP3_BASELINE_MIBPS} MiB/s.`,
-      );
-    }
-    lowered.push({
-      volumeId: volume.VolumeId,
-      fromIops: volume.Iops,
-      fromThroughput: volume.Throughput,
-      lowered: ok,
-    });
   }
-  return lowered;
 }
