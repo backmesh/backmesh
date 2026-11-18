@@ -230,7 +230,11 @@ Starter.
   the 7-day average spot price in us-east-1's cheapest zone with a 30 GB gp3
   disk. 150,000 × $0.0013 = $195.
 - RunsOn license: Starter, $350 ÷ 12 = $29.17 a month.
-- RunsOn control plane: "from about $7 a month", per its pricing page.
+- RunsOn control plane: "from about $7 a month", per its pricing page. That
+  figure also covers its S3 cache bucket and in-region data transfer, so it
+  grows with cache use and load. backmesh's control plane is a flat $86, and
+  its cache buckets bill separately for what they store, so neither row
+  counts cache storage above that floor.
 - backmesh compute: [cost inputs](/cost/) put `backmesh-4` spot types in
   us-east-2 at $0.0497 to $0.07 an hour on 2026-11-13. 150,000 ÷ 60 = 2,500
   hours, so $124 to $175.
