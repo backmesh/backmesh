@@ -26,9 +26,14 @@ const catalog = catalogs();
 
 describe('runner classes', () => {
   it('gives each size a spot, on-demand and KVM class of 4 GiB VM types', () => {
-    const { classes, problems, noKvm } = planClasses([AWS], catalog, 'aws');
+    const { classes, problems, noKvm, noGpu } = planClasses(
+      [AWS],
+      catalog,
+      'aws',
+    );
     expect(problems).toEqual([]);
     expect(noKvm).toEqual([]);
+    expect(noGpu).toEqual([]);
     expect(classes.map((c) => `${c.label} ${c.code}`)).toEqual([
       ...['backmesh-2 a2', 'backmesh-4 a4', 'backmesh-8 a8', 'backmesh-16 ag'],
       ...['backmesh-od-2 b2', 'backmesh-od-4 b4'],
@@ -37,6 +42,7 @@ describe('runner classes', () => {
       ...['backmesh-kvm-8 k8', 'backmesh-kvm-16 kg'],
       ...['backmesh-kvm-od-2 l2', 'backmesh-kvm-od-4 l4'],
       ...['backmesh-kvm-od-8 l8', 'backmesh-kvm-od-16 lg'],
+      ...['backmesh-gpu-t4 d4', 'backmesh-gpu-od-t4 e4'],
     ]);
     expect(classes[1]).toEqual({
       ...AWS,
@@ -110,8 +116,18 @@ describe('runner classes', () => {
       },
     ]);
     // Another listener's public runner still reads as its cloud's spot.
-    expect(codeClass('c4')).toEqual({ cloud: 'aws', spot: true, vcpus: 4 });
-    expect(codeClass('x2')).toEqual({ cloud: 'azure', spot: true, vcpus: 2 });
+    expect(codeClass('c4')).toEqual({
+      cloud: 'aws',
+      spot: true,
+      vcpus: 4,
+      gpu: false,
+    });
+    expect(codeClass('x2')).toEqual({
+      cloud: 'azure',
+      spot: true,
+      vcpus: 2,
+      gpu: false,
+    });
     expect(
       planClasses([AWS], catalog, 'aws').classes.some((c) => c.public),
     ).toBe(false);
@@ -194,6 +210,75 @@ describe('runner classes', () => {
     expect(
       classes.find((c) => c.label === 'backmesh-kvm-od-4')?.regions,
     ).toEqual(['us-east-2']);
+  });
+
+  it("gives AWS and Azure a T4 class on spot and on demand, as GitHub's GPU runner", () => {
+    const { classes, noGpu } = planClasses([AWS, AZURE, GCP], catalog, 'aws');
+    const gpu = classes.filter((c) => c.gpu);
+    expect(gpu).toEqual([
+      {
+        ...AWS,
+        label: 'backmesh-gpu-t4',
+        code: 'd4',
+        vcpus: 4,
+        spot: true,
+        kvm: false,
+        vmTypes: ['g4dn.xlarge'],
+        regions: ['us-east-2'],
+        gpu: 'T4',
+      },
+      expect.objectContaining({ label: 'backmesh-gpu-od-t4', code: 'e4' }),
+      expect.objectContaining({
+        label: 'backmesh-azure-gpu-t4',
+        code: 't4',
+        cloud: 'azure',
+        vmTypes: ['Standard_NC4as_T4_v3'],
+      }),
+      expect.objectContaining({
+        label: 'backmesh-azure-gpu-od-t4',
+        code: 'u4',
+      }),
+    ]);
+    // anycloud can't launch a T4 on GCP yet: no GPU labels there.
+    expect(noGpu).toEqual([GCP]);
+    // Another listener's GPU runner holds its GPU quota, not the CPU one.
+    expect(codeClass('d4')).toEqual({
+      cloud: 'aws',
+      spot: true,
+      vcpus: 4,
+      gpu: true,
+    });
+    expect(codeClass('u4')).toMatchObject({ spot: false, gpu: true });
+    // --public-repos never makes a GPU label public.
+    expect(
+      planClasses([AWS], catalog, 'aws', true).classes.filter((c) => c.public),
+    ).toHaveLength(2);
+  });
+
+  it("keeps Azure's GPU class to the regions anycloud's GPU image reaches, and drops a T4 in the wrong shape", () => {
+    const t4 = CATALOG.azure.find((t) => t.vmType === 'Standard_NC4as_T4_v3')!;
+    const regions = new Map([
+      ['westus2', CATALOG.azure],
+      ['westus', CATALOG.azure],
+      ['eastus', CATALOG.azure],
+    ]);
+    const { classes } = planClasses(
+      [AZURE],
+      new Map([['azure', regions]]),
+      'azure',
+    );
+    expect(classes.find((c) => c.label === 'backmesh-gpu-t4')?.regions).toEqual(
+      ['westus2', 'eastus'],
+    );
+    const twoGpus = catalogs({
+      azure: CATALOG.azure.map((t) =>
+        t === t4 ? { ...t, accelerators: [{ name: 'T4', count: 2 }] } : t,
+      ),
+    });
+    const plan = planClasses([AZURE], twoGpus, 'azure');
+    expect(plan.classes.some((c) => c.gpu)).toBe(false);
+    expect(plan.noGpu).toEqual([AZURE]);
+    expect(plan.problems).toEqual([]);
   });
 
   it('names a listed region that offers none of the types', () => {

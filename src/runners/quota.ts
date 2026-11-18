@@ -1,16 +1,29 @@
 // The vCPU quotas the runners' VMs count against: a region's spot and
-// on-demand vCPUs for the classes' families.
+// on-demand vCPUs for the classes' families, and for the GPU classes' own.
 import type { AnycloudApi } from '../anycloud/client.js';
-import type { Cloud } from './classes.js';
+import { GPU, type Cloud } from './classes.js';
 import type { RunCommand } from './regions.js';
 
+/** A region's spot and on-demand vCPU limits; GCP's aren't read. */
+export interface QuotaLimits {
+  spot?: number;
+  onDemand?: number;
+  // The GPU classes' family: AWS's G and VT spot and on demand, and Azure's
+  // NCASv3_T4 on demand (its spot GPU VMs count against `spot`).
+  gpuSpot?: number;
+  gpuOnDemand?: number;
+}
+export type QuotaKind = keyof QuotaLimits;
+
 /**
- * The regional spot and on-demand vCPU quotas: AWS's Service Quotas codes
- * and Azure's compute usage names, as anycloud reads them
- * (`src/shared/quota-resolvers/aws.ts:17`, `azure-identity.ts:73-74`), and
- * where to raise them.
+ * The quotas: AWS's Service Quotas codes and Azure's compute usage names, as
+ * anycloud reads them (`src/shared/quota-resolvers/aws.ts:13-17`,
+ * `azure-identity.ts:73-74`, `azure.ts:47`), and where to raise them.
  */
-const QUOTA = {
+const QUOTA: Record<
+  QuotaKind,
+  Partial<Record<Exclude<Cloud, 'gcp'>, readonly [string, string]>>
+> = {
   spot: {
     aws: [
       'L-34B43A08',
@@ -25,13 +38,47 @@ const QUOTA = {
     ],
     azure: ['cores', '"Total Regional vCPUs"'],
   },
-} as const;
+  gpuSpot: {
+    aws: [
+      'L-3819A6DF',
+      'EC2 "All G and VT Spot Instance Requests" (L-3819A6DF)',
+    ],
+  },
+  gpuOnDemand: {
+    aws: [
+      'L-DB2E81BA',
+      'EC2 "Running On-Demand G and VT instances" (L-DB2E81BA)',
+    ],
+    azure: ['standardNCASv3_T4Family', '"Standard NCASv3_T4 Family vCPUs"'],
+  },
+};
 
-/** A region's spot and on-demand vCPU limits; GCP's aren't read. */
-export interface QuotaLimits {
-  spot?: number;
-  onDemand?: number;
+const quota = (cloud: Exclude<Cloud, 'gcp'>, kind: QuotaKind) =>
+  QUOTA[kind][cloud]!;
+
+/**
+ * The quotas a runner counts against, the GPU family's first: Azure's spot
+ * VMs all count against its low-priority vCPUs, whatever their family, and
+ * its on-demand ones against their family's and the regional vCPUs
+ * (anycloud `src/api/services/quota/azure.ts:385-392`).
+ */
+export function quotaKinds(
+  cloud: Cloud,
+  spot: boolean,
+  gpu?: string,
+): QuotaKind[] {
+  if (!gpu) return [spot ? 'spot' : 'onDemand'];
+  if (cloud === 'azure') return spot ? ['spot'] : ['gpuOnDemand', 'onDemand'];
+  return [spot ? 'gpuSpot' : 'gpuOnDemand'];
 }
+
+/** A quota kind as plans and status name it. */
+export const KIND_NAME: Record<QuotaKind, string> = {
+  spot: 'spot',
+  onDemand: 'on-demand',
+  gpuSpot: 'GPU spot',
+  gpuOnDemand: 'GPU on-demand',
+};
 
 /** The default class's vCPUs: a quota under it runs no `backmesh-4` job. */
 const DEFAULT_VCPUS = 4;
@@ -59,9 +106,14 @@ export async function readQuota(
           ...['--output', 'text'],
         ]),
       );
+    // The GPU quotas are only shown, so a failed read leaves them unread.
+    const gpu = (kind: 'gpuSpot' | 'gpuOnDemand') =>
+      read(quota('aws', kind)[0]).catch(() => undefined);
     return {
-      spot: await read(QUOTA.spot.aws[0]),
-      onDemand: await read(QUOTA.onDemand.aws[0]),
+      spot: await read(quota('aws', 'spot')[0]),
+      onDemand: await read(quota('aws', 'onDemand')[0]),
+      gpuSpot: await gpu('gpuSpot'),
+      gpuOnDemand: await gpu('gpuOnDemand'),
     };
   }
   const usage = JSON.parse(
@@ -77,8 +129,9 @@ export async function readQuota(
     return found && Number(found.limit);
   };
   return {
-    spot: read(QUOTA.spot.azure[0]),
-    onDemand: read(QUOTA.onDemand.azure[0]),
+    spot: read(quota('azure', 'spot')[0]),
+    onDemand: read(quota('azure', 'onDemand')[0]),
+    gpuOnDemand: read(quota('azure', 'gpuOnDemand')[0]),
   };
 }
 
@@ -94,96 +147,101 @@ export interface QuotaCheck {
 }
 
 /** The quota's short name: AWS's code, or Azure's usage name. */
-export function quotaCode(cloud: Exclude<Cloud, 'gcp'>, spot: boolean) {
-  return cloud === 'aws'
-    ? QUOTA[spot ? 'spot' : 'onDemand'].aws[0]
-    : QUOTA[spot ? 'spot' : 'onDemand'].azure[1];
+export function quotaCode(cloud: Exclude<Cloud, 'gcp'>, kind: QuotaKind) {
+  const [code, name] = quota(cloud, kind);
+  return cloud === 'aws' ? code : name;
 }
 
+interface Planned {
+  label: string;
+  vcpus: number;
+  spot: boolean;
+  gpu?: string;
+  regions: readonly string[];
+}
+
+// A region's limit of the kind, when read.
+const limitOf = (
+  limits: ReadonlyMap<string, QuotaLimits>,
+  region: string,
+  kind: QuotaKind,
+) => {
+  const vcpus = limits.get(region)?.[kind];
+  return vcpus !== undefined && Number.isFinite(vcpus) ? vcpus : undefined;
+};
+
 /**
- * A runner region whose spot or on-demand quota can't fit one VM of some of
- * the cloud's classes: the listener skips it for those, keeping it in the
- * list, until a read shows the quota raised. For install's plan, such as
+ * A runner region whose quota of some kind can't fit one VM of some of the
+ * cloud's classes: the listener skips it for those, keeping it in the list,
+ * until a read shows the quota raised. For install's plan, such as
  * "us-west-1: spot quota 5 vCPU, skipped for backmesh-8, backmesh-16; raise
  * L-34B43A08 to use it". GCP's quotas aren't read, so it's never skipped.
  */
 export function skippedRegions(
   cloud: Cloud,
   limits: ReadonlyMap<string, QuotaLimits>,
-  classes: readonly {
-    label: string;
-    vcpus: number;
-    spot: boolean;
-    regions: readonly string[];
-  }[],
+  classes: readonly Planned[],
 ): string[] {
   if (cloud === 'gcp') return [];
-  const lines: string[] = [];
-  for (const [region, limit] of limits) {
-    for (const spot of [true, false]) {
-      const vcpus = spot ? limit.spot : limit.onDemand;
-      if (vcpus === undefined || !Number.isFinite(vcpus)) continue;
+  const kinds = Object.keys(QUOTA) as QuotaKind[];
+  return [...limits.keys()].flatMap((region) =>
+    kinds.flatMap((kind) => {
+      const vcpus = limitOf(limits, region, kind);
+      if (vcpus === undefined) return [];
       const mine = classes.filter(
-        (c) => c.spot === spot && c.regions.includes(region),
+        (c) =>
+          quotaKinds(cloud, c.spot, c.gpu).includes(kind) &&
+          c.regions.includes(region),
       );
       const under = mine.filter((c) => c.vcpus > vcpus);
-      if (!under.length) continue;
+      if (!under.length) return [];
       const which =
         under.length === mine.length
           ? ''
           : ` for ${under.map((c) => c.label).join(', ')}`;
-      lines.push(
-        `${region}: ${spot ? 'spot' : 'on-demand'} quota ${vcpus} vCPU, skipped${which}; raise ${quotaCode(cloud, spot)} to use it`,
-      );
-    }
-  }
-  return lines;
+      return [
+        `${region}: ${KIND_NAME[kind]} quota ${vcpus} vCPU, skipped${which}; raise ${quotaCode(cloud, kind)} to use it`,
+      ];
+    }),
+  );
 }
 
 /**
- * The labels that would start no runners: every one of their runner
- * regions' quota for their kind (spot, or on demand for an `od` label) is
- * under one of their VMs, and a spot label never falls back on demand
- * (owner, 2026-11-09). One line each for install's and upgrade's plans.
+ * The labels that would start no runners: in every one of their runner
+ * regions, one of the quotas of their kind (spot, or on demand for an `od`
+ * label; the GPU family's for a GPU label) is under one of their VMs, and a
+ * spot label never falls back on demand (owner, 2026-11-09). One line each
+ * for install's and upgrade's plans.
  */
 export function startsNoRunners(
   cloud: Cloud,
   limits: ReadonlyMap<string, QuotaLimits>,
-  classes: readonly {
-    label: string;
-    vcpus: number;
-    spot: boolean;
-    regions: readonly string[];
-  }[],
+  classes: readonly Planned[],
 ): string[] {
   if (cloud === 'gcp') return [];
   return classes.flatMap((c) => {
     const each = c.regions.map((region) => {
-      const vcpus = c.spot
-        ? limits.get(region)?.spot
-        : limits.get(region)?.onDemand;
-      return { region, vcpus };
+      const kind = quotaKinds(cloud, c.spot, c.gpu).find((k) => {
+        const vcpus = limitOf(limits, region, k);
+        return vcpus !== undefined && vcpus < c.vcpus;
+      });
+      return { region, kind, vcpus: kind && limitOf(limits, region, kind) };
     });
-    const under = each.every(
-      ({ vcpus }) =>
-        vcpus !== undefined && Number.isFinite(vcpus) && vcpus < c.vcpus,
-    );
-    if (!under || !each.length) return [];
-    const kind = c.spot ? 'spot' : 'on-demand';
+    if (!each.length || !each.every(({ kind }) => kind)) return [];
+    const codes = [...new Set(each.map(({ kind }) => quotaCode(cloud, kind!)))];
     return [
-      `${c.label} would start no runners: every runner region's ${kind} quota is under one ${c.vcpus}-vCPU runner (${each.map(({ region, vcpus }) => `${region} ${vcpus} vCPU`).join(', ')}); raise ${quotaCode(cloud, c.spot)} in ${each.map(({ region }) => region).join(' or ')} to use it.`,
+      `${c.label} would start no runners: every runner region's ${KIND_NAME[each[0]!.kind!]} quota is under one ${c.vcpus}-vCPU runner (${each.map(({ region, vcpus }) => `${region} ${vcpus} vCPU`).join(', ')}); raise ${codes.join(' or ')} in ${each.map(({ region }) => region).join(' or ')} to use it.`,
     ];
   });
 }
 
-/** The AWS or Azure quota to raise for more spot or on-demand vCPUs. */
+/** The AWS or Azure quota to raise for more vCPUs of the kind. */
 export function quotaToRaise(
   cloud: Exclude<Cloud, 'gcp'>,
   regions: readonly string[],
-  spot: boolean,
+  kind: QuotaKind,
 ): string {
-  const [, quota] = QUOTA[spot ? 'spot' : 'onDemand'][cloud];
-  return `${quota} in ${regions.join(', ')}`;
+  return `${quota(cloud, kind)[1]} in ${regions.join(', ')}`;
 }
 
 /**
@@ -206,8 +264,9 @@ export function quotaCheck(
       increase: `"CPUS_ALL_REGIONS" (32 by default) and ${names}'s ${spot ? '"PREEMPTIBLE_CPUS", ' : '"CPUS", '}"N2D_CPUS" and "N2_CPUS"`,
     };
   }
-  const [name] = QUOTA[spot ? 'spot' : 'onDemand'][cloud];
-  const increase = quotaToRaise(cloud, regions, spot);
+  const kind = spot ? 'spot' : 'onDemand';
+  const [name] = quota(cloud, kind);
+  const increase = quotaToRaise(cloud, regions, kind);
   const each = regions.map((region) => {
     const found = limits.get(region);
     const vcpus = spot ? found?.spot : found?.onDemand;
@@ -229,13 +288,24 @@ export function quotaCheck(
   };
 }
 
-// The control plane's current spot and on-demand vCPU limits for the
-// region: AWS's standard-family Service Quotas and Azure's regional cores,
-// as anycloud keys them (`awsQuotaResourceKey`, `AZURE_QUOTA_RESOURCE_KEYS`).
-const KEYS = {
-  aws: { spot: 'aws:l-34b43a08', onDemand: 'aws:l-1216c47a' },
-  azure: { spot: 'azure:lowprioritycores', onDemand: 'azure:cores' },
-} as const;
+// The control plane's current limits for the region, as anycloud keys them
+// (`awsQuotaResourceKey`, `AZURE_QUOTA_RESOURCE_KEYS`, and Azure's GPU
+// families, which its quota status lists: `quota/azure.ts:501-536`).
+const KEYS: Record<Exclude<Cloud, 'gcp'>, QuotaLimitKeys> = {
+  aws: {
+    spot: 'aws:l-34b43a08',
+    onDemand: 'aws:l-1216c47a',
+    gpuSpot: 'aws:l-3819a6df',
+    gpuOnDemand: 'aws:l-db2e81ba',
+  },
+  azure: {
+    spot: 'azure:lowprioritycores',
+    onDemand: 'azure:cores',
+    gpuOnDemand: 'azure:standardncasv3_t4family',
+  },
+};
+type QuotaLimitKeys = Partial<Record<QuotaKind, string>> &
+  Record<'spot' | 'onDemand', string>;
 
 /**
  * Reads the region's limits through the control plane's quota status, with
@@ -277,10 +347,9 @@ export async function readQuotaStatus(
     if (unavailable) throw new Error(unavailable.message ?? unavailable.status);
     return undefined;
   };
-  return {
-    spot: current(KEYS[cloud].spot),
-    onDemand: current(KEYS[cloud].onDemand),
-  };
+  return Object.fromEntries(
+    Object.entries(KEYS[cloud]).map(([kind, key]) => [kind, current(key)]),
+  );
 }
 
 /**
@@ -310,4 +379,42 @@ export function formatQuota(check: QuotaCheck, spot: boolean): string {
   return check.vcpus === undefined
     ? `${kind} vCPUs unread (raise ${check.increase} for more jobs at once)`
     : `${check.vcpus} ${kind} vCPUs (${Math.floor(check.vcpus / DEFAULT_VCPUS)} backmesh-4 jobs at once${unread})`;
+}
+
+/**
+ * The GPU labels' quota line for install's plan and `backmesh status`, such as
+ * "GPU quota: 0 spot vCPUs, 8 on-demand vCPUs (2 backmesh-gpu-od-t4 jobs at
+ * once); raise ... to run backmesh-gpu-t4". A new account usually has none
+ * (AWS's G and VT and Azure's NCASv3_T4 default to 0), so it's shown, never
+ * refused: the GPU labels' jobs wait at GitHub until it's raised.
+ */
+export function formatGpuQuota(
+  cloud: Exclude<Cloud, 'gcp'>,
+  regions: readonly string[],
+  limits: ReadonlyMap<string, QuotaLimits>,
+): string {
+  const kinds = (['gpuSpot', 'gpuOnDemand'] as const).filter(
+    (kind) => QUOTA[kind][cloud],
+  );
+  const parts: string[] = [];
+  const raise: string[] = [];
+  for (const kind of kinds) {
+    const label = kind === 'gpuSpot' ? 'backmesh-gpu-t4' : 'backmesh-gpu-od-t4';
+    const read = regions.flatMap((r) => limitOf(limits, r, kind) ?? []);
+    const vcpus = read.reduce((sum, v) => sum + v, 0);
+    const name = kind === 'gpuSpot' ? 'spot' : 'on-demand';
+    parts.push(
+      read.length
+        ? `${vcpus} ${name} vCPUs (${Math.floor(vcpus / GPU.vcpus)} ${label} jobs at once)`
+        : `${name} vCPUs unread`,
+    );
+    if (!read.length || vcpus < GPU.vcpus) {
+      raise.push(`${quotaToRaise(cloud, regions, kind)} to run ${label}`);
+    }
+  }
+  const spot =
+    cloud === 'azure'
+      ? ', and its spot VMs count against the spot vCPUs above'
+      : '';
+  return `GPU quota: ${parts.join(', ')}${spot}${raise.length ? `; raise ${raise.join(', and ')}` : ''}`;
 }

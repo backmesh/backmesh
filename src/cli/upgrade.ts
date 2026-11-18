@@ -33,6 +33,7 @@ import {
 import { readApiVersion, readListener, type StatusReport } from './status.js';
 import {
   classesOf,
+  noGpuLine,
   noKvmLine,
   planRegions,
   runnerClouds,
@@ -260,11 +261,16 @@ export async function upgrade(
         `This release's classes can't run for ${org}:\n- ${plan.problems.join('\n- ')}`,
       );
     }
-    plan.noKvm.forEach((target) =>
-      print(
-        noKvmLine(target, [...(plan.catalog.get(target.cloud)?.keys() ?? [])]),
-      ),
-    );
+    for (const [targets, line] of [
+      [plan.noKvm, noKvmLine],
+      [plan.noGpu, noGpuLine],
+    ] as const) {
+      for (const target of targets) {
+        print(
+          line(target, [...(plan.catalog.get(target.cloud)?.keys() ?? [])]),
+        );
+      }
+    }
     const before = running.runners ? parseRoutes(running.runners) : [];
     // Classes the release dropped retire: their scale sets drain first.
     const live = new Set(running.status.scaleSets.map((set) => set.label));

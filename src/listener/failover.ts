@@ -41,9 +41,10 @@ export interface Kind {
   cloud: string;
   spot: boolean;
   kvm: boolean;
+  gpu?: string;
 }
-const key = ({ cloud, spot, kvm }: Kind, region: string) =>
-  `${cloud} ${region} ${kvm ? 'KVM ' : ''}${spot ? 'spot' : 'on demand'}`;
+const key = ({ cloud, spot, kvm, gpu }: Kind, region: string) =>
+  `${cloud} ${region} ${kvm ? 'KVM ' : ''}${gpu ? 'GPU ' : ''}${spot ? 'spot' : 'on demand'}`;
 
 export class Failover {
   private readonly slow = new Map<string, number[]>();

@@ -2,7 +2,13 @@ import { z } from 'zod';
 
 import { statisticsSchema } from '../github/types.js';
 import { telemetryStatusSchema } from './telemetry.js';
-import { quotaCode, quotaToRaise } from '../runners/quota.js';
+import {
+  KIND_NAME,
+  quotaCode,
+  quotaKinds,
+  quotaToRaise,
+  type QuotaKind,
+} from '../runners/quota.js';
 import { BOOT_DEADLINE_MS } from './failover.js';
 import { QUOTA_REFUSALS } from './runner-jobs.js';
 
@@ -11,6 +17,9 @@ import { QUOTA_REFUSALS } from './runner-jobs.js';
 // the runner Jobs from the scaler's listing by state, the reasons runners are
 // short and the startup-failure backoff. Only counts, as no job maps to a
 // runner before it starts, and the summaries of the job rows.
+// A quota record's kind (`quotaKinds`).
+const quotaKind = z.enum(['spot', 'onDemand', 'gpuSpot', 'gpuOnDemand']);
+
 const percentiles = z.object({ p50: z.number(), p95: z.number() }).nullable();
 // `JobRows.summary` (`timings.ts`).
 const jobsSummary = z.object({
@@ -102,6 +111,8 @@ export const listenerStatusSchema = z.object({
       label: z.string(),
       // Optional, as an older listener doesn't report it.
       cloud: z.enum(['aws', 'gcp', 'azure']).optional(),
+      // A GPU label's GPU, such as T4; optional, as other labels have none.
+      gpu: z.string().optional(),
       // Removed by install or upgrade: draining, then deleted.
       retiring: z.boolean().optional(),
       // Waiting for a VM; launching; running a runner.
@@ -136,7 +147,14 @@ export const listenerStatusSchema = z.object({
           spot: z.boolean(),
           vcpus: z.number().int(),
           all: z.boolean(),
-          regions: z.array(z.object({ region: z.string(), limit: z.number() })),
+          // `kind`: optional, as an older listener has none.
+          regions: z.array(
+            z.object({
+              region: z.string(),
+              limit: z.number(),
+              kind: quotaKind.optional(),
+            }),
+          ),
         })
         .optional(),
       // A spot label's regions that fit its quota, every one avoided for
@@ -152,6 +170,7 @@ export const listenerStatusSchema = z.object({
           cloud: z.enum(['aws', 'gcp', 'azure']),
           regions: z.array(z.string()),
           spot: z.boolean(),
+          kind: quotaKind.optional(),
           limit: z.number(),
         })
         .optional(),
@@ -216,9 +235,13 @@ export function formatJobs(set: ListenerStatus['scaleSets'][number]): string[] {
     ...(day.startupFailures
       ? [`    ${count(day.startupFailures, 'runner')} failed to start`]
       : []),
-    ...quotaWarning(set.cloud, day),
+    ...quotaWarning(set.cloud, set.gpu, day),
   ];
 }
+
+// The quota a record names; an older listener's names only spot or on demand.
+export const kindOf = (spot: boolean, kind?: QuotaKind): QuotaKind =>
+  kind ?? (spot ? 'spot' : 'onDemand');
 
 const CLOUD_NAME = { aws: 'AWS', gcp: 'GCP', azure: 'Azure' } as const;
 
@@ -228,6 +251,7 @@ const CLOUD_NAME = { aws: 'AWS', gcp: 'GCP', azure: 'Azure' } as const;
 // QUOTA_REFUSALS refused.
 function quotaWarning(
   cloud: keyof typeof CLOUD_NAME | undefined,
+  gpu: string | undefined,
   w: z.infer<typeof jobsSummary>,
 ): string[] {
   const q = w.quotaRefused;
@@ -243,7 +267,7 @@ function quotaWarning(
         : `CPUS, N2D_CPUS and N2_CPUS in ${regions}`
       : cloud === 'azure' && !spot
         ? `the VM family's vCPU quota in ${regions}`
-        : `${quotaCode(cloud, spot)} in ${regions}`;
+        : `${quotaCode(cloud, quotaKinds(cloud, spot, gpu)[0]!)} in ${regions}`;
   return [
     `    ⚠ ${q.runners} runners waited for ${CLOUD_NAME[cloud]} quota in ${regions}, up to ${seconds(wait)}.`,
     `      Raise ${fix} to start them right away.`,
@@ -295,16 +319,17 @@ export function formatSlow(set: ListenerStatus['scaleSets'][number]): string[] {
     );
   }
   if (set.skipped) {
-    for (const { region, limit } of set.skipped.regions) {
+    const { cloud, spot, vcpus } = set.skipped;
+    for (const { region, limit, kind } of set.skipped.regions) {
       lines.push(
-        `    ${region}: ${set.skipped.spot ? 'spot' : 'on-demand'} quota ${limit} vCPU, under one ${set.skipped.vcpus}-vCPU runner, skipped; raise ${quotaCode(set.skipped.cloud, set.skipped.spot)} to use it`,
+        `    ${region}: ${KIND_NAME[kindOf(spot, kind)]} quota ${limit} vCPU, under one ${vcpus}-vCPU runner, skipped; raise ${quotaCode(cloud, kindOf(spot, kind))} to use it`,
       );
     }
   }
   if (quota && quota.cloud !== 'gcp') {
-    const kind = quota.spot ? 'spot' : 'on-demand';
+    const kind = kindOf(quota.spot, quota.kind);
     lines.push(
-      `    capped by ${quota.cloud} ${quota.regions.join(', ')} ${kind} vCPU quota (${quota.limit}); raise ${quotaToRaise(quota.cloud, quota.regions, quota.spot)}`,
+      `    capped by ${quota.cloud} ${quota.regions.join(', ')} ${KIND_NAME[kind]} vCPU quota (${quota.limit}); raise ${quotaToRaise(quota.cloud, quota.regions, kind)}`,
     );
   }
   return lines;

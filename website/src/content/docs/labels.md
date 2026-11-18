@@ -16,6 +16,9 @@ number of vCPUs.
 | `kvm-`           | The VM has `/dev/kvm`                                           | `backmesh-kvm-4` |
 | the number       | vCPUs, with 4 GiB of memory each                                | `backmesh-8`     |
 
+The [GPU labels](#gpu), `backmesh-gpu-t4` and `backmesh-gpu-od-t4`, end in
+their GPU instead of a number.
+
 So `backmesh-4` is a 4-vCPU, 16 GiB spot VM in the control plane's cloud, and
 `backmesh-azure-kvm-od-8` an 8-vCPU on-demand Azure VM with `/dev/kvm`.
 
@@ -108,6 +111,43 @@ Like the other labels, they have no VM while idle, retry on demand after a spot
 reclaim, and have on-demand twins, `backmesh-kvm-od-2` to `backmesh-kvm-od-16`.
 On another cloud than the control plane's they name it: `backmesh-azure-kvm-8`. They share their
 cloud's spot and on-demand vCPU quotas with the other labels.
+
+## GPU
+
+Jobs that need an NVIDIA GPU run on `backmesh-gpu-t4`, a spot VM with one
+Tesla T4 (16 GB of VRAM) and 4 vCPUs, the shape of GitHub's GPU runner. Its
+on-demand twin is `backmesh-gpu-od-t4`. On another cloud than the control
+plane's they name it: `backmesh-azure-gpu-t4`.
+
+| Cloud | Type                   | vCPU | Memory | Regions                                                                  |
+| ----- | ---------------------- | ---- | ------ | ------------------------------------------------------------------------ |
+| AWS   | `g4dn.xlarge`          | 4    | 16 GiB | every runner region                                                      |
+| Azure | `Standard_NC4as_T4_v3` | 4    | 28 GiB | `eastus`, `centralus`, `eastus2`, `southcentralus`, `westus2`, `westus3` |
+
+GitHub's GPU runner has 28 GB of memory; AWS's `g4dn.xlarge` has 16 GiB, so a
+job that needs more than about 14 GiB of RAM runs on Azure's. GCP has no GPU
+labels yet: anycloud can't launch a T4 VM there.
+
+The job sees the GPU as on GitHub's runner: `nvidia-smi` works in a step, and
+`docker run --gpus all` works on the VM's Docker through the NVIDIA container
+toolkit. The VM's image comes with the NVIDIA driver; CUDA itself comes from
+your job's container or a setup action, as on GitHub's runner.
+
+```yaml
+runs-on: backmesh-gpu-t4
+steps:
+  - run: nvidia-smi
+  - run: docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
+```
+
+GPU VMs count against their own quotas, which are 0 on most new accounts:
+AWS's "All G and VT Spot Instance Requests" (`L-3819A6DF`) and "Running
+On-Demand G and VT instances" (`L-DB2E81BA`), and Azure's "Standard NCASv3_T4
+Family vCPUs" on demand (its spot GPU VMs count against "Total Regional
+Low-priority vCPUs" with the other spot labels). Install and
+[`backmesh status`](/status/) print them and name the one to raise; until it's
+raised, the GPU labels' jobs wait at GitHub. See [Cost](/cost/#gpu) for their
+prices.
 
 ## Large Node.js tools
 

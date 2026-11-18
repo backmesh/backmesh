@@ -58,7 +58,11 @@ quota, and on-demand labels against "Total Regional vCPUs". Install reads both
 through `az vm list-usage` and prints them as how many `backmesh-4` jobs fit at
 once. A region whose quota can't fit one VM of a label gets none of that
 label's runners until you raise it; install and
-[`backmesh status`](/status/) name the quota. [More](/faq/#installing).
+[`backmesh status`](/status/) name the quota. The on-demand
+[GPU label](/labels/#gpu) also counts against "Standard NCASv3_T4 Family
+vCPUs", 0 on most new subscriptions; request at least 4 under
+[Quotas](https://portal.azure.com/#view/Microsoft_Azure_Capacity/QuotaMenuBlade/~/myQuotas)
+in the portal. [More](/faq/#installing).
 
 ## Cost
 
