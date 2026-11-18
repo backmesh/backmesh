@@ -13,7 +13,7 @@ head:
   - tag: script
     attrs:
       type: application/ld+json
-    content: '{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What are the open-source alternatives to GitHub-hosted runners?","acceptedAnswer":{"@type":"Answer","text":"Three free, open-source runner managers autoscale self-hosted GitHub Actions runners: Actions Runner Controller (ARC, Apache-2.0, on Kubernetes), terraform-aws-github-runner (MIT, on AWS with Lambda, SQS and EC2) and backmesh (Apache-2.0, a spot VM per job on AWS, GCP or Azure)."}},{"@type":"Question","name":"Is there an alternative to Actions Runner Controller without Kubernetes?","acceptedAnswer":{"@type":"Answer","text":"Yes. terraform-aws-github-runner runs runners on EC2 through Lambda functions on AWS, and backmesh runs each job on its own spot VM in AWS, GCP or Azure from one CLI install. Neither needs a Kubernetes cluster."}},{"@type":"Question","name":"Which open-source GitHub Actions runner manager works on GCP and Azure?","acceptedAnswer":{"@type":"Answer","text":"ARC runs on any Kubernetes cluster, including GKE and AKS. backmesh runs VMs directly in GCP projects and Azure subscriptions as well as AWS accounts. terraform-aws-github-runner is AWS only."}},{"@type":"Question","name":"Which is cheapest to run?","acceptedAnswer":{"@type":"Answer","text":"All three are free software, and runners bill as cloud compute. The fixed part differs: ARC needs a Kubernetes cluster (EKS and GKE charge $0.10 per cluster per hour, about $73 a month, plus nodes), terraform-aws-github-runner scales to zero and bills Lambda and SQS per request, and backmesh keeps two small VMs at about $74 to $111 a month."}},{"@type":"Question","name":"Does terraform-aws-github-runner use ephemeral runners?","acceptedAnswer":{"@type":"Answer","text":"Optionally. Its enable_ephemeral_runners variable defaults to false, so runners can be reused across jobs unless you turn it on."}}]}'
+    content: '{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What are the open-source alternatives to GitHub-hosted runners?","acceptedAnswer":{"@type":"Answer","text":"Three free, open-source runner managers autoscale self-hosted GitHub Actions runners: Actions Runner Controller (ARC, Apache-2.0, on Kubernetes), terraform-aws-github-runner (MIT, on AWS with Lambda, SQS and EC2) and backmesh (Apache-2.0, a spot VM per job on AWS, GCP or Azure)."}},{"@type":"Question","name":"Is there an alternative to Actions Runner Controller without Kubernetes?","acceptedAnswer":{"@type":"Answer","text":"Yes. terraform-aws-github-runner runs runners on EC2 through Lambda functions on AWS, and backmesh runs each job on its own spot VM in AWS, GCP or Azure from one CLI install. Neither needs a Kubernetes cluster."}},{"@type":"Question","name":"Which open-source GitHub Actions runner manager works on GCP and Azure?","acceptedAnswer":{"@type":"Answer","text":"ARC runs on any Kubernetes cluster, including GKE and AKS. backmesh runs VMs directly in GCP projects and Azure subscriptions as well as AWS accounts. terraform-aws-github-runner is AWS only."}},{"@type":"Question","name":"Which is cheapest to run?","acceptedAnswer":{"@type":"Answer","text":"All three are free software, and runners bill as cloud compute. The fixed part differs: ARC needs a Kubernetes cluster (EKS charges $0.10 per cluster per hour, about $73 a month, plus nodes; on GKE the free tier covers that fee for one zonal or Autopilot cluster), terraform-aws-github-runner scales to zero and bills Lambda and SQS per request, and backmesh keeps two small VMs at about $74 to $111 a month."}},{"@type":"Question","name":"Does terraform-aws-github-runner use ephemeral runners?","acceptedAnswer":{"@type":"Answer","text":"Optionally. Its enable_ephemeral_runners variable defaults to false, so runners can be reused across jobs unless you turn it on."}}]}'
 ---
 
 Actions Runner Controller (ARC), terraform-aws-github-runner and backmesh are
@@ -54,8 +54,10 @@ gets a fresh pod on a node that may also run other pods.
 Jobs that need Docker need one of ARC's container modes. Docker-in-Docker
 runs a Docker daemon in a privileged sidecar container. Kubernetes mode runs
 each job's containers as separate pods and needs a persistent volume for the
-job's work directory. ARC's README notes that the older autoscaling modes are
-now legacy and maintained by the community only.
+job's work directory ([GitHub's docs](https://docs.github.com/en/actions/tutorials/use-actions-runner-controller/deploy-runner-scale-sets)).
+ARC's [README](https://github.com/actions/actions-runner-controller#readme)
+notes that the older autoscaling modes are now legacy and maintained by the
+community only.
 
 ### terraform-aws-github-runner
 
@@ -101,8 +103,9 @@ wants runners without either, or is on GCP or Azure.
 All three can give each job a clean environment, but the boundary differs:
 
 - ARC gives each job a new pod. Pods share a node's kernel with other pods,
-  and Docker-in-Docker needs a privileged container, which weakens that
-  boundary.
+  and Docker-in-Docker needs a
+  [privileged container](https://docs.github.com/en/actions/tutorials/use-actions-runner-controller/deploy-runner-scale-sets), which weakens
+  that boundary.
 - terraform-aws-github-runner gives each job a full EC2 instance when
   ephemeral runners are on. With them off, a runner can take a later job on
   the same instance, so files and processes from one job can be seen by the
@@ -111,8 +114,10 @@ All three can give each job a clean environment, but the boundary differs:
   the VM's own Docker without privileged mode.
 
 None of the three makes it safe to run untrusted pull requests from forks on
-runners that can reach your network. GitHub's own guidance is to avoid
-self-hosted runners on public repositories for that reason. backmesh supports
+runners that can reach your network. GitHub's own
+[guidance](https://docs.github.com/en/actions/reference/security/secure-use)
+is that self-hosted runners should almost never be used for public
+repositories for that reason. backmesh supports
 only private repositories for now. Its [security model](/security/) also notes
 that jobs from every repository in an org share the same labels, so any repo
 in the org can use the runners; per-repository isolation is planned.
@@ -125,7 +130,9 @@ The three handle that differently:
 - ARC uses whatever nodes the cluster has. Spot comes from spot node pools or
   a node autoscaler such as Karpenter. A reclaimed node fails the jobs on it.
 - terraform-aws-github-runner launches spot instances by default and can fall
-  back to on demand. A reclaimed instance fails its job.
+  back to on demand when spot has no capacity
+  (`enable_runner_on_demand_failover_for_errors`, in its [inputs](https://github.com/github-aws-runners/terraform-aws-github-runner#inputs)).
+  A reclaimed instance fails its job.
 - backmesh runs spot by default. If spot reclaims were a run's only failures,
   it reruns those jobs on demand, up to twice. Jobs that shouldn't be
   interrupted use `backmesh-od-*` labels.
@@ -149,8 +156,9 @@ A job on an autoscaled runner waits for capacity:
 - ARC waits for a pod to schedule. On a node with room, that's seconds. If the
   cluster has to add a node, it's the node's boot time first.
 - terraform-aws-github-runner waits for an EC2 instance to boot and register.
-  A warm pool of idle instances, an option in the module, removes most of
-  that wait at the cost of paying for idle instances.
+  A pool of idle instances (the module's `pool_config`, in its
+  [inputs](https://github.com/github-aws-runners/terraform-aws-github-runner#inputs)) removes most of that wait at the cost of paying
+  for idle instances.
 - backmesh waits for a VM to boot: about 30 seconds on AWS and 60 to 70
   seconds on GCP and Azure. It learns each workflow's shape and starts runners
   ahead of predicted jobs, and a coding agent can run `backmesh cue` before it
@@ -163,7 +171,7 @@ A job on an autoscaled runner waits for capacity:
 | Upgrades     | Helm chart upgrades, plus cluster upgrades | Module version bumps, Lambda zips, `terraform apply` | `backmesh upgrade`                                               |
 | Runner image | A container image you build or pick        | An AMI you build or pick                             | backmesh's [image](/runner-image/), Ubuntu 24.04, or your own    |
 | Status       | Kubernetes tools and ARC's metrics         | CloudWatch logs and metrics                          | `backmesh status`: runners, queue, job times, month-to-date cost |
-| Removal      | Uninstall the charts                       | `terraform destroy`                                  | `backmesh uninstall`                                             |
+| Removal      | Uninstall the charts                       | `terraform destroy`                                  | `backmesh uninstall`, then delete what it lists                  |
 
 ## What it costs
 
@@ -173,7 +181,7 @@ part that differs:
 | Fixed part    | ARC                                                                                                                                                                                       | terraform-aws-github-runner   | backmesh                                 |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ---------------------------------------- |
 | What it is    | A Kubernetes cluster: [EKS](https://aws.amazon.com/eks/pricing/) and [GKE](https://cloud.google.com/kubernetes-engine/pricing) charge $0.10 per cluster per hour, plus nodes kept running | Lambda calls and SQS messages | Two small always-on VMs with their disks |
-| About a month | $73 for the EKS or GKE fee, before nodes                                                                                                                                                  | Usually a few dollars         | $86 on AWS, $74 on GCP, $111 on Azure    |
+| About a month | $73 for the EKS fee, before nodes; GKE's free tier covers one zonal or Autopilot cluster                                                                                                  | Usually a few dollars         | $86 on AWS, $74 on GCP, $111 on Azure    |
 
 A worked month: 150,000 minutes of 4-vCPU Linux jobs on AWS spot. backmesh's
 [cost inputs](/cost/) put 4-vCPU spot VMs in us-east-2 at about $0.050 to
@@ -181,12 +189,12 @@ $0.070 an hour on 2026-11-13, or about $124 to $175 for those minutes. All
 three tools would pay roughly that for the compute itself, since all three can
 run spot. The fixed part then decides the total:
 
-| On AWS, 150,000 4-vCPU minutes | Compute   | Fixed               | Total, about      |
-| ------------------------------ | --------- | ------------------- | ----------------- |
-| GitHub-hosted 4-core           | $1,800    | none                | $1,800            |
-| ARC on EKS                     | $124–$175 | $73 + nodes for ARC | $197–$248 + nodes |
-| terraform-aws-github-runner    | $124–$175 | a few dollars       | $130–$180         |
-| backmesh                       | $124–$175 | $86                 | $210–$261         |
+| On AWS, 150,000 4-vCPU minutes | Compute   | Fixed               | Total, about            |
+| ------------------------------ | --------- | ------------------- | ----------------------- |
+| GitHub-hosted 4-core           | $1,800    | none                | $1,800                  |
+| ARC on EKS                     | $124–$175 | $73 + nodes for ARC | $197–$248 + nodes       |
+| terraform-aws-github-runner    | $124–$175 | a few dollars       | $130–$180               |
+| backmesh                       | $124–$175 | $86                 | $210–$261, before disks |
 
 These leave out disks, boot time and engineering time. For ARC, the nodes that
 run ARC's controller and listener, and any spare capacity for pods to land on,
@@ -243,7 +251,8 @@ your project or subscription. terraform-aws-github-runner is AWS only.
 **Which is cheapest to run?** All three are free; the fixed part differs. The
 Terraform module scales to zero and costs a few dollars a month in Lambda and
 SQS. backmesh's control plane costs about $74 to $111. ARC's cost is a
-cluster, about $73 a month in fees on EKS or GKE before nodes.
+cluster: about $73 a month in fees on EKS before nodes, and on GKE the free
+tier covers the fee for one zonal or Autopilot cluster.
 
 **Does terraform-aws-github-runner use ephemeral runners?** Only if you turn
 on `enable_ephemeral_runners`; it defaults to `false`.

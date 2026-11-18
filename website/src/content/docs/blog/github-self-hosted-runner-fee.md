@@ -34,7 +34,7 @@ about it now. Every price links to its source and was checked on 2026-11-18.
 | Is there a fee on self-hosted runners? | No                                                            |
 | Was it cancelled?                      | No, postponed on 2025-12-17 with no new date                  |
 | How much was announced?                | $0.002 per minute, any runner size, private repositories only |
-| Did GitHub-hosted prices change?       | Yes, down by up to 39% from 2026-01-01                        |
+| Did GitHub-hosted prices change?       | Yes, down by up to 39% from 2026-01-01, per GitHub            |
 | What's included each month?            | $12 on Free, $18 on Pro and Team, $300 on Enterprise Cloud    |
 | Are public repositories affected?      | No                                                            |
 | Is GitHub Enterprise Server affected?  | No, per the announcement                                      |
@@ -45,7 +45,8 @@ On 2025-12-16, GitHub published
 "[Coming soon: simpler pricing and a better experience for GitHub Actions](https://github.blog/changelog/2025-12-16-coming-soon-simpler-pricing-and-a-better-experience-for-github-actions/)".
 It made two changes at once:
 
-1. GitHub-hosted runners would cost up to 39% less from 2026-01-01.
+1. GitHub-hosted runners would cost up to 39% less from 2026-01-01, per
+   GitHub.
 2. A new "Actions cloud platform charge" of $0.002 per minute would apply to
    self-hosted runner usage in private repositories from 2026-03-01. Those
    minutes would also count against a plan's included usage.
@@ -57,12 +58,10 @@ would pay less and 15% would pay more, with a median increase of about $13 a
 month. It also said the new GitHub-hosted prices already included the $0.002
 platform charge, so the charge was new only for self-hosted runners.
 
-The reaction was large. The Hacker News thread on the change reached
-[802 points and 819 comments](https://news.ycombinator.com/item?id=46291156),
-the largest discussion of GitHub Actions pricing that year. Much of it came
-from teams that already pay for their own machines and objected to paying per
-minute for hardware they run. On Reddit, the r/github and r/devops threads
-on the announcement passed 200 comments each.
+The reaction was large. The Hacker News thread on the change had
+[802 points and 819 comments](https://news.ycombinator.com/item?id=46291156)
+as of 2026-11-18. Much of it came from teams that already pay for their own
+machines and objected to paying per minute for hardware they run.
 
 ## The postponement
 

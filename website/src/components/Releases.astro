@@ -6,6 +6,8 @@ const files = import.meta.glob<MarkdownInstance<Record<string, never>>>(
   '../../../docs/releases/*.md',
   { eager: true },
 );
+// Releases whose notes describe the paid plans v0.3.2 removed.
+const PLANS = new Set(['v0.2.0', 'v0.3.0']);
 const semver = (v: string) => v.slice(1).split('.').map(Number);
 const releases = Object.entries(files)
   .map(([path, file]) => ({
@@ -22,6 +24,11 @@ const releases = Object.entries(files)
   releases.map(({ version, Content }) => (
     <section>
       <h2 id={version}>backmesh {version}</h2>
+      {PLANS.has(version) && (
+        <p>
+          <em>Historical: the paid plans below were removed in v0.3.2.</em>
+        </p>
+      )}
       <p>
         <a
           href={`https://github.com/backmesh/backmesh-releases/releases/tag/${version}`}

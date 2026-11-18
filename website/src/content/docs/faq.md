@@ -17,8 +17,8 @@ Apache License 2.0, and its cache action is under the MIT License. The source
 is at [backmesh/backmesh](https://github.com/backmesh/backmesh). backmesh
 charges no license or per-minute fee; your clouds bill you for the VMs.
 
-**Did backmesh have paid plans?** Early releases did: v0.2.0 and v0.3.0 had
-paid plans with a trial. v0.3.2 removed them, and v0.4.0 made backmesh open
+**Did backmesh have paid plans?** Early releases did: v0.2.0 announced paid
+plans, and v0.3.0 charged for them after a trial. v0.3.2 removed them, and v0.4.0 made backmesh open
 source. The [changelog](/changelog/) has each release.
 
 **Was backmesh an LLM API proxy?** Earlier, yes. Before it ran GitHub Actions

@@ -295,7 +295,8 @@ options, see
 
 Self-hosting pays off with volume. Each 4-vCPU minute moved from GitHub's
 $0.012 to spot saves about $0.010 to $0.0115, so backmesh's fixed $74–$111 a
-month pays for itself at roughly 6,000 to 11,000 such minutes a month (our
+month pays for itself at roughly 7,000 to 9,800 such minutes a month, depending on
+the cloud (our
 arithmetic). At 2 vCPU, where GitHub charges $0.006, the saving per minute is
 smaller. A team using a few thousand minutes is better off with the fixes
 above and the included usage.

@@ -174,7 +174,7 @@ The 150,000-minute row matches backmesh's published figures. The 20,000 and
 500,000 rows are our own arithmetic with the same inputs. The spot figures
 leave out disks, VM boots and reruns, so they're a floor. At 20,000 minutes
 the control plane is most of the bill. By the same arithmetic, below roughly
-7,400 to 9,800 minutes a month of 4-core jobs, depending on the cloud,
+7,000 to 9,800 minutes a month of 4-core jobs, depending on the cloud,
 GitHub-hosted runners cost less.
 
 How long a credit balance lasts for CI alone, using the high end of each
