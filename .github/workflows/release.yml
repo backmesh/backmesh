@@ -10,6 +10,9 @@ name: Release
 # file, no mirror and no formula; its images are public as for any release.
 # An rc may be tagged on a pull request's head, so a change is live-checked
 # before it merges (owner, 2026-11-18); a release's own tag must be on main.
+# Tag an rc only on a same-repository branch head a maintainer has reviewed,
+# never a fork PR's head: the tagged commit's release.yml runs with packages,
+# id-token and contents write.
 on:
   push:
     tags: ['v*']
