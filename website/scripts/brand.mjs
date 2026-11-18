@@ -159,7 +159,7 @@ files['apple-touch-icon.png'] = png(
 // The OG image, 1200 x 630: the lockup, the page's headline and lede, and
 // the agent prompt under a hairline, as the page sets them.
 function og() {
-  const head = ['Self-hosted GitHub Actions', 'runners for up to 10× less.']
+  const head = ['Up to 2× faster,', '5× cheaper builds.']
     .map(
       (line, i) =>
         outline(sans, line, 82, 80, 278 + i * 88, {
@@ -170,7 +170,7 @@ function og() {
     .join('');
   const lede = outline(
     sans,
-    'Each job runs on its own spot VM in your AWS, GCP or Azure account.',
+    'Self-hosted GitHub Actions runners in your AWS, GCP or Azure account.',
     28,
     80,
     420,

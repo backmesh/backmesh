@@ -27,10 +27,47 @@ import {
   per1000,
 } from '../cost';
 
-const title = 'backmesh: Self-hosted GitHub Actions runners for up to 10× less';
+const title =
+  'backmesh: Free, open-source GitHub Actions runners in your AWS, GCP or Azure';
 const description =
-  'Each GitHub Actions job runs on its own spot VM in your AWS, GCP or Azure account, at up to 10× less compute cost. Your cloud bills you, so its credits apply.';
+  'Free and open source (Apache-2.0). Self-hosted GitHub Actions runners on spot VMs in your AWS, GCP or Azure account: up to 2× faster, 5× cheaper builds than GitHub-hosted runners in our benchmarks. Your cloud bills you, so its credits apply.';
 const og = new URL('/brand/og.png', Astro.site).href;
+
+// Build benchmarks, 2026-11-18: medians of 5 rounds each, backmesh-4 against
+// GitHub's ubuntu-latest (/benchmarks/ has the method and the runs). Each
+// card's numbers link to its row there.
+const benchmarks = [
+  {
+    id: 'docker',
+    workload: 'Docker build',
+    project: 'grafana/k6 v0.54.0 image',
+    secs: [71, 148],
+    wait: 48,
+    cost: ['$0.0032', '$0.018'],
+    faster: '2.1×',
+    cheaper: '5.5×',
+  },
+  {
+    id: 'rust',
+    workload: 'Rust',
+    project: 'ripgrep 14.1.1, cargo build --release',
+    secs: [49, 70],
+    wait: 50,
+    cost: ['$0.0027', '$0.012'],
+    faster: '1.4×',
+    cheaper: '4.4×',
+  },
+  {
+    id: 'typescript',
+    workload: 'TypeScript',
+    project: 'TypeScript v5.6.3, npm ci and hereby local',
+    secs: [35, 56],
+    wait: 43,
+    cost: ['$0.0021', '$0.006'],
+    faster: '1.6×',
+    cheaper: '2.8×',
+  },
+];
 const money = (v: number) => `$${Math.round(v).toLocaleString('en-US')}`;
 const range = (lo: number, hi: number) => `${money(lo)}–${money(hi)}`;
 const minutes = MINUTES.toLocaleString('en-US');
@@ -115,6 +152,7 @@ const jsonLd = {
       url: site,
       logo: new URL('/brand/icon-512.png', site).href,
       email: 'luis@backmesh.com',
+      sameAs: ['https://github.com/backmesh'],
     },
     {
       '@type': 'SoftwareApplication',
@@ -123,6 +161,9 @@ const jsonLd = {
       description: SUMMARY,
       applicationCategory: 'DeveloperApplication',
       operatingSystem: 'macOS, Linux',
+      license: 'https://www.apache.org/licenses/LICENSE-2.0',
+      isAccessibleForFree: true,
+      sameAs: ['https://github.com/backmesh/backmesh'],
       publisher: { '@id': `${site}#organization` },
       offers: {
         '@type': 'Offer',
@@ -248,15 +289,16 @@ const jsonLd = {
 
     <main>
       <section class="wrap hero">
-        <h1>Self-hosted GitHub Actions runners for up to 10× less.</h1>
+        <h1>Up to 2× faster, 5×&nbsp;cheaper builds.</h1>
         <div class="hero-figure"><HeroDiagram /></div>
         <div class="hero-body">
           <p class="sub">
-            Each job runs on its own spot VM in your AWS, GCP or Azure account.
-            Your cloud bills you, so your cloud credits apply.
+            Self-hosted GitHub Actions runners: each job runs on its own spot VM
+            in your AWS, GCP or Azure account. Your cloud bills you, so your
+            cloud credits apply.
           </p>
           <AgentPrompt />
-          <p class="free">Core features free, no credit card.</p>
+          <p class="free">Free and open source (Apache-2.0), no credit card.</p>
           <div class="ctas">
             <a class="more" href="/install/">Install manually</a>
             <a class="more" href="#cost">See the costs</a>
@@ -270,6 +312,47 @@ const jsonLd = {
       <div class="wrap trust-wrap">
         <TrustStrip />
       </div>
+
+      <section id="benchmarks" class="wrap section benchmarks">
+        <h2>Builds against GitHub's ubuntu-latest.</h2>
+        <p class="lead">
+          Median of 5 runs each, a <code>backmesh-4</code> spot VM on AWS
+          against GitHub-hosted <code>ubuntu-latest</code>.
+        </p>
+        <ul class="plans bench">
+          {
+            benchmarks.map(({ id, workload, project, secs, wait, cost, faster, cheaper }) => {
+              const row = `/benchmarks/#${id}`;
+              return (
+                <li>
+                  <b>{workload}</b>
+                  <strong>
+                    <a href={row}>
+                      {secs[0]}<span aria-hidden="true"> s</span><span class="sr-only"> seconds</span>
+                    </a>
+                  </strong>
+                  <span class="runner">
+                    on backmesh-4, plus <a href={row}>{wait} s</a> before the job
+                    starts, about <a href="/benchmarks/#method">17 s</a> when cued
+                  </span>
+                  <ul>
+                    <li>{project}</li>
+                    <li>
+                      <a href={row}>{secs[1]} s</a> on GitHub-hosted:{' '}
+                      <a href={row}>{faster}</a> faster
+                    </li>
+                    <li>
+                      <a href={row}>{cost[0]}</a> a build, against{' '}
+                      <a href={row}>{cost[1]}</a>: <a href={row}>{cheaper}</a> cheaper
+                    </li>
+                  </ul>
+                </li>
+              );
+            })
+          }
+        </ul>
+        <p class="method"><a href="/benchmarks/">How we measured →</a></p>
+      </section>
 
       <section id="cost" class="wrap section cost">
         <h2>
@@ -300,7 +383,10 @@ const jsonLd = {
         />
         <div class="cost-foot">
           <p class="caption">
-            {caption} <a href="#faq">What does backmesh cost?</a>
+            {caption} <a href="#faq">What does backmesh cost?</a> Or work out
+            your own bill with the <a href="/calculator/">cost calculator</a>, by
+            cloud: <a href="/aws/">AWS</a>, <a href="/gcp/">GCP</a>,{' '}
+            <a href="/azure/">Azure</a>.
           </p>
           <div
             class="receipt"
@@ -351,13 +437,14 @@ const jsonLd = {
       <section id="pricing" class="wrap section pricing">
         <h2>Pricing</h2>
         <p class="lead">
-          backmesh's core features are free; you pay your clouds for the VMs.
+          backmesh is free and open source; you pay your clouds for the VMs.
         </p>
         <ul class="plans">
           <li>
             <b>Free</b>
             <strong>$0</strong>
             <ul>
+              <li>Open source, Apache-2.0</li>
               <li>Unlimited jobs</li>
               <li>Cache included</li>
               <li>No credit card required</li>
@@ -497,6 +584,13 @@ const jsonLd = {
       </a>
       <div class="links">
         <a href="/install/">Install</a>
+        <a href="/aws/">AWS</a>
+        <a href="/gcp/">GCP</a>
+        <a href="/azure/">Azure</a>
+        <a href="/calculator/">Cost calculator</a>
+        <a href="/blog/tags/comparisons/">Compare</a>
+        <a href="/blog/">Blog</a>
+        <a href="/changelog/">Changelog</a>
         <a href="/security/">Security model</a>
         <a href="/faq/">FAQ</a>
         <a href="#pricing">Pricing</a>
@@ -951,6 +1045,54 @@ const jsonLd = {
     }
     .plans strong {
       font-size: 52px;
+    }
+  }
+
+  /* Benchmarks: the pricing cards, three across. */
+  .bench {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .bench > li + li {
+    padding: 26px 24px 0;
+  }
+  .bench > li:first-child {
+    padding-right: 24px;
+  }
+  .bench > li:last-child {
+    padding-right: 0;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .bench .runner {
+    margin: -8px 0 18px;
+    color: var(--bm-soft);
+    font-size: 14px;
+  }
+  .bench strong a {
+    color: inherit;
+  }
+  .method {
+    margin: 32px 0 0;
+    font-weight: 600;
+  }
+  @media (max-width: 960px) {
+    .bench {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .bench > li,
+    .bench > li + li {
+      padding: 24px 0 8px;
+      border-left: 0;
+    }
+    .bench > li + li {
+      margin-top: 24px;
+      border-top: 1px solid var(--bm-hair);
     }
   }
 

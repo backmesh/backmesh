@@ -31,6 +31,7 @@ You need:
   a project, or `az` with a subscription, with
   [the rights install needs](/security/#what-install-needs). What install
   creates in each cloud: [AWS](/aws/), [GCP](/gcp/), [Azure](/azure/).
+- `curl`, `tar`, and `sha256sum` or `shasum`, for the install script.
 
 ## Run install
 
@@ -43,8 +44,9 @@ else signs you in and lists the orgs you're an admin of to pick from. Without a
 terminal it asks nothing and names your orgs and the command to run instead.
 
 With nothing else, the control plane and runners go on the cloud your CLI is
-signed in to, near GitHub's US East. The control plane is two small always-on
-VMs in your account that start runners for your jobs (about $74–$111 a month).
+signed in to, near GitHub's US East. The control plane is two always-on VMs
+(t3.large and t3.small on AWS) in your account that start runners for your
+jobs (about $74–$111 a month).
 To choose, see [Control plane and runners](#control-plane-and-runners). To see
 the plan first:
 

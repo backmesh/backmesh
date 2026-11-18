@@ -1,6 +1,9 @@
 ---
 title: Labels and sizes
 description: The runs-on labels backmesh creates, their sizes, and how they map to clouds.
+head:
+  - tag: title
+    content: 'GitHub Actions runner sizes and runs-on labels | backmesh'
 ---
 
 A label reads left to right: `backmesh-`, then optional parts, then the

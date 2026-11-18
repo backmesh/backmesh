@@ -74,7 +74,8 @@ These are catalog prices in `us-east-2`, spot in the lowest zone, for a
 | `m6a.xlarge` | 0.0547   | 0.1728        |
 
 Other sizes scale with their vCPUs. Each job also pays for its VM's boot and its
-100 GB disk, about $0.01 an hour. The control plane costs about $86 a month. At
+100 GB gp3 disk at 4,000 IOPS and 500 MiB/s, about $0.038 an hour. The
+control plane costs about $86 a month. At
 those prices, 150,000 minutes a month of `backmesh-4` jobs cost at least
 $210–$261 with the control plane, before disks, boots and runners started ahead
 of jobs; see [the costs](/#cost). Spot prices change by the hour.
