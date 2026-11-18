@@ -83,7 +83,7 @@ and GitHub runs that control plane at a large and growing scale:
   about 71 million after its re-architecture
   ([pricing FAQ](https://github.com/resources/insights/2026-pricing-changes-for-github-actions)).
 - GitHub's COO said Actions went from about 1 billion minutes a week in 2025
-  to 2.1 billion in a single week of April 2026
+  to 2.1 billion in the first days of one week in April 2026
   ([post](https://x.com/kdaigle/status/2040164759836778878)).
 
 As of 2026-11-18, the discussion has no staff update after the postponement,

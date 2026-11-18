@@ -50,6 +50,7 @@ export default defineConfig({
         starlightBlog({
           title: 'Blog',
           prefix: 'blog',
+          postCount: 10,
           recentPostCount: 10,
           metrics: { readingTime: true },
           authors: {
