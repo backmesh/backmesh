@@ -50,6 +50,13 @@ const SUBMITS_PER_TICK = 50;
 // cancel.
 export const COMPLETED_GRACE_MS = 10 * 60_000;
 
+// A scale set's scale-down waits this long after GitHub ends one of its jobs
+// with no runner, which GitHub does to a job no runner took within 5 minutes,
+// offering it again at once: its runners still launching would otherwise go
+// and the next one start its retries over, as v0.4.3-rc.1's GPU runner did
+// (terminated at 22:53:54 after 4 min of spot refusals, coordinator).
+export const REQUEUE_HOLD_MS = 30_000;
+
 export type { WorkflowRun };
 
 // What happens to a run's reclaimed jobs: `retry` when
@@ -134,6 +141,9 @@ export interface ScaleSet {
   // A spot label's regions that fit its quota, every one avoided for slow
   // boots: none starts until the first avoidance ends (ms).
   avoiding?: { regions: string[]; until: number };
+  // When GitHub last ended one of its jobs with no runner (ms): `reconcile`
+  // holds its scale-down for REQUEUE_HOLD_MS after.
+  requeuedAt?: number;
 }
 
 export interface ScalerDeps {
@@ -275,6 +285,9 @@ export class Scaler {
         if (!(jobId && [...this.joins].some((e) => e.job.jobId === jobId))) {
           this.joins.add({ label: set.route.label, job, at: this.now() });
         }
+        // No runner: GitHub dropped a job no runner took within its
+        // 5-minute acquire, and offers it again at once.
+        if (!job.runnerName) set.requeuedAt = this.now();
         if (job.runnerName) {
           this.started.delete(job.runnerName);
           this.completed.set(job.runnerName, this.now());
@@ -454,7 +467,9 @@ export class Scaler {
       // on-demand VMs and spot ones go first.
       const onDemand = !!this.deps.routing?.onDemand(set.route, now);
       if (have > desired) {
-        downs.push([mine, have - desired, set.route.label, onDemand]);
+        if (now - (set.requeuedAt ?? -Infinity) >= REQUEUE_HOLD_MS) {
+          downs.push([mine, have - desired, set.route.label, onDemand]);
+        }
         continue;
       }
       const short = Math.max(0, real - have);

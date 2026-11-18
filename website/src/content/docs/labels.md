@@ -119,14 +119,22 @@ Tesla T4 (16 GB of VRAM) and 4 vCPUs, the shape of GitHub's GPU runner. Its
 on-demand twin is `backmesh-gpu-od-t4`. On another cloud than the control
 plane's they name it: `backmesh-azure-gpu-t4`.
 
-| Cloud | Type                   | vCPU | Memory | Regions                                                                                                    |
-| ----- | ---------------------- | ---- | ------ | ---------------------------------------------------------------------------------------------------------- |
-| AWS   | `g4dn.xlarge`          | 4    | 16 GiB | the runner regions that offer it                                                                           |
-| Azure | `Standard_NC4as_T4_v3` | 4    | 28 GiB | the runner regions that offer it: `eastus`, `centralus`, `eastus2`, `southcentralus`, `westus2`, `westus3` |
+| Cloud | Type                               | vCPU | Memory     | Regions                                                                                                    |
+| ----- | ---------------------------------- | ---- | ---------- | ---------------------------------------------------------------------------------------------------------- |
+| AWS   | `g4dn.xlarge`, then `g4dn.2xlarge` | 4, 8 | 16, 32 GiB | the runner regions that offer them                                                                         |
+| Azure | `Standard_NC4as_T4_v3`             | 4    | 28 GiB     | the runner regions that offer it: `eastus`, `centralus`, `eastus2`, `southcentralus`, `westus2`, `westus3` |
 
 GitHub's GPU runner has 28 GB of memory; AWS's `g4dn.xlarge` has 16 GiB, so a
-job that needs more than about 14 GiB of RAM runs on Azure's. GCP has no GPU
-labels yet: anycloud can't launch a T4 VM there.
+job that needs more than about 14 GiB of RAM runs on Azure's. AWS's
+`g4dn.2xlarge` has the same T4 and is tried when no `g4dn.xlarge` is free, at
+about 1.4 times the price. GCP has no GPU labels yet: anycloud can't launch a
+T4 VM there.
+
+A GPU job starts slower than a CPU one: its VM boots NVIDIA's larger image,
+and pulling and starting the runner's image takes about 90 seconds more. When
+spot T4s are short, a `backmesh-gpu-t4` job waits for one: like every spot
+label, it never falls back on demand. Run jobs that must start quickly on
+`backmesh-gpu-od-t4`.
 
 The job sees the GPU as on GitHub's runner: `nvidia-smi` works in a step, and
 `docker run --gpus all` works on the VM's Docker through the NVIDIA container

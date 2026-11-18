@@ -223,7 +223,9 @@ describe('runner classes', () => {
         vcpus: 4,
         spot: true,
         kvm: false,
-        vmTypes: ['g4dn.xlarge'],
+        // The same T4 on 8 vCPUs next, so a spot refusal fails over at
+        // once instead of backing off.
+        vmTypes: ['g4dn.xlarge', 'g4dn.2xlarge'],
         regions: ['us-east-2'],
         gpu: 'T4',
       },
