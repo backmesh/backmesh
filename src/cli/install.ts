@@ -84,7 +84,9 @@ import {
   readControlPool,
   readOrgId,
   controlPlaneOf,
+  type NodePool,
 } from './installation.js';
+import { controlPlaneAccount, lowerControlDisks } from './control-disks.js';
 
 export const CLUSTER = 'backmesh';
 
@@ -587,7 +589,7 @@ async function waitForPool(
     if (i > 0) await sleep(intervalMs);
     const { nodePools } = await api.listNodePools({ query: {} });
     const pool = nodePools.find((p) => p.name === name);
-    if (pool?.state === 'running') return;
+    if (pool?.state === 'running') return pool;
     if (pool?.state === 'failed') {
       throw new Error(
         `${name} failed${pool.lastError ? `: ${pool.lastError}` : ''}. Fix the cause and run install again, which replaces it.`,
@@ -1278,6 +1280,8 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         minVmCount: 1,
         maxVmCount: 1,
         allowPrivilegedJobs: false,
+        // gp3's baseline, not anycloud's default `high` (control-disks.ts).
+        ...(first.cloud === 'aws' && { osDiskTier: 'medium' as const }),
       },
     });
   }
@@ -1309,6 +1313,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   // first; already created or confirmed
   // above, so this only double-checks.
   await ensureCacheBuckets(api, tag, parseRoutes(finalRunners), ui.print);
+  let running: NodePool | undefined;
   if (existing.listeners.some((listener) => listener.name === name)) {
     // A re-run applies the plan's changes: the Secret, then a roll. The
     // plan named the listener it read, so one that appeared since is
@@ -1361,7 +1366,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       }),
     );
     // anycloud refuses a Deployment on a pool that isn't running yet.
-    await waitForPool(api, CONTROL_POOL, deps.retry);
+    running = await waitForPool(api, CONTROL_POOL, deps.retry);
     const env = {
       BACKMESH_INSTALL: tag,
       ...override?.env,
@@ -1376,6 +1381,20 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       ]),
       '--wait',
     ]);
+  }
+
+  // A control plane this run made boots its disks at gp3's baseline: the
+  // management VM's, until anycloud's template does, and `bm-control`'s
+  // (control-disks.ts). A re-run leaves its disks to `upgrade`.
+  if (!existing.pool && running && first.cloud === 'aws') {
+    await lowerControlDisks(
+      clusterId,
+      first.region,
+      await controlPlaneAccount(deps.run, clusterId),
+      running,
+      deps.command,
+      ui.print,
+    );
   }
 
   // Step 9.

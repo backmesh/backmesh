@@ -132,7 +132,7 @@ describe('POST /v1/installs/revoke', () => {
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({
       error:
-        'acme restricts third-party apps: an org owner approves backmesh at https://github.com/organizations/acme/settings/oauth_application_policy, then run rotate-key again.',
+        "acme restricts third-party apps. An org owner: run rotate-key again and click Grant next to acme on GitHub's sign-in page. Anyone else: run rotate-key again and click Request there, have an org owner approve it at https://github.com/organizations/acme/settings/oauth_application_policy, then run rotate-key once more.",
     });
   });
 

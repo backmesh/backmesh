@@ -42,12 +42,17 @@ SHA-256 digest, so it needs network access to GitHub's release downloads.
 Install creates the control plane and each cloud's role through your signed-in
 cloud CLI, as you, so that identity needs the rights to create them:
 
-- **AWS:** a CloudFormation stack with an IAM role and OIDC provider.
+- **AWS:** a CloudFormation stack with an IAM role and OIDC provider, plus
+  `ec2:DescribeInstances`, `ec2:DescribeVolumes` and `ec2:ModifyVolume`, which
+  lower the control plane's two disks to gp3's baseline speed.
 - **GCP:** a custom role, a service account, and a workload identity pool and
   provider with their IAM bindings, plus turning on the Compute, IAM, IAM
   Credentials and Security Token Service APIs.
 - **Azure:** a custom role, a resource group with a managed identity and its
   federated credential, and a role assignment.
+
+`backmesh upgrade` needs those three EC2 rights too, to lower an older
+installation's disks ([Upgrade](/upgrade/)).
 
 No cloud keys are saved, and nothing else needs installing. A re-run that only
 adds or changes runners on another cloud needs just that cloud's CLI and

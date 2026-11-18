@@ -115,6 +115,7 @@ function realUpgradeDeps(io: CliIo, json: boolean): UpgradeDeps {
     env: io.env,
     run: runAnycloud,
     runLong: anycloudBinary(0),
+    command: cloudCommand,
     release: async () => readCompatibility(),
     status: () => realStatus(io),
     ...realUi(io, json),

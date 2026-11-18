@@ -255,6 +255,28 @@ function setUp(
           })),
         );
       }
+      // The new management VM at anycloud 0.1.78's 8,000 IOPS; bm-control's
+      // Node is created at the baseline.
+      if (args[0] === 'aws' && args[1] === 'ec2') {
+        return {
+          'describe-instances': JSON.stringify([
+            {
+              Tags: [{ Key: 'Name', Value: 'anycloud-cluster-c1' }],
+              Root: '/dev/sda1',
+              Devices: [{ Name: '/dev/sda1', Volume: 'vol-api' }],
+            },
+          ]),
+          'describe-volumes': JSON.stringify([
+            {
+              VolumeId: 'vol-api',
+              VolumeType: 'gp3',
+              Iops: 8000,
+              Throughput: 125,
+            },
+          ]),
+          'modify-volume': '{}',
+        }[args[2]!]!;
+      }
       if (args[0] === 'aws') return JSON.stringify({ Account: account.aws });
       if (args.join(' ') === 'az account show --output json') {
         return JSON.stringify({ id: account.azure });
@@ -331,7 +353,8 @@ describe('install', () => {
   });
 
   it("runs install's steps in order, making each cloud's role through its CLI", async () => {
-    const { deps, calls, requests, lines, tokens, refreshable } = setUp();
+    const { deps, calls, commands, requests, lines, tokens, refreshable } =
+      setUp();
     const result = await install(asked, deps);
 
     expect(
@@ -385,6 +408,8 @@ describe('install', () => {
         allowPrivilegedJobs: false,
         minVmCount: 1,
         maxVmCount: 1,
+        // gp3's baseline 3,000 IOPS and 125 MiB/s.
+        osDiskTier: 'medium',
       }),
     ]);
     expect(result).toMatchObject({
@@ -403,6 +428,13 @@ describe('install', () => {
         'aws us-east-2 quota: 640 spot vCPUs (160 backmesh-4 jobs at once), 128 on-demand vCPUs (32 backmesh-4 jobs at once)',
         'Always on: 2 VMs that run backmesh (t3.large and t3.small) on aws us-east-2, about $86 a month with their disks and addresses.',
       ]),
+    );
+    // ...which the new control plane's disks then are.
+    expect(commands).toContainEqual(
+      'aws ec2 modify-volume --volume-id vol-api --iops 3000 --throughput 125 --region us-east-2 --output json',
+    );
+    expect(lines).toContain(
+      'Lowered vol-api from 8000 IOPS and 125 MiB/s to 3000 IOPS and 125 MiB/s.',
     );
     expect(lines).toContain(
       'Done. Use `runs-on: backmesh-4` (a 4-vCPU spot VM) in a workflow; other sizes: https://backmesh.com/labels/',
@@ -1091,7 +1123,7 @@ describe('install', () => {
 
   it('changes nothing on a re-run of the plan the listener already runs', async () => {
     const asked: string[] = [];
-    const { deps, calls, requests, lines } = setUp(
+    const { deps, calls, commands, requests, lines } = setUp(
       {
         env: OVERRIDE,
         pools: [control],
@@ -1132,6 +1164,8 @@ describe('install', () => {
     expect(lines).toContain(
       "No changes: acme's listener already runs this plan.",
     );
+    // Its disks are `upgrade`'s.
+    expect(commands.filter((c) => c.startsWith('aws ec2'))).toEqual([]);
   });
 
   it("rolls a re-run that only reorders a label's VM types, with no consent asked", async () => {
@@ -1760,6 +1794,14 @@ describe('install', () => {
     await install({ ...options, controlPlane: 'gcp:us-central1' }, gcp.deps);
     expect(gcp.calls).toContain(
       `credentials new ${BM.gcp} --provider gcp --gcloud-account ci@p1.iam.gserviceaccount.com --project-id p1 --generate`,
+    );
+    // Only AWS's disks have provisioned speed to lower.
+    expect(gcp.commands.filter((c) => c.startsWith('aws ec2'))).toEqual([]);
+    const pool = gcp.requests.find((r) =>
+      r.startsWith('POST /v1/node-pools '),
+    )!;
+    expect(JSON.parse(pool.slice(pool.indexOf('{')))).not.toHaveProperty(
+      'osDiskTier',
     );
   });
 
