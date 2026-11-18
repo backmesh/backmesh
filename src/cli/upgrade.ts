@@ -247,7 +247,7 @@ export async function upgrade(
   const read = [];
   const revived: string[] = [];
   for (const found of installation.orgs) {
-    const why = await stalled(found, exec);
+    const { why, read: first } = await stalled(found, exec);
     if (why && planOnly) {
       throw new UsageError(
         `${orgOfListener(found.name)}'s listener ${why}, so \`--plan\` works only after upgrade starts it again; run \`backmesh upgrade\`, which does that before it plans anything.`,
@@ -260,7 +260,8 @@ export async function upgrade(
     }
     const listener = why ? await revive(found, url, exec, deps) : found;
     if (why) revived.push(orgOfListener(found.name)!);
-    const running = await readListener(exec, listener).catch(() => undefined);
+    const running =
+      first ?? (await readListener(exec, listener).catch(() => undefined));
     if (!running) {
       throw new Error(
         `${orgOfListener(listener.name)}'s listener didn't answer, so upgrade can't read its install key. Run \`backmesh status\`, then upgrade again.`,
@@ -564,7 +565,10 @@ export async function upgrade(
     // install.ts's re-run has its own roll condition (no image change to
     // weigh, since it refuses a listener on another release first); keep
     // both in step (converge.ts).
+    // A listener left in standby by a move that stopped after its
+    // Deployment's delete takes jobs only once rolled without it.
     const roll =
+      running.standby ||
       !!apiToken ||
       installKey !== running.installKey ||
       running.image !== release.listenerImage ||
@@ -619,13 +623,17 @@ export async function upgrade(
 
 // Why an org's listener on its VM must start again before upgrade can read
 // it: its VM is gone, or it doesn't answer. A Deployment is read where it is.
-async function stalled(found: Listener, exec: AnycloudExec) {
+// The read, when it answered, is the loop's.
+async function stalled(
+  found: Listener,
+  exec: AnycloudExec,
+): Promise<{ why?: string; read?: Awaited<ReturnType<typeof readListener>> }> {
   const { vm } = found;
-  if (!vm || found.deployment) return undefined;
-  if (vm.lost) return `VM ${vm.id} is gone`;
+  if (!vm || found.deployment) return {};
+  if (vm.lost) return { why: `VM ${vm.id} is gone` };
   return readListener(exec, found).then(
-    () => undefined,
-    () => `on ${vm.id} isn't answering`,
+    (read) => ({ read }),
+    () => ({ why: `on ${vm.id} isn't answering` }),
   );
 }
 

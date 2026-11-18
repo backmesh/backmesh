@@ -121,13 +121,15 @@ const api = anycloudApi(
   },
 );
 
-// In standby, one read before `/status` answers, so it reports a refused
-// token.
+// In standby, one read before `/status` answers, so it reports a token the
+// control plane refuses, or any other failure to reach it.
 const standby = !!process.env[STANDBY_ENV];
 if (standby) {
   await api
     .listWorkloads({ query: { workloadType: 'vm', limit: '1' } })
-    .catch(() => undefined);
+    .catch((error: unknown) => {
+      refused ??= { since: new Date().toISOString(), error: String(error) };
+    });
 }
 // Loopback only: `backmesh status`, `upgrade` and `uninstall` reach it through
 // `anycloud exec` and `docker exec`. Up first, so they work while the App

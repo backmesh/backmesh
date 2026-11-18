@@ -922,6 +922,8 @@ async function currentListener(
     // sets or clears it.
     rotatingFrom: running.rotatingFrom,
     cacheCapGb: running.cacheCapGb,
+    // Left in standby by a move that didn't finish: a roll ends it.
+    standby: running.standby,
     routes,
     live,
   };
@@ -1331,7 +1333,8 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     // listener's Secret.
     if (
       finalRunners !== current.listener.runners ||
-      plan.cacheCapGb !== current.cacheCapGb
+      plan.cacheCapGb !== current.cacheCapGb ||
+      current.standby
     ) {
       const line = reorderedOnlyLine(
         undefined,

@@ -589,11 +589,9 @@ describe('upgrade', () => {
     const order = calls.filter((c) => /^(status|api upgrade|roll)/.test(c));
     // An older API reads nothing for this release's client until it moves.
     expect(order[0]).toBe('api upgrade');
-    // Every org is read before any roll; each roll is then read again.
+    // Every org is read once before any roll; each roll is then read again.
     expect(order.slice(1)).toEqual([
       `status ${VM.acme}`,
-      `status ${VM.acme}`,
-      `status ${VM.beta}`,
       `status ${VM.beta}`,
       ROLL,
       `status ${VM.acme}`,
@@ -1551,6 +1549,15 @@ describe('upgrade', () => {
       );
       expect(calls.filter((c) => c.startsWith('deployment'))).toEqual([]);
       expect(calls).not.toContain('node-pool delete np-1');
+    });
+
+    it('takes a listener a stopped move left in standby out of it, with nothing else to change', async () => {
+      const { deps, calls, hosts } = setUp({ ...current });
+      const acme = hosts.get(VM.acme!)!;
+      acme.env = { ...acme.env, BACKMESH_STANDBY: '1' };
+      await upgrade(deps);
+      expect(mutations(calls)).toEqual([ROLL]);
+      expect(acme.env).not.toHaveProperty('BACKMESH_STANDBY');
     });
 
     it('asks before moving several orgs, with the VMs’ total cost', async () => {

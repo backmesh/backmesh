@@ -518,6 +518,15 @@ describe('status', () => {
     );
   });
 
+  it('says a listener left in standby takes no jobs until `backmesh upgrade`', async () => {
+    const report = await setUp({
+      listener: probed(LISTENER.status, 'acme', { BACKMESH_STANDBY: '1' }),
+    }).read();
+    expect(report.warnings).toEqual([
+      "acme's listener is in standby and takes no jobs: its move off bm-control didn't finish. Run `backmesh upgrade`.",
+    ]);
+  });
+
   it('says a lost listener VM needs `backmesh upgrade`', async () => {
     const report = await setUp({ lost: ['backmesh-acme'] }).read();
     expect(report.warnings).toEqual([

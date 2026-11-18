@@ -714,6 +714,13 @@ describe('install', () => {
     await expect(
       install(options, setUp({ env: OVERRIDE, features: unreleased }).deps),
     ).rejects.toThrow('lacks release-1, c26, which');
+    // The listener's VM needs service tokens (anycloud phase 2a).
+    await expect(
+      install(
+        asked,
+        setUp({ features: { ...RELEASED, 'service-tokens': undefined } }).deps,
+      ),
+    ).rejects.toThrow('lacks service-tokens, which backmesh needs');
   });
 
   describe('prerequisites', () => {
@@ -1260,6 +1267,26 @@ describe('install', () => {
       'm8i.xlarge',
       'm7i.xlarge',
     ]);
+  });
+
+  it('rolls a listener a stopped move left in standby out of it on a re-run', async () => {
+    const { deps, calls, requests } = setUp(
+      {
+        env: OVERRIDE,
+        vms: [acmeVm],
+        hosted: true,
+        cacheBuckets: ['bm-cache-l8u5e-us-east-2'],
+      },
+      probe({ BACKMESH_STANDBY: '1' }),
+    );
+    await install(options, deps);
+    expect(calls).toContainEqual(`roll ${VM}`);
+    const secret = requests.find((r) =>
+      r.startsWith('PUT /v1/secrets/backmesh-acme '),
+    )!;
+    expect(JSON.parse(secret.split(' ')[2]!).values).not.toHaveProperty(
+      'BACKMESH_STANDBY',
+    );
   });
 
   it('changes the cache cap on a re-run: in the plan and its ID, then the Secret and a roll', async () => {

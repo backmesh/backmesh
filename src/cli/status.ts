@@ -47,6 +47,7 @@ import {
   API_TOKEN_ENV,
   LISTENER_IMAGE_ENV,
   RUNNER_GROUP_ENV,
+  STANDBY_ENV,
 } from '../listener/env.js';
 
 // The listener binds loopback only and its image has Node but no curl, so
@@ -117,6 +118,7 @@ export async function readListener(
       LISTENER_IMAGE_ENV,
       RUNNER_GROUP_ENV,
       API_TOKEN_ENV,
+      STANDBY_ENV,
     ],
   });
   return {
@@ -128,6 +130,9 @@ export async function readListener(
     runnerGroup: env[RUNNER_GROUP_ENV],
     // Its anycloud service token, absent before its VM.
     apiToken: env[API_TOKEN_ENV],
+    // Started in standby by a move off `bm-control` that didn't finish: it
+    // takes no jobs until a roll without it.
+    standby: !!env[STANDBY_ENV],
     status: listenerStatusSchema.parse(body),
     // The listener doesn't start without it.
     org: z.string().parse(env.ORG),
@@ -275,6 +280,15 @@ export async function readStatus({
     if (refused) {
       warnings.push(
         `${org}: the control plane has refused the listener's service token since ${minute(refused.since)}, so it can't start runners; a restore from a backup older than the token does this. Run \`backmesh upgrade\` to issue it a new one.`,
+      );
+    }
+    if (
+      'standby' in listener &&
+      listener.standby &&
+      !('deployment' in section)
+    ) {
+      warnings.push(
+        `${org}'s listener is in standby and takes no jobs: its move off ${CONTROL_POOL} didn't finish. Run \`backmesh upgrade\`.`,
       );
     }
     if ('error' in listener) {

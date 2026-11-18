@@ -28,6 +28,8 @@ const PINNED: Feature[] = [
   'c26',
   'role-connections',
   'role-apply',
+  // Each org's listener VM authenticates with one.
+  'service-tokens',
 ];
 
 export function checkPinned(version: string, features?: FeatureTable) {
