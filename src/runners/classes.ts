@@ -85,7 +85,10 @@ export interface CloudTarget {
    * regions are `RUNNER_REGIONS` (`regions.ts`), account-allowed.
    */
   region: string;
-  /** The anycloud connection the VM Jobs launch with. */
+  /**
+   * The anycloud connection the VM Jobs launch with, as the listener's
+   * routes record it: empty until install names it on the control plane.
+   */
   credentials: string;
 }
 

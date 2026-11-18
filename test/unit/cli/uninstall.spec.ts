@@ -12,9 +12,11 @@ import {
   type UninstallDeps,
   type UninstallOptions,
 } from '../../../src/cli/uninstall.js';
+import { connectionName } from '../../../src/cli/installation.js';
 import {
   fakeApi,
   fakeBinary,
+  fakeCloud,
   fakeOrg,
   fakeWorker,
   INSTALL_KEY,
@@ -71,6 +73,7 @@ function setUp({
   worker = fakeWorker(),
   github = fakeOrg(),
   runners = [] as string[],
+  cloud = fakeCloud(['anycloud-bm-gcp']),
 }: {
   url?: string;
   listener?: boolean;
@@ -95,6 +98,8 @@ function setUp({
   // Runner VM Jobs the drain left running: terminated, then released a
   // read later.
   runners?: string[];
+  // The user's cloud CLIs, with our CI's generated identities.
+  cloud?: ReturnType<typeof fakeCloud>;
 } = {}) {
   const deleted = new Set<string>();
   const phases = new Map<string, number>();
@@ -230,6 +235,11 @@ function setUp({
     env: { BACKMESH_ANYCLOUD_DIR: mkdtempSync(join(tmpdir(), 'backmesh-')) },
     run,
     runLong: run,
+    // In `calls` too, to order it against the binary's steps.
+    command: async (args) => {
+      calls.push(`cloud ${args.join(' ')}`);
+      return cloud.command(args);
+    },
     ui: {
       print: (line) => lines.push(line),
       ...(tty && {
@@ -349,12 +359,21 @@ describe('uninstall', () => {
     expect(lines.join('\n')).not.toContain('ghs_');
     expect(lines[0]).toMatch(/1 running job will fail/);
     // anycloud's delete keeps what install made in each cloud it connected:
-    // a role connection's setup, or our CI's generated identity.
-    expect(lines.filter((l) => / is left in /.test(l))).toEqual([
+    // a role connection's setup, which is printed, and our CI's generated
+    // identity, here from before 0.4.1, which uninstall deletes once its
+    // connection went with the control plane.
+    expect(lines).toContain(
       "aws's role connection setup is left in the account it ran in. It trusts only this control plane, which is gone; delete it in aws's console.",
-      expect.stringMatching(
-        /^gcp's identity anycloud-bm-gcp is left in your cloud[^]*gcloud iam service-accounts delete "\$SA" --project "\$PROJECT" --quiet$/,
-      ),
+    );
+    expect(lines).toContain(
+      "Deleted gcp's identity anycloud-bm-gcp, which install generated, from the project gcp's CLI is signed in to.",
+    );
+    const deletes = calls.filter((c) =>
+      /^cloud gcloud iam service-accounts delete|^cluster delete/.test(c),
+    );
+    expect(deletes).toEqual([
+      DELETE_HOSTED,
+      'cloud gcloud iam service-accounts delete anycloud-bm-gcp@p1.iam.gserviceaccount.com --project p1 --quiet',
     ]);
   });
 
@@ -595,11 +614,53 @@ describe('uninstall', () => {
     const ci = setUp({ answers: false });
     ci.deps.env.BACKMESH_UNSUPPORTED_CI_OVERRIDE = 'anycloud-ci';
     await uninstall(gone, ci.deps);
+    // Named for the control plane, and from before 0.4.1, and not deleted:
+    // it may still answer.
     expect(
-      ci.lines.filter((l) =>
-        / is left in your cloud, if install generated it/.test(l),
+      ci.lines
+        .filter((l) =>
+          / is left in your cloud, if install generated it/.test(l),
+        )
+        .map((l) => l.split(' ')[2]),
+    ).toEqual(
+      (['aws', 'gcp', 'azure'] as const).flatMap((cloud) => [
+        `anycloud-${connectionName(cloud, 'c1')}`,
+        `anycloud-bm-${cloud}`,
+      ]),
+    );
+    expect(ci.calls.some((c) => c.startsWith('cloud '))).toBe(false);
+
+    // Without the control plane's ID, its name is unknown.
+    const unknown = setUp({ url: 'http://localhost:8080' });
+    unknown.deps.env.BACKMESH_UNSUPPORTED_CI_OVERRIDE = 'anycloud-ci';
+    await uninstall(gone, unknown.deps);
+    expect(unknown.lines).toContain(
+      "aws's identity anycloud-bm-aws-<6 characters> is left in your cloud, if install generated it; delete it in aws's console.",
+    );
+  });
+
+  it("deletes our CI's identities after deleting a control plane that does not answer through the cloud CLI", async () => {
+    const names = (['aws', 'gcp', 'azure'] as const).map(
+      (cloud) => `anycloud-${connectionName(cloud, 'c1')}`,
+    );
+    const cloud = fakeCloud(names);
+    const { deps, calls, lines } = setUp({ answers: false, cloud });
+    deps.env.BACKMESH_UNSUPPORTED_CI_OVERRIDE = 'anycloud-ci';
+    await uninstall(
+      { ...scripted, controlPlane: 'aws:us-east-2', confirm: 'c1' },
+      deps,
+    );
+    expect(cloud.live.size).toBe(0);
+    // One from before 0.4.1 is named, not deleted: it may be another's.
+    expect(lines).toContainEqual(
+      expect.stringMatching(
+        /^aws's identity anycloud-bm-aws is left in your cloud, if install generated it\. [^]*--user-name anycloud-bm-aws$/,
       ),
-    ).toHaveLength(3);
+    );
+    expect(
+      calls.findIndex((c) => c.startsWith('cloud aws iam delete-user ')),
+    ).toBeGreaterThan(calls.findIndex((c) => c.includes('--delete-vms')));
+    expect(lines.filter((l) => l.startsWith('Deleted '))).toHaveLength(3);
   });
 
   it('asks before a GitHub-only uninstall at a terminal', async () => {
@@ -1103,27 +1164,34 @@ describe('uninstall', () => {
     expect(
       (await leftovers({})).every((l) => /role connection setup/.test(l)),
     ).toBe(true);
-    const ci = await leftovers({
-      BACKMESH_UNSUPPORTED_CI_OVERRIDE: 'anycloud-ci',
-    });
-    expect(ci.every((l) => / is left in your cloud/.test(l))).toBe(true);
-    expect(ci).toHaveLength(3);
+    // Our CI's, named for the control plane, are deleted: here none is.
+    const { deps, lines } = setUp({ hostedList: false });
+    deps.env.BACKMESH_UNSUPPORTED_CI_OVERRIDE = 'anycloud-ci';
+    await uninstall(scripted, deps);
+    expect(lines.filter((l) => / isn't in the /.test(l))).toEqual(
+      (['aws', 'gcp', 'azure'] as const).map((cloud) =>
+        expect.stringMatching(
+          `^${cloud}'s identity anycloud-${connectionName(cloud, 'c1')} isn't in the`,
+        ),
+      ),
+    );
   });
 
   it("removes each identity's grants before the identity", () => {
-    const gcp = leftoverIdentity('gcp').split('\n').slice(1);
+    const gcp = leftoverIdentity('gcp', 'bm-gcp').split('\n').slice(1);
     expect(gcp).toHaveLength(1);
     expect(gcp[0]).toMatch(
       /SA=anycloud-bm-gcp@\$PROJECT\.iam\.gserviceaccount\.com; for role in roles\/compute\.instanceAdmin\.v1 roles\/compute\.securityAdmin roles\/storage\.admin; do gcloud projects remove-iam-policy-binding .*; done; gcloud iam service-accounts delete "\$SA"/,
     );
-    const azure = leftoverIdentity('azure').split('\n').slice(1);
+    const azure = leftoverIdentity('azure', 'bm-azure').split('\n').slice(1);
     expect(azure[0]).toMatch(
       /az ad app list --display-name anycloud-bm-azure --query .*; do az role assignment delete --assignee "\$app" --scope .*; az ad app delete --id "\$app"; done$/,
     );
     // One line each that parses, with nothing to fill in.
     for (const cloud of ['aws', 'gcp', 'azure'] as const) {
-      expect(leftoverIdentity(cloud)).not.toMatch(/<|>/);
-      for (const line of leftoverIdentity(cloud).split('\n').slice(1)) {
+      const left = leftoverIdentity(cloud, connectionName(cloud, 'c1'));
+      expect(left).not.toMatch(/<|>/);
+      for (const line of left.split('\n').slice(1)) {
         expect(() =>
           execFileSync('bash', ['-n', '-c', line.trim()]),
         ).not.toThrow();

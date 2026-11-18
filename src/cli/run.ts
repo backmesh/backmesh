@@ -186,6 +186,7 @@ function realUninstallDeps(io: CliIo, json: boolean): UninstallDeps {
     env: io.env,
     run: runAnycloud,
     runLong: anycloudBinary(0),
+    command: cloudCommand,
     ui: realUi(io, json),
   };
 }

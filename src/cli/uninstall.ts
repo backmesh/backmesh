@@ -25,6 +25,7 @@ import { removeFromGitHub } from './cleanup.js';
 import { drainStatusSchema } from '../listener/drain.js';
 import { TERMINAL } from '../listener/runner-jobs.js';
 import { CLOUDS, type Cloud } from '../runners/classes.js';
+import type { RunCommand } from '../runners/regions.js';
 import {
   CLUSTER,
   deleteIdentity,
@@ -33,10 +34,13 @@ import {
   SIGNED_IN,
   type InstallUi,
 } from './install.js';
+import { removeIdentity } from './identity.js';
 import { UsageError } from './errors.js';
 import { signInAgain } from './github-sign-in.js';
 import {
   clusterIdOf,
+  connectionName,
+  installConnection,
   installTag,
   listenerName,
   orgOfListener,
@@ -63,6 +67,8 @@ export interface UninstallDeps {
   run: RunAnycloud;
   // For `cluster delete`, which waits until the installation is gone.
   runLong: RunAnycloud;
+  // The user's cloud CLIs, which delete our CI's generated identities.
+  command: RunCommand;
   // `ask` reads a typed line; both are undefined without a TTY.
   ui: InstallUi;
   api?: typeof anycloudApi;
@@ -100,9 +106,18 @@ async function poll<T>(
 // What install left in each cloud: our CI's generated identity, whose
 // connection is only anycloud's record of it (`credentials-domain.ts:294-303`
 // at v0.1.72), or a role connection's setup, which trusts only the deleted
-// control plane's issuer.
-export const leftoverIdentity = (cloud: Cloud) =>
-  `${cloud}'s identity ${generatedIdentity(cloud)} is left in your cloud, if install generated it. Delete it, signed in to the ${SIGNED_IN[cloud]} install used, with:\n${deleteIdentity(cloud)}`;
+// control plane's issuer. The identity's name is its connection's, unknown
+// without the control plane's ID.
+export interface Leftover {
+  kind: 'key' | 'role';
+  connection?: string;
+  // Not read from the control plane's connections (`everyCloud`).
+  guessed?: boolean;
+}
+export const leftoverIdentity = (cloud: Cloud, connection?: string) =>
+  connection
+    ? `${cloud}'s identity ${generatedIdentity(connection)} is left in your cloud, if install generated it. Delete it, signed in to the ${SIGNED_IN[cloud]} install used, with:\n${deleteIdentity(cloud, connection)}`
+    : `${cloud}'s identity ${generatedIdentity(`bm-${cloud}`)}-<6 characters> is left in your cloud, if install generated it; delete it in ${cloud}'s console.`;
 export const leftoverRole = (cloud: Cloud, maybe = false) =>
   `${cloud}'s role connection setup is left in the ${SIGNED_IN[cloud]} it ran in${maybe ? ', if install connected it' : ''}. It trusts only this control plane, which is gone; delete it in ${cloud}'s console.`;
 
@@ -142,19 +157,39 @@ function printRemaining(out: string, print: (line: string) => void) {
   print(`Still in your cloud, to delete in its console: ${what.join(', ')}.`);
 }
 
-// The hosted API's connections: a `bm-<cloud>` one is install's.
-const listConnections = async (run: RunAnycloud) => {
+// The hosted API's connections that install made (`installConnection`).
+const listConnections = async (run: RunAnycloud, clusterId: string) => {
   const listed = JSON.parse(await run(['credentials', 'list', '--json'])) as {
     name: string;
     kind?: 'key' | 'role';
   }[];
   return new Map(
     CLOUDS.flatMap((cloud) => {
-      const found = listed.find(({ name }) => name === `bm-${cloud}`);
-      return found ? [[cloud, found.kind ?? 'key'] as const] : [];
+      const found = installConnection(cloud, clusterId, listed);
+      return found
+        ? [[cloud, { kind: found.kind ?? 'key', connection: found.name }]]
+        : [];
     }),
   );
 };
+
+// Without the connections, every cloud's: our CI's generated identity, named
+// for the control plane when its ID is known, or a customer's role setup.
+// One from before 0.4.1, `anycloud-bm-<cloud>`, is printed too: in an
+// account several installations share, it may be another's.
+const everyCloud = (env: NodeJS.ProcessEnv, clusterId?: string) =>
+  new Map<Cloud, Leftover>(
+    CLOUDS.map((cloud) => [
+      cloud,
+      readOverride(env)
+        ? {
+            kind: 'key',
+            connection: clusterId && connectionName(cloud, clusterId),
+            guessed: true,
+          }
+        : { kind: 'role' },
+    ]),
+  );
 
 // The bucket goes only with the user's yes at a TTY or the flag, and
 // then only with the cluster's name or ID, typed or as `--confirm`.
@@ -268,7 +303,7 @@ interface ControlPlane {
   // Whether the control plane goes: no `--org`, or the last org's.
   whole: boolean;
   // What install left in each cloud, to print.
-  leftovers: Map<Cloud, 'key' | 'role'>;
+  leftovers: Map<Cloud, Leftover>;
   deleteBucket: boolean;
 }
 
@@ -380,18 +415,12 @@ async function readControlPlane(
         )
         .map(({ name }) => orgOfListener(name)!);
   // The hosted API's connections name the clouds; they go with it at step 4.
-  // Without them every cloud's identity cleanup prints: a command for an
-  // identity that doesn't exist fails without changing anything.
+  // Without them every cloud's identity cleanup runs: one that doesn't
+  // exist is only reported.
   const leftovers = !whole
-    ? new Map()
-    : await listConnections(run).catch(
-        () =>
-          new Map(
-            CLOUDS.map(
-              (cloud) =>
-                [cloud, readOverride(deps.env) ? 'key' : 'role'] as const,
-            ),
-          ),
+    ? new Map<Cloud, Leftover>()
+    : await listConnections(run, clusterId).catch(() =>
+        everyCloud(deps.env, clusterId),
       );
   // Any other Deployment there, such as an older listener, could register
   // scale sets again during the GitHub cleanup. Managed ones are anycloud's.
@@ -698,19 +727,20 @@ export async function uninstall(
     );
   }
   // Without the control plane's connections, what install may have left:
-  // our CI's generated identities, or a customer's role setups.
+  // our CI's generated identities, or a customer's role setups. A generated
+  // identity goes once its connection went with the control plane; one that
+  // may still answer keeps it.
   const maybe = !plane;
-  const leftovers =
-    plane?.leftovers ??
-    new Map(
-      CLOUDS.map(
-        (cloud) => [cloud, readOverride(deps.env) ? 'key' : 'role'] as const,
-      ),
-    );
-  for (const [cloud, kind] of leftovers) {
+  const leftovers = plane?.leftovers ?? everyCloud(deps.env, clusterId);
+  for (const [cloud, { kind, connection, guessed }] of leftovers) {
     ui.print(
-      kind === 'role' ? leftoverRole(cloud, maybe) : leftoverIdentity(cloud),
+      kind === 'role'
+        ? leftoverRole(cloud, maybe)
+        : connection && (plane || seedDelete)
+          ? await removeIdentity(cloud, connection, deps.command)
+          : leftoverIdentity(cloud, connection),
     );
+    if (guessed) ui.print(leftoverIdentity(cloud, `bm-${cloud}`));
   }
   if ((plane && !plane.deleteBucket) || (seedDelete && !deleteBucket)) {
     ui.print(

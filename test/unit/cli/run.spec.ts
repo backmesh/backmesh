@@ -58,6 +58,7 @@ async function run(...argv: string[]) {
       env: {},
       run: never,
       runLong: never,
+      command: never,
       ui: { print: () => undefined },
     }),
     streamLogs,

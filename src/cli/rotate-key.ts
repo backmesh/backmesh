@@ -147,7 +147,7 @@ export async function rotateKey(
     );
   }
   const worker: WorkerDeps = workerDeps(deps, print);
-  const orgId = running.orgId || (await readOrgId(org, deps.fetch));
+  const orgId = running.orgId || (await readOrgId(org, deps.fetch, deps.env));
   const control = anycloudControl(api, deps.run);
   const base = {
     name,

@@ -406,3 +406,74 @@ export const versionMismatch = (client: string, served: string) =>
     },
     { status: 400 },
   );
+
+// The user's cloud CLIs, holding anycloud's generated identities by name,
+// each with an access key and its policy or grants, and marked as
+// `--generate` marks them unless `unmarked`. A command naming `refuse` is
+// denied.
+export function fakeCloud(
+  names: string[],
+  { unmarked = false, refuse }: { unmarked?: boolean; refuse?: string } = {},
+) {
+  const calls: string[] = [];
+  const live = new Set(names);
+  const absent = (line: string, why: string) =>
+    new Error(`Command failed: ${line}\n${why}`);
+  const command = async ([cli, ...args]: string[]) => {
+    const line = [cli, ...args].join(' ');
+    calls.push(line);
+    if (refuse && line.includes(refuse)) {
+      throw new Error(`Command failed: ${line}\nAccessDenied: not allowed`);
+    }
+    if (cli === 'aws') {
+      const [, verb, , name = ''] = args;
+      if (!live.has(name)) {
+        throw absent(line, 'An error occurred (NoSuchEntity) when calling');
+      }
+      if (verb === 'delete-user') live.delete(name);
+      return JSON.stringify(
+        {
+          'list-user-tags': {
+            Tags: unmarked ? [] : [{ Key: 'anycloud:generation-id' }],
+          },
+          'list-access-keys': { AccessKeyMetadata: [{ AccessKeyId: 'AK1' }] },
+          'list-user-policies': { PolicyNames: ['AnycloudAccess'] },
+          'list-attached-user-policies': { AttachedPolicies: [] },
+        }[verb!] ?? {},
+      );
+    }
+    if (cli === 'gcloud') {
+      if (args[0] === 'config') return 'p1\n';
+      if (args[0] === 'projects') return '';
+      const name = args[3]!.split('@')[0]!;
+      if (!live.has(name)) throw absent(line, 'NOT_FOUND: Unknown');
+      if (args[2] === 'delete') live.delete(name);
+      return JSON.stringify({
+        description: unmarked ? 'mine' : 'AnyCloud credential generation 1',
+      });
+    }
+    if (args[0] === 'account') return 'sub-1\n';
+    if (args[0] === 'role') return '';
+    if (args[2] === 'delete') {
+      live.delete(args[4]!.replace(/^app-/, ''));
+      return '';
+    }
+    const name = args[4]!;
+    return JSON.stringify(
+      live.has(name)
+        ? [
+            {
+              appId: `app-${name}`,
+              tags: unmarked
+                ? []
+                : [
+                    'AnycloudManaged',
+                    `AnycloudCredentialName:${name.replace(/^anycloud-/, '')}`,
+                  ],
+            },
+          ]
+        : [],
+    );
+  };
+  return { command, calls, live };
+}

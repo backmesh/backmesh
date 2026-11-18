@@ -24,7 +24,7 @@ import {
 import type { InstallPlan } from '../../../src/cli/plan.js';
 import { PlanChanged, UsageError } from '../../../src/cli/errors.js';
 import { ANYCLOUD_VERSION } from '../../../src/anycloud/contract.generated.js';
-import { installTag } from '../../../src/cli/installation.js';
+import { connectionName, installTag } from '../../../src/cli/installation.js';
 import { parseRoutes } from '../../../src/listener/routes.js';
 import { leftoverIdentity } from '../../../src/cli/uninstall.js';
 import { fakeGitHub, json } from '../github/fake-github.js';
@@ -53,6 +53,12 @@ const images = {
   listenerImage: `ghcr.io/backmesh/backmesh-listener@sha256:${'b'.repeat(64)}`,
 };
 const HOSTED = 'https://c1.anycloud.sh';
+// Each cloud's connection on HOSTED's control plane, `c1`.
+const BM = {
+  aws: connectionName('aws', 'c1'),
+  gcp: connectionName('gcp', 'c1'),
+  azure: connectionName('azure', 'c1'),
+};
 // backmesh's anycloud state, one per machine.
 const stateDir = () => mkdtempSync(join(tmpdir(), 'backmesh-install-'));
 const RUNNING = { state: 'running', managementApiUrl: HOSTED, lastError: null };
@@ -104,7 +110,8 @@ function setUp(
     answers = [] as string[],
     cacheBuckets,
   }: {
-    // bm-aws's cache buckets, when a previous install made them.
+    // bm-aws's cache buckets, when a previous install made them: the
+    // connection an installation before 0.4.1 named, which `RUNNERS` records.
     cacheBuckets?: string[];
     env?: NodeJS.ProcessEnv;
     pools?: object[];
@@ -141,9 +148,9 @@ function setUp(
     // As `--apply --json` answers once the role is made and saved.
     ...Object.fromEntries(
       (['aws', 'gcp', 'azure'] as const).map((cloud) => [
-        `credentials new bm-${cloud} --provider ${cloud} --role --apply`,
+        `credentials new ${BM[cloud]} --provider ${cloud} --role --apply`,
         JSON.stringify({
-          name: `bm-${cloud}`,
+          name: BM[cloud],
           cloudProvider: cloud.toUpperCase(),
           kind: 'role',
           account: roleIn ?? account[cloud],
@@ -201,7 +208,7 @@ function setUp(
     },
     'POST /v1/node-pools': (body: string) => {
       const pool = JSON.parse(body) as { credentialName: string };
-      const cloudProvider = { 'bm-aws': 'AWS', 'bm-gcp': 'GCP' }[
+      const cloudProvider = { [BM.aws]: 'AWS', [BM.gcp]: 'GCP' }[
         pool.credentialName
       ];
       created.push({ ...pool, cloudProvider, state: 'provisioning' });
@@ -336,10 +343,10 @@ describe('install', () => {
       'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --json',
       `api use ${HOSTED}`,
       // The role's trust names the hosted API, so it comes after create.
-      'credentials new bm-aws --provider aws --role --apply --json',
+      `credentials new ${BM.aws} --provider aws --role --apply --json`,
       'api access add --service-account backmesh-acme',
       expect.stringMatching(
-        /^deployment create backmesh-acme ghcr\.io\/backmesh\/backmesh-listener@sha256:b+ --node-pool bm-control --secret backmesh-acme -e BACKMESH_INSTALL=[a-z0-9]{5} --wait$/,
+        /^deployment create backmesh-acme ghcr\.io\/backmesh\/backmesh-listener@sha256:b+ --node-pool bm-control --cpus 0\.5 --secret backmesh-acme -e BACKMESH_INSTALL=[a-z0-9]{5} --wait$/,
       ),
     ]);
     // The org, runner image and classes are in a Secret that `upgrade` can
@@ -359,12 +366,12 @@ describe('install', () => {
     // The cache bucket for the runner region, checked with a test mint.
     expect(requests).toContainEqual(
       expect.stringMatching(
-        /^PUT \/v1\/credentials\/bm-aws\/buckets\/bm-cache-[a-z0-9]{5}-us-east-2\?region=us-east-2$/,
+        /^PUT \/v1\/credentials\/bm-aws-lz9d56\/buckets\/bm-cache-[a-z0-9]{5}-us-east-2\?region=us-east-2$/,
       ),
     );
     expect(requests).toContainEqual(
       expect.stringMatching(
-        /^POST \/v1\/credentials\/bm-aws\/storage-tokens\?region=us-east-2 /,
+        /^POST \/v1\/credentials\/bm-aws-lz9d56\/storage-tokens\?region=us-east-2 /,
       ),
     );
     // bm-control is the only pool: runners are VM Jobs.
@@ -415,7 +422,7 @@ describe('install', () => {
       calls.filter((c) => /^(cluster|credentials new|deployment)/.test(c)),
     ).toEqual([
       'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --json',
-      'credentials new bm-aws --provider aws --profile default --account-id 123456789012 --generate',
+      `credentials new ${BM.aws} --provider aws --profile default --account-id 123456789012 --generate`,
       expect.stringMatching(
         /-e BACKMESH_UNSUPPORTED_CI_OVERRIDE=anycloud-ci --wait$/,
       ),
@@ -429,6 +436,13 @@ describe('install', () => {
     );
     await install(asked, reused.deps);
     expect(reused.calls.some((c) => c.includes('--role'))).toBe(false);
+    // An installation before 0.4.1 keeps its `bm-<cloud>` connection.
+    const pool = reused.requests.find((r) =>
+      r.startsWith('POST /v1/node-pools '),
+    )!;
+    expect(JSON.parse(pool.slice(pool.indexOf('{')))).toMatchObject({
+      credentialName: 'bm-aws',
+    });
 
     // anycloud's sign-in failures: a signed-out CLI's actionRequired, and a
     // typed refusal.
@@ -481,7 +495,7 @@ describe('install', () => {
       await install({ ...opts, planId }, deps);
       expect(calls).toContain(
         [
-          `credentials new bm-${cloud} --provider ${cloud} --role --apply`,
+          `credentials new ${BM[cloud]} --provider ${cloud} --role --apply`,
           ...flags,
           '--json',
         ].join(' '),
@@ -517,7 +531,7 @@ describe('install', () => {
     await expect(install(asked, deps)).rejects.toThrow(
       "aws's CLI made the role in account 210987654321, not 123456789012, which install read and the plan names. The connection is removed. Delete the CloudFormation stack anycloud-role-c1-anycloud-sh it left in account 210987654321 (us-east-2), sign aws in to 123456789012, and run install again.",
     );
-    expect(calls).toContain('credentials delete bm-aws');
+    expect(calls).toContain(`credentials delete ${BM.aws}`);
     expect(calls.some((c) => c.startsWith('api access add'))).toBe(false);
   });
   it("removes a saved role connection in another account than the plan's", async () => {
@@ -552,7 +566,7 @@ describe('install', () => {
       return run(args);
     };
     await expect(install(asked, deps)).rejects.toThrow(
-      "aws's CLI made the role in account 210987654321, not 123456789012, which install read and the plan names. Removing the connection bm-aws failed, so run install again to remove it.",
+      `aws's CLI made the role in account 210987654321, not 123456789012, which install read and the plan names. Removing the connection ${BM.aws} failed, so run install again to remove it.`,
     );
   });
 
@@ -591,7 +605,7 @@ describe('install', () => {
       code: 'l4',
       cloud: 'aws',
       region: 'us-east-2',
-      credentials: 'bm-aws',
+      credentials: BM.aws,
       vcpus: 4,
       spot: false,
       kvm: true,
@@ -764,7 +778,7 @@ describe('install', () => {
         };
         await expect(install(asked, deps)).resolves.toBeDefined();
         const want = region ? { AWS_REGION: region } : {};
-        expect(envs.get('credentials new bm-aws')).toEqual(want);
+        expect(envs.get(`credentials new ${BM.aws}`)).toEqual(want);
         expect(envs.get('aws sts get-caller-identity')).toEqual(want);
         // The user's AWS config isn't read or changed.
         expect(
@@ -986,7 +1000,7 @@ describe('install', () => {
       // The joining org gets its own cache bucket, and nothing else.
       expect(requests.filter((r) => r.startsWith('POST'))).toEqual([
         expect.stringMatching(
-          /^POST \/v1\/credentials\/bm-aws\/storage-tokens/,
+          /^POST \/v1\/credentials\/bm-aws-lz9d56\/storage-tokens/,
         ),
       ]);
       expect(calls.filter((c) => /^(api access|deployment)/.test(c))).toEqual([
@@ -1106,6 +1120,13 @@ describe('install', () => {
     await install({ ...options, yes: false }, deps);
     // Nothing to agree to, so nothing is asked.
     expect(asked).toEqual([]);
+    // The routes' `bm-aws`, from before 0.4.1, is the connection install
+    // keeps, here made again since the hosted API lists none.
+    expect(
+      calls
+        .filter((c) => c.startsWith('credentials new'))
+        .map((c) => c.split(' ')[2]),
+    ).toEqual(['bm-aws']);
     expect(requests.filter((r) => /^(POST|PUT)/.test(r))).toEqual([]);
     expect(calls.some((c) => c.startsWith('deployment'))).toBe(false);
     expect(lines).toContain(
@@ -1337,7 +1358,7 @@ describe('install', () => {
       expect.arrayContaining(['backmesh-4', 'backmesh-gcp-4']),
     );
     expect(calls).toContain(
-      `deployment upgrade backmesh-acme --image ${images.listenerImage} --secret backmesh-acme --wait`,
+      `deployment upgrade backmesh-acme --image ${images.listenerImage} --secret backmesh-acme --cpus 0.5 --wait`,
     );
     expect(calls.some((c) => c.startsWith('deployment create'))).toBe(false);
     expect(lines).toContain("Rolling acme's listener with the new settings.");
@@ -1370,7 +1391,8 @@ describe('install', () => {
     expect(calls).toContain(`api use ${HOSTED}`);
     expect(
       calls.some(
-        (c) => c.includes('credentials new bm-gcp') && c.includes('--generate'),
+        (c) =>
+          c.includes(`credentials new ${BM.gcp}`) && c.includes('--generate'),
       ),
     ).toBe(true);
     // The runners still rolled with gcp added.
@@ -1390,7 +1412,7 @@ describe('install', () => {
   it("connects a reused control plane's cloud when its bm-control pool is still missing", async () => {
     // A first install whose `cluster create` finished but whose aws role
     // connection failed: the API answers and its record is named `backmesh`,
-    // but `bm-aws` and `bm-control` don't exist. The re-run reuses the
+    // but aws's connection and `bm-control` don't exist. The re-run reuses the
     // cluster, yet still connects aws, since step 7 creates `bm-control`
     // with that connection.
     const binary = { 'vm-types gcp us-east4': JSON.stringify(CATALOG.gcp) };
@@ -1411,13 +1433,13 @@ describe('install', () => {
     await install({ ...options, runners: ['gcp'] }, deps);
 
     expect(calls.some((c) => c.startsWith('cluster create'))).toBe(false);
-    expect(calls.some((c) => c.startsWith('credentials new bm-aws'))).toBe(
+    expect(calls.some((c) => c.startsWith(`credentials new ${BM.aws}`))).toBe(
       true,
     );
     const pool = requests.find((r) => r.startsWith('POST /v1/node-pools '))!;
     expect(JSON.parse(pool.slice(pool.indexOf('{')))).toMatchObject({
       name: 'bm-control',
-      credentialName: 'bm-aws',
+      credentialName: BM.aws,
       region: 'us-east-2',
     });
   });
@@ -1722,7 +1744,7 @@ describe('install', () => {
     const aws = setUp({ env: { ...OVERRIDE, AWS_PROFILE: 'ci' } });
     await install(options, aws.deps);
     expect(aws.calls).toContain(
-      'credentials new bm-aws --provider aws --profile ci --account-id 123456789012 --generate',
+      `credentials new ${BM.aws} --provider aws --profile ci --account-id 123456789012 --generate`,
     );
 
     const gcp = setUp(
@@ -1737,17 +1759,16 @@ describe('install', () => {
       })[args.join(' ')] ?? command(args);
     await install({ ...options, controlPlane: 'gcp:us-central1' }, gcp.deps);
     expect(gcp.calls).toContain(
-      'credentials new bm-gcp --provider gcp --gcloud-account ci@p1.iam.gserviceaccount.com --project-id p1 --generate',
+      `credentials new ${BM.gcp} --provider gcp --gcloud-account ci@p1.iam.gserviceaccount.com --project-id p1 --generate`,
     );
   });
 
   // anycloud 0.1.73's refusals: its own for AWS and Azure, and the IAM
   // API's 409 for GCP, after `credentials new`'s prefix.
   const EXISTS = {
-    aws: 'AWS user anycloud-bm-aws already exists; select a new credential name.',
-    gcp: 'GCP request failed (HTTP 409, ALREADY_EXISTS). Check the selected operator, project, enabled APIs, and permissions. Inspect GCP project p1, service account anycloud-bm-gcp@p1.iam.gserviceaccount.com, invocation 1 (unique ID unknown) for manual reconciliation; resources were retained and no uncertain mutation was retried.',
-    azure:
-      'Azure identity "anycloud-bm-azure" already exists. Please use a different name or delete every matching application and service principal.',
+    aws: `AWS user anycloud-${BM.aws} already exists; select a new credential name.`,
+    gcp: `GCP request failed (HTTP 409, ALREADY_EXISTS). Check the selected operator, project, enabled APIs, and permissions. Inspect GCP project p1, service account anycloud-${BM.gcp}@p1.iam.gserviceaccount.com, invocation 1 (unique ID unknown) for manual reconciliation; resources were retained and no uncertain mutation was retried.`,
+    azure: `Azure identity "anycloud-${BM.azure}" already exists. Please use a different name or delete every matching application and service principal.`,
   };
   it.each(['aws', 'gcp', 'azure'] as const)(
     "stops over an earlier installation's %s identity, with what deletes it",
@@ -1778,11 +1799,13 @@ describe('install', () => {
         deps,
       ).catch((e: Error) => e);
       expect(String(error)).toContain(
-        `${cloud}'s identity anycloud-bm-${cloud} is left from an earlier installation`,
+        `${cloud}'s identity anycloud-${BM[cloud]} is left from an earlier install on this control plane`,
       );
       // Uninstall's command.
       const commands = (error as Error).message.split('\n').slice(1);
-      expect(commands).toEqual(leftoverIdentity(cloud).split('\n').slice(1));
+      expect(commands).toEqual(
+        leftoverIdentity(cloud, BM[cloud]).split('\n').slice(1),
+      );
       expect(commands).toHaveLength(1);
     },
   );
@@ -2072,7 +2095,7 @@ describe('install', () => {
     expect(parseControlPlane('gcp:us-central1')).toEqual({
       cloud: 'gcp',
       region: 'us-central1',
-      credentials: 'bm-gcp',
+      credentials: '',
     });
     for (const bad of ['aws', 'aws:', 'aws:us-east-1,us-east-2', 'a:b:c']) {
       expect(() => parseControlPlane(bad)).toThrow(UsageError);
@@ -2086,12 +2109,12 @@ describe('install', () => {
     const controlPlane = { cloud: 'aws', region: 'us-east-2' } as const;
     // None: the control plane's cloud, with its default regions.
     expect(parseRunners([], controlPlane)).toEqual([
-      { cloud: 'aws', region: 'us-east-2', credentials: 'bm-aws' },
+      { cloud: 'aws', region: 'us-east-2', credentials: '' },
     ]);
     expect(parseRunners(['aws', 'gcp', 'azure'], controlPlane)).toEqual([
-      { cloud: 'aws', region: 'us-east-2', credentials: 'bm-aws' },
-      { cloud: 'gcp', region: 'us-east4', credentials: 'bm-gcp' },
-      { cloud: 'azure', region: 'eastus', credentials: 'bm-azure' },
+      { cloud: 'aws', region: 'us-east-2', credentials: '' },
+      { cloud: 'gcp', region: 'us-east4', credentials: '' },
+      { cloud: 'azure', region: 'eastus', credentials: '' },
     ]);
     expect(() => parseRunners(['oracle'], controlPlane)).toThrow(
       'expected one of aws, gcp, azure',
@@ -2252,7 +2275,7 @@ describe('install', () => {
       calls
         .filter((c) => c.startsWith('credentials new'))
         .map((c) => c.split(' ')[2]),
-    ).toEqual(['bm-aws', 'bm-gcp']);
+    ).toEqual([BM.aws, BM.gcp]);
     const secret = requests.find((r) =>
       r.startsWith('PUT /v1/secrets/backmesh-acme '),
     )!;
