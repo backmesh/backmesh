@@ -29,8 +29,7 @@ GitHub Actions runners.
 
 **How does backmesh compare with GitHub-hosted runners?** A workflow changes
 only its `runs-on`. Its jobs run on spot VMs in your accounts. In our [build
-benchmarks](/#benchmarks), builds ran up to 2× faster at up to a fifth of the
-cost, and your cloud credits apply. Each job waits for its VM to boot, and only
+benchmarks](/benchmarks/), builds ran up to 2× faster and 5× cheaper, and your cloud credits apply. Each job waits for its VM to boot, and only
 Linux x86-64 jobs in private repositories can use the runners.
 
 **Which clouds does backmesh run on?** AWS, Google Cloud (GCP) and Azure. One installation can use

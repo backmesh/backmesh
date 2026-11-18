@@ -159,7 +159,7 @@ files['apple-touch-icon.png'] = png(
 // The OG image, 1200 x 630: the lockup, the page's headline and lede, and
 // the agent prompt under a hairline, as the page sets them.
 function og() {
-  const head = ['Up to 2× faster builds', 'at up to a fifth of the cost.']
+  const head = ['Up to 2× faster,', '5× cheaper builds.']
     .map(
       (line, i) =>
         outline(sans, line, 82, 80, 278 + i * 88, {

@@ -30,34 +30,39 @@ import {
 const title =
   'backmesh: Free, open-source GitHub Actions runners in your AWS, GCP or Azure';
 const description =
-  'Free and open source (Apache-2.0). Self-hosted GitHub Actions runners on spot VMs in your AWS, GCP or Azure account: up to 2× faster builds at up to a fifth of the cost of GitHub-hosted runners in our benchmarks. Your cloud bills you, so its credits apply.';
+  'Free and open source (Apache-2.0). Self-hosted GitHub Actions runners on spot VMs in your AWS, GCP or Azure account: up to 2× faster, 5× cheaper builds than GitHub-hosted runners in our benchmarks. Your cloud bills you, so its credits apply.';
 const og = new URL('/brand/og.png', Astro.site).href;
 
 // Build benchmarks, 2026-11-18: medians of 5 rounds each, backmesh-4 against
-// GitHub's ubuntu-latest (benchmarks/builds/README.md has the method).
-const BENCH_URL =
-  'https://github.com/backmesh/backmesh/tree/main/benchmarks/builds';
+// GitHub's ubuntu-latest (/benchmarks/ has the method and the runs). Each
+// card's numbers link to its row there.
 const benchmarks = [
   {
+    id: 'docker',
     workload: 'Docker build',
     project: 'grafana/k6 v0.54.0 image',
     secs: [71, 148],
+    wait: 48,
     cost: ['$0.0032', '$0.018'],
     faster: '2.1×',
     cheaper: '5.6×',
   },
   {
+    id: 'rust',
     workload: 'Rust',
     project: 'ripgrep 14.1.1, cargo build --release',
     secs: [49, 70],
+    wait: 50,
     cost: ['$0.0027', '$0.012'],
     faster: '1.4×',
     cheaper: '4.4×',
   },
   {
+    id: 'typescript',
     workload: 'TypeScript',
     project: 'TypeScript v5.6.3, npm ci and hereby local',
     secs: [35, 56],
+    wait: 43,
     cost: ['$0.0021', '$0.006'],
     faster: '1.6×',
     cheaper: '2.9×',
@@ -284,7 +289,7 @@ const jsonLd = {
 
     <main>
       <section class="wrap hero">
-        <h1>Up to 2× faster builds at up to a fifth of the cost.</h1>
+        <h1>Up to 2× faster, 5×&nbsp;cheaper builds.</h1>
         <div class="hero-figure"><HeroDiagram /></div>
         <div class="hero-body">
           <p class="sub">
@@ -316,67 +321,37 @@ const jsonLd = {
         </p>
         <ul class="plans bench">
           {
-            benchmarks.map(({ workload, project, secs, cost, faster, cheaper }) => (
-              <li>
-                <b>{workload}</b>
-                <strong>
-                  {secs[0]}<span aria-hidden="true"> s</span><span class="sr-only"> seconds</span>
-                </strong>
-                <span class="runner"
-                  >on backmesh-4, plus about 50 s before the job starts, about
-                  17 s when cued</span
-                >
-                <ul>
-                  <li>{project}</li>
-                  <li>
-                    {secs[1]} s on GitHub-hosted: {faster} faster
-                  </li>
-                  <li>
-                    {cost[0]} a build, against {cost[1]}: {cheaper} cheaper
-                  </li>
-                </ul>
-              </li>
-            ))
+            benchmarks.map(({ id, workload, project, secs, wait, cost, faster, cheaper }) => {
+              const row = `/benchmarks/#${id}`;
+              return (
+                <li>
+                  <b>{workload}</b>
+                  <strong>
+                    <a href={row}>
+                      {secs[0]}<span aria-hidden="true"> s</span><span class="sr-only"> seconds</span>
+                    </a>
+                  </strong>
+                  <span class="runner">
+                    on backmesh-4, plus <a href={row}>{wait} s</a> before the job
+                    starts, about <a href="/benchmarks/#method">17 s</a> when cued
+                  </span>
+                  <ul>
+                    <li>{project}</li>
+                    <li>
+                      <a href={row}>{secs[1]} s</a> on GitHub-hosted:{' '}
+                      <a href={row}>{faster}</a> faster
+                    </li>
+                    <li>
+                      <a href={row}>{cost[0]}</a> a build, against{' '}
+                      <a href={row}>{cost[1]}</a>: <a href={row}>{cheaper}</a> cheaper
+                    </li>
+                  </ul>
+                </li>
+              );
+            })
           }
         </ul>
-        <details class="method">
-          <summary>
-            <span class="q">
-              <b>How we measured</b>
-              <span>Private repository, 2026-11-18</span>
-            </span>
-            <span class="toggle" aria-hidden="true" />
-          </summary>
-          <ul>
-            <li>
-              Runtime is a job's start to its finish. The wait before the job
-              starts, from its queueing, isn't in it: a median 2 s on GitHub, 50
-              s (36 to 99 s) on backmesh uncued, and about 17 s with
-              <a href="#cue">backmesh cue</a>.
-            </li>
-            <li>
-              GitHub's <code>ubuntu-latest</code> in a private repository has 2
-              vCPUs, and <code>backmesh-4</code> has 4. GitHub bills whole
-              minutes, at $0.006 a minute.
-            </li>
-            <li>
-              backmesh's cost is its spot VM in us-east-2, mid-range of $0.0497
-              to $0.07 an hour, and its 100 GB disk at 4,000 IOPS and 500 MiB/s,
-              counted from boot. It leaves out the control plane, about $86 a
-              month on AWS.
-            </li>
-            <li>
-              Neither side used a build cache, except setup-node's default npm
-              cache on both. On backmesh, the Rust job's <code>cargo</code> is
-              Ubuntu's package, installed on first use within the measured
-              time.
-            </li>
-            <li>
-              The workflow and results are in
-              <a href={BENCH_URL}>benchmarks/builds</a>.
-            </li>
-          </ul>
-        </details>
+        <p class="method"><a href="/benchmarks/">How we measured →</a></p>
       </section>
 
       <section id="cost" class="wrap section cost">
@@ -1099,8 +1074,12 @@ const jsonLd = {
     color: var(--bm-soft);
     font-size: 14px;
   }
+  .bench strong a {
+    color: inherit;
+  }
   .method {
-    margin-top: 32px;
+    margin: 32px 0 0;
+    font-weight: 600;
   }
   @media (max-width: 960px) {
     .bench {

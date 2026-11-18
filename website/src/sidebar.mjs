@@ -23,6 +23,7 @@ export const sidebar = [
       'security',
       'telemetry',
       'cost',
+      'benchmarks',
       'calculator',
       'changelog',
       'faq',
