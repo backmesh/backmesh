@@ -68,6 +68,13 @@ export const listenerStatusSchema = z.object({
     .object({ since: z.iso.datetime(), installUrl: z.string() })
     .nullable()
     .optional(),
+  // Since when, and why, the control plane has refused the listener's
+  // service token; null while it takes it. Optional, as a listener from
+  // before its VM doesn't report it.
+  anycloud: z
+    .object({ since: z.iso.datetime(), error: z.string() })
+    .nullable()
+    .optional(),
   // Telemetry's sends. Optional, as one waiting for the App has none.
   telemetry: telemetryStatusSchema.optional(),
   runners: z.number().int(),
@@ -177,7 +184,12 @@ export type ListenerStatus = z.infer<typeof listenerStatusSchema>;
 // The part the scaler reports.
 export type ScaleSetsStatus = Omit<
   ListenerStatus,
-  'installed' | 'actionsPermission' | 'broker' | 'notInstalled' | 'telemetry'
+  | 'installed'
+  | 'actionsPermission'
+  | 'broker'
+  | 'notInstalled'
+  | 'anycloud'
+  | 'telemetry'
 >;
 
 const seconds = (ms: number) =>

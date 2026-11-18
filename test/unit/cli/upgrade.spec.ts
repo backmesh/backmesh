@@ -269,6 +269,7 @@ function setUp({
       'role-connections': '0.1.0',
       'role-apply': '0.1.0',
       'vm-job-regions': undefined,
+      'service-tokens': '0.1.0',
       c28: undefined,
     },
   };
@@ -859,6 +860,7 @@ describe('upgrade', () => {
     both.deps.features = {
       ...both.deps.features!,
       'vm-job-regions': '0.1.0',
+      'service-tokens': '0.1.0',
     };
     quotaStatus(both.routes, limits);
     both.deps.confirm = confirm;

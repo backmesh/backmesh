@@ -18,13 +18,14 @@ import {
 import {
   activeApiUrl,
   anycloudApi,
+  anycloudExec,
   apiToken,
   tokenRefresh,
 } from '../anycloud/client.js';
 import { workerDeps } from './worker.js';
 import { cue, type CueDeps } from './cue.js';
 import { signInAgain } from './github-sign-in.js';
-import { clusterIdOf, listenerName, readControlPool } from './installation.js';
+import { clusterIdOf, listenerName, readInstallation } from './installation.js';
 import { signInScopes } from '../app/github.js';
 import { readCompatibility } from '../release/compatibility.js';
 import { install, type InstallDeps } from './install.js';
@@ -53,8 +54,11 @@ export interface CliIo {
   readStatus?: (io: CliIo, org?: string) => Promise<StatusReport>;
   // Streams a workload's log to this terminal; resolves with the exit code.
   streamLogs?: (args: string[]) => Promise<number>;
-  // The control plane's listener names, for `logs` without `--org`.
-  listeners?: (io: CliIo) => Promise<string[]>;
+  // The control plane's listeners, for `logs`: each name and its VM, or a
+  // listener from before its VM's Deployment.
+  listeners?: (
+    io: CliIo,
+  ) => Promise<{ name: string; vm?: string; deployment?: string }[]>;
   cueDeps?: (io: CliIo) => CueDeps;
 }
 
@@ -200,15 +204,12 @@ export async function realStatus(
 ) {
   const url = await activeApiUrl(run);
   clusterIdOf(url);
+  const token = await apiToken(io.env, run);
+  const refresh = tokenRefresh(io.env, run, url, reSignIn(io));
   return readStatus({
-    api: anycloudApi(
-      url,
-      await apiToken(io.env, run),
-      fetch,
-      tokenRefresh(io.env, run, url, reSignIn(io)),
-    ),
+    api: anycloudApi(url, token, fetch, refresh),
     apiUrl: url,
-    run,
+    exec: anycloudExec(url, token, fetch, refresh),
     fetch,
     org,
   });
@@ -230,7 +231,11 @@ async function realListeners(io: CliIo) {
     undefined,
     tokenRefresh(io.env, runAnycloud, url, reSignIn(io)),
   );
-  return (await readControlPool(api)).listeners.map(({ name }) => name);
+  return (await readInstallation(api)).orgs.map(({ name, vm, deployment }) => ({
+    name,
+    vm: vm?.id,
+    deployment: deployment?.name,
+  }));
 }
 
 export async function runCli(argv: string[], io: CliIo): Promise<number> {
@@ -397,22 +402,40 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
             "Pass --org <org> for that org's listener's log, or a runner's name, not both.",
           );
         }
-        // Without either, the control plane's only listener.
-        let name = runner ?? (opts.org && listenerName(opts.org));
-        if (!name) {
-          const names = await (io.listeners ?? realListeners)(io);
-          if (names.length !== 1) {
-            throw new UsageError(
-              `Pass --org <org> for that org's listener's log; this control plane runs ${names.length} listeners.`,
-            );
-          }
-          name = names[0]!;
+        const follow = opts.follow ? ['--follow'] : [];
+        if (runner) {
+          exitCode = await (io.streamLogs ?? realLogs)([
+            'logs',
+            runner,
+            ...follow,
+          ]);
+          return;
         }
-        exitCode = await (io.streamLogs ?? realLogs)([
-          'logs',
-          name,
-          ...(opts.follow ? ['--follow'] : []),
-        ]);
+        // Without --org, the control plane's only listener.
+        const listeners = await (io.listeners ?? realListeners)(io);
+        const listener = opts.org
+          ? listeners.find((l) => l.name === listenerName(opts.org!))
+          : listeners.length === 1
+            ? listeners[0]
+            : undefined;
+        if (!listener) {
+          throw new UsageError(
+            opts.org
+              ? `There's no listener for ${opts.org} on this control plane.`
+              : `Pass --org <org> for that org's listener's log; this control plane runs ${listeners.length} listeners.`,
+          );
+        }
+        // A Deployment runs until `upgrade` has moved it. A VM's own log is
+        // anycloud's keepalive: the listener's is its container's.
+        exitCode = await (io.streamLogs ?? realLogs)(
+          listener.deployment
+            ? ['logs', listener.deployment, ...follow]
+            : [
+                'exec',
+                listener.vm!,
+                `docker logs --tail 1000 ${opts.follow ? '--follow ' : ''}backmesh-listener`,
+              ],
+        );
       },
     );
 

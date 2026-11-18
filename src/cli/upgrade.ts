@@ -30,7 +30,11 @@ import {
   readControlPool,
   readOrgId,
 } from './installation.js';
-import { readApiVersion, readListener, type StatusReport } from './status.js';
+import {
+  readApiVersion,
+  readDeployedListener,
+  type StatusReport,
+} from './status.js';
 import {
   classesOf,
   noKvmLine,
@@ -210,7 +214,7 @@ export async function upgrade(
   // sign-in, so a refusal changes nothing but an older API's move.
   const read = [];
   for (const listener of listeners) {
-    const running = await readListener(run, listener.name).catch(
+    const running = await readDeployedListener(run, listener).catch(
       () => undefined,
     );
     if (!running) {

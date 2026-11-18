@@ -9,7 +9,7 @@ import {
   rotateKey,
   type RotateKeyDeps,
 } from '../../../src/cli/rotate-key.js';
-import { readListener } from '../../../src/cli/status.js';
+import { readDeployedListener } from '../../../src/cli/status.js';
 import {
   fakeApi,
   fakeBinary,
@@ -613,7 +613,9 @@ describe('rotateKey', () => {
       // through unexamined — the exact call this fix depends on, so a
       // clean marker here means upgrade carries through nothing.
       const name = 'backmesh-acme';
-      const running = await readListener(f.deps.run, name);
+      const [deployment] = (await f.api.listDeployments({ query: {} }))
+        .deployments;
+      const running = await readDeployedListener(f.deps.run, deployment!);
       const control = anycloudControl(f.api, f.deps.run);
       const base = {
         name,
