@@ -33,7 +33,10 @@ name: E2E
 # ci-install's reviewer. The owner's one-time setup is
 # E2E_TEST_ORG_DEPLOY_KEY (a write deploy key on the test org's e2e
 # repository) in both environments, AWS_ROLE_ARN in `e2e`, and that
-# repository with test/e2e/test-org/labels.yml as its labels.yml. It
+# repository with test/e2e/test-org/labels.yml as its
+# .github/workflows/labels.yml: after a change to the copy merges, a
+# maintainer pushes it there; until then the test-org leg fails, naming the
+# difference. It
 # refuses an org ANYCLOUD_API_URLS names: those are live.
 
 on:
@@ -367,7 +370,12 @@ jobs:
           # GitHub's host keys, over HTTPS.
           install -m 700 -d ~/.ssh
           curl -fsS https://api.github.com/meta | jq -r '.ssh_keys[] | "github.com " + .' >>~/.ssh/known_hosts
-          GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes" node test/e2e/run-test-org-labels.ts
+          # GitHub cancels a step by signalling this shell: the script gets
+          # it, and deletes its branch before the EXIT trap removes the key.
+          GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes" node test/e2e/run-test-org-labels.ts &
+          pid=$!
+          trap 'kill -INT $pid; wait $pid' INT TERM
+          wait $pid
 
       # Always, after anything that may have made something, cancelled too:
       # everything but the App, and the checkpoint bucket with the rest. Its

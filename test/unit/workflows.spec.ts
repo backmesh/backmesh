@@ -1,6 +1,8 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   chmodSync,
+  existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -427,6 +429,68 @@ describe("the test org's label run", () => {
       /GIT_SSH_COMMAND="ssh -i \$key -o IdentitiesOnly=yes" node test\/e2e\/run-test-org-labels\.ts/,
     );
   });
+
+  // GitHub cancels a step by signalling its shell, not the shell's children.
+  it("hands a cancel to the run's script, and removes the key only once the script is done", async () => {
+    const step = e2e.jobs['test-org']!.steps!.find(
+      (s) => s.name === "The label member on the test org's runners",
+    )!;
+    const dir = mkdtempSync(join(tmpdir(), 'cancel-'));
+    const key = join(dir, 'test-org-key');
+    const bin = join(dir, 'bin');
+    mkdirSync(bin);
+    // node: marks itself started, and on SIGINT records whether the key is
+    // still there, as the script's branch delete needs it.
+    writeFileSync(
+      join(bin, 'node'),
+      `#!/bin/bash
+exec ${process.execPath} -e '
+const fs = require("fs");
+process.on("SIGINT", () => {
+  fs.writeFileSync("${dir}/cleanup", fs.existsSync("${key}") ? "key present" : "key gone");
+  process.exit(130);
+});
+fs.writeFileSync("${dir}/started", String(process.pid));
+setInterval(() => {}, 1000);
+'
+`,
+    );
+    writeFileSync(join(bin, 'curl'), `#!/bin/bash\necho '{"ssh_keys":[]}'\n`);
+    chmodSync(join(bin, 'node'), 0o755);
+    chmodSync(join(bin, 'curl'), 0o755);
+    const shell = spawn('bash', ['-eo', 'pipefail', '-c', step.run!], {
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH}`,
+        HOME: dir,
+        RUNNER_TEMP: dir,
+        DEPLOY_KEY: 'k',
+      },
+      stdio: 'ignore',
+    });
+    const exited = new Promise<number | null>((resolve) =>
+      shell.on('exit', (code) => resolve(code)),
+    );
+    while (!existsSync(join(dir, 'started'))) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    shell.kill('SIGINT');
+    const code = await Promise.race([
+      exited,
+      new Promise<'hung'>((resolve) => setTimeout(() => resolve('hung'), 5000)),
+    ]);
+    if (code === 'hung') {
+      process.kill(
+        Number(readFileSync(join(dir, 'started'), 'utf8')),
+        'SIGKILL',
+      );
+      shell.kill('SIGKILL');
+    }
+    expect(code).not.toBe('hung');
+    expect(code).not.toBe(0);
+    expect(readFileSync(join(dir, 'cleanup'), 'utf8')).toBe('key present');
+    expect(existsSync(key)).toBe(false);
+  }, 15_000);
 
   it("runs on a push to run/** only, and calls e2e-labels.yml with run.json's matrix and ref", () => {
     expect(labels().on).toEqual({ push: { branches: ['run/**'] } });
