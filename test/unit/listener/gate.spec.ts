@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Note, WorkflowRun } from '../../../src/github/checks.js';
+import type { Note } from '../../../src/github/checks.js';
 import type { GateGitHub, GateJob } from '../../../src/github/runs.js';
 import { Planner } from '../../../src/listener/prewarm.js';
 import {
@@ -23,7 +23,8 @@ const pr = (type: Parameters<typeof message>[0], fields = {}) =>
   message(type, { eventName: 'pull_request', ...fields });
 
 // A fake GitHub whose `acme/app` is public and whose run 7 is a fork's,
-// unless a test says otherwise.
+// unless a test says otherwise. It only reads: the App's token can't cancel
+// a run (owner, 2026-11-19).
 function setup(github: Partial<GateGitHub> = {}, deps: Partial<GateDeps> = {}) {
   const calls: string[] = [];
   const notes: Note[] = [];
@@ -41,9 +42,6 @@ function setup(github: Partial<GateGitHub> = {}, deps: Partial<GateDeps> = {}) {
       private: false,
       fork: true,
     })) as GateGitHub['run'],
-    forceCancel: async ({ runId }: WorkflowRun) => {
-      calls.push(`cancel ${runId}`);
-    },
     repos: async () => [],
     activeRuns: async () => [],
     jobs: async () => [],
@@ -127,41 +125,42 @@ describe('Gate', () => {
     expect(notes).toEqual([]);
   });
 
-  it("holds a fork run's jobs until they complete, cancels it once with a note, and ends a runner that starts one", async () => {
+  it("holds a fork run's jobs until they complete, notes it once, and ends a runner that starts one", async () => {
     const { gate, calls, settle, notes, terminated, logs, clock } = setup();
     gate.observe(KVM, pr('JobAssigned'));
     await settle();
-    expect(calls).toEqual(['run', 'cancel 7']);
+    expect(calls).toEqual(['run']);
     expect(notes).toEqual([
       {
         name: 'fork run 7',
-        title: 'Fork run cancelled',
+        title: 'Fork run held',
         summary:
-          '`test` asked for `backmesh-kvm-4`. In this public repository, pull requests from forks run only on `backmesh-public-4`, so backmesh cancelled the run. Use one of them, or a GitHub-hosted runner.',
+          '`test` asked for `backmesh-kvm-4`. In this public repository, pull requests from forks run only on `backmesh-public-4`, so backmesh starts no runner for it and ends one that takes it. Use one of them, or a GitHub-hosted runner.',
       },
     ]);
     expect(gate.holds(pr('JobAssigned'))).toBe(true);
-    // An idle runner of the set took it before the cancel landed.
+    // An idle runner of the set took it.
     clock.now = 10_000;
     gate.observe(KVM, pr('JobStarted', { runnerName: 'bmabc12-k4-00000001' }));
+    gate.observe(KVM, pr('JobAssigned', { jobId: 'job-2' }));
     await settle();
     expect(terminated).toEqual(['bmabc12-k4-00000001']);
     expect(logs).toContain('untrusted job on a private label');
-    // Within the minute, no second cancel.
-    expect(calls.filter((c) => c.startsWith('cancel'))).toHaveLength(1);
+    // One note per run.
+    expect(notes).toHaveLength(1);
+    expect(gate.heldOn(KVM.code)).toBe(2);
+    gate.observe(KVM, pr('JobCompleted', { result: 'failed' }));
     expect(gate.heldOn(KVM.code)).toBe(1);
-    gate.observe(KVM, pr('JobCompleted', { result: 'canceled' }));
-    expect(gate.heldOn(KVM.code)).toBe(0);
   });
 
-  it("counts a cancelled run's jobs again 2 minutes after the cancel, with no JobCompleted", async () => {
+  it("keeps an untrusted run's jobs out of the count until they complete, or a day passes", async () => {
     const { gate, settle, clock } = setup();
     gate.observe(KVM, pr('JobAssigned'));
     await settle();
-    clock.now = 2 * 60_000 - 1;
+    clock.now = 24 * 3_600_000 - 1;
     await gate.tick();
     expect(gate.heldOn(KVM.code)).toBe(1);
-    clock.now = 2 * 60_000;
+    clock.now = 24 * 3_600_000;
     await gate.tick();
     expect(gate.heldOn(KVM.code)).toBe(0);
   });
@@ -190,21 +189,6 @@ describe('Gate', () => {
     await gate.tick();
     expect(gate.heldOn(KVM.code)).toBe(0);
     expect(changed()).toBe(1);
-  });
-
-  it('keeps a fork run held and its runners ended when the cancel is refused', async () => {
-    const { gate, settle, terminated, logs, notes } = setup({
-      forceCancel: async () => {
-        throw new Error('403 Resource not accessible by integration');
-      },
-    });
-    gate.observe(KVM, pr('JobAssigned'));
-    gate.observe(KVM, pr('JobStarted', { runnerName: 'bmabc12-k4-00000001' }));
-    await settle();
-    expect(logs).toContain('fork run cancel failed');
-    expect(notes).toEqual([]);
-    expect(terminated).toEqual(['bmabc12-k4-00000001']);
-    expect(gate.heldOn(KVM.code)).toBe(1);
   });
 
   it("sweeps public repos' fork runs that messages missed, every 5 minutes", async () => {
@@ -247,14 +231,14 @@ describe('Gate', () => {
       },
     });
     await gate.tick();
-    expect(calls).toEqual(['jobs 7', 'cancel 7', 'jobs 8']);
+    expect(calls).toEqual(['jobs 7', 'jobs 8']);
     expect(terminated).toEqual(['bmabc12-k4-00000001']);
     expect(notes.map((n) => n.summary)).toEqual([
       expect.stringContaining('`build` asked for `backmesh-kvm-4`'),
     ]);
     clock.now = SWEEP_MS - 1;
     await gate.tick();
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(2);
     clock.now = SWEEP_MS;
     await gate.tick();
     expect(calls.filter((c) => c === 'jobs 7')).toHaveLength(2);
@@ -307,7 +291,7 @@ describe('Gate', () => {
     await gate.tick();
     gate.observe(KVM, pr('JobAssigned'));
     await settle();
-    expect(calls).toEqual(['run', 'cancel 7']);
+    expect(calls).toEqual(['run']);
     // A failed listing trusts no repository from the last one, even one it
     // listed as private.
     listing = [{ owner: 'acme', repo: 'app', private: true }];
@@ -321,43 +305,8 @@ describe('Gate', () => {
     expect(calls.filter((c) => c === 'run')).toHaveLength(2);
   });
 
-  it('tries a cancel GitHub failed for another reason again after a minute', async () => {
-    let fail = true;
-    const { gate, calls, clock, settle } = setup({
-      forceCancel: async () => {
-        calls.push('cancel');
-        if (fail) throw Object.assign(new Error('502'), { status: 502 });
-      },
-    });
-    gate.observe(KVM, pr('JobAssigned'));
-    await settle();
-    fail = false;
-    clock.now = 60_000;
-    gate.observe(KVM, pr('JobAssigned', { jobId: 'job-2' }));
-    await settle();
-    expect(calls.filter((c) => c === 'cancel')).toHaveLength(2);
-  });
-
-  it('tries a refused cancel once per run', async () => {
-    const { gate, calls, clock, settle, logs } = setup({
-      forceCancel: async () => {
-        calls.push('cancel');
-        throw Object.assign(new Error('Resource not accessible'), {
-          status: 403,
-        });
-      },
-    });
-    gate.observe(KVM, pr('JobAssigned'));
-    await settle();
-    clock.now = 10 * 60_000;
-    gate.observe(KVM, pr('JobAssigned', { jobId: 'job-2' }));
-    await settle();
-    expect(calls.filter((c) => c === 'cancel')).toHaveLength(1);
-    expect(logs.filter((m) => m === 'fork run cancel failed')).toHaveLength(1);
-  });
-
   it("goes on to a repo's other runs when one run's jobs can't be read", async () => {
-    const { gate, calls } = setup({
+    const { gate, notes } = setup({
       repos: async () => [{ owner: 'acme', repo: 'app', private: false }],
       activeRuns: async () => [
         { runId: 7, fork: true },
@@ -377,7 +326,7 @@ describe('Gate', () => {
       },
     });
     await gate.tick();
-    expect(calls).toEqual(['cancel 8']);
+    expect(notes.map((n) => n.name)).toEqual(['fork run 8']);
   });
 
   it("lets a same-repo PR's run reach the planner after the read: its children start when build does", async () => {
@@ -459,28 +408,25 @@ describe('Gate', () => {
         runnerName: `bmabc12-c4-0000000${runId}`,
       });
 
-    it("cancels an untrusted run's public job at 60 minutes, then ends its runner 5 minutes on", async () => {
+    it("ends an untrusted run's public runner at 60 minutes, with a note", async () => {
       const { gate, calls, notes, terminated, settle, clock } = setup();
       gate.observe(PUBLIC, started());
       await settle();
-      // On a public label alone: nothing to cancel yet, nothing held.
+      // On a public label alone: nothing held.
       expect(calls).toEqual(['run']);
       expect(gate.heldOn(PUBLIC.code)).toBe(0);
       clock.now = LIMIT_MS - 1;
       await gate.tick();
-      expect(calls).not.toContain('cancel 7');
+      expect(terminated).toEqual([]);
       clock.now = LIMIT_MS;
       await gate.tick();
-      expect(calls).toContain('cancel 7');
+      expect(terminated).toEqual(['bmabc12-c4-00000007']);
       expect(notes.at(-1)).toEqual({
         name: 'runtime limit in run 7',
         title: 'Runtime limit',
         summary:
-          '`test` ran on `backmesh-public-4` for 60 minutes, the limit for pull requests from forks, so backmesh cancelled the run.',
+          '`test` ran on `backmesh-public-4` for 60 minutes, the limit for pull requests from forks, so backmesh ended its runner.',
       });
-      clock.now = LIMIT_MS + 5 * 60_000;
-      await gate.tick();
-      expect(terminated).toEqual(['bmabc12-c4-00000007']);
     });
 
     it('never times a trusted run, or a job that completed', async () => {
@@ -502,11 +448,11 @@ describe('Gate', () => {
       await settle();
       clock.now = 2 * LIMIT_MS;
       await gate.tick();
-      expect(calls.filter((c) => c.startsWith('cancel'))).toEqual([]);
+      expect(calls).toEqual(['run', 'run']);
     });
 
     it("times a fork job a restart lost from the sweep's started_at", async () => {
-      const { gate, calls, clock, terminated } = setup({
+      const { gate, clock, terminated } = setup({
         repos: async () => [{ owner: 'acme', repo: 'app', private: false }],
         activeRuns: async () => [{ runId: 7, fork: true }],
         jobs: async () => [
@@ -521,17 +467,14 @@ describe('Gate', () => {
       });
       // The new listener's first tick, 30 minutes into the job.
       await gate.tick();
-      expect(calls).toEqual([]);
+      expect(terminated).toEqual([]);
       clock.now = 30 * 60_000;
-      await gate.tick();
-      expect(calls).toEqual(['cancel 7']);
-      clock.now = 35 * 60_000;
       await gate.tick();
       expect(terminated).toEqual(['bmabc12-c4-00000007']);
     });
 
     it("keeps a sweep-seeded clock when the runner's JobStarted comes later", async () => {
-      const { gate, calls, clock, settle, logs } = setup({
+      const { gate, terminated, clock, settle, logs } = setup({
         repos: async () => [{ owner: 'acme', repo: 'app', private: false }],
         activeRuns: async () => [{ runId: 7, fork: true }],
         jobs: async () => [
@@ -558,11 +501,11 @@ describe('Gate', () => {
       await settle();
       clock.now = 30 * 60_000;
       await gate.tick();
-      expect(calls).toContain('cancel 7');
+      expect(terminated).toContain('bmabc12-c4-00000007');
     });
 
-    it('ends every public runner of the run at the grace, with one cancel, logged as the limit', async () => {
-      const { gate, calls, clock, settle, terminated, logs } = setup();
+    it("ends every public runner of the run at its first job's limit, with one note, logged as the limit", async () => {
+      const { gate, notes, clock, settle, terminated, logs } = setup();
       gate.observe(PUBLIC, started());
       clock.now = 20 * 60_000;
       gate.observe(
@@ -572,13 +515,11 @@ describe('Gate', () => {
       await settle();
       clock.now = LIMIT_MS;
       await gate.tick();
-      clock.now = LIMIT_MS + 5 * 60_000;
-      await gate.tick();
       expect(terminated.sort()).toEqual([
         'bmabc12-c4-00000007',
         'bmabc12-c4-0000000b',
       ]);
-      expect(calls.filter((c) => c.startsWith('cancel'))).toEqual(['cancel 7']);
+      expect(notes.map((n) => n.name)).toEqual(['runtime limit in run 7']);
       expect(logs).toContain('runtime limit terminate');
       expect(logs).not.toContain('untrusted job on a private label');
     });

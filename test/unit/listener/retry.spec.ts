@@ -21,7 +21,7 @@ const reclaim = (runner: string, job = 'test'): Reclaim => ({
 });
 
 // GitHub's view of run 7: its state, and each attempt's jobs.
-function fakeRuns(canRerun = true) {
+function fakeRuns() {
   const clock = { now: 0 };
   const state: RunState = {
     status: 'in_progress',
@@ -63,7 +63,6 @@ function fakeRuns(canRerun = true) {
         state.status = 'queued';
       },
     },
-    canRerun: () => canRerun,
     ours: (runner) => runner.startsWith('bm'),
     log: (entry) => void logs.push(entry),
     now: () => clock.now,
@@ -86,10 +85,10 @@ function fakeRuns(canRerun = true) {
 }
 
 describe('Retrier', () => {
-  it("decides at detection from the token, the run's attempt and the opt-out", async () => {
-    expect(await fakeRuns(false).retrier.decide(RUN, [reclaim('r1')])).toBe(
-      'unavailable',
-    );
+  // The rerun goes through the Worker (`/v1/rerun`), so the listener's own
+  // token needs no Actions write.
+  it("decides at detection from the run's attempt and the opt-out", async () => {
+    expect(await fakeRuns().retrier.decide(RUN, [reclaim('r1')])).toBe('retry');
 
     const capped = fakeRuns();
     capped.state.attempt = 3;
