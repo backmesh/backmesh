@@ -207,7 +207,9 @@ jobs:
         include:
           - cloud: aws
             placement: --runners aws
-            control-plane-region: us-east-2
+            # Not us-east-2: our production control plane is a cluster
+            # named backmesh there, in this same account (see the guard).
+            control-plane-region: us-west-2
             environment: e2e
           - cloud: azure
             placement: --runners azure
@@ -301,6 +303,21 @@ jobs:
           printf '[default]\naws_access_key_id = %s\naws_secret_access_key = %s\naws_session_token = %s\n' \
             "$KEY_ID" "$SECRET" "$SESSION" >~/.aws/credentials
           chmod 600 ~/.aws/credentials
+
+      # anycloud finds a cluster by name per region, so install would resume
+      # a backmesh cluster already in the leg's region, as v0.5.0-rc.3's did
+      # our production control plane's (run 44634950328), and uninstall
+      # would then delete it.
+      - name: Refuse a region with a backmesh cluster
+        if: matrix.cloud == 'aws'
+        id: guard
+        run: |
+          stacks=$(aws --no-cli-pager --output json cloudformation describe-stacks --region "$CONTROL_PLANE_REGION" \
+            | jq -r '.Stacks[] | select(any(.Tags[]?; .Key == "anycloud_cluster_name" and .Value == "backmesh")) | .StackName')
+          if [[ -n $stacks ]]; then
+            printf '::error title=A backmesh cluster in %s::%s\n' "$CONTROL_PLANE_REGION" $stacks
+            exit 1
+          fi
 
       # Install generates the runners' Azure identity as this app, and
       # uninstall deletes it as the same. Only az is signed in, so install
@@ -417,7 +434,7 @@ jobs:
       # GitHub sign-in is approved as install's is, and it reads GitHub with
       # the job's token as install does.
       - name: backmesh uninstall
-        if: ${{ always() && steps.bin.outcome == 'success' }}
+        if: ${{ always() && steps.bin.outcome == 'success' && steps.guard.outcome != 'failure' }}
         timeout-minutes: 60
         env:
           GH_TOKEN: ${{ github.token }}
