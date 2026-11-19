@@ -2,7 +2,8 @@
 // install's own GitHub token can only read Actions. /v1/rerun reruns a
 // run's failed jobs when they all ran on this install's runners, named with
 // its tag; /v1/cancel force-cancels a fork's run the gate stops. A refusal
-// throws with its status, as GitHub's would, so the caller drops it.
+// throws with its status, as GitHub's would, so the caller drops it, and the
+// Worker's `code` for which refusal it is.
 import type { WorkflowRun } from '../github/checks.js';
 
 interface WorkerRuns {
@@ -27,12 +28,13 @@ async function post(
     signal: AbortSignal.timeout(30_000),
   });
   if (res.ok) return;
-  const { error } = (await res.json().catch(() => ({}))) as {
+  const { error, code } = (await res.json().catch(() => ({}))) as {
     error?: string;
+    code?: string;
   };
   throw Object.assign(
     new Error(error ?? `backmesh.com answered ${res.status}`),
-    { status: res.status },
+    { status: res.status, code },
   );
 }
 

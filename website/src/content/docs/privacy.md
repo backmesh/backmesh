@@ -37,7 +37,9 @@ secrets or the org's member list. Your machine keeps it for your control plane, 
 sends it to `api.backmesh.com` once to check you can manage the org's
 self-hosted runners; we keep no token. Uninstall's check is the same. We store the
 org's numeric GitHub ID, an install ID, when the install was created, and a
-SHA-256 hash of the install's key, never the key itself.
+SHA-256 hash of the install's key, never the key itself, and, once your
+listener asks backmesh.com to rerun or cancel a run, the install's runner
+tag: the 5 characters that start its runners' names.
 
 For your orgs, we store their numeric GitHub IDs and names.
 
@@ -50,6 +52,9 @@ for an hour-long installation token about every 30 minutes; we hand it over
 and keep none. Each token issued, and each uninstall call, refused or not,
 writes one audit row: the install, org and installation, the token's
 permissions and expiry, and the caller's IP address and Cloudflare ray ID.
+Each rerun or cancel your listener asks for, refused or not, writes one row
+too: the install and org, the repository's owner and name and the run's ID,
+the outcome, and the caller's IP address and Cloudflare ray ID.
 
 ### Cookies
 
@@ -96,6 +101,7 @@ different privacy policy.
 | Daily job counts                              | Kept                                                               |
 | Install sign-ins' and App installation tokens | Not kept                                                           |
 | Token and uninstall audit rows                | 90 days                                                            |
+| Rerun and cancel rows                         | 90 days                                                            |
 | App installation records                      | Until the App is uninstalled or GitHub reports it gone             |
 | Org and install records                       | Kept, so an org's installs survive renames; ask us to delete them  |
 | API request logs                              | Up to 7 days, at Cloudflare                                        |

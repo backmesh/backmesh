@@ -162,6 +162,7 @@ describe('POST /v1/rerun', () => {
       error: expect.stringContaining(
         "didn't all run on this install's runners",
       ),
+      code: 'not_our_runners',
     });
     expect(upstream.reruns).toEqual([]);
   });
@@ -183,9 +184,11 @@ describe('POST /v1/rerun', () => {
       attempt: 1,
       jobs: [{ conclusion: 'failure', runner_name: 'bmzzzzz-a4-k3j9x0qz' }],
     });
+    // One install key, minted before the race.
+    const key = await keyOf(env, 11);
     const [a, b] = await Promise.all([
-      rerun({ ...RUN, install: TAG }),
-      rerun({ ...RUN, run_id: 43, install: 'zzzzz' }),
+      rerun({ ...RUN, install: TAG }, key),
+      rerun({ ...RUN, run_id: 43, install: 'zzzzz' }, key),
     ]);
 
     expect([a.status, b.status].sort()).toEqual([200, 403]);
@@ -254,8 +257,9 @@ describe('POST /v1/rerun', () => {
     const res = await rerun();
 
     expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({
+    expect(await res.json()).toMatchObject({
       error: expect.stringContaining('cannot be rerun'),
+      code: 'github_refused',
     });
   });
 

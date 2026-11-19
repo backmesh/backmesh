@@ -168,6 +168,7 @@ describe('POST /v1/token', () => {
       token: 'ghs_7',
       expires_at: '2026-11-06T13:00:00Z',
       permissions: KEY_TOKEN,
+      installation_permissions: ALL,
       org: { id: 11, login: 'acme-old' },
     });
   });
