@@ -34,6 +34,7 @@ type Step = {
 type Job = {
   if?: string;
   needs?: string | string[];
+  env?: Record<string, string>;
   strategy?: { 'max-parallel'?: number; matrix?: { include?: unknown[] } };
   steps?: Step[];
   'runs-on'?: string;
@@ -310,9 +311,10 @@ describe("e2e.yml's production and Azure checks", () => {
         { cloud: 'azure', placement: '--runners azure' },
       ]),
     );
-    expect(JSON.stringify(job)).toContain(
-      '132fb71c-65af-40f2-84a6-63a7eda9414e',
-    );
+    // Our Azure CI subscription, as ci-install.yml signs in to.
+    expect(job.env).toMatchObject({
+      AZURE_SUBSCRIPTION_ID: '${{ secrets.AZURE_SUBSCRIPTION_ID }}',
+    });
   });
 
   it('always sweeps Azure, last, for what the run made', () => {

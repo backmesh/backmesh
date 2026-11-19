@@ -20,15 +20,15 @@ name: E2E
 # where install puts it by default, running one job. Each leg then
 # uninstalls it and sweeps its cloud for anything left. Install and uninstall
 # each print a GitHub device sign-in, in the run's annotations and summary,
-# which an admin of the test org approves, as for ci-install.yml. The backmesh App stays installed
-# on the test org (`uninstall --keep-app`): only an org owner can install
-# it. The owner's one-time setup is the `e2e` environment's secrets
-# (E2E_TEST_ORG_DISPATCH_TOKEN, AWS_ROLE_ARN, AZURE_CLIENT_ID and
-# AZURE_TENANT_ID: an app that can generate install's Azure identity, as
-# ci-install.yml's does, with a federated credential for this repository's e2e
-# environment) and the test org's e2e
-# repository with its labels.yml (the owner's setup notes). It refuses an org ANYCLOUD_API_URLS names: those are
-# live.
+# which an admin of the test org approves, as for ci-install.yml. The
+# backmesh App stays installed on the test org (`uninstall --keep-app`): only
+# an org owner can install it. The owner's one-time setup is the `e2e`
+# environment's secrets (E2E_TEST_ORG_DISPATCH_TOKEN, AWS_ROLE_ARN, and
+# AZURE_CLIENT_ID, AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID: an app that can
+# generate install's Azure identity, as ci-install.yml's does, with a
+# federated credential for this repository's e2e environment) and the test
+# org's e2e repository with its labels.yml (the owner's setup notes). It
+# refuses an org ANYCLOUD_API_URLS names: those are live.
 
 on:
   workflow_dispatch:
@@ -206,8 +206,8 @@ jobs:
       ORG: ${{ inputs.org }}
       VERSION: ${{ needs.plan.outputs.version }}
       CLOUD: ${{ matrix.cloud }}
-      # Our Azure CI subscription.
-      AZURE_SUBSCRIPTION_ID: 132fb71c-65af-40f2-84a6-63a7eda9414e
+      # Our Azure CI subscription (131eed90-…), as ci-install.yml's.
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
