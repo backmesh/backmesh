@@ -356,6 +356,57 @@ describe("e2e.yml's Worker and Azure checks", () => {
     );
   });
 
+  // The install step's own script, for a leg, up to the sign-in: backmesh
+  // stubbed to print a plan with Azure's runner regions.
+  const labelMatrix = (cloud: string) => {
+    const job = e2e.jobs['test-org']!;
+    const leg = (
+      job.strategy!.matrix!.include as Record<string, string | undefined>[]
+    ).find((l) => l.cloud === cloud)!;
+    const step = job.steps!.find((s) => s.id === 'install')!;
+    expect(step.env!.LABEL).toBe('${{ matrix.label }}');
+    const dir = mkdtempSync(join(tmpdir(), 'install-'));
+    const env = join(dir, 'env');
+    writeFileSync(env, '');
+    const plan = {
+      planId: 'p1',
+      controlPlane: { cloud, region: 'eastus' },
+      runners: [{ cloud: 'azure', regions: ['eastus'] }],
+    };
+    const matrix = {
+      include: [{ label: 'backmesh-4', cloud: 'aws', regions: ['us-east-2'] }],
+    };
+    const out = runStep(step.run!.replace('test/e2e/with-sign-in.sh ', ''), {
+      env: {
+        CLOUD: cloud,
+        PLACEMENT: leg.placement!,
+        LABEL: leg.label ?? '',
+        CONTROL_PLANE_REGION: leg['control-plane-region'] ?? '',
+        MATRIX: JSON.stringify(matrix),
+        GITHUB_ENV: env,
+      },
+      commands: { backmesh: `echo '${JSON.stringify(plan)}'` },
+    });
+    expect(out.status, out.stderr).toBe(0);
+    const line = /^LABEL_MATRIX=(.*)$/m.exec(readFileSync(env, 'utf8'))![1]!;
+    return { matrix, got: JSON.parse(line) as typeof matrix };
+  };
+
+  // Our Azure CI subscription has 3 spot vCPUs per region until its quota
+  // is raised: the Azure leg's one job runs on backmesh-2, AWS's on `labels`.
+  it("runs the Azure leg's one job on its leg's label, and AWS's labels unchanged", () => {
+    const azure = labelMatrix('azure');
+    expect(azure.got.include).toEqual([
+      expect.objectContaining({
+        label: 'backmesh-2',
+        cloud: 'azure',
+        regions: ['eastus'],
+      }),
+    ]);
+    const aws = labelMatrix('aws');
+    expect(aws.got).toEqual(aws.matrix);
+  });
+
   // Our Azure CI app trusts only ci-install's federated subject, so the
   // Azure leg signs in from that environment, reading only its Azure IDs.
   it("signs in to Azure from ci-install's environment and to AWS from e2e's", () => {
