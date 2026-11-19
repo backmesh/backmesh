@@ -40,9 +40,12 @@ class Relay {
   // The next POST's answer, when set.
   answer?: { status: number; body: object };
   hang = false;
+  // Every request fails to connect.
+  down = false;
   fetch = vi.fn(async (input: string | URL, init: RequestInit = {}) => {
     const url = new URL(String(input));
     this.calls.push(`${init.method ?? 'GET'} ${url.host}${url.pathname}`);
+    if (this.down) throw new TypeError('fetch failed');
     if (this.hang) {
       return new Promise<Response>((_, reject) =>
         init.signal!.addEventListener('abort', () =>
@@ -58,9 +61,10 @@ class Relay {
       this.trades.push(JSON.parse(String(init.body ?? '{}')));
       // A sign-in that reaches none of the App's installations, and one
       // the org's SAML SSO holds back.
+      const { revoke } = this.trades.at(-1) as { revoke?: boolean };
       if (auth === 'Bearer ghu_nobody') {
         return Response.json(
-          { error: 'No org.', code: 'no_org' },
+          { error: 'No org.', code: 'no_org', revoked: revoke === true },
           { status: 403 },
         );
       }
@@ -224,7 +228,7 @@ describe('backmesh cue', () => {
       expect(await cue({ inS: 120, signIn: false }, deps)).toEqual({
         outcome: 'refused',
         message:
-          "Your cue credential doesn't reach acme. If backmesh's GitHub App was installed on it since, run `backmesh cue --sign-in`. Nothing was sent.",
+          "Your cue credential doesn't reach acme: backmesh's GitHub App was installed there, its key rotated or it was uninstalled since. Run `backmesh cue --sign-in`. Nothing was sent.",
       });
       expect(readFileSync(saved(), 'utf8')).toBe(`${STALE}\n`);
       expect(relay.calls).not.toContain(
@@ -237,6 +241,30 @@ describe('backmesh cue', () => {
       await cue({ signIn: true }, deps);
 
       expect(relay.trades).toEqual([{ revoke: false }, { revoke: true }]);
+    });
+
+    it("doesn't say signed in when --sign-in's trade fails, and says whether other copies were revoked", async () => {
+      // The new sign-in reaches no org: other copies are revoked anyway.
+      deps.signIn = async () => {
+        signIns++;
+        writeFileSync(join(dir, '.token'), 'ghu_nobody\n');
+      };
+      expect(await cue({ signIn: true }, deps)).toEqual({
+        outcome: 'refused',
+        message:
+          "Your GitHub sign-in reaches none of the orgs backmesh's GitHub App is on, so there's no org to cue. Your other cue credentials were revoked. Nothing was sent.",
+      });
+      // backmesh.com unreachable: nothing was revoked.
+      relay.down = true;
+      deps.signIn = async () => {
+        signIns++;
+        writeFileSync(join(dir, '.token'), 'ghu_alice\n');
+      };
+      const unreachable = await cue({ signIn: true }, deps);
+      expect(unreachable.outcome).toBe('unavailable');
+      expect(unreachable.message).toContain(
+        "your other cue credentials weren't revoked",
+      );
     });
 
     it('tells the user to authorize SAML SSO when the org holds the sign-in back', async () => {

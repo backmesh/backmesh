@@ -338,6 +338,38 @@ describe('the cue credential', () => {
     expect((await withCredential(first.credential)).status).toBe(401);
   });
 
+  it('revokes at an explicit sign-in even when the trade is refused, and says so', async () => {
+    const first = (await (await trade('alice')).json()) as {
+      credential: string;
+    };
+    upstream.reaches.set('alice', []);
+
+    const refused = await trade('alice', true);
+
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({
+      code: 'no_org',
+      revoked: true,
+    });
+    expect((await withCredential(first.credential)).status).toBe(401);
+  });
+
+  it("keeps a user's newest 10 credentials", async () => {
+    const issued: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      advance(1000);
+      issued.push(
+        ((await (await trade('alice')).json()) as { credential: string })
+          .credential,
+      );
+    }
+
+    expect((await withCredential(issued[0]!)).status).toBe(401);
+    expect((await withCredential(issued[1]!)).status).toBe(401);
+    expect((await withCredential(issued[2]!)).status).toBe(200);
+    expect((await withCredential(issued[11]!)).status).toBe(200);
+  });
+
   it('tells a sign-in that reaches no org from one SAML SSO holds back', async () => {
     upstream.reaches.set('nora', []);
     const none = await trade('nora');
