@@ -35,12 +35,12 @@ async function signInProblem(token: string, loginOf: SignInLogin) {
   if (refused) return REJECTED;
 }
 
-// GitHub answered 401 for the saved sign-in: it was revoked, such as by a
-// newer sign-in past GitHub's ten tokens per App and user. The backmesh
-// App's user tokens don't expire (its owner turned expiry off). `again` says
-// what signs in again.
+// GitHub answered 401 for the saved sign-in: it expired (the backmesh App's
+// user tokens last 8 hours; the control plane's own API token outlives it),
+// or it was revoked, such as by a newer sign-in past GitHub's ten tokens per
+// App and user. `again` says what signs in again.
 export const refusedSignIn = (again: string) =>
-  `GitHub revoked the saved sign-in. ${again}`;
+  `The saved GitHub sign-in expired or was revoked. ${again}`;
 
 // Whether the saved sign-in, else GITHUB_TOKEN, is one the control plane
 // takes. A refused GITHUB_TOKEN is a problem for the user to fix; a refused

@@ -47,6 +47,10 @@ function setUp(org = fakeOrg()) {
       calls.push(new URL(String(url)).pathname);
       return worker.fetch(new Request(url, init), env);
     }
+    // GitHub's device flow, from the same fake GitHub as the Worker's.
+    if (new URL(String(url)).host === 'github.com') {
+      return upstream.fetch(url as string, init);
+    }
     return org.fetch(url, init);
   }) as typeof globalThis.fetch;
   const print = (line: string) => lines.push(line);
@@ -74,11 +78,17 @@ describe("uninstall's cleanup", () => {
     );
     const app = await finishCleanup(cleanup.cleanup_id!, client);
 
+    // GitHub's device flow on github.com, then one call with its token.
     expect(calls).toEqual([
-      '/v1/installs/device',
-      '/v1/installs/cleanup',
       '/v1/installs/cleanup',
       '/v1/installs/cleanup/finish',
+    ]);
+    expect(
+      upstream.calls.filter((c) => c.startsWith('POST github.com/')),
+    ).toEqual([
+      'POST github.com/login/device/code',
+      'POST github.com/login/oauth/access_token',
+      'POST github.com/login/oauth/access_token',
     ]);
     expect(upstream.mints).toEqual([
       { organization_self_hosted_runners: 'write' },
@@ -102,7 +112,9 @@ describe("uninstall's cleanup", () => {
       new Set(['token ghs_7']),
     );
     expect(lines).toEqual([
-      'Sign in with GitHub as an admin of acme, so backmesh removes itself from acme: open https://github.com/login/device and enter ABCD-1234.',
+      expect.stringMatching(
+        /^Sign in with GitHub as an admin of acme, so backmesh removes itself from acme: open https:\/\/github\.com\/login\/device and enter ABCD-1234 \(it expires at \d\d:\d\d UTC\)\.$/,
+      ),
     ]);
   });
 
@@ -127,18 +139,13 @@ describe("uninstall's cleanup", () => {
   });
 
   it('stops at a 429 and says to retry later', async () => {
-    upstream.devicePending = 5;
-    env.SIGNIN_LIMIT = limiter(2);
+    env.SIGNIN_LIMIT = limiter(0);
     const { client, calls } = setUp();
 
     await expect(signInForCleanup('acme', undefined, client)).rejects.toThrow(
       'Too many requests; retry later.',
     );
-    expect(calls).toEqual([
-      '/v1/installs/device',
-      '/v1/installs/cleanup',
-      '/v1/installs/cleanup',
-    ]);
+    expect(calls).toEqual(['/v1/installs/cleanup']);
   });
 
   it('re-mints with the cleanup_id', async () => {

@@ -506,7 +506,7 @@ describe('backmesh cue', () => {
     writeFileSync(join(dir, '.token'), 'ghu_revoked\n');
     const revoked = {
       outcome: 'not signed in',
-      message: `GitHub revoked the saved sign-in. Run \`backmesh cue --sign-in\` to sign in again. Nothing was sent.`,
+      message: `The saved GitHub sign-in expired or was revoked. Run \`backmesh cue --sign-in\` to sign in again. Nothing was sent.`,
     };
     expect(await cue({ inS: 120, signIn: false }, deps)).toEqual(revoked);
     // The file stays for --sign-in to replace, and the push isn't blocked.

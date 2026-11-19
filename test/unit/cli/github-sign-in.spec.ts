@@ -89,10 +89,10 @@ describe('signInAgain', () => {
     return { said: lines.filter((l) => l.includes('revoked')) };
   };
 
-  it('says GitHub revoked the saved sign-in only when GitHub answers 401', async () => {
+  it('says the saved sign-in expired or was revoked only when GitHub answers 401', async () => {
     const { said } = await again('ghu_revoked');
     expect(said).toEqual([
-      `GitHub revoked the saved sign-in. backmesh signs in again.`,
+      `The saved GitHub sign-in expired or was revoked. backmesh signs in again.`,
     ]);
     // A working one (as for \`cue --sign-in\`), one GitHub couldn't check,
     // one that isn't the App's sign-in, such as an older OAuth one, or none
@@ -114,13 +114,10 @@ describe('signInLogin (the real GitHub client)', () => {
     const { calls, restore } = spyOnConsole();
     try {
       const ok = (async () =>
-        Response.json(
-          {},
-          { headers: { 'x-oauth-scopes': 'read:org, read:packages' } },
-        )) as typeof globalThis.fetch;
+        Response.json({ login: 'octocat' })) as typeof globalThis.fetch;
       await expect(
         signInLogin('ghu_ok', { request: { fetch: ok } }),
-      ).resolves.toEqual(['read:org', 'read:packages']);
+      ).resolves.toBe('octocat');
       const revoked = (async () =>
         Response.json(
           { message: 'Bad credentials' },
@@ -142,10 +139,9 @@ describe('signInLogin (the real GitHub client)', () => {
     const { calls, restore } = spyOnConsole();
     const deprecated = (async () =>
       Response.json(
-        {},
+        { login: 'octocat' },
         {
           headers: {
-            'x-oauth-scopes': 'read:org, read:packages',
             deprecation: 'true',
             sunset: 'Wed, 11 Nov 2026 00:00:00 GMT',
             link: '<https://docs.github.com/deprecation>; rel="deprecation"',
@@ -155,7 +151,7 @@ describe('signInLogin (the real GitHub client)', () => {
     try {
       await expect(
         signInLogin('ghu_ok', { request: { fetch: deprecated } }),
-      ).resolves.toEqual(['read:org', 'read:packages']);
+      ).resolves.toBe('octocat');
     } finally {
       restore();
     }
@@ -195,9 +191,9 @@ describe('signInAgain, with the real GitHub client', () => {
     writeFileSync(join(dir, '.token'), 'ghu_revoked\n');
     const { calls, restore } = spyOnConsole();
     const lines: string[] = [];
-    // The backmesh Worker's device flow, answering at once.
-    const backmeshFetch = (async (url: string) =>
-      url.endsWith('/v1/installs/device')
+    // GitHub's device flow with the App, answering at once.
+    const deviceFetch = (async (url: string) =>
+      url.endsWith('/login/device/code')
         ? Response.json({
             device_code: 'd',
             user_code: 'ABCD-1234',
@@ -206,7 +202,7 @@ describe('signInAgain, with the real GitHub client', () => {
             expires_in: 900,
           })
         : Response.json({
-            github_token: 'ghu_new',
+            access_token: 'ghu_new',
           })) as typeof globalThis.fetch;
     // GitHub: 401 for the revoked token being checked, fine for the fresh
     // one `saveSignIn` checks right after.
@@ -216,15 +212,12 @@ describe('signInAgain, with the real GitHub client', () => {
             { message: 'Bad credentials' },
             { status: 401, headers: { 'x-github-request-id': 'DA94:1234' } },
           )
-        : Response.json(
-            {},
-            { headers: { 'x-oauth-scopes': 'read:org, read:packages' } },
-          )) as typeof globalThis.fetch;
+        : Response.json({ login: 'octocat' })) as typeof globalThis.fetch;
     try {
       await signInAgain(
         {
           env: { BACKMESH_ANYCLOUD_DIR: dir },
-          fetch: backmeshFetch,
+          fetch: deviceFetch,
           print: (l) => lines.push(l),
           wait: async () => {},
         },
@@ -236,7 +229,7 @@ describe('signInAgain, with the real GitHub client', () => {
     // `signIn` also prints its own device-code instruction; only the
     // revoked-sign-in line matters here, and no raw request-log line.
     expect(lines.filter((l) => l.includes('revoked'))).toEqual([
-      'GitHub revoked the saved sign-in. backmesh signs in again.',
+      'The saved GitHub sign-in expired or was revoked. backmesh signs in again.',
     ]);
     expect(readFileSync(join(dir, '.token'), 'utf8')).toBe('ghu_new\n');
     expect(calls).toEqual({ debug: 0, info: 0, warn: 0, error: 0 });

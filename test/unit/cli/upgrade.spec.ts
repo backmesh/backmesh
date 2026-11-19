@@ -493,7 +493,7 @@ describe('upgrade', () => {
     await refresh!(undefined);
     expect(logins).toEqual([`login ${HOSTED}`, `login ${HOSTED}`]);
     expect(lines).toContain(
-      `GitHub revoked the saved sign-in. backmesh signs in again.`,
+      `The saved GitHub sign-in expired or was revoked. backmesh signs in again.`,
     );
     expect(readFileSync(join(dir, '.token'), 'utf8')).toBe(`${SIGNED_IN}\n`);
   });

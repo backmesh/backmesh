@@ -1804,7 +1804,7 @@ describe('install', () => {
       // Only GitHub's refusal is called revoked.
       expect(
         stale.lines.includes(
-          `GitHub revoked the saved sign-in. Install signs in again.`,
+          `The saved GitHub sign-in expired or was revoked. Install signs in again.`,
         ),
       ).toBe(token === 'ghu_revoked');
       expect(readFileSync(join(staleDir, '.token'), 'utf8').trim()).toBe(
@@ -1819,7 +1819,7 @@ describe('install', () => {
     writeFileSync(join(ciSaved, '.token'), 'ghu_revoked');
     await install(options, ciRevoked.deps);
     expect(ciRevoked.lines).toContain(
-      `GitHub revoked the saved sign-in. Install uses GITHUB_TOKEN.`,
+      `The saved GitHub sign-in expired or was revoked. Install uses GITHUB_TOKEN.`,
     );
     expect(existsSync(join(ciSaved, '.token'))).toBe(false);
   });
