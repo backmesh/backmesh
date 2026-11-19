@@ -192,7 +192,14 @@ export class Retrier implements Routing {
           code !== 'actions_write_needed' &&
           !(status === 403 && rateLimited(error));
         if (refused) this.waiting.delete(key);
-        else entry.nextAt = now + entry.delayMs;
+        else {
+          // The Worker's 409 (no Actions write yet) or 429 (its limit)
+          // backs off, doubling up to MAX_POLL_MS.
+          if (status === 409 || status === 429) {
+            entry.delayMs = Math.min(entry.delayMs * 2, MAX_POLL_MS);
+          }
+          entry.nextAt = now + entry.delayMs;
+        }
         this.deps.log({
           msg: refused ? 'rerun refused; dropped' : 'run read failed; retrying',
           run: key,

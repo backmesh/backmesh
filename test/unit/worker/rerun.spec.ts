@@ -232,6 +232,34 @@ describe('POST /v1/rerun', () => {
     expect((await rerun()).status).toBe(429);
   });
 
+  it('lets an install over the cap back under it within the hour, its 429s not counting', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    upstream.runs.get('acme/app/42')!.jobs = [
+      { conclusion: 'failure', runner_name: 'GitHub Actions 2' },
+    ];
+    for (let i = 0; i < 200; i++) await rerun();
+    // Asking on while capped, 250 times over 50 minutes.
+    for (let i = 0; i < 250; i++) {
+      vi.setSystemTime(Date.now() + 12_000);
+      expect((await rerun()).status).toBe(429);
+    }
+    upstream.runs.get('acme/app/42')!.jobs = [
+      { conclusion: 'failure', runner_name: OURS },
+    ];
+    vi.setSystemTime(Date.now() + 11 * 60_000);
+
+    expect((await rerun()).status).toBe(200);
+    vi.useRealTimers();
+  });
+
+  it('refuses for Actions write before reading the repository or the run', async () => {
+    upstream.installations.get(11)!.permissions.actions = 'read';
+
+    expect((await rerun()).status).toBe(409);
+    expect(upstream.calls.filter((c) => c.includes('/repos/'))).toEqual([]);
+    expect(upstream.mints).toEqual([]);
+  });
+
   it.each([
     [
       'a 403 with retry-after',

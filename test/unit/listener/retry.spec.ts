@@ -251,8 +251,29 @@ describe('Retrier', () => {
     await env.retrier.poll(2 * MIN);
     expect(env.retrier.status(0).waiting).toBe(1);
     env.failRerun();
+    // Backed off: 4 minutes after the refusal, not 2.
     await env.retrier.poll(4 * MIN);
+    expect(env.calls).not.toContain('rerun');
+    await env.retrier.poll(6 * MIN);
     expect(env.calls).toContain('rerun');
+  });
+
+  it('backs off, doubling up to 30 minutes, while the Worker answers 409 or 429', async () => {
+    const env = fakeRuns();
+    await env.retrier.decide(RUN, [reclaim('r1')]);
+    env.finish();
+    env.failRerun(429);
+    let reruns = 0;
+    const tried: number[] = [];
+    for (let t = 2; t <= 120; t++) {
+      const before = env.logs.length;
+      await env.retrier.poll(t * MIN);
+      if (env.logs.length > before) tried.push(t);
+    }
+    reruns = tried.length;
+    // 2, then 4, 8, 16, 30, 30... minutes apart.
+    expect(tried.slice(0, 5)).toEqual([2, 6, 14, 30, 60]);
+    expect(reruns).toBeLessThan(10);
   });
 
   it.each<Record<string, string>>([

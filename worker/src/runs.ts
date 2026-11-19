@@ -133,7 +133,8 @@ async function runAction(
   // A call GitHub fails isn't left pending.
   try {
     const calls = await env.DB.prepare(
-      'SELECT count(*) AS n FROM run_actions WHERE install = ? AND at > ?',
+      `SELECT count(*) AS n FROM run_actions WHERE install = ? AND at > ?
+       AND outcome != 'rate_limited'`,
     )
       .bind(install.id, Date.now() - HOUR)
       .first<{ n: number }>();
@@ -161,6 +162,26 @@ async function runAction(
       return refuse('bad_tag', 403, "That isn't this install's runner tag.");
     }
 
+    // The App's Actions write is an owner's to accept on each installation;
+    // a cached grant without it is read again, so an acceptance shows at once.
+    // Checked first, so a refused call costs one installation read.
+    let installation = await installationOf(env, install.org);
+    if (!installation) {
+      await record('app_not_installed');
+      return notInstalled(env, install.org);
+    }
+    if (installation.permissions.actions !== 'write') {
+      await forget(env, install.org);
+      installation = await installationOf(env, install.org);
+    }
+    if (installation?.permissions.actions !== 'write') {
+      const login = installation?.login ?? owner;
+      return refuse(
+        'actions_write_needed',
+        409,
+        `An owner of ${login} accepts the backmesh App's Actions write at https://github.com/organizations/${login}/settings/installations/${installation?.id}, so backmesh.com can rerun and cancel runs.`,
+      );
+    }
     const reader = await mintToken(env, install.org, {
       actions: 'read',
       metadata: 'read',
@@ -246,21 +267,6 @@ async function runAction(
       .run();
     if ((await bound()) !== tag) {
       return refuse('bad_tag', 403, "That isn't this install's runner tag.");
-    }
-    // The App's Actions write is an owner's to accept on each installation;
-    // a cached grant without it is read again, so an acceptance shows at once.
-    let installation = await installationOf(env, install.org);
-    if (installation && installation.permissions.actions !== 'write') {
-      await forget(env, install.org);
-      installation = await installationOf(env, install.org);
-    }
-    if (installation?.permissions.actions !== 'write') {
-      const login = installation?.login ?? owner;
-      return refuse(
-        'actions_write_needed',
-        409,
-        `An owner of ${login} accepts the backmesh App's Actions write at https://github.com/organizations/${login}/settings/installations/${installation?.id}, so backmesh.com can rerun and cancel runs.`,
-      );
     }
     const writer = await mintToken(env, install.org, {
       actions: 'write',
