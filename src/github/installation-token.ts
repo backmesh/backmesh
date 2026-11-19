@@ -53,6 +53,16 @@ export class InstallationTokens {
   // What the installation grants the App, such as `{ actions: 'write' }`,
   // which backmesh.com's run actions need. Undefined before the first mint.
   installationPermissions: Record<string, string | undefined> | undefined;
+
+  // The installation's Actions permission, as `status` reports it:
+  // backmesh.com reruns and cancels with its write. Undefined before the
+  // first mint.
+  actionsPermission() {
+    return (
+      this.installationPermissions &&
+      (this.installationPermissions.actions ?? 'none')
+    );
+  }
   // Since when the broker has failed or refused, and the latest reason;
   // null once it mints or answers 409.
   unreachable: { since: string; error: string } | null = null;

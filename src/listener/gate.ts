@@ -219,6 +219,8 @@ export class Gate {
           if (other.key === timed.key) other.limited ??= now;
         }
         state.limited = true;
+        // A limit cancel the Worker refuses isn't tried again (only the
+        // label path is): the runners end at the grace either way.
         this.deps.log({ msg: 'runtime limit', run: timed.key, runner });
         await this.cancel(state, 'limit', {
           name: `runtime limit in run ${state.run.runId}`,
