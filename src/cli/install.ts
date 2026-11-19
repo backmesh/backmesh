@@ -12,7 +12,7 @@ import {
 import { ANYCLOUD_VERSION } from '../anycloud/contract.generated.js';
 import { missingFeatures, type FeatureTable } from '../anycloud/features.js';
 import { anycloudControl } from '../app/anycloud.js';
-import { workerDeps, signInForKey, waitForApp } from './worker.js';
+import { API_URL_ENV, workerDeps, signInForKey, waitForApp } from './worker.js';
 import { checkSignIn, saveSignIn, signInAgain } from './github-sign-in.js';
 import { readApiVersion, readListener } from './status.js';
 import { readOverride } from '../app/override.js';
@@ -1376,6 +1376,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
           installKey,
           rotatingFrom: current.rotatingFrom,
           cacheCapGb: plan.cacheCapGb,
+          apiUrl: deps.env[API_URL_ENV],
         },
         { control, runLong: deps.runLong, again: 'install' },
       );
@@ -1390,6 +1391,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         installKey,
         runners: finalRunners,
         cacheCapGb: plan.cacheCapGb,
+        apiUrl: deps.env[API_URL_ENV],
       }),
     );
     // anycloud refuses a Deployment on a pool that isn't running yet.

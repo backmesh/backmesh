@@ -253,7 +253,8 @@ describe("release.yml's Worker deploy", () => {
     ).jobs.setup!.steps!.find((s) =>
       s.run?.includes('worker/scripts/setup.ts'),
     )!.env!;
-    expect(step.env).toEqual(setup);
+    const { RC: _rc, ...env } = step.env!;
+    expect(env).toEqual(setup);
     expect(step.env!.CLOUDFLARE_API_TOKEN).toBe(
       '${{ secrets.CLOUDFLARE_API_TOKEN }}',
     );
@@ -282,17 +283,10 @@ describe("release.yml's Worker deploy", () => {
     for (const job of ['release', 'public', 'cache-action', 'homebrew']) {
       expect(needs(job), job).toContain(name);
     }
-    // Neither an rc nor a release publishes after a failed deploy.
-    const after = (result: string, context: Context) =>
-      runs('release', {
-        ...context,
-        'needs.matrix.result': 'success',
-        [`needs.${name}.result`]: result,
-      });
-    expect(after('success', rc)).toBe(true);
-    expect(after('success', final)).toBe(true);
-    expect(after('failure', rc)).toBe(false);
-    expect(after('failure', final)).toBe(false);
+    // Neither an rc nor a release publishes after a failed deploy: with no
+    // `if`, GitHub runs a job only when every job it needs succeeded.
+    expect(release.jobs.release!.needs).toContain(name);
+    expect(release.jobs.release!.if).toBeUndefined();
   });
 });
 

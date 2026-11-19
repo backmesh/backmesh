@@ -1,6 +1,7 @@
 // The backmesh Worker on api.backmesh.com, still named
-// backmesh-billing, as is its database. The Worker setup workflow deploys it,
-// with the database ID filled in.
+// backmesh-billing, as is its database, and `env.staging`, the one an rc
+// qualifies on. release.yml deploys them (worker/scripts/setup.ts), with the
+// database ID filled in.
 {
   "name": "backmesh-billing",
   "main": "src/index.ts",
@@ -56,4 +57,45 @@
   "workers_dev": false,
   // Workers Logs keeps recent invocations, exceptions and console lines.
   "observability": { "enabled": true },
+  // Staging: release.yml deploys it from each -rc.N tag, and the rc's e2e
+  // signs in through it (BACKMESH_API_URL). Its own database, hostname and
+  // rate limits; the same App and, inherited, cron (2 of the 5).
+  "env": {
+    "staging": {
+      "name": "backmesh-staging",
+      "vars": { "GITHUB_APP_SLUG": "backmesh" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "backmesh-staging",
+          // Filled in by worker/scripts/setup.ts.
+          "database_id": "00000000-0000-0000-0000-000000000000",
+          "migrations_dir": "migrations",
+        },
+      ],
+      "ratelimits": [
+        {
+          "name": "SIGNIN_LIMIT",
+          "namespace_id": "4511",
+          "simple": { "limit": 30, "period": 60 },
+        },
+        {
+          "name": "INSTALL_LIMIT",
+          "namespace_id": "4512",
+          "simple": { "limit": 30, "period": 60 },
+        },
+        {
+          "name": "TOKEN_LIMIT",
+          "namespace_id": "4513",
+          "simple": { "limit": 10, "period": 60 },
+        },
+      ],
+      "durable_objects": {
+        "bindings": [{ "name": "RELAY", "class_name": "Relay" }],
+      },
+      "routes": [
+        { "pattern": "api-staging.backmesh.com", "custom_domain": true },
+      ],
+    },
+  },
 }

@@ -13,8 +13,10 @@ name: E2E
 # `uninstall` drain would.
 #
 # With `version` (a release or release candidate, such as v0.4.3-rc.1), the
-# `production` job checks api.backmesh.com runs the Worker built from that
-# tag's commit, and the `test-org` job installs that release fresh for `org`,
+# `worker` job checks the Worker release.yml deployed for that tag (the
+# staging one on api-staging.backmesh.com for an rc, api.backmesh.com for a
+# release) runs that tag's commit, and the `test-org` job, signed in through
+# that same Worker, installs that release fresh for `org`,
 # the test org (backmesh-dryrun), once per leg: on AWS, running the label
 # member, and on Azure, in our Azure CI subscription, with the control plane
 # where install puts it by default, running one job. Each leg then
@@ -72,6 +74,7 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       version: ${{ steps.pinned.outputs.version }}
+      api-url: ${{ steps.pinned.outputs.api-url }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -88,6 +91,10 @@ jobs:
           if [[ -n $VERSION ]]; then
             [[ $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] || { echo "::error::$VERSION isn't a release tag"; exit 1; }
             echo "version=$VERSION" >>"$GITHUB_OUTPUT"
+            # The Worker release.yml deployed for it.
+            api=https://api.backmesh.com
+            [[ $VERSION == *-rc.* ]] && api=https://api-staging.backmesh.com
+            echo "api-url=$api" >>"$GITHUB_OUTPUT"
             exit 0
           fi
           version=$(awk -F': ' '/^ {6}BACKMESH_VERSION:/ { print $2; exit }' .github/workflows/ci-install.yml)
@@ -156,26 +163,30 @@ jobs:
       - name: 'Stop member: terminate the runner Job, GitHub must fail the job within 15 s'
         run: node test/e2e/run-stop-member.ts
 
-  # The Worker on api.backmesh.com is the one release.yml deployed for
-  # `version`: a release's CLI is tested against what production runs.
-  production:
+  # The Worker the tag's CLI signs in through is the one release.yml deployed
+  # for it: a release's CLI is tested against what production runs, an rc's
+  # against staging.
+  worker:
     needs: plan
     if: ${{ inputs.version }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
+    env:
+      BACKMESH_API_URL: ${{ needs.plan.outputs.api-url }}
     steps:
-      - name: api.backmesh.com runs the Worker built from the tag under test
+      - name: The target Worker runs the one built from the tag under test
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.plan.outputs.version }}
         run: |
           want=$(gh api "repos/$GITHUB_REPOSITORY/commits/$VERSION" --jq .sha)
-          got=$(curl -fsS --max-time 30 https://api.backmesh.com/v1/version | jq -r .commit) || got=
+          host=${BACKMESH_API_URL#https://}
+          got=$(curl -fsS --max-time 30 "$BACKMESH_API_URL/v1/version" | jq -r .commit) || got=
           [[ $got == "$want" ]] \
-            || { echo "::error::api.backmesh.com runs the Worker built from ${got:-an unknown commit}, not $VERSION's $want"; exit 1; }
-          echo "api.backmesh.com runs $VERSION's Worker, $want."
+            || { echo "::error::$host runs the Worker built from ${got:-an unknown commit}, not $VERSION's $want"; exit 1; }
+          echo "$host runs $VERSION's Worker, $want."
 
   # A fresh install of `version` on the test org, per leg, then the uninstall
   # and a sweep, whatever came before them. AWS, with the control plane
@@ -206,6 +217,9 @@ jobs:
       ORG: ${{ inputs.org }}
       VERSION: ${{ needs.plan.outputs.version }}
       CLOUD: ${{ matrix.cloud }}
+      # Every sign-in, and the listener install makes, use the Worker the
+      # `worker` job checks.
+      BACKMESH_API_URL: ${{ needs.plan.outputs.api-url }}
       # Our Azure CI subscription (131eed90-…), as ci-install.yml's.
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
     steps:

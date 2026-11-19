@@ -399,10 +399,7 @@ describe('install', () => {
       const secret = requests.find((r) =>
         r.startsWith('PUT /v1/secrets/backmesh-acme '),
       )!;
-      return JSON.parse(secret.split(' ')[2]!).values as Record<
-        string,
-        string
-      >;
+      return JSON.parse(secret.split(' ')[2]!).values as Record<string, string>;
     };
     // The staging Worker's install key is unknown to production's.
     expect(

@@ -9,8 +9,8 @@ name: Release
 # backmesh/backmesh-releases, which install.sh and Homebrew's backmesh/tap
 # install from, and the cache action to backmesh/cache. A vX.Y.Z-rc.N tag is a
 # qualification build: a prerelease in this repository only, with no notes
-# file, no Worker deploy, no mirror and no formula; its images are public as
-# for any release.
+# file, no mirror and no formula, which deploys the staging Worker on
+# api-staging.backmesh.com instead; its images are public as for any release.
 # An rc may be tagged on a pull request's head, so a change is live-checked
 # before it merges (owner, 2026-11-18); a release's own tag must be on main.
 # Tag an rc only on a same-repository branch head a maintainer has reviewed,
@@ -113,18 +113,20 @@ jobs:
           if-no-files-found: error
 
   # The Worker the release's CLI signs in through, deployed from the tag's
-  # commit once the rc it was qualified as builds again, and before anything
-  # publishes, so no published CLI meets an older Worker; a failed deploy
-  # publishes nothing. As worker-setup.yml does, with its secrets: the
-  # database's migrations, the Worker, and its secrets.
+  # commit before anything publishes, so no published CLI meets an older
+  # Worker; a failed deploy publishes nothing. A release deploys production,
+  # once the rc it was qualified as builds again; an rc deploys only the
+  # staging Worker, which its e2e signs in through. As worker-setup.yml
+  # does, with its secrets: the database's migrations, the Worker, and its
+  # secrets.
   worker:
     needs: [check, matrix]
-    if: needs.check.outputs.rc == 'false'
     runs-on: ubuntu-24.04
     environment: publish
     timeout-minutes: 20
+    # Production's deploys queue with worker-setup.yml's.
     concurrency:
-      group: worker
+      group: ${{ needs.check.outputs.rc == 'true' && 'worker-staging' || 'worker' }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -137,18 +139,17 @@ jobs:
       - run: yarn --cwd website install --frozen-lockfile --ignore-scripts
       - name: Deploy the Worker
         env:
+          RC: ${{ needs.check.outputs.rc }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           BILLING_GITHUB_CLIENT_ID: ${{ vars.BILLING_GITHUB_CLIENT_ID }}
           BILLING_GITHUB_APP_ID: ${{ vars.BILLING_GITHUB_APP_ID || secrets.BILLING_GITHUB_APP_ID }}
           BILLING_GITHUB_APP_PRIVATE_KEY: ${{ secrets.BILLING_GITHUB_APP_PRIVATE_KEY }}
           BILLING_GITHUB_APP_PRIVATE_KEY_NEXT: ${{ secrets.BILLING_GITHUB_APP_PRIVATE_KEY_NEXT }}
-        run: node worker/scripts/setup.ts --apply
+        run: node worker/scripts/setup.ts --apply $([[ $RC == true ]] && echo --staging)
 
-  # After the Worker's deploy on a release; an rc has none.
   release:
     needs: [check, matrix, worker]
-    if: ${{ !cancelled() && needs.matrix.result == 'success' && (needs.worker.result == 'success' || needs.check.outputs.rc == 'true') }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write # the GitHub release

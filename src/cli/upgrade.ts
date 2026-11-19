@@ -7,7 +7,7 @@ import { type AnycloudApi, type anycloudApi } from '../anycloud/client.js';
 import type { FeatureTable } from '../anycloud/features.js';
 import { anycloudControl } from '../app/anycloud.js';
 import type { Compatibility } from '../release/compatibility.js';
-import { keyAccepted, waitForApp, workerDeps } from './worker.js';
+import { API_URL_ENV, keyAccepted, waitForApp, workerDeps } from './worker.js';
 import { NeedsPlan, PlanChanged, UsageError } from './errors.js';
 import { hashPlan, type UpgradePlan } from './plan.js';
 import { checkHosted, checkPinned, hostedApi } from './prerequisites.js';
@@ -489,6 +489,7 @@ export async function upgrade(
         // sets or clears it.
         rotatingFrom: running.rotatingFrom,
         cacheCapGb: running.cacheCapGb,
+        apiUrl: deps.env[API_URL_ENV],
       },
       { control, runLong: deps.runLong, again: 'upgrade' },
     );

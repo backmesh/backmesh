@@ -1,17 +1,30 @@
 // Sets up the Worker, idempotently, for release.yml's deploy and
 // worker-setup.yml's first setup: the D1 database and its migrations, the
 // Worker, built from GITHUB_SHA's commit, and its secrets. A dry run only
-// reads and prints the plan.
+// reads and prints the plan. `--staging` sets up the staging Worker an rc
+// qualifies on instead (wrangler.jsonc's staging environment), with its own
+// database and hostname and the same App.
 //
-//   node worker/scripts/setup.ts [--apply]
+//   node worker/scripts/setup.ts [--apply] [--staging]
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 import { appJwt } from '../src/app.ts';
 
-const HOST = 'https://api.backmesh.com';
-const DATABASE = 'backmesh-billing';
-const WORKER = 'backmesh-billing';
+const TARGETS = {
+  production: {
+    host: 'https://api.backmesh.com',
+    database: 'backmesh-billing',
+    worker: 'backmesh-billing',
+    env: [] as string[],
+  },
+  staging: {
+    host: 'https://api-staging.backmesh.com',
+    database: 'backmesh-staging',
+    worker: 'backmesh-staging',
+    env: ['--env', 'staging'],
+  },
+};
 const CONFIG = 'worker/wrangler.jsonc';
 const SETUP_CONFIG = 'worker/wrangler.setup.jsonc';
 // Owner-set in the publish environment; the Worker gets them as secrets.
@@ -43,6 +56,7 @@ const RETIRED = [
 export interface Deps {
   env: Record<string, string | undefined>;
   apply: boolean;
+  staging?: boolean;
   fetch: typeof fetch;
   // Runs wrangler with the arguments, and stdin; returns stdout.
   wrangler: (args: string[], input?: string) => string;
@@ -54,6 +68,7 @@ export interface Deps {
 // fails on that limit can leave them partly changed. Read-only, so a dry
 // run reports them too; after a deploy, a difference stops the setup.
 export async function checkTriggers(
+  worker: string,
   env: Deps['env'],
   fetch: Deps['fetch'],
   log: Deps['log'],
@@ -65,7 +80,7 @@ export async function checkTriggers(
     ) as string[]
   ).sort();
   const res = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${WORKER}/schedules`,
+    `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${worker}/schedules`,
     { headers: { Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}` } },
   );
   if (!res.ok) {
@@ -84,7 +99,16 @@ export async function checkTriggers(
   log(`${differ} The apply sets them.`);
 }
 
-export async function setup({ env, apply, fetch, wrangler, log }: Deps) {
+export async function setup({
+  env,
+  apply,
+  staging,
+  fetch,
+  wrangler,
+  log,
+}: Deps) {
+  const target = TARGETS[staging ? 'staging' : 'production'];
+  const { host, database: databaseName, worker } = target;
   const missing = REQUIRED.filter((name) => !env[name]);
   if (missing.length) {
     throw new Error(
@@ -144,35 +168,44 @@ export async function setup({ env, apply, fetch, wrangler, log }: Deps) {
     uuid: string;
     name: string;
   }[];
-  let database = databases.find((d) => d.name === DATABASE)?.uuid;
+  let database = databases.find((d) => d.name === databaseName)?.uuid;
   if (!database) {
-    plan(`create the D1 database ${DATABASE}`);
+    plan(`create the D1 database ${databaseName}`);
     if (apply) {
-      wrangler(['d1', 'create', DATABASE]);
+      wrangler(['d1', 'create', databaseName]);
       database = (
         JSON.parse(wrangler(['d1', 'list', '--json'])) as typeof databases
-      ).find((d) => d.name === DATABASE)?.uuid;
+      ).find((d) => d.name === databaseName)?.uuid;
     }
   }
   if (database && apply) {
     writeFileSync(
       SETUP_CONFIG,
       readFileSync(CONFIG, 'utf8').replace(
-        /"database_id": "[^"]*"/,
-        `"database_id": "${database}"`,
+        new RegExp(
+          `("database_name": "${databaseName}",[^}]*"database_id": ")[^"]*`,
+        ),
+        `$1${database}`,
       ),
     );
   }
-  const config = ['--config', SETUP_CONFIG];
+  const config = ['--config', SETUP_CONFIG, ...target.env];
   const listSecrets = () =>
     (
       JSON.parse(
-        wrangler(['secret', 'list', '--format', 'json', '--name', WORKER]),
+        wrangler(['secret', 'list', '--format', 'json', '--name', worker]),
       ) as { name: string }[]
     ).map((s) => s.name);
-  plan(`apply ${DATABASE}'s migrations and deploy the Worker on ${HOST}`);
+  plan(`apply ${databaseName}'s migrations and deploy the Worker on ${host}`);
   if (apply) {
-    wrangler(['d1', 'migrations', 'apply', DATABASE, '--remote', ...config]);
+    wrangler([
+      'd1',
+      'migrations',
+      'apply',
+      databaseName,
+      '--remote',
+      ...config,
+    ]);
     wrangler(['deploy', ...config, '--var', `COMMIT:${env.GITHUB_SHA}`]);
   }
   // After a deploy the Worker exists, so a failure here is real; a dry run
@@ -186,7 +219,7 @@ export async function setup({ env, apply, fetch, wrangler, log }: Deps) {
       log('No Worker yet.');
     }
   }
-  await checkTriggers(env, fetch, log, apply);
+  await checkTriggers(worker, env, fetch, log, apply);
 
   // The Worker's secrets, through stdin so no value reaches the log.
   const pending: Record<string, string> = {
@@ -215,6 +248,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   await setup({
     env: process.env,
     apply: process.argv.includes('--apply'),
+    staging: process.argv.includes('--staging'),
     fetch,
     wrangler: (args, input) =>
       execFileSync('website/node_modules/.bin/wrangler', args, {
