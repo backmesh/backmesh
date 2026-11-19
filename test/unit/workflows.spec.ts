@@ -538,7 +538,11 @@ describe("e2e.yml's sign-in codes", () => {
     writeFileSync(env, '');
     expect(step.env!.GH_TOKEN).toBe('${{ github.token }}');
     const out = runStep(step.run!, {
-      env: { GITHUB_ENV: env, GITHUB_REPOSITORY: 'backmesh/backmesh' },
+      env: {
+        TITLE: step.env!.TITLE!,
+        GITHUB_ENV: env,
+        GITHUB_REPOSITORY: 'backmesh/backmesh',
+      },
       commands: {
         gh: `echo "$*" >>${calls}
 case "$2" in
