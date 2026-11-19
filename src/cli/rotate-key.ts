@@ -43,7 +43,7 @@ import {
 } from './worker.js';
 import { rollListener } from './converge.js';
 import { UsageError } from './errors.js';
-import { keyFrom, type SignInScopes } from './github-sign-in.js';
+import { keyFrom, type SignInCheck } from './github-sign-in.js';
 import { z } from 'zod';
 
 import {
@@ -65,7 +65,7 @@ export interface RotateKeyDeps {
   print: (line: string) => void;
   fetch?: typeof globalThis.fetch;
   wait?: (ms: number) => Promise<void>;
-  signInScopes?: SignInScopes;
+  signInCheck?: SignInCheck;
   api?: typeof anycloudApi;
   exec?: typeof anycloudExec;
 }
@@ -194,22 +194,22 @@ export async function rotateKey(
       // needed for that, never another key: signing in again for this
       // install would replace a key that's already correctly deployed.
       print(
-        `Signing in as an admin of ${org} to finish rotating its install key.`,
+        `Signing in as an owner of ${org} to finish rotating its install key.`,
       );
       const token = await signIn(
         worker,
-        `as an admin of ${org}, to finish rotating its install key`,
+        `as an owner of ${org}, to finish rotating its install key`,
       );
       return { newKey: currentKey, oldInstall: resume, token };
     }
     // A key is `bmk_`, the 32-hex install ID, then 32 random hex.
     const oldInstall = currentKey.slice(4, 36);
-    print(`Signing in as an admin of ${org} to mint a new install key.`);
+    print(`Signing in as an owner of ${org} to mint a new install key.`);
     // Never the old key's install ID: a fresh install, so the old key
     // keeps working until it's explicitly revoked below.
     const signed = await keyFrom(org, worker, deps.env, {
-      why: `as an admin of ${org}, to replace its install key`,
-      scopesOf: deps.signInScopes,
+      why: `as an owner of ${org}, to replace its install key`,
+      checkOf: deps.signInCheck,
       ignoreSaveSignInError: true,
     });
     print(`Rolling ${org}'s listener onto the new key.`);

@@ -162,7 +162,6 @@ export function testEnv(): Env {
     SIGNIN_LIMIT: limiter(),
     INSTALL_LIMIT: limiter(),
     TOKEN_LIMIT: limiter(),
-    GITHUB_CLIENT_ID: 'client',
     GITHUB_APP_ID: '1',
     GITHUB_APP_SLUG: 'backmesh',
     GITHUB_APP_PRIVATE_KEY: appKey(),
@@ -202,14 +201,21 @@ export class Upstream {
   // The App's installations by org ID, and the key GitHub checks JWTs with.
   installations = new Map<number, InstallationFixture>();
   appPublicKey = publicKey;
-  // GitHub's status for a membership lookup, when it fails.
-  membershipStatus?: number;
-  // Orgs whose OAuth app access restrictions haven't approved backmesh.
-  restricted = new Set<string>();
   // Each token mint's requested permissions.
   mints: Record<string, string>[] = [];
   // The scopes GitHub grants a sign-in's token, as its answer lists them.
   oauthScope = 'read:org,read:packages';
+  // Paths GitHub never answers: the request waits until it's aborted.
+  silent = new Set<string>();
+  // The orgs whose installation each user's token reaches, by user, when
+  // not the user's memberships.
+  reaches = new Map<string, number[]>();
+  // Users whose token GitHub refuses (401).
+  revoked = new Set<string>();
+  // GitHub's status for a path it fails.
+  failing = new Map<string, number>();
+  // GitHub's own answer for a path, such as a rate limit or an SSO refusal.
+  answers = new Map<string, () => Response>();
 
   fetch = async (input: string | URL | Request, init: RequestInit = {}) => {
     const url = new URL(String(input));
@@ -223,6 +229,21 @@ export class Upstream {
     const path = url.pathname;
     this.calls.push(`${init.method ?? 'GET'} ${url.host}${path}`);
     this.forms.push([path, form]);
+    if (this.silent.has(path)) {
+      return new Promise<Response>((_, reject) =>
+        init.signal?.addEventListener('abort', () =>
+          reject(init.signal!.reason),
+        ),
+      );
+    }
+    const answer = this.answers.get(path);
+    if (answer) return answer();
+    if (this.failing.has(path)) {
+      return new Response('', { status: this.failing.get(path) });
+    }
+    if (this.revoked.has(user)) {
+      return Response.json({ message: 'Bad credentials' }, { status: 401 });
+    }
     if (path === '/login/device/code') {
       return Response.json({
         device_code: 'device',
@@ -241,35 +262,21 @@ export class Upstream {
         return Response.json({ error: 'expired_token' });
       }
     }
-    const membership = path.match(/^\/user\/memberships\/orgs\/(.+)$/);
-    if (membership && this.membershipStatus) {
-      return Response.json(
-        { message: 'Resource protected by organization SAML enforcement.' },
-        { status: this.membershipStatus },
-      );
-    }
-    if (membership && this.restricted.has(membership[1]!)) {
-      // GitHub's answer, verbatim.
-      return Response.json(
-        {
-          message: `Although you appear to have the correct authorization credentials, the \`${membership[1]}\` organization has enabled OAuth App access restrictions, meaning that data access to third-parties is limited. For more information on these restrictions, including how to enable this app, visit https://docs.github.com/articles/restricting-access-to-your-organization-s-data/`,
-          documentation_url:
-            'https://docs.github.com/articles/restricting-access-to-your-organization-s-data/',
-        },
-        { status: 403 },
-      );
-    }
-    if (membership) {
-      const m = this.memberships
-        .get(user)
-        ?.find((o) => o.login === membership[1]);
-      if (!m) return new Response('', { status: 404 });
-      const organization = { id: m.id, login: m.login };
+    // The App's installations a user token reaches: GitHub lists one when
+    // the user can access one of its repositories, which `reaches` sets
+    // (an outside collaborator's, or a member's with no repository), else
+    // the user's orgs.
+    if (path === '/user/installations') {
+      const orgs =
+        this.reaches.get(user) ??
+        (this.memberships.get(user) ?? []).map((o) => o.id);
+      const installations = orgs.flatMap((id) => {
+        const i = this.installations.get(id);
+        return i ? [{ id: i.id, account: { id, login: i.login } }] : [];
+      });
       return Response.json({
-        role: m.role,
-        state: 'active',
-        organization,
-        user: { id: this.userId(user), login: user },
+        total_count: installations.length,
+        installations,
       });
     }
     if (path === '/login/oauth/access_token') {
@@ -281,10 +288,43 @@ export class Upstream {
     if (path === '/user') {
       return Response.json({ id: this.userId(user), login: user });
     }
+    // The App's user token reaches an org's runner groups only where the
+    // App is installed and the person can manage the org's runners.
+    const groups = path.match(/^\/orgs\/([^/]+)\/actions\/runner-groups$/);
+    if (groups) {
+      const org = this.org(groups[1]!);
+      const m = this.memberships.get(user)?.find((o) => o.id === org?.id);
+      if (!org || !m) {
+        return Response.json({ message: 'Not Found' }, { status: 404 });
+      }
+      if (!this.installations.has(org.id) || m.role !== 'admin') {
+        return Response.json(
+          { message: 'Resource not accessible by integration' },
+          { status: 403 },
+        );
+      }
+      return Response.json({ total_count: 1, runner_groups: [] });
+    }
+    const org = path.match(/^\/orgs\/([^/]+)$/);
+    if (org) {
+      const found = this.org(org[1]!);
+      return found
+        ? Response.json(found)
+        : Response.json({ message: 'Not Found' }, { status: 404 });
+    }
     if (path.startsWith('/app') || /^\/orgs\/[^/]+\/installation$/.test(path))
       return this.app(path, init);
     return new Response(`unexpected ${path}`, { status: 500 });
   };
+
+  // GitHub's public `GET /orgs/{org}`, from the orgs the fixtures name.
+  private org(login: string) {
+    const known = [
+      ...[...this.memberships.values()].flat(),
+      ...[...this.installations].map(([id, i]) => ({ id, login: i.login })),
+    ].find((o) => o.login.toLowerCase() === login.toLowerCase());
+    return known && { id: known.id, login: known.login };
+  }
 
   private userId(login: string) {
     if (!this.userIds.has(login))

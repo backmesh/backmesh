@@ -53,11 +53,9 @@ VM, so no image layers carry over.
 
 ## Installing
 
-**Can I install backmesh when my org restricts OAuth apps?** Yes, once an org
-owner approves backmesh at
-`https://github.com/organizations/<org>/settings/oauth_application_policy`. An
-org with OAuth app access restrictions, the default for a new org, refuses
-install's sign-in until then.
+**Can I install backmesh when my org restricts OAuth apps?** Yes. backmesh
+signs in through its GitHub App, and GitHub Apps aren't subject to an org's
+OAuth app access restrictions.
 
 **Where does backmesh put its control plane?** With several cloud CLIs signed in and no
 `--control-plane`, install picks the first of AWS, GCP and Azure, and the plan
@@ -72,8 +70,8 @@ VM type backmesh's labels use, narrowed to the ones your account allows.
 [More](/install/#regions).
 
 **Can several orgs share one backmesh control plane?** Yes, when they have the same owner:
-run install with the other org and the same `--control-plane`. An admin of that
-org signs in, and install adds only that org's listener. Its plan says the org
+run install with the other org and the same `--control-plane`. An owner of
+that org, or a member who manages its self-hosted runners, signs in, and install adds only that org's listener. Its plan says the org
 joins the others' control plane, and that every org on it must have the same
 owner: their runners use the same cloud connections, and each org's listener,
 on its own VM, holds a control plane token that can reach the others' install
@@ -121,9 +119,9 @@ as it would without one.
 **Can a coding agent in a sandbox cue backmesh?** Yes, with a copied sign-in. A sandbox that starts fresh each time can't
 keep a sign-in. A human can copy one from a machine where backmesh is signed
 in, `~/.backmesh/anycloud/.token`, into the sandbox's secrets as
-`BACKMESH_CUE_TOKEN`, which `backmesh cue` uses first. It is that human's full
-backmesh sign-in, not a cue-only key, so keep it secret; a later sign-in on
-that machine can revoke it.
+`BACKMESH_CUE_TOKEN`, which `backmesh cue` uses first. It lasts 8 hours from
+that sign-in, and it is that human's full backmesh sign-in, not a cue-only
+key, so keep it secret; a later sign-in on that machine can revoke it.
 
 ## Is it safe?
 

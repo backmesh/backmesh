@@ -46,10 +46,10 @@ describe('the installation’s identity', () => {
       auth.push((init?.headers as Record<string, string>).authorization);
       return githubOrg(new URL(url).pathname);
     }) as unknown as typeof globalThis.fetch;
-    await readOrgId('Acme', fetch, { GITHUB_TOKEN: 'gho_a', GH_TOKEN: 'b' });
+    await readOrgId('Acme', fetch, { GITHUB_TOKEN: 'ghu_a', GH_TOKEN: 'b' });
     await readOrgId('Acme', fetch, { GH_TOKEN: 'b' });
     await readOrgId('Acme', fetch, {});
-    expect(auth).toEqual(['Bearer gho_a', 'Bearer b', undefined]);
+    expect(auth).toEqual(['Bearer ghu_a', 'Bearer b', undefined]);
   });
 
   it('says when GitHub’s rate limit stopped the read', async () => {
@@ -82,7 +82,7 @@ describe('the installation’s identity', () => {
       ),
     ]) {
       await expect(
-        readOrgId('Acme', fetch, { GITHUB_TOKEN: 'gho_a' }),
+        readOrgId('Acme', fetch, { GITHUB_TOKEN: 'ghu_a' }),
       ).rejects.toThrow(
         "GitHub's API rate limit stopped the read of Acme's ID (HTTP 403). Retry once it resets.",
       );

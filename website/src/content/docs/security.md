@@ -91,18 +91,26 @@ the CLI a key of its own and read cues sent while it does, so treat a cue's
 repository and branch names as no more secret from backmesh than its GitHub
 App's reach already makes them.
 
-The CLI calls it too. During `backmesh install`, an org admin signs in with
-GitHub once with GitHub's device flow, asking for `read:org` and
-`read:packages`: the CLI prints a code, and the admin enters it at
-`https://github.com/login/device` on any device. That GitHub page is the only
-check that the code is yours: it names backmesh and the scopes, so enter a code
-only if your own terminal printed it. backmesh checks the admin role with that
-GitHub token, mints the install key, and returns both to the CLI over HTTPS,
-keeping neither: the token stays on your machine as the control plane's
-sign-in. If backmesh's App isn't on the org, the CLI then prints GitHub's own
-install link for it. Every later sign-in (an install re-run, `upgrade`,
-`rotate-key`, `cue --sign-in`, and `status`, `logs` or `uninstall` replacing an
-expired one) uses the same device code. `backmesh upgrade` checks backmesh still accepts the install's key. `backmesh uninstall` asks an org admin to sign in the
+The CLI calls it too. During `backmesh install`, an org owner (or a member who
+manages the org's self-hosted runners) signs in to
+backmesh's GitHub App once with GitHub's device flow: the CLI prints a code and
+when it expires, and the owner enters it at `https://github.com/login/device`
+on any device. That GitHub page is the only check that the code is yours: it
+names backmesh, so enter a code only if your own terminal printed it. A code
+that expires is replaced by a new one. The sign-in is a GitHub App user token
+that lasts 8 hours, and can do only what both [the App](#the-github-app) and
+you can: manage the org's self-hosted runners, read workflow runs and their
+logs, rerun or cancel them, post check runs, and read repositories' metadata.
+It can't read code, secrets or the org's member list. The CLI sends it to
+backmesh once, which
+checks with it that you can manage the org's self-hosted runners, mints the
+install key, and returns the key over HTTPS, keeping neither: the token stays
+on your machine as the control plane's sign-in. If backmesh's App isn't on the
+org, the CLI first prints GitHub's own install link for it and waits. Every
+later sign-in (an install re-run, `upgrade`, `rotate-key`, `cue --sign-in`,
+and `status`, `logs` or `uninstall` replacing an expired one) is the same
+device flow. `backmesh upgrade` checks backmesh still accepts the install's key. `backmesh uninstall` asks an org owner, or a member who manages the org's
+self-hosted runners, to sign in the
 same way, then gets an hour-long token that can manage only your org's
 self-hosted runners, which it keeps in memory to delete backmesh's runners,
 scale sets and runner group, and finally removes the App from your org.
@@ -170,8 +178,9 @@ for up to an hour.
 ### If your install's key leaks
 
 Your install's key gets GitHub tokens for your org, so the listener reads it on
-a control plane VM, which runs no job. If you think it leaked, an admin of your
-org runs `backmesh rotate-key --org <org>`, which signs in with GitHub again,
+a control plane VM, which runs no job. If you think it leaked, an owner of your
+org, or a member who manages its self-hosted runners, runs
+`backmesh rotate-key --org <org>`, which signs in with GitHub again,
 writes a new key to the listener and only then revokes the old one. A token
 already handed out works for up to an hour.
 

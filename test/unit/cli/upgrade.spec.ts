@@ -19,6 +19,9 @@ import {
   listenerVm,
   githubOrg,
   INSTALL_KEY,
+  DEVICE,
+  GITHUB_TOKEN,
+  NEXT_DEVICE,
   SIGNED_IN,
   versionMismatch,
 } from './fakes.js';
@@ -385,11 +388,14 @@ function setUp({
     status: Array.isArray(keyStatus) ? keyStatus : [keyStatus],
     installs,
     tokens: beta ? [token('acme'), token('beta')] : [token('acme')],
+    // The first code expires before anyone enters it.
+    codes: [Response.json(DEVICE), Response.json(NEXT_DEVICE)],
+    polls: [Response.json({ error: 'expired_token' }), GITHUB_TOKEN],
   });
   const deps: UpgradeDeps = {
     // No saved anycloud files, whatever this machine holds.
     env: { BACKMESH_ANYCLOUD_DIR: mkdtempSync(join(tmpdir(), 'backmesh-')) },
-    signInScopes: async () => ['read:org', 'read:packages'],
+    signInCheck: async () => ({ login: 'octocat', appIds: [] }),
     run,
     runLong: run,
     release: async () => RELEASE,
@@ -400,7 +406,7 @@ function setUp({
       clientVersion ? fakeApi(routes, refusal, clientVersion).api : api,
     exec: () => exec,
     fetch: async (url, init) =>
-      String(url).startsWith('https://api.backmesh.com/')
+      /^https:\/\/(api\.backmesh\.com|github\.com)\//.test(String(url))
         ? worker.fetch(url, init)
         : String(url).startsWith('https://api.github.com/')
           ? githubOrg(new URL(String(url)).pathname)
@@ -464,18 +470,18 @@ describe('upgrade', () => {
     };
     // anycloud's login relays a device code until backmesh has signed in.
     const dir = deps.env.BACKMESH_ANYCLOUD_DIR!;
-    writeFileSync(join(dir, '.token'), 'gho_revoked\n');
-    deps.signInScopes = async (token) => {
-      if (token === 'gho_revoked')
+    writeFileSync(join(dir, '.token'), 'ghu_revoked\n');
+    deps.signInCheck = async (token) => {
+      if (token === 'ghu_revoked')
         throw new GitHubError(401, 'Bad credentials');
-      return ['read:org', 'read:packages'];
+      return { login: 'octocat', appIds: [] };
     };
     const run = deps.run;
     const logins: string[] = [];
     deps.run = async (args) => {
       if (args[0] !== 'login') return run(args);
       logins.push(args.join(' '));
-      if (readFileSync(join(dir, '.token'), 'utf8').startsWith('gho_revoked')) {
+      if (readFileSync(join(dir, '.token'), 'utf8').startsWith('ghu_revoked')) {
         throw Object.assign(new Error('Command failed: anycloud login'), {
           stdout: `${JSON.stringify({ actionRequired: { code: 'GITHUB_SIGN_IN_REQUIRED' } })}\n`,
         });
@@ -487,7 +493,7 @@ describe('upgrade', () => {
     await refresh!(undefined);
     expect(logins).toEqual([`login ${HOSTED}`, `login ${HOSTED}`]);
     expect(lines).toContain(
-      `GitHub revoked the saved sign-in. backmesh signs in again.`,
+      `The saved GitHub sign-in expired or was revoked. backmesh signs in again.`,
     );
     expect(readFileSync(join(dir, '.token'), 'utf8')).toBe(`${SIGNED_IN}\n`);
   });
@@ -497,7 +503,7 @@ describe('upgrade', () => {
     const result = await upgrade(deps);
 
     expect(mutations(calls)).toEqual([
-      'api upgrade',
+      'api upgrade --sign-in-apps 5622376',
       'api status --watch --json',
       ROLL,
     ]);
@@ -578,7 +584,9 @@ describe('upgrade', () => {
     await expect(upgrade(moved.deps)).rejects.toThrow(
       'Upgrade cancelled after the control plane updated, with no listener changed; raise the quotas named above, then run `backmesh upgrade` again.',
     );
-    expect(mutations(moved.calls)).toContain('api upgrade');
+    expect(mutations(moved.calls)).toContain(
+      'api upgrade --sign-in-apps 5622376',
+    );
     expect(rolledAny(moved.calls)).toBe(false);
   });
 
@@ -588,7 +596,7 @@ describe('upgrade', () => {
 
     const order = calls.filter((c) => /^(status|api upgrade|roll)/.test(c));
     // An older API reads nothing for this release's client until it moves.
-    expect(order[0]).toBe('api upgrade');
+    expect(order[0]).toBe('api upgrade --sign-in-apps 5622376');
     // Every org is read once before any roll; each roll is then read again.
     expect(order.slice(1)).toEqual([
       `status ${VM.acme}`,
@@ -836,7 +844,7 @@ describe('upgrade', () => {
     it('asks nothing when only the release moves', async () => {
       const { deps, calls } = setUp();
       await upgrade(deps);
-      expect(mutations(calls)).toContain('api upgrade');
+      expect(mutations(calls)).toContain('api upgrade --sign-in-apps 5622376');
     });
   });
 
@@ -1236,7 +1244,11 @@ describe('upgrade', () => {
     await upgrade(deps);
 
     expect(worker.calls).toEqual([
-      'POST /v1/installs/device',
+      // The first code expires before anyone enters it.
+      'POST github.com/login/device/code',
+      'POST github.com/login/oauth/access_token',
+      'POST github.com/login/device/code',
+      'POST github.com/login/oauth/access_token',
       'POST /v1/installs',
       'GET /v1/status',
       'POST /v1/token',
@@ -1273,19 +1285,19 @@ describe('upgrade', () => {
         Response.json({
           install: 'cd'.repeat(16),
           key: replaced,
-          github_token: SIGNED_IN,
         }),
       ],
     });
   const replaced = `bmk_${'cd'.repeat(16)}${'ef'.repeat(16)}`;
 
-  it('signs in again for a refused key, saves the replacement and rolls', async () => {
+  it('signs in again for a refused key, on a fresh code once the first expires, saves the replacement and rolls', async () => {
     const { deps, calls, requests, worker } = refusedKey();
 
     await upgrade(deps);
 
+    expect(worker.signIns()).toHaveLength(2);
     expect(worker.bodies).toEqual([
-      { org: 'acme', device_code: 'dev-3584e1', install: 'ab'.repeat(16) },
+      { org: 'acme', github_token: SIGNED_IN, install: 'ab'.repeat(16) },
     ]);
     expect(savedKey(requests)).toBe(replaced);
     expect(rolled(calls)).toBe(true);
@@ -1297,12 +1309,12 @@ describe('upgrade', () => {
   it("keeps the control plane's sign-in when one is saved or GITHUB_TOKEN is set", async () => {
     const saved = refusedKey();
     const token = join(saved.deps.env.BACKMESH_ANYCLOUD_DIR!, '.token');
-    writeFileSync(token, 'gho_owner\n');
+    writeFileSync(token, 'ghu_owner\n');
     await upgrade(saved.deps);
-    expect(readFileSync(token, 'utf8')).toBe('gho_owner\n');
+    expect(readFileSync(token, 'utf8')).toBe('ghu_owner\n');
 
     const ci = refusedKey();
-    ci.deps.env.GITHUB_TOKEN = 'gho_ci';
+    ci.deps.env.GITHUB_TOKEN = 'ghu_ci';
     await upgrade(ci.deps);
     const ciToken = join(ci.deps.env.BACKMESH_ANYCLOUD_DIR!, '.token');
     expect(existsSync(ciToken)).toBe(false);
@@ -1333,9 +1345,9 @@ describe('upgrade', () => {
       // The fakes refuse every read before `api upgrade`, as 0.1.73 does.
       const { deps, calls } = setUp();
       await upgrade(deps);
-      expect(calls.findIndex((c) => c === 'api upgrade')).toBeLessThan(
-        calls.findIndex((c) => c.startsWith('status')),
-      );
+      expect(
+        calls.findIndex((c) => c === 'api upgrade --sign-in-apps 5622376'),
+      ).toBeLessThan(calls.findIndex((c) => c.startsWith('status')));
       expect(mutations(calls)).toContain(ROLL);
     });
 
@@ -1388,7 +1400,7 @@ describe('upgrade', () => {
         'Upgrade cancelled after the control plane updated, with no listener changed',
       );
       expect(mutations(calls)).toEqual([
-        'api upgrade',
+        'api upgrade --sign-in-apps 5622376',
         'api status --watch --json',
       ]);
 
@@ -1406,7 +1418,7 @@ describe('upgrade', () => {
       };
       again.deps.confirm = async () => true;
       const result = await upgrade(again.deps);
-      expect(again.calls).not.toContain('api upgrade');
+      expect(again.calls).not.toContain('api upgrade --sign-in-apps 5622376');
       expect(result).toMatchObject({ controlPlane: { upgraded: false } });
       expect(mutations(again.calls)).toContain(ROLL);
     });
@@ -1417,7 +1429,7 @@ describe('upgrade', () => {
         `acme's listener didn't start on ${VM.acme}.`,
       );
       expect(mutations(calls)).toEqual([
-        'api upgrade',
+        'api upgrade --sign-in-apps 5622376',
         'api status --watch --json',
         `start ${VM.acme}`,
       ]);
@@ -1431,7 +1443,7 @@ describe('upgrade', () => {
       });
       await expect(upgrade(deps)).rejects.toThrow(NeedsPlan);
       expect(mutations(calls)).toEqual([
-        'api upgrade',
+        'api upgrade --sign-in-apps 5622376',
         'api status --watch --json',
       ]);
     });

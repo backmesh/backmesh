@@ -16,6 +16,9 @@ beforeEach(() => {
   env = testEnv();
   upstream = new Upstream();
   vi.stubGlobal('fetch', upstream.fetch);
+  // The App is on acme: a user token's runner-groups read says who manages
+  // its runners.
+  upstream.installations.set(7, { id: 70, login: 'acme', permissions: {} });
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -116,24 +119,6 @@ describe('POST /v1/installs/revoke', () => {
     });
 
     expect(res.status).toBe(403);
-  });
-
-  it("names the org's OAuth app restriction to rotate-key", async () => {
-    await remember(7, 'acme');
-    upstream.restricted.add('acme');
-    const { install: oldInstall } = await mintKey(env.DB, 7);
-    const { key: newKey } = await mintKey(env.DB, 7);
-
-    const res = await call(newKey, {
-      install: oldInstall,
-      github_token: 'token-alice',
-    });
-
-    expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({
-      error:
-        'acme restricts third-party apps: an org owner approves backmesh at https://github.com/organizations/acme/settings/oauth_application_policy, then run rotate-key again.',
-    });
   });
 
   it('refuses a missing github_token', async () => {
@@ -256,9 +241,12 @@ describe('POST /v1/installs/revoke', () => {
     expect(res.status).toBe(403);
   });
 
-  it("answers 502 when GitHub's membership check fails, revoking nothing", async () => {
+  it("answers 502 when GitHub's runner-groups check fails, revoking nothing", async () => {
     await remember(7, 'acme');
-    upstream.membershipStatus = 500;
+    upstream.memberships.set('alice', [
+      { id: 7, login: 'acme', role: 'admin' },
+    ]);
+    upstream.failing.set('/orgs/acme/actions/runner-groups', 500);
     const { key: oldKey, install: oldInstall } = await mintKey(env.DB, 7);
     const { key: newKey } = await mintKey(env.DB, 7);
 

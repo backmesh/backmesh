@@ -8,7 +8,6 @@ import { appKey, Upstream } from './fakes.js';
 const ENV: Record<string, string> = {
   CLOUDFLARE_API_TOKEN: 'cf',
   CLOUDFLARE_ACCOUNT_ID: 'acct',
-  BILLING_GITHUB_CLIENT_ID: 'Iv1.client',
   BILLING_GITHUB_APP_ID: '1',
   BILLING_GITHUB_APP_PRIVATE_KEY: appKey(),
 };
@@ -109,10 +108,8 @@ describe('Worker setup', () => {
 
   it('names missing secrets', async () => {
     const w = world();
-    const { BILLING_GITHUB_CLIENT_ID: _, ...partial } = ENV;
-    await expect(w.run(true, partial)).rejects.toThrow(
-      'BILLING_GITHUB_CLIENT_ID',
-    );
+    const { CLOUDFLARE_ACCOUNT_ID: _, ...partial } = ENV;
+    await expect(w.run(true, partial)).rejects.toThrow('CLOUDFLARE_ACCOUNT_ID');
     expect(w.writes).toEqual([]);
   });
 
@@ -133,7 +130,7 @@ describe('Worker setup', () => {
     expect(w.writes).toContain('wrangler deploy');
     expect(w.cf.secrets).not.toHaveProperty('GITHUB_APP_ID');
     expect(w.cf.secrets).not.toHaveProperty('GITHUB_APP_PRIVATE_KEY');
-    expect(w.cf.secrets).toHaveProperty('GITHUB_CLIENT_ID');
+    expect(w.cf.secrets).toEqual({});
     expect(w.log.join('\n')).toContain('answer 503');
   });
 
@@ -185,7 +182,6 @@ describe('Worker setup', () => {
       'wrangler secret bulk',
     ]);
     expect(w.cf.secrets).toEqual({
-      GITHUB_CLIENT_ID: 'Iv1.client',
       GITHUB_APP_ID: '1',
       GITHUB_APP_PRIVATE_KEY: ENV.BILLING_GITHUB_APP_PRIVATE_KEY,
     });
@@ -210,6 +206,8 @@ describe('Worker setup', () => {
       BILLING_OPEN: 'true',
       BILLING_ALLOWLIST: 'acme',
       GITHUB_CLIENT_SECRET: 'client-secret',
+      // The OAuth app's, which sign-ins used before the App's device flow.
+      GITHUB_CLIENT_ID: 'Iv1.client',
     });
 
     await w.run(true);
@@ -217,7 +215,6 @@ describe('Worker setup', () => {
     expect(Object.keys(w.cf.secrets).sort()).toEqual([
       'GITHUB_APP_ID',
       'GITHUB_APP_PRIVATE_KEY',
-      'GITHUB_CLIENT_ID',
     ]);
   });
 

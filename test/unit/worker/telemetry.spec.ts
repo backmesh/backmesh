@@ -181,149 +181,24 @@ describe('install keys', () => {
     expect(await stored(11)).toHaveLength(1);
   });
 
-  it('mints a key after device sign-in, for an org admin only', async () => {
-    upstream.memberships.set('alice', [
-      { id: 11, login: 'acme', role: 'admin' },
-      { id: 12, login: 'acme-labs', role: 'member' },
-    ]);
-    upstream.devicePending = 1;
-    const create = (org: string) =>
-      worker.fetch(
-        new Request(`${ORIGIN}/v1/installs`, {
-          method: 'POST',
-          body: JSON.stringify({ org, device_code: 'alice' }),
-        }),
-        env,
-      );
-
-    const code = await worker.fetch(
-      new Request(`${ORIGIN}/v1/installs/device`, { method: 'POST' }),
-      env,
-    );
-    expect(await code.json()).toMatchObject({ user_code: 'ABCD-1234' });
-    expect((await create('acme')).status).toBe(202);
-    const minted = await create('acme');
-    const body = (await minted.json()) as { org_id: number; key: string };
-    expect(body).toMatchObject({ org_id: 11, org: 'acme' });
-    const statusRes = await worker.fetch(
-      new Request(`${ORIGIN}/v1/status`, {
-        headers: { Authorization: `Bearer ${body.key}` },
-      }),
-      env,
-    );
-    expect(await statusRes.json()).toMatchObject({ org_id: 11 });
-
-    const refused = await create('acme-labs');
-    expect(refused.status).toBe(403);
-    // A non-admin's token isn't returned either.
-    expect(await refused.text()).not.toContain('token-alice');
-    // The key's hash is stored, never the key or the GitHub token.
-    const stored = JSON.stringify(
-      (await env.DB.prepare('SELECT * FROM installs').all()).results,
-    );
-    expect(stored).not.toContain(body.key);
-    expect(stored).not.toContain('token-alice');
-  });
-
-  it("asks GitHub for the control plane's scopes and returns the token only to the signer", async () => {
-    upstream.memberships.set('alice', [
-      { id: 11, login: 'acme', role: 'admin' },
-    ]);
-    const device = (body?: object) =>
-      worker.fetch(
-        new Request(`${ORIGIN}/v1/installs/device`, {
-          method: 'POST',
-          body: body && JSON.stringify(body),
-        }),
-        env,
-      );
-    const scopes = () =>
-      upstream.forms
-        .filter(([path]) => path === '/login/device/code')
-        .map(([, form]) => form.get('scope'));
-    // Uninstall's admin check, or an older CLI: read:org only.
-    await device();
-    await device({ control_plane: false });
-    await device({ control_plane: true });
-    expect(scopes()).toEqual([
-      'read:org',
-      'read:org',
-      'read:org read:packages',
-    ]);
-    const res = await worker.fetch(
-      new Request(`${ORIGIN}/v1/installs`, {
-        method: 'POST',
-        body: JSON.stringify({ org: 'acme', device_code: 'alice' }),
-      }),
-      env,
-    );
-
-    expect(await res.json()).toMatchObject({ github_token: 'token-alice' });
-
-    // Without a key: the token alone, after the same pending answers.
-    upstream.devicePending = 1;
-    const relay = () =>
-      worker.fetch(
-        new Request(`${ORIGIN}/v1/sign-in`, {
-          method: 'POST',
-          body: JSON.stringify({ device_code: 'bob' }),
-        }),
-        env,
-      );
-    expect((await relay()).status).toBe(202);
-    expect(await (await relay()).json()).toEqual({ github_token: 'token-bob' });
-    const installs = await env.DB.prepare('SELECT * FROM installs').all();
-    expect(installs.results).toHaveLength(1);
-    expect(JSON.stringify(installs.results)).not.toContain('token-');
-  });
-
-  it('revokes the old key when the install signs in again', async () => {
-    upstream.memberships.set('alice', [
-      { id: 11, login: 'acme', role: 'admin' },
-    ]);
-    const signIn = async (install?: string) =>
-      (await (
-        await worker.fetch(
-          new Request(`${ORIGIN}/v1/installs`, {
-            method: 'POST',
-            body: JSON.stringify({
-              org: 'acme',
-              device_code: 'alice',
-              install,
-            }),
-          }),
-          env,
-        )
-      ).json()) as { install: string; key: string };
-    const statusOf = async (key: string) =>
-      (
-        await worker.fetch(
-          new Request(`${ORIGIN}/v1/status`, {
-            headers: { Authorization: `Bearer ${key}` },
-          }),
-          env,
-        )
-      ).status;
-
-    const first = await signIn();
-    const again = await signIn(first.install);
-
-    expect(again.install).toBe(first.install);
-    expect(await statusOf(first.key)).toBe(401);
-    expect(await statusOf(again.key)).toBe(200);
-  });
-
   it('answers 429 over the rate limits', async () => {
     env.SIGNIN_LIMIT = limiter(1);
     env.INSTALL_LIMIT = limiter(1);
-    const device = () =>
+    upstream.memberships.set('alice', [
+      { id: 11, login: 'acme', role: 'admin' },
+    ]);
+    upstream.installations.set(11, { id: 7, login: 'acme', permissions: {} });
+    const signIn = () =>
       worker.fetch(
-        new Request(`${ORIGIN}/v1/installs/device`, { method: 'POST' }),
+        new Request(`${ORIGIN}/v1/installs`, {
+          method: 'POST',
+          body: JSON.stringify({ org: 'acme', github_token: 'token-alice' }),
+        }),
         env,
       );
 
-    expect((await device()).status).toBe(200);
-    expect((await device()).status).toBe(429);
+    expect((await signIn()).status).toBe(200);
+    expect((await signIn()).status).toBe(429);
     expect((await authed(env, 11, '/v1/status')).status).toBe(200);
     expect((await authed(env, 11, '/v1/status')).status).toBe(429);
     // Refused keys count against the client IP.
@@ -347,18 +222,5 @@ describe('install keys', () => {
     const again = await mintKey(env.DB, 11, first.install);
 
     expect(again.install).not.toBe(first.install);
-  });
-
-  it('answers 502 when GitHub refuses the device code', async () => {
-    vi.stubGlobal('fetch', async () =>
-      Response.json({ error: 'device_flow_disabled' }),
-    );
-
-    const res = await worker.fetch(
-      new Request(`${ORIGIN}/v1/installs/device`, { method: 'POST' }),
-      env,
-    );
-
-    expect(res.status).toBe(502);
   });
 });

@@ -16,7 +16,13 @@ import { anycloudControl, type AnycloudControl } from '../app/anycloud.js';
 import { OVERRIDE } from '../app/override.js';
 import { runnerGroupName } from '../github/runner-group.js';
 import type { Compatibility } from '../release/compatibility.js';
-import { keyAccepted, waitForApp, workerDeps } from './worker.js';
+import {
+  GITHUB_APP_ID,
+  GITHUB_APPS_FLAG,
+  keyAccepted,
+  waitForApp,
+  workerDeps,
+} from './worker.js';
 import { z } from 'zod';
 
 import { NeedsPlan, PlanChanged, UsageError } from './errors.js';
@@ -49,7 +55,7 @@ import {
   startListener,
 } from './listener-vm.js';
 import type { Cloud } from '../runners/classes.js';
-import { keyFrom, type SignInScopes } from './github-sign-in.js';
+import { keyFrom, type SignInCheck } from './github-sign-in.js';
 import {
   clusterIdOf,
   CONTROL_POOL,
@@ -93,8 +99,8 @@ export interface UpgradeDeps {
   features?: FeatureTable;
   // The sign-in's polling wait, and a listener's start.
   wait?: (ms: number) => Promise<void>;
-  // The scopes GitHub granted a sign-in (`signInScopes`).
-  signInScopes?: SignInScopes;
+  // The login of a sign-in's user (`signInCheck`).
+  signInCheck?: SignInCheck;
   // Undefined without a TTY: upgrade never asks there.
   confirm?: (question: string) => Promise<boolean>;
   // The release before the pinned anycloud, the oldest a move starts from.
@@ -150,7 +156,7 @@ async function upgradeApi(
 ): Promise<boolean> {
   if (from === to) return false;
   deps.print('Upgrading the control plane.');
-  await deps.runLong(['api', 'upgrade']);
+  await deps.runLong(['api', 'upgrade', GITHUB_APPS_FLAG, GITHUB_APP_ID]);
   const status = apiStatusLine(
     await deps.runLong(['api', 'status', '--watch', '--json']),
   );
@@ -449,7 +455,7 @@ export async function upgrade(
       );
       installKey = (
         await keyFrom(org, worker, deps.env, {
-          scopesOf: deps.signInScopes,
+          checkOf: deps.signInCheck,
         })
       ).key;
     }
@@ -462,7 +468,7 @@ export async function upgrade(
       installKey = (
         await keyFrom(org, worker, deps.env, {
           install: installKey.slice(4, 36),
-          scopesOf: deps.signInScopes,
+          checkOf: deps.signInCheck,
         })
       ).key;
       if (!(await keyAccepted(installKey, worker))) {

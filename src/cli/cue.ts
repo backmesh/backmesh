@@ -143,7 +143,7 @@ async function target(
 // Whether the branch has a PR: some `refs/pull/<n>/head` at the branch's
 // remote head, read with the user's own git credentials, as GitHub keeps
 // each PR's head there. backmesh's sign-in can't read a private repo's PRs,
-// and asking costs no new scope. A closed PR whose branch hasn't moved
+// and asking costs no new permission. A closed PR whose branch hasn't moved
 // since reads as one, as does a branch at the same commit as another
 // branch's PR. `?` when git can't answer in time.
 const PR_CHECK_MS = 1_500;

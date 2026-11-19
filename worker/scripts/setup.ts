@@ -14,11 +14,7 @@ const WORKER = 'backmesh-billing';
 const CONFIG = 'worker/wrangler.jsonc';
 const SETUP_CONFIG = 'worker/wrangler.setup.jsonc';
 // Owner-set in the publish environment; the Worker gets them as secrets.
-export const REQUIRED = [
-  'CLOUDFLARE_API_TOKEN',
-  'CLOUDFLARE_ACCOUNT_ID',
-  'BILLING_GITHUB_CLIENT_ID',
-];
+export const REQUIRED = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID'];
 // The backmesh App: its ID and its private key as PKCS#8, which
 // WebCrypto imports. GitHub issues PKCS#1; convert it with
 // `openssl pkcs8 -topk8 -nocrypt -in app.pem`. Both or neither: until the App
@@ -27,9 +23,11 @@ const APP = ['BILLING_GITHUB_APP_ID', 'BILLING_GITHUB_APP_PRIVATE_KEY'];
 // During a rotation, the next key, which the Worker signs with once set.
 const NEXT_KEY = 'BILLING_GITHUB_APP_PRIVATE_KEY_NEXT';
 // Retired secrets, deleted where a Worker still has them: the billing
-// Worker's, and the OAuth client secret only connect links' web flow used
-// (owner, 2026-11-12: device flow only).
+// Worker's, the OAuth client secret only connect links' web flow used
+// (owner, 2026-11-12: device flow only), and the OAuth app's client ID,
+// which sign-ins used until they moved to the App (owner, 2026-11-19).
 const RETIRED = [
+  'GITHUB_CLIENT_ID',
   'GITHUB_CLIENT_SECRET',
   'STRIPE_SECRET_KEY',
   'STRIPE_WEBHOOK_SECRET',
@@ -182,16 +180,16 @@ export async function setup({ env, apply, fetch, wrangler, log }: Deps) {
   await checkTriggers(env, fetch, log, apply);
 
   // The Worker's secrets, through stdin so no value reaches the log.
-  const pending: Record<string, string> = {
-    GITHUB_CLIENT_ID: env.BILLING_GITHUB_CLIENT_ID!,
-  };
+  const pending: Record<string, string> = {};
   if (app.length) {
     pending.GITHUB_APP_ID = env.BILLING_GITHUB_APP_ID!;
     pending.GITHUB_APP_PRIVATE_KEY = env.BILLING_GITHUB_APP_PRIVATE_KEY!;
   }
   if (env[NEXT_KEY]) pending.GITHUB_APP_PRIVATE_KEY_NEXT = env[NEXT_KEY];
-  plan(`set the Worker secrets ${Object.keys(pending).sort().join(', ')}`);
-  if (apply) wrangler(['secret', 'bulk', ...config], JSON.stringify(pending));
+  if (Object.keys(pending).length) {
+    plan(`set the Worker secrets ${Object.keys(pending).sort().join(', ')}`);
+    if (apply) wrangler(['secret', 'bulk', ...config], JSON.stringify(pending));
+  }
   // Once a rotation is promoted, the Worker stops signing with the old next
   // key, which it would otherwise prefer, and no retired secret stays.
   const stale = [

@@ -1,9 +1,11 @@
 // The CLI's calls to backmesh.com: the install key, sign-ins and
-// uninstall's cleanup. Every sign-in is GitHub's device flow (owner,
-// 2026-11-12): an org admin signs in once during install, and the Worker
+// uninstall's cleanup. Every sign-in is GitHub's device flow with the
+// backmesh GitHub App (owner, 2026-11-19), run here against github.com: an
+// org owner signs in, and the Worker checks the App's user token once and
 // mints the key, which goes straight into the release Secret and is never
-// shown. When the App isn't on the org yet, install prints GitHub's App
-// install link and waits (`waitForApp`).
+// shown. GitHub Apps aren't subject to an org's OAuth app policy. When the
+// App isn't on the org yet, the sign-in prints GitHub's App install link
+// and waits for it.
 import { z } from 'zod';
 
 export const INSTALL_KEY_ENV = 'BACKMESH_INSTALL_KEY';
@@ -34,6 +36,10 @@ export const workerDeps = (
   wait: deps.wait,
 });
 
+// Each request to GitHub or the Worker gives up after this long: GitHub's
+// token endpoint has taken 8 s and more (backmesh#31).
+const REQUEST_MS = 30_000;
+
 // The Worker didn't answer, answered 5xx, or broke its contract.
 export class WorkerUnreachable extends Error {}
 
@@ -44,12 +50,13 @@ async function call<T>(
   path: string,
   schema: z.ZodType<T>,
   init: RequestInit = {},
+  timeoutMs = REQUEST_MS,
 ) {
   const host = new URL(baseOf(deps.env)).host;
   const res = await deps
     .fetch(`${baseOf(deps.env)}${path}`, {
       ...init,
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(timeoutMs),
     })
     .catch(() => {
       throw new WorkerUnreachable(`${host} didn't answer`);
@@ -75,6 +82,18 @@ async function call<T>(
   return { data: parsed.data };
 }
 
+// The backmesh App's client ID, which is public: the device flow needs no
+// secret.
+export const GITHUB_APP_CLIENT_ID = 'Iv23li6e0q0gl3GOQ9ny';
+// The App's ID, the one App whose user tokens the hosted API exchanges,
+// and the flag of `cluster create` and `api upgrade` that names it.
+export const GITHUB_APP_ID = '5622376';
+export const GITHUB_APPS_FLAG = '--sign-in-apps';
+// A sign-in waits this long for someone to enter a code, with a fresh code
+// whenever one expires: an agent's human may be away for a while.
+const SIGN_IN_MS = 6 * 3_600_000;
+const SIGN_IN_HOURS = SIGN_IN_MS / 3_600_000;
+
 const deviceSchema = z.object({
   device_code: z.string(),
   user_code: z.string(),
@@ -82,61 +101,149 @@ const deviceSchema = z.object({
   interval: z.number(),
   expires_in: z.number(),
 });
-// GitHub's OAuth token for the user who signed in: `read:org` for the
-// Worker's admin check and `read:packages`, the scopes anycloud's hosted API
-// exchanges, so the same sign-in serves both.
-const githubToken = z.string().regex(/^gho_\w+$/);
-const pendingSchema = z.object({
-  pending: z.literal(true),
-  slow_down: z.boolean().optional(),
+const installSchema = z.object({ key: z.string().regex(/^bmk_[0-9a-f]{64}$/) });
+// GitHub's refusal, such as `device_flow_disabled`, or a poll's state.
+const refusalSchema = z.object({
+  error: z.string(),
+  error_description: z.string().optional(),
 });
-const installSchema = z.union([
-  z.object({
-    key: z.string().regex(/^bmk_[0-9a-f]{64}$/),
-    github_token: githubToken,
-  }),
-  pendingSchema,
-]);
-const signInSchema = z.union([
-  z.object({ github_token: githubToken }),
-  pendingSchema,
-]);
-
-// GitHub's device flow through the Worker (`/v1/installs/device`): prints
-// the code, then calls `poll` with the device code every interval until it
-// answers. Plain lines, no prompt: CI runs this unattended and someone enters
-// the code from the job log. The device code is a credential, so it's never
-// printed. `poll` answers undefined while the sign-in is pending, and
-// `slow_down` or a 429 waits longer.
-async function deviceFlow<T>(
-  deps: WorkerDeps,
-  why: string,
-  poll: (deviceCode: string) => Promise<T | 'pending' | 'slow_down'>,
-  // A sign-in the CLI keeps for the control plane, which asks GitHub
-  // for read:packages too.
-  controlPlane = false,
-): Promise<T> {
-  const wait =
-    deps.wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
-  const device = await call(deps, '/v1/installs/device', deviceSchema, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ control_plane: controlPlane }),
-  });
-  if (!device.data) throw new Error(`backmesh refused: ${device.error}`);
-  const { device_code, user_code, verification_uri } = device.data;
-  deps.print(
-    `Sign in with GitHub ${why}: open ${verification_uri} and enter ${user_code}.`,
+const pollSchema = z.object({ access_token: z.string() }).or(refusalSchema);
+const refused = (answer: z.infer<typeof refusalSchema>) =>
+  new Error(
+    `GitHub refused the sign-in: ${answer.error_description ?? answer.error}`,
   );
-  let interval = device.data.interval;
-  const expires = Date.now() + device.data.expires_in * 1000;
-  for (;;) {
-    await wait(interval * 1000);
-    if (Date.now() > expires) throw new Error('The sign-in code expired.');
-    const answer = await poll(device_code);
-    if (answer === 'slow_down') interval += 5;
-    else if (answer !== 'pending') return answer;
+
+const sleep = (deps: WorkerDeps) =>
+  deps.wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+
+// A form POST to github.com's device flow, or undefined when GitHub didn't
+// answer, answered 5xx or rate-limited it (429): the caller waits and asks
+// again. Any other answer GitHub gives without a reason ends the sign-in.
+async function github<T>(
+  deps: WorkerDeps,
+  path: string,
+  form: Record<string, string>,
+  schema: z.ZodType<T>,
+) {
+  const res = await deps
+    .fetch(`https://github.com${path}`, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+      body: new URLSearchParams(form),
+      signal: AbortSignal.timeout(REQUEST_MS),
+    })
+    .catch(() => undefined);
+  if (!res || res.status >= 500 || res.status === 429) return undefined;
+  const answer = schema.safeParse(await res.json().catch(() => undefined));
+  if (!answer.success) {
+    throw new Error(`GitHub refused the sign-in: HTTP ${res.status}`);
   }
+  return answer.data;
+}
+
+// GitHub's device flow with the backmesh App: prints the code and when it
+// expires, then polls GitHub every interval until someone signs in. Plain
+// lines, no prompt: CI runs this unattended and someone enters the code
+// from the job log. A poll GitHub doesn't answer is asked again, a code
+// that expires is replaced by a fresh one, and only a denial or
+// SIGN_IN_MS without a sign-in ends it. The device code is a credential,
+// so it's never printed. Answers the App's user token (`ghu_`).
+async function deviceSignIn(deps: WorkerDeps, why: string): Promise<string> {
+  const wait = sleep(deps);
+  const deadline = Date.now() + SIGN_IN_MS;
+  while (Date.now() < deadline) {
+    const device = await github(
+      deps,
+      '/login/device/code',
+      { client_id: GITHUB_APP_CLIENT_ID },
+      deviceSchema.or(refusalSchema),
+    );
+    if (!device) {
+      await wait(5_000);
+      continue;
+    }
+    if ('error' in device) throw refused(device);
+    const expires = Date.now() + device.expires_in * 1000;
+    const at = new Date(expires).toISOString().slice(11, 16);
+    deps.print(
+      `Sign in with GitHub ${why}: open ${device.verification_uri} and enter ${device.user_code} (it expires at ${at} UTC).`,
+    );
+    let interval = device.interval;
+    while (Date.now() < Math.min(expires, deadline)) {
+      await wait(interval * 1000);
+      const answer = await github(
+        deps,
+        '/login/oauth/access_token',
+        {
+          client_id: GITHUB_APP_CLIENT_ID,
+          device_code: device.device_code,
+          grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+        },
+        pollSchema,
+      );
+      if (!answer) continue;
+      // With the App's token expiry on, GitHub also answers a refresh token,
+      // which only the App's client secret redeems: it's left unread, and an
+      // expired sign-in signs in again.
+      if ('access_token' in answer) return answer.access_token;
+      if (answer.error === 'authorization_pending') continue;
+      if (answer.error === 'slow_down') interval += 5;
+      else if (answer.error === 'expired_token') break;
+      else if (answer.error === 'access_denied') {
+        throw new Error('The GitHub sign-in was denied.');
+      } else throw refused(answer);
+    }
+  }
+  throw new Error(
+    `Nobody finished the GitHub sign-in in ${SIGN_IN_HOURS} hours. Run the command again for a new code.`,
+  );
+}
+
+// The Worker's 409 when the App isn't on the org, polled every 15 seconds
+// for an hour while an org owner clicks Install.
+const notInstalledSchema = z.object({ install_url: z.string() });
+const APP_POLL_MS = 15_000;
+const APP_POLLS = 240;
+const installAppLine = (org: string, link?: string) =>
+  `An owner of ${org} installs the backmesh GitHub App: open ${link ?? 'https://github.com/apps/backmesh'} and click Install. Waiting for it.`;
+const appMissing = (org: string) =>
+  `The backmesh GitHub App isn't installed on ${org} after an hour. Install it and run install again.`;
+
+// Tries of a sign-in's one Worker call while the Worker is unreachable or
+// failing, WORKER_RETRY_MS apart: the token stays good, so a blip doesn't
+// cost the sign-in.
+const WORKER_TRIES = 5;
+const WORKER_RETRY_MS = 10_000;
+
+// The Worker's answer to `send`, which carries a sign-in's token. A 429
+// waits and asks again; the App not yet on the org (409 app_not_installed)
+// prints GitHub's install link once and asks again every APP_POLL_MS for an
+// hour, with the same token. Any other refusal throws its reason.
+async function withSignIn<T>(
+  deps: WorkerDeps,
+  org: string,
+  send: () => ReturnType<typeof call<T>>,
+): Promise<T> {
+  const wait = sleep(deps);
+  let failures = 0;
+  let linked = false;
+  for (let attempt = 1; attempt <= APP_POLLS; attempt++) {
+    const answer = await send().catch((error: unknown) => {
+      if (!(error instanceof WorkerUnreachable)) throw error;
+      if (++failures >= WORKER_TRIES) throw error;
+      return undefined;
+    });
+    if (answer?.data) return answer.data;
+    const link = notInstalledSchema.safeParse(answer?.body).data?.install_url;
+    if (answer?.status === 409 && link) {
+      if (!linked) deps.print(installAppLine(org, link));
+      linked = true;
+    } else if (answer && answer.status !== 429) {
+      throw new Error(answer.error);
+    }
+    await wait(answer ? APP_POLL_MS : WORKER_RETRY_MS);
+  }
+  throw new Error(appMissing(org));
 }
 
 // Names the Worker in an outage, which isn't a refusal.
@@ -152,40 +259,29 @@ async function reaching<T>(what: string, request: () => Promise<T>) {
   }
 }
 
-// A new install key from an org admin's one-time GitHub sign-in, which the
-// Worker checks for the admin role, and that sign-in's token. `install`
+// A new install key from an org owner's GitHub sign-in, which the Worker
+// checks can manage the org's runners, and that sign-in's token. `install`
 // names the installation whose key it replaces, so the old key stops
-// working. The listener doesn't start without a key, so an
-// unreachable Worker stops here. `why` overrides the default prompt for a
-// caller whose purpose isn't `install`'s or `upgrade`'s, such as
-// `rotate-key`'s.
+// working. The listener doesn't start without a key, so a Worker that stays
+// unreachable stops here. `why` overrides the default prompt for a caller
+// whose purpose isn't `install`'s or `upgrade`'s, such as `rotate-key`'s.
 export function signInForKey(
   org: string,
   deps: WorkerDeps,
   install?: string,
-  why = `once, as an admin of ${org}, so backmesh can connect to it`,
+  why = `once, as an owner of ${org}, so backmesh can connect to it`,
 ): Promise<{ key: string; token: string }> {
-  return reaching('the GitHub sign-in', () =>
-    deviceFlow(
-      deps,
-      why,
-      async (device_code) => {
-        const answer = await call(deps, '/v1/installs', installSchema, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ org, device_code, install }),
-        });
-        // 403: not an org admin; 400: the code expired or was denied.
-        if (answer.status === 429) return 'slow_down';
-        if (!answer.data) throw new Error(answer.error);
-        if ('key' in answer.data) {
-          return { key: answer.data.key, token: answer.data.github_token };
-        }
-        return answer.data.slow_down ? 'slow_down' : 'pending';
-      },
-      true,
-    ),
-  );
+  return reaching('the GitHub sign-in', async () => {
+    const token = await deviceSignIn(deps, why);
+    const { key } = await withSignIn(deps, org, () =>
+      call(deps, '/v1/installs', installSchema, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ org, github_token: token, install }),
+      }),
+    );
+    return { key, token };
+  });
 }
 
 // `backmesh rotate-key`'s last step: revokes `install`
@@ -232,29 +328,11 @@ export function revokeKey(
 
 // A GitHub sign-in for the control plane alone, with no key: when the saved
 // one is missing or refused and the installation already has its key.
-export function signIn(
+// GitHub's device flow alone; the Worker isn't part of it.
+export const signIn = (
   deps: WorkerDeps,
   why = 'for your backmesh installation',
-): Promise<string> {
-  return reaching('the GitHub sign-in', () =>
-    deviceFlow(
-      deps,
-      why,
-      async (device_code) => {
-        const answer = await call(deps, '/v1/sign-in', signInSchema, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ device_code }),
-        });
-        if (answer.status === 429) return 'slow_down';
-        if (!answer.data) throw new Error(answer.error);
-        if ('github_token' in answer.data) return answer.data.github_token;
-        return answer.data.slow_down ? 'slow_down' : 'pending';
-      },
-      true,
-    ),
-  );
-}
+): Promise<string> => deviceSignIn(deps, why);
 
 // Uninstall's cleanup. The token is null when the App
 // isn't installed on the org: nothing of backmesh's is left at GitHub.
@@ -263,46 +341,51 @@ const cleanupTokenSchema = z.object({
   expires_at: z.string().nullable(),
   org: z.object({ id: z.number(), login: z.string() }),
 });
-const cleanupSchema = z.union([
-  cleanupTokenSchema.extend({ cleanup_id: z.string() }),
-  z.object({ pending: z.literal(true), slow_down: z.boolean().optional() }),
-]);
-export type Cleanup = z.infer<typeof cleanupTokenSchema> & {
-  cleanup_id: string;
-};
+// No cleanup where the App isn't installed: nothing of backmesh's is at
+// GitHub to remove, and nothing for the Worker to finish.
+const cleanupSchema = cleanupTokenSchema.extend({
+  cleanup_id: z.string().nullable(),
+});
+export type Cleanup = z.infer<typeof cleanupSchema>;
 
-// Uninstall's one sign-in: an admin of `org` signs in, and the Worker
+// The cleanup call checks the sign-in, revokes the key and mints a token:
+// up to six GitHub calls in a row at the Worker's 7 s each.
+const CLEANUP_MS = 60_000;
+
+// Uninstall's one sign-in: an owner of `org` signs in, and the Worker
 // answers a runners-only token for an hour and the `cleanup_id` that
 // re-mints it and finishes. `key`, the install key when the listener's
 // Secret is readable, has the Worker revoke that install first, so its own
-// last token doesn't count as a live listener. Any refusal stops, a 429
-// included: the Worker's reason says to retry later.
+// last token doesn't count as a live listener. A 429 (the client's or the
+// org's hourly limit) is waited out with the same sign-in, as install's is;
+// any other refusal stops.
 export function signInForCleanup(
   org: string,
   key: string | undefined,
   deps: WorkerDeps,
 ): Promise<Cleanup> {
-  return reaching('the GitHub sign-in', () =>
-    deviceFlow(
+  return reaching('the GitHub sign-in', async () => {
+    const token = await deviceSignIn(
       deps,
-      `as an admin of ${org}, so backmesh removes itself from ${org}`,
-      async (device_code) => {
-        const answer = await call(deps, '/v1/installs/cleanup', cleanupSchema, {
+      `as an owner of ${org}, so backmesh removes itself from ${org}`,
+    );
+    return withSignIn(deps, org, () =>
+      call(
+        deps,
+        '/v1/installs/cleanup',
+        cleanupSchema,
+        {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(key && { Authorization: `Bearer ${key}` }),
           },
-          body: JSON.stringify({ device_code, org }),
-        });
-        if (!answer.data) throw new Error(answer.error);
-        if ('pending' in answer.data) {
-          return answer.data.slow_down ? 'slow_down' : 'pending';
-        }
-        return answer.data;
-      },
-    ),
-  );
+          body: JSON.stringify({ org, github_token: token }),
+        },
+        CLEANUP_MS,
+      ),
+    );
+  });
 }
 
 async function cleanupCall<T>(
@@ -355,10 +438,6 @@ export async function keyAccepted(key: string, deps: WorkerDeps) {
 }
 
 const tokenSchema = z.object({ org: z.object({ login: z.string() }) });
-const notInstalledSchema = z.object({ install_url: z.string() });
-// Install's 15-second poll for an hour: an org owner clicks Install.
-const APP_POLL_MS = 15_000;
-const APP_POLLS = 240;
 
 // Before the listener starts, the broker must mint a token for the org, so
 // the App is installed there. Its 409 carries the install
@@ -393,9 +472,7 @@ export async function waitForApp(org: string, key: string, deps: WorkerDeps) {
     if (answer?.status === 409 && !linked) {
       linked = true;
       const link = notInstalledSchema.safeParse(answer.body).data?.install_url;
-      deps.print(
-        `An owner of ${org} installs the backmesh GitHub App: open ${link ?? 'https://github.com/apps/backmesh'} and click Install. Waiting for it.`,
-      );
+      deps.print(installAppLine(org, link));
     } else if (
       answer?.error &&
       answer.status !== 409 &&
@@ -409,6 +486,6 @@ export async function waitForApp(org: string, key: string, deps: WorkerDeps) {
   throw new Error(
     unreachable
       ? `Couldn't reach backmesh.com for an hour (${unreachable}). Run install again when it's reachable.`
-      : `The backmesh GitHub App isn't installed on ${org} after an hour. Install it and run install again.`,
+      : appMissing(org),
   );
 }
