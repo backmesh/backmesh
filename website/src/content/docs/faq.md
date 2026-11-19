@@ -119,9 +119,9 @@ as it would without one.
 **Can a coding agent in a sandbox cue backmesh?** Yes, with a copied sign-in. A sandbox that starts fresh each time can't
 keep a sign-in. A human can copy one from a machine where backmesh is signed
 in, `~/.backmesh/anycloud/.token`, into the sandbox's secrets as
-`BACKMESH_CUE_TOKEN`, which `backmesh cue` uses first. It is that human's full
-backmesh sign-in, not a cue-only key, so keep it secret; a later sign-in on
-that machine can revoke it.
+`BACKMESH_CUE_TOKEN`, which `backmesh cue` uses first. It lasts 8 hours from
+that sign-in, and it is that human's full backmesh sign-in, not a cue-only
+key, so keep it secret; a later sign-in on that machine can revoke it.
 
 ## Is it safe?
 

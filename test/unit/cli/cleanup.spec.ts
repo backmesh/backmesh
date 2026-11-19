@@ -10,7 +10,7 @@ import { removeFromGitHub } from '../../../src/cli/cleanup.js';
 import type { Env } from '../../../worker/src/index.js';
 import worker from '../../../worker/src/index.js';
 import { mintKey, rememberLogin } from '../../../worker/src/installs.js';
-import { limiter, ORIGIN, testEnv, Upstream } from '../worker/fakes.js';
+import { ORIGIN, testEnv, Upstream } from '../worker/fakes.js';
 import { fakeOrg, GROUP } from './fakes.js';
 
 // The CLI's side of uninstall's cleanup against the real Worker,
@@ -113,7 +113,7 @@ describe("uninstall's cleanup", () => {
     );
     expect(lines).toEqual([
       expect.stringMatching(
-        /^Sign in with GitHub as an admin of acme, so backmesh removes itself from acme: open https:\/\/github\.com\/login\/device and enter ABCD-1234 \(it expires at \d\d:\d\d UTC\)\.$/,
+        /^Sign in with GitHub as an owner of acme, so backmesh removes itself from acme: open https:\/\/github\.com\/login\/device and enter ABCD-1234 \(it expires at \d\d:\d\d UTC\)\.$/,
       ),
     ]);
   });
@@ -138,14 +138,19 @@ describe("uninstall's cleanup", () => {
     ).resolves.toMatchObject({ token: 'ghs_7' });
   });
 
-  it('stops at a 429 and says to retry later', async () => {
-    env.SIGNIN_LIMIT = limiter(0);
-    const { client, calls } = setUp();
+  it('waits out a 429 with the same sign-in', async () => {
+    // The client IP's limit refuses the first call only.
+    let calls = 0;
+    env.SIGNIN_LIMIT = { limit: async () => ({ success: ++calls > 1 }) };
+    const { client, calls: sent } = setUp();
 
-    await expect(signInForCleanup('acme', undefined, client)).rejects.toThrow(
-      'Too many requests; retry later.',
-    );
-    expect(calls).toEqual(['/v1/installs/cleanup']);
+    const cleanup = await signInForCleanup('acme', undefined, client);
+
+    expect(cleanup.token).toBe('ghs_7');
+    expect(sent).toEqual(['/v1/installs/cleanup', '/v1/installs/cleanup']);
+    expect(
+      upstream.calls.filter((c) => c === 'POST github.com/login/device/code'),
+    ).toHaveLength(1);
   });
 
   it('re-mints with the cleanup_id', async () => {

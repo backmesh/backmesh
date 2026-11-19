@@ -1954,7 +1954,7 @@ describe('install', () => {
       ),
     ).toEqual([
       expect.stringMatching(
-        /^Sign in with GitHub once, as an admin of acme, so backmesh can connect to it: open https:\/\/github\.com\/login\/device and enter ABCD-1234 \(it expires at \d\d:\d\d UTC\)\.$/,
+        /^Sign in with GitHub once, as an owner of acme, so backmesh can connect to it: open https:\/\/github\.com\/login\/device and enter ABCD-1234 \(it expires at \d\d:\d\d UTC\)\.$/,
       ),
       'An owner of acme installs the backmesh GitHub App: open https://github.com/apps/backmesh/installations/new/permissions?target_id=7 and click Install. Waiting for it.',
     ]);

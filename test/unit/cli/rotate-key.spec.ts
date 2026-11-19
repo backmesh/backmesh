@@ -294,7 +294,7 @@ const purposes = ({
 // The fixture's sign-in: the first code expires, and a fresh one follows.
 const SIGN_IN_LINES = [
   expect.stringMatching(
-    /^Sign in with GitHub as an admin of acme, to replace its install key: open https:\/\/github\.com\/login\/device and enter ABCD-1234 \(it expires at \d\d:\d\d UTC\)\.$/,
+    /^Sign in with GitHub as an owner of acme, to replace its install key: open https:\/\/github\.com\/login\/device and enter ABCD-1234 \(it expires at \d\d:\d\d UTC\)\.$/,
   ),
   expect.stringContaining('enter WXYZ-5678 (it expires at '),
 ];
@@ -416,7 +416,7 @@ describe('rotateKey', () => {
     ]);
     expect(noInstallIds(lines)).toBe(true);
     expect(lines).toEqual([
-      `Signing in as an admin of acme to mint a new install key.`,
+      `Signing in as an owner of acme to mint a new install key.`,
       ...SIGN_IN_LINES,
       `Rolling acme's listener onto the new key.`,
       `acme's listener runs on the new key; revoking the old install.`,
@@ -441,7 +441,7 @@ describe('rotateKey', () => {
     // run, so this failure gets no line of its own: the same progress
     // lines as the happy path, nothing more.
     expect(lines).toEqual([
-      `Signing in as an admin of acme to mint a new install key.`,
+      `Signing in as an owner of acme to mint a new install key.`,
       ...SIGN_IN_LINES,
       `Rolling acme's listener onto the new key.`,
       `acme's listener runs on the new key; revoking the old install.`,

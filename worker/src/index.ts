@@ -14,6 +14,7 @@ import type { RelayNamespace } from './relay.js';
 import {
   createInstall,
   keyInstall,
+  oldSignIn,
   revokeInstall,
   SignInRefused,
 } from './installs.js';
@@ -86,6 +87,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (pathname === '/v1/installs' || Object.hasOwn(cleanups, pathname)) {
     const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
     if (!(await env.SIGNIN_LIMIT.limit({ key: ip })).success) return tooMany();
+  }
+  if (pathname === '/v1/installs/device' || pathname === '/v1/sign-in') {
+    return oldSignIn();
   }
   if (pathname === '/v1/installs' && request.method === 'POST') {
     return createInstall(request, env);

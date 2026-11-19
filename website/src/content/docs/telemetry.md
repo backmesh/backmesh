@@ -121,8 +121,8 @@ receives, such as sign-in details.
 
 ## Installs
 
-An org owner signs in to backmesh's GitHub App once, during `backmesh
-install`. backmesh.com uses that GitHub token once, to check you can manage
+An org owner, or a member who manages the org's self-hosted runners, signs in
+to backmesh's GitHub App once, during `backmesh install`. backmesh.com uses that GitHub token once, to check you can manage
 the org's self-hosted runners, and keeps none; it stays on your machine for
 your control plane. It ties the install
 to your org: no one else can send events or get GitHub tokens for it.

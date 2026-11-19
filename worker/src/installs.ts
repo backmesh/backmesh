@@ -97,7 +97,8 @@ export class SignInRefused extends Error {
   }
 }
 
-// The old sign-in form, which v0.4.3 and earlier CLIs send.
+// What v0.4.3 and earlier CLIs get at their first step, the device code
+// they asked the Worker for (`/v1/installs/device`, `/v1/sign-in`).
 export const oldSignIn = () =>
   Response.json(
     {
@@ -107,50 +108,75 @@ export const oldSignIn = () =>
     { status: 400 },
   );
 
-// Who `token` (an App user token) belongs to, the org's ID and current
-// login, and whether they can manage the org's self-hosted runners: GitHub
-// lists the org's runner groups to a user token only when both the App
-// (its Self-hosted runners permission) and the person can, which a plain
-// member can't. Where the App isn't installed GitHub lists them to nobody,
-// so that's told apart. null: no such org. Remembers the org's login, which
-// finds its installation. The token is used here and not stored.
-export async function runnersAdmin(env: Env, token: string, org: string) {
-  const [user, found] = await Promise.all([
-    asUser(token, '/user'),
-    asUser(token, `/orgs/${encodeURIComponent(org)}`),
-  ]);
-  if (user.status === 401 || found.status === 401) {
+// GitHub's 403 when the App user token can't read what the App could: the
+// person lacks the right, or the App isn't on the org. A non-member may get
+// a 404.
+const NOT_ACCESSIBLE = 'Resource not accessible by integration';
+
+// Throws for a refused sign-in: GitHub's 401, or a 403 asking for the org's
+// SAML SSO.
+function refusedSignIn(res: Response, org: string) {
+  if (res.status === 401) {
     throw new SignInRefused('GitHub refused the sign-in; sign in again.', 401);
   }
-  if (found.status === 404) return null;
-  if (!user.ok || !found.ok) {
-    throw new GitHubError(
-      `GitHub /user, /orgs/${org}: ${user.status}, ${found.status}`,
-    );
-  }
-  const { login: who } = (await user.json()) as { login: string };
-  const { id, login } = (await found.json()) as { id: number; login: string };
-  await rememberLogin(env, id, login);
-  const groups = await asUser(
-    token,
-    `/orgs/${encodeURIComponent(login)}/actions/runner-groups?per_page=1`,
-  );
-  if (groups.status === 401) {
-    throw new SignInRefused('GitHub refused the sign-in; sign in again.', 401);
-  }
-  if (groups.status === 403 && groups.headers.has('X-GitHub-SSO')) {
+  if (res.status === 403 && res.headers.has('X-GitHub-SSO')) {
     throw new SignInRefused(
-      `Authorize the backmesh sign-in for ${login}'s SAML SSO on GitHub, then sign in again.`,
+      `Authorize the backmesh sign-in for ${org}'s SAML SSO on GitHub, then sign in again.`,
       403,
     );
   }
+}
+
+// GitHub failing `path` for another reason than the sign-in, such as a rate
+// limit or a suspended installation, with its own message.
+async function gitHubFailed(res: Response, path: string) {
+  const { message } = (await res.json().catch(() => ({}))) as {
+    message?: string;
+  };
+  return new GitHubError(
+    `GitHub ${path}: ${res.status}${message ? ` ${message}` : ''}`,
+  );
+}
+
+// Who `token` (an App user token) belongs to, the org's ID and current
+// login, and whether they can manage the org's self-hosted runners: GitHub
+// lists the org's runner groups to a user token only when both the App
+// (its Self-hosted runners permission) and the person can: an owner, or a
+// member with a role that manages runners, not a plain member. Where the
+// App isn't installed GitHub refuses everyone the same way, so that's told
+// apart. Any other refusal, such as a rate limit, is GitHub's to report.
+// null: no such org. Remembers the org's login, which finds its
+// installation. The token is used here and not stored.
+export async function runnersAdmin(env: Env, token: string, org: string) {
+  const orgPath = `/orgs/${encodeURIComponent(org)}`;
+  const [user, found] = await Promise.all([
+    asUser(token, '/user'),
+    asUser(token, orgPath),
+  ]);
+  refusedSignIn(user, org);
+  refusedSignIn(found, org);
+  if (found.status === 404) return null;
+  if (!user.ok) throw await gitHubFailed(user, '/user');
+  if (!found.ok) throw await gitHubFailed(found, orgPath);
+  const { login: who } = (await user.json()) as { login: string };
+  const { id, login } = (await found.json()) as { id: number; login: string };
+  await rememberLogin(env, id, login);
+  const groupsPath = `/orgs/${encodeURIComponent(login)}/actions/runner-groups`;
+  const groups = await asUser(token, `${groupsPath}?per_page=1`);
+  refusedSignIn(groups, login);
   let can: 'manage' | 'refused' | 'app_not_installed' = 'manage';
-  if (groups.status === 403 || groups.status === 404) {
+  if (!groups.ok) {
+    const { message } = (await groups
+      .clone()
+      .json()
+      .catch(() => ({}))) as { message?: string };
+    const refused =
+      groups.status === 404 ||
+      (groups.status === 403 && message === NOT_ACCESSIBLE);
+    if (!refused) {
+      throw await gitHubFailed(groups, groupsPath);
+    }
     can = (await installationOf(env, id)) ? 'refused' : 'app_not_installed';
-  } else if (!groups.ok) {
-    throw new GitHubError(
-      `GitHub /orgs/${login}/actions/runner-groups: ${groups.status}`,
-    );
   }
   return { id, login, user: who, can };
 }
@@ -169,7 +195,8 @@ export function notRunnersAdmin(
       { status: 409 },
     );
   }
-  const error = `${doing} needs the right to manage its self-hosted runners: sign in as an owner of ${admin?.login ?? org}.`;
+  const name = admin?.login ?? org;
+  const error = `${doing} needs the right to manage its self-hosted runners: sign in as an owner of ${name}, or a member who manages its self-hosted runners.`;
   return Response.json({ error }, { status: 403 });
 }
 
@@ -181,14 +208,12 @@ export const rememberLogin = (env: Env, id: number, login: string) =>
     .bind(id, login)
     .run();
 
-// The JSON body of a sign-in call, or a Response refusing it: the old
-// device_code form, or a missing field.
+// The JSON body of a sign-in call, or a Response refusing a missing field.
 export async function signInBody(request: Request, fields: string[]) {
   const body = ((await request.json().catch(() => null)) ?? {}) as Record<
     string,
     unknown
   >;
-  if ('device_code' in body) return oldSignIn();
   const missing = fields.filter((f) => typeof body[f] !== 'string' || !body[f]);
   if (missing.length) {
     const error = `${missing.join(' and ')} ${missing.length > 1 ? 'are' : 'is'} required`;

@@ -25,7 +25,8 @@ Or with Homebrew: `brew install backmesh/tap/backmesh`.
 You need:
 
 - A GitHub org owner, who signs in and installs backmesh's GitHub App during
-  install.
+  install. A member who manages the org's self-hosted runners can sign in
+  too, once the App is on the org.
 - A signed-in cloud CLI on your `PATH` for each cloud: `aws`, `gcloud` with
   a project, or `az` with a subscription, with
   [the rights install needs](/security/#what-install-needs). What install

@@ -194,7 +194,7 @@ describe('signInForKey', () => {
   });
 
   it('stops on a 4xx GitHub answers without a reason, and retries a 429', async () => {
-    const page = () =>
+    const page = async () =>
       new Response('<html>Forbidden</html>', {
         status: 403,
         headers: { 'Content-Type': 'text/html' },

@@ -18,7 +18,11 @@ const REJECTED = 'GitHub rejected the sign-in';
 
 // Why the hosted API would refuse `token`, or undefined. It exchanges only
 // a GitHub App's user token (`ghu_`), such as backmesh's sign-in, so any
-// other would fail after `cluster create` has started billing.
+// other would fail after `cluster create` has started billing. Which App a
+// `ghu_` token is from isn't checked: GitHub can't say for a user whose orgs
+// don't have the App yet. Another App's token passes here and is refused by
+// the hosted API's allowed-App list (`--github-apps`) at its first request,
+// after `cluster create`.
 async function signInProblem(token: string, loginOf: SignInLogin) {
   if (!token.startsWith('ghu_')) {
     return "The GitHub sign-in isn't backmesh's (a GitHub App sign-in), which the control plane needs";
@@ -72,7 +76,7 @@ export async function checkSignIn(
   return {
     signedIn: false,
     problems: [
-      `${problem}: in CI, set GITHUB_TOKEN to a backmesh GitHub sign-in (\`backmesh cue --sign-in\` saves one); otherwise unset it and run install again to sign in.`,
+      `${problem}: a backmesh sign-in lasts 8 hours, so in CI set GITHUB_TOKEN to one made within that time (\`backmesh cue --sign-in\` saves one to ~/.backmesh/anycloud/.token); otherwise unset it and run install again to sign in.`,
     ],
   };
 }

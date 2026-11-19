@@ -424,7 +424,7 @@ describe('uninstall', () => {
     expect([...github.runners.values()]).toEqual(['build-box', 'bmaster-ci']);
     expect(lines.filter((l) => l.startsWith('Sign in'))).toEqual([
       expect.stringMatching(
-        /^Sign in with GitHub as an admin of acme, so backmesh removes itself from acme: open https:\/\/github\.com\/login\/device and enter ABCD-1234 \(it expires at \d\d:\d\d UTC\)\.$/,
+        /^Sign in with GitHub as an owner of acme, so backmesh removes itself from acme: open https:\/\/github\.com\/login\/device and enter ABCD-1234 \(it expires at \d\d:\d\d UTC\)\.$/,
       ),
       expect.stringContaining('enter WXYZ-5678'),
     ]);

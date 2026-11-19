@@ -84,6 +84,9 @@ async function call<T>(
 // The backmesh App's client ID, which is public: the device flow needs no
 // secret.
 export const GITHUB_APP_CLIENT_ID = 'Iv23li6e0q0gl3GOQ9ny';
+// The App's ID, the one App whose user tokens the hosted API exchanges
+// (`--github-apps` on `cluster create` and `api upgrade`).
+export const GITHUB_APP_ID = '5622376';
 // A sign-in waits this long for someone to enter a code, with a fresh code
 // whenever one expires: an agent's human may be away for a while.
 const SIGN_IN_MS = 6 * 3_600_000;
@@ -112,8 +115,8 @@ const sleep = (deps: WorkerDeps) =>
   deps.wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
 
 // A form POST to github.com's device flow, or undefined when GitHub didn't
-// answer, answered 5xx, or answered something else than JSON: the caller
-// waits and asks again.
+// answer, answered 5xx or rate-limited it (429): the caller waits and asks
+// again. Any other answer GitHub gives without a reason ends the sign-in.
 async function github<T>(
   deps: WorkerDeps,
   path: string,
@@ -128,8 +131,12 @@ async function github<T>(
       signal: AbortSignal.timeout(REQUEST_MS),
     })
     .catch(() => undefined);
-  if (!res || res.status >= 500) return undefined;
-  return schema.safeParse(await res.json().catch(() => undefined)).data;
+  if (!res || res.status >= 500 || res.status === 429) return undefined;
+  const answer = schema.safeParse(await res.json().catch(() => undefined));
+  if (!answer.success) {
+    throw new Error(`GitHub refused the sign-in: HTTP ${res.status}`);
+  }
+  return answer.data;
 }
 
 // GitHub's device flow with the backmesh App: prints the code and when it
@@ -173,6 +180,9 @@ async function deviceSignIn(deps: WorkerDeps, why: string): Promise<string> {
         pollSchema,
       );
       if (!answer) continue;
+      // With the App's token expiry on, GitHub also answers a refresh token,
+      // which only the App's client secret redeems: it's left unread, and an
+      // expired sign-in signs in again.
       if ('access_token' in answer) return answer.access_token;
       if (answer.error === 'authorization_pending') continue;
       if (answer.error === 'slow_down') interval += 5;
@@ -257,7 +267,7 @@ export function signInForKey(
   org: string,
   deps: WorkerDeps,
   install?: string,
-  why = `once, as an admin of ${org}, so backmesh can connect to it`,
+  why = `once, as an owner of ${org}, so backmesh can connect to it`,
 ): Promise<{ key: string; token: string }> {
   return reaching('the GitHub sign-in', async () => {
     const token = await deviceSignIn(deps, why);
@@ -340,8 +350,9 @@ export type Cleanup = z.infer<typeof cleanupSchema>;
 // answers a runners-only token for an hour and the `cleanup_id` that
 // re-mints it and finishes. `key`, the install key when the listener's
 // Secret is readable, has the Worker revoke that install first, so its own
-// last token doesn't count as a live listener. Any refusal stops, a 429
-// included: the Worker's reason says to retry later.
+// last token doesn't count as a live listener. A 429 (the client's or the
+// org's hourly limit) is waited out with the same sign-in, as install's is;
+// any other refusal stops.
 export function signInForCleanup(
   org: string,
   key: string | undefined,
@@ -350,21 +361,18 @@ export function signInForCleanup(
   return reaching('the GitHub sign-in', async () => {
     const token = await deviceSignIn(
       deps,
-      `as an admin of ${org}, so backmesh removes itself from ${org}`,
+      `as an owner of ${org}, so backmesh removes itself from ${org}`,
     );
-    return withSignIn(deps, org, async () => {
-      const sent = await call(deps, '/v1/installs/cleanup', cleanupSchema, {
+    return withSignIn(deps, org, () =>
+      call(deps, '/v1/installs/cleanup', cleanupSchema, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(key && { Authorization: `Bearer ${key}` }),
         },
         body: JSON.stringify({ org, github_token: token }),
-      });
-      // Only an unreachable Worker is asked again.
-      if (sent.status === 429) throw new Error(sent.error);
-      return sent;
-    });
+      }),
+    );
   });
 }
 

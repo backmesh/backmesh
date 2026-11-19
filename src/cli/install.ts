@@ -13,7 +13,12 @@ import {
 import { ANYCLOUD_VERSION } from '../anycloud/contract.generated.js';
 import { missingFeatures, type FeatureTable } from '../anycloud/features.js';
 import { anycloudControl } from '../app/anycloud.js';
-import { workerDeps, signInForKey, waitForApp } from './worker.js';
+import {
+  GITHUB_APP_ID,
+  signInForKey,
+  waitForApp,
+  workerDeps,
+} from './worker.js';
 import { checkSignIn, saveSignIn, signInAgain } from './github-sign-in.js';
 import { readApiVersion, readListener } from './status.js';
 import { readOverride } from '../app/override.js';
@@ -593,6 +598,8 @@ async function bootstrapCluster(
         region,
         '--vm-type',
         size,
+        '--github-apps',
+        GITHUB_APP_ID,
         '--json',
       ]);
     } catch (error) {

@@ -74,10 +74,11 @@ export async function appJwt(
   return `${data}.${base64url(new Uint8Array(signature))}`;
 }
 
-// A GitHub call gives up after this long, so a sign-in's three calls in a
-// row answer within the CLI's 30 s (GitHub's API answers in well under a
-// second; its token endpoint once took 8 s, backmesh#31).
-export const GITHUB_TIMEOUT_MS = 10_000;
+// A GitHub call gives up after this long, so a sign-in's four calls in a
+// row (the user and org together, the runner groups, then the App's
+// installation by ID and by login) answer within the CLI's 30 s. GitHub's
+// API answers in well under a second.
+export const GITHUB_TIMEOUT_MS = 7_000;
 
 export const randomHex = () =>
   Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) =>

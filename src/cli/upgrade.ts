@@ -16,7 +16,12 @@ import { anycloudControl, type AnycloudControl } from '../app/anycloud.js';
 import { OVERRIDE } from '../app/override.js';
 import { runnerGroupName } from '../github/runner-group.js';
 import type { Compatibility } from '../release/compatibility.js';
-import { keyAccepted, waitForApp, workerDeps } from './worker.js';
+import {
+  GITHUB_APP_ID,
+  keyAccepted,
+  waitForApp,
+  workerDeps,
+} from './worker.js';
 import { z } from 'zod';
 
 import { NeedsPlan, PlanChanged, UsageError } from './errors.js';
@@ -150,7 +155,7 @@ async function upgradeApi(
 ): Promise<boolean> {
   if (from === to) return false;
   deps.print('Upgrading the control plane.');
-  await deps.runLong(['api', 'upgrade']);
+  await deps.runLong(['api', 'upgrade', '--github-apps', GITHUB_APP_ID]);
   const status = apiStatusLine(
     await deps.runLong(['api', 'status', '--watch', '--json']),
   );

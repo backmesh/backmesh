@@ -1,7 +1,7 @@
 // The cue relay's routes. `backmesh cue` signs in
 // with the backmesh App's user token from its device sign-in, which must
-// reach the org's App installation, as an org member's does; the listener
-// connects with its install key. Each
+// reach the org's App installation; the listener connects with its install
+// key. Each
 // is forwarded to the org's Relay Durable Object (relay.ts) with only what
 // the Worker vouches for.
 //   GET  /v1/cue/keys?org=<login>   the org's listener keys
@@ -28,8 +28,11 @@ const json = (body: unknown, status = 200) => Response.json(body, { status });
 
 // The signed-in user and the org's ID, when the user's App token reaches
 // the org's installation of the App: GitHub lists an installation to a user
-// token only for an org the user belongs to. `/user/memberships` would need
-// the App's Members permission, which it doesn't ask for.
+// token when the user can access one of its repositories, an outside
+// collaborator included and a member with no repository not. That's a gate
+// against abuse, not the authority: the listener acts on a cue only for a
+// user GitHub says can push to its repository. `/user/memberships` would
+// need the App's Members permission, which it doesn't ask for.
 async function orgMember(token: string, org: string) {
   const [user, installs] = await Promise.all([
     asUser(token, '/user'),
@@ -95,7 +98,8 @@ async function signIn(request: Request, env: Env, org: unknown) {
   if (member === 'expired') {
     return json({ error: 'GitHub sign-in expired; sign in again.' }, 401);
   }
-  return member ?? json({ error: `Not a member of ${org}.` }, 403);
+  const error = `None of ${org}'s repositories that backmesh's GitHub App is on is open to you.`;
+  return member ?? json({ error }, 403);
 }
 
 const relay = (
