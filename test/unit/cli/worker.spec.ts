@@ -299,6 +299,28 @@ describe('signIn (plain, for a re-sign-in)', () => {
 });
 
 describe('signInForCleanup', () => {
+  // Its Worker call checks the sign-in, revokes the key and mints a token:
+  // more GitHub calls in a row than a sign-in's.
+  it('gives the Worker 60 s to answer', async () => {
+    const answer = json({
+      token: 'ghs_7',
+      expires_at: '2100-01-01T00:00:00Z',
+      org: { id: 7, login: 'acme' },
+      cleanup_id: 'c'.repeat(64),
+    });
+    const worker = fakeWorker({ cleanups: [after(40_000, answer)] });
+    const cleanup = await settle(
+      signInForCleanup('acme', undefined, {
+        env: {},
+        fetch: worker.fetch,
+        print: () => {},
+      }),
+    );
+
+    expect(cleanup.token).toBe('ghs_7');
+    expect(worker.bodies).toHaveLength(1);
+  });
+
   it('waits out a 429 and asks again with the same sign-in, as install does', async () => {
     const limited = json({ error: 'Too many requests; retry later.' }, 429);
     const worker = fakeWorker({

@@ -2,7 +2,10 @@
 // its install key and runner tag: its own GitHub token can only read.
 import { describe, expect, it } from 'vitest';
 
-import { workerRerun } from '../../../src/listener/rerun.js';
+import {
+  workerCancel,
+  workerRerun,
+} from '../../../src/listener/run-actions.js';
 
 const KEY = `bmk_${'ab'.repeat(32)}`;
 const RUN = { owner: 'acme', repo: 'app', runId: 42 };
@@ -56,5 +59,31 @@ describe('workerRerun', () => {
       message: 'not ours',
       status: 403,
     });
+  });
+
+  it('asks the Worker to cancel a fork run, saying why', async () => {
+    const { fetch, sent } = fake(Response.json({ cancelled: true }));
+    const cancel = workerCancel({
+      url: 'https://api.backmesh.test',
+      key: KEY,
+      install: 'a1b2c',
+      fetch,
+    });
+
+    await cancel(RUN, 'limit');
+
+    expect(sent).toEqual([
+      {
+        url: 'https://api.backmesh.test/v1/cancel',
+        auth: `Bearer ${KEY}`,
+        body: {
+          owner: 'acme',
+          repo: 'app',
+          run_id: 42,
+          install: 'a1b2c',
+          reason: 'limit',
+        },
+      },
+    ]);
   });
 });

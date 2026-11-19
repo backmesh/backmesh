@@ -50,12 +50,13 @@ async function call<T>(
   path: string,
   schema: z.ZodType<T>,
   init: RequestInit = {},
+  timeoutMs = REQUEST_MS,
 ) {
   const host = new URL(baseOf(deps.env)).host;
   const res = await deps
     .fetch(`${baseOf(deps.env)}${path}`, {
       ...init,
-      signal: AbortSignal.timeout(REQUEST_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     })
     .catch(() => {
       throw new WorkerUnreachable(`${host} didn't answer`);
@@ -87,7 +88,7 @@ export const GITHUB_APP_CLIENT_ID = 'Iv23li6e0q0gl3GOQ9ny';
 // The App's ID, the one App whose user tokens the hosted API exchanges,
 // and the flag of `cluster create` and `api upgrade` that names it.
 export const GITHUB_APP_ID = '5622376';
-export const GITHUB_APPS_FLAG = '--github-apps';
+export const GITHUB_APPS_FLAG = '--sign-in-apps';
 // A sign-in waits this long for someone to enter a code, with a fresh code
 // whenever one expires: an agent's human may be away for a while.
 const SIGN_IN_MS = 6 * 3_600_000;
@@ -347,6 +348,10 @@ const cleanupSchema = cleanupTokenSchema.extend({
 });
 export type Cleanup = z.infer<typeof cleanupSchema>;
 
+// The cleanup call checks the sign-in, revokes the key and mints a token:
+// up to six GitHub calls in a row at the Worker's 7 s each.
+const CLEANUP_MS = 60_000;
+
 // Uninstall's one sign-in: an owner of `org` signs in, and the Worker
 // answers a runners-only token for an hour and the `cleanup_id` that
 // re-mints it and finishes. `key`, the install key when the listener's
@@ -365,14 +370,20 @@ export function signInForCleanup(
       `as an owner of ${org}, so backmesh removes itself from ${org}`,
     );
     return withSignIn(deps, org, () =>
-      call(deps, '/v1/installs/cleanup', cleanupSchema, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(key && { Authorization: `Bearer ${key}` }),
+      call(
+        deps,
+        '/v1/installs/cleanup',
+        cleanupSchema,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(key && { Authorization: `Bearer ${key}` }),
+          },
+          body: JSON.stringify({ org, github_token: token }),
         },
-        body: JSON.stringify({ org, github_token: token }),
-      }),
+        CLEANUP_MS,
+      ),
     );
   });
 }

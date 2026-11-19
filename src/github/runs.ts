@@ -4,7 +4,7 @@ import type { WorkflowRun } from './checks.js';
 
 // The REST calls the retry makes, behind an interface tests
 // replace. Reading needs Actions: read; the rerun goes through the Worker
-// (`src/listener/rerun.ts`), which holds the App's Actions write.
+// (`src/listener/run-actions.ts`), which holds the App's Actions write.
 export interface RunState {
   status: string | null;
   conclusion: string | null;
@@ -228,8 +228,9 @@ export function cacheRun(octokit: Octokit) {
   };
 }
 
-// The public-repository gate's reads, with Actions: read. A run is a fork's
-// when its head repository isn't its repository, or is gone.
+// The public-repository gate's reads, with Actions: read, and its cancel,
+// through the Worker (`src/listener/run-actions.ts`). A run is a fork's when its
+// head repository isn't its repository, or is gone.
 export interface GateRun {
   private: boolean;
   fork: boolean;
@@ -244,6 +245,9 @@ export interface GateJob {
 }
 export interface GateGitHub {
   run(run: WorkflowRun): Promise<GateRun>;
+  // Skips `if: always()` steps, which a plain cancel still runs. Why: a job
+  // asks for a label that isn't public, or one passed the runtime limit.
+  forceCancel(run: WorkflowRun, reason: 'label' | 'limit'): Promise<void>;
   // The installation's repositories.
   repos(): Promise<{ owner: string; repo: string; private: boolean }[]>;
   // The repository's queued and in-progress pull-request runs.
@@ -260,7 +264,7 @@ const isFork = (
   head: { full_name?: string } | null | undefined,
 ) => head?.full_name?.toLowerCase() !== repo.full_name.toLowerCase();
 
-export function gateGitHub(octokit: Octokit): GateGitHub {
+export function gateGitHub(octokit: Octokit): Omit<GateGitHub, 'forceCancel'> {
   return {
     async run({ owner, repo, runId }) {
       const { data } = await octokit.rest.actions.getWorkflowRun({

@@ -205,18 +205,28 @@ export class Upstream {
   mints: Record<string, string>[] = [];
   // The repositories installation tokens can read, by `owner/repo`, with
   // their owner's ID, and their workflow runs by `owner/repo/id`.
-  repos = new Map<string, { ownerId: number }>();
+  repos = new Map<string, { ownerId: number; private?: boolean }>();
   runs = new Map<
     string,
     {
       status: string;
       attempt: number;
-      jobs: { conclusion: string | null; runner_name: string | null }[];
+      // The head repository's `owner/repo`: a fork's when it isn't the run's.
+      head?: string;
+      jobs: {
+        conclusion: string | null;
+        runner_name: string | null;
+        labels?: string[];
+        status?: string;
+        started_at?: string | null;
+      }[];
     }
   >();
   // Each `rerun-failed-jobs` call: its run, and the permissions of the
   // token it was made with (the latest mint).
   reruns: { run: string; permissions: Record<string, string> }[] = [];
+  // Each `force-cancel` call, the same way.
+  cancels: { run: string; permissions: Record<string, string> }[] = [];
   // The scopes GitHub grants a sign-in's token, as its answer lists them.
   oauthScope = 'read:org,read:packages';
   // Paths GitHub never answers: the request waits until it's aborted.
@@ -350,6 +360,7 @@ export class Upstream {
     if (!rest) {
       return Response.json({
         full_name: `${owner}/${repo}`,
+        private: found.private ?? true,
         owner: { id: found.ownerId, login: owner },
       });
     }
@@ -361,6 +372,8 @@ export class Upstream {
         id: Number(id),
         status: run.status,
         run_attempt: run.attempt,
+        repository: { full_name: `${owner}/${repo}` },
+        head_repository: { full_name: run.head ?? `${owner}/${repo}` },
       });
     }
     if (more === '/rerun-failed-jobs' && init.method === 'POST') {
@@ -370,7 +383,14 @@ export class Upstream {
       });
       return new Response(null, { status: 201 });
     }
-    if (more === `/attempts/${run.attempt}/jobs`) {
+    if (more === '/force-cancel' && init.method === 'POST') {
+      this.cancels.push({
+        run: `${owner}/${repo}/${id}`,
+        permissions: this.mints.at(-1)!,
+      });
+      return new Response(null, { status: 202 });
+    }
+    if (more === `/attempts/${run.attempt}/jobs` || more === '/jobs') {
       return Response.json({ total_count: run.jobs.length, jobs: run.jobs });
     }
     return new Response(`unexpected ${path}`, { status: 500 });

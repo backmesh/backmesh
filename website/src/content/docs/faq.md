@@ -70,8 +70,8 @@ VM type backmesh's labels use, narrowed to the ones your account allows.
 [More](/install/#regions).
 
 **Can several orgs share one backmesh control plane?** Yes, when they have the same owner:
-run install with the other org and the same `--control-plane`. An admin of that
-org signs in, and install adds only that org's listener. Its plan says the org
+run install with the other org and the same `--control-plane`. An owner of
+that org, or a member who manages its self-hosted runners, signs in, and install adds only that org's listener. Its plan says the org
 joins the others' control plane, and that every org on it must have the same
 owner: their runners use the same cloud connections, and each org's listener,
 on its own VM, holds a control plane token that can reach the others' install

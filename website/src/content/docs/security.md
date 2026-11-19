@@ -135,21 +135,30 @@ backmesh uses one public GitHub App, `backmesh`. During install, an org owner
 installs it on your org with one click. Its webhook is off, and it has only
 these permissions:
 
-| Permission                       | Why backmesh needs it                                                                                                                                   |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Self-hosted runners: write (org) | Scale sets, runner registration, the runner group, removing idle runners                                                                                |
-| Actions: write                   | Your listener reads runs and jobs (read only); backmesh.com reruns jobs a spot reclaim failed, only when they all ran on your install's runners (write) |
-| Metadata: read                   | Required by GitHub                                                                                                                                      |
+| Permission                       | Why backmesh needs it                                                                                                                                            |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Self-hosted runners: write (org) | Scale sets, runner registration, the runner group, removing idle runners                                                                                         |
+| Actions: write                   | Your listener reads runs and jobs (read only); backmesh.com reruns jobs a spot reclaim failed, and cancels a fork's run the public-repository gate stops (write) |
+| Metadata: read                   | Required by GitHub                                                                                                                                               |
 
 It has no Contents, Secrets, Members, Checks or Administration permission.
 
 Your listener's tokens are narrower than the App: Self-hosted runners write,
 Actions read and Metadata read, so your install's key grants no more than
 someone who manages your org's runners. The App's Actions write is used only
-by `api.backmesh.com` itself, to rerun a run's failed jobs after a spot
-reclaim: it checks your org owns the repository, the run finished at its first
-or second attempt, and every failed job ran on your install's runners, then
-reruns with a token that lasts for that one call.
+by `api.backmesh.com` itself, with a token that lasts for that one call, for
+two things your listener asks for with your install's key:
+
+- **Rerun a run's failed jobs after a spot reclaim** (`/v1/rerun`): only when
+  your org owns the repository, the run finished at its first or second
+  attempt, and every job that failed or timed out ran on your install's
+  runners.
+- **Cancel a fork's run** (`/v1/cancel`, with `--public-repos`): only a pull
+  request run from a fork in one of your org's public repositories that is
+  still going, and either asks for a backmesh label that isn't public or has
+  run 60 minutes on your install's runner.
+
+Each is limited to 20 an hour per install, and each call is logged.
 
 backmesh holds the App's private key, as a secret of the service at
 `api.backmesh.com`. It's never in your accounts, and the listener never holds
@@ -184,10 +193,12 @@ for up to an hour.
 ### If your install's key leaks
 
 Your install's key gets GitHub tokens for your org, so the listener reads it on
-a control plane VM, which runs no job. If you think it leaked, an admin of your
-org runs `backmesh rotate-key --org <org>`, which signs in with GitHub again,
+a control plane VM, which runs no job. If you think it leaked, an owner of your
+org, or a member who manages its self-hosted runners, runs
+`backmesh rotate-key --org <org>`, which signs in with GitHub again,
 writes a new key to the listener and only then revokes the old one. A token
-already handed out works for up to an hour.
+already handed out works for up to an hour. Until then, whoever holds the key
+can also ask backmesh.com to rerun or cancel runs, within the checks above.
 
 ## Which jobs run
 

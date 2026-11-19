@@ -20,7 +20,12 @@ import {
   waitForApp,
   workerDeps,
 } from './worker.js';
-import { checkSignIn, saveSignIn, signInAgain } from './github-sign-in.js';
+import {
+  checkSignIn,
+  saveSignIn,
+  signInAgain,
+  type SignInCheck,
+} from './github-sign-in.js';
 import { readApiVersion, readListener } from './status.js';
 import { readOverride } from '../app/override.js';
 import { parseRoutes } from '../listener/routes.js';
@@ -237,8 +242,8 @@ export interface InstallDeps {
   // minutes.
   runLong: RunAnycloud;
   command: RunCommand;
-  // The login of a sign-in's user (`signInLogin`).
-  signInLogin: (token: string) => Promise<string>;
+  // The login of a sign-in's user (`signInCheck`).
+  signInCheck: SignInCheck;
   release: () => Promise<Pick<Compatibility, 'runnerImage' | 'listenerImage'>>;
   ui: InstallUi;
   api?: typeof anycloudApi;
@@ -330,7 +335,7 @@ async function checkPrerequisites(
 ): Promise<{ identities: Map<Cloud, string>; signedIn: boolean }> {
   checkPinned(ANYCLOUD_VERSION, deps.features);
   const { signedIn, problems } = signIn
-    ? await checkSignIn(deps.env, deps.signInLogin, deps.ui.print)
+    ? await checkSignIn(deps.env, deps.signInCheck, deps.ui.print)
     : { signedIn: false, problems: [] };
   const identities = await checkClouds(targets, deps, problems);
   return { identities, signedIn };
@@ -1353,12 +1358,12 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   const name = listenerName(options.org);
   let installKey = current?.installKey;
   if (installKey) {
-    if (!signedIn) await signInAgain(worker, deps.signInLogin)();
+    if (!signedIn) await signInAgain(worker, deps.signInCheck)();
   } else {
     const signed = await signInForKey(options.org, worker);
     installKey = signed.key;
     if (!signedIn) {
-      await saveSignIn(deps.env, signed.token, deps.signInLogin);
+      await saveSignIn(deps.env, signed.token, deps.signInCheck);
     }
   }
   // Step 4, before anything is billed: backmesh's App on the org.

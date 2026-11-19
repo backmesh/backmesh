@@ -2,10 +2,11 @@
 // a fork's pull request in a public repository is untrusted, and runs only on
 // `backmesh-public-<n>`. GitHub assigns a job before the listener hears of
 // it, so the gate can't hold one back: it leaves untrusted and unclassified
-// jobs out of their set's desired count and terminates any runner on another
-// label that starts one of its jobs, so they end failed. It can't cancel a
-// run: the App's token reads Actions only (owner, 2026-11-19). A sweep of
-// the public repositories' active runs covers what a restart's lost
+// jobs out of their set's desired count, force-cancels an untrusted run
+// through the Worker's /v1/cancel (the listener's token reads Actions only,
+// owner 2026-11-19), and terminates any runner on another label that starts
+// one of its jobs. A
+// sweep of the public repositories' active runs covers what a restart's lost
 // messages miss.
 import type { Note, WorkflowRun } from '../github/checks.js';
 import type { Log } from '../github/retry.js';
@@ -18,13 +19,17 @@ export const PR_EVENTS = [
   'pull_request_review',
   'pull_request_review_comment',
 ];
-// An untrusted run's held jobs count again after this, in case no
-// JobCompleted comes for one that never started.
 const DAY_MS = 24 * 3_600_000;
 export const SWEEP_MS = 5 * 60_000;
-// An untrusted run's job on a public label runs at most this long: then
-// every public runner of the run is terminated.
+const CANCEL_MS = 60_000;
+// After a cancel, GitHub stops counting the run's jobs: they count again
+// then, in case no JobCompleted comes for one that never started.
+const RELEASE_MS = 2 * 60_000;
+// An untrusted run's job on a public label runs at most this long; its
+// runner's Job is terminated this long after the cancel if it's still
+// running.
 export const LIMIT_MS = 60 * 60_000;
+const LIMIT_GRACE_MS = 5 * 60_000;
 
 export interface GateDeps {
   github: GateGitHub;
@@ -59,10 +64,15 @@ interface RunState {
   failed?: boolean;
   // A job on a label that isn't public, for the note.
   asked?: { job: string; label: string };
-  // Its note is in the log.
-  noted?: boolean;
+  cancelledAt?: number;
+  // When a cancel last went through.
+  cancelled?: number;
+  // The cancel was refused, so no more tries.
+  refused?: boolean;
   // Runners on a label that isn't public that started one of its jobs.
   runners: Set<string>;
+  // Past the runtime limit: a later public job of the run ends as it starts.
+  limited?: boolean;
   evicted: Set<string>;
 }
 
@@ -88,7 +98,7 @@ export class Gate {
   // JobStarted or the sweep's `started_at`, for the runtime limit.
   private readonly timed = new Map<
     string,
-    { key: string; job: string; label: string; at: number }
+    { key: string; job: string; label: string; at: number; limited?: number }
   >();
   private sweptAt = -Infinity;
   private ticking: Promise<void> | undefined;
@@ -110,6 +120,11 @@ export class Gate {
     if (route.public) {
       if (job.messageType === 'JobCompleted') this.timed.delete(job.runnerName);
       if (job.messageType !== 'JobStarted' || !job.runnerName) return;
+      const limited = this.runs.get(key);
+      if (limited?.limited) {
+        void this.evict(limited, job.runnerName, 'runtime limit terminate');
+        return;
+      }
       if (!this.timed.has(job.runnerName)) {
         this.timed.set(job.runnerName, {
           key,
@@ -168,8 +183,10 @@ export class Gate {
   private async tock() {
     const now = this.now();
     for (const [key, state] of this.runs) {
-      if (now - state.at < DAY_MS) continue;
-      this.runs.delete(key);
+      const released =
+        state.cancelled !== undefined && now - state.cancelled >= RELEASE_MS;
+      if (now - state.at >= DAY_MS) this.runs.delete(key);
+      else if (!released) continue;
       this.release(key);
     }
     for (const state of this.runs.values()) {
@@ -182,8 +199,9 @@ export class Gate {
     await this.limit(this.now());
   }
 
-  // An untrusted run's job past the limit on a public label: every public
-  // runner of the run is terminated, with one note. Trusted runs are never
+  // An untrusted run's job past the limit on a public label: the run is
+  // force-cancelled with a note, and every one of its public runners' Jobs
+  // terminated if still running 5 minutes later. Trusted runs are never
   // acted on.
   private async limit(now: number) {
     for (const [runner, timed] of this.timed) {
@@ -192,31 +210,58 @@ export class Gate {
         this.timed.delete(runner);
         continue;
       }
-      if (state.trusted !== false || now - timed.at < LIMIT_MS) continue;
-      this.deps.log({ msg: 'runtime limit', run: timed.key, runner });
-      await this.note(state, {
-        name: `runtime limit in run ${state.run.runId}`,
-        title: 'Runtime limit',
-        summary: `\`${timed.job}\` ran on \`${timed.label}\` for 60 minutes, the limit for pull requests from forks, so backmesh ended its runner.`,
-      });
-      for (const [other, also] of this.timed) {
-        if (also.key !== timed.key) continue;
-        this.timed.delete(other);
-        await this.evict(state, other, 'runtime limit terminate');
+      if (state.trusted !== false) continue;
+      if (timed.limited === undefined) {
+        if (now - timed.at < LIMIT_MS) continue;
+        // The cancel is the run's: its other jobs end with this one, and
+        // one that starts later ends at once.
+        for (const other of this.timed.values()) {
+          if (other.key === timed.key) other.limited ??= now;
+        }
+        state.limited = true;
+        this.deps.log({ msg: 'runtime limit', run: timed.key, runner });
+        await this.cancel(state, 'limit', {
+          name: `runtime limit in run ${state.run.runId}`,
+          title: 'Runtime limit',
+          summary: `\`${timed.job}\` ran on \`${timed.label}\` for 60 minutes, the limit for pull requests from forks, so backmesh cancelled the run.`,
+        });
+      } else if (now - timed.limited >= LIMIT_GRACE_MS) {
+        this.timed.delete(runner);
+        await this.evict(state, runner, 'runtime limit terminate');
       }
     }
   }
 
-  // The run's note, in the listener's log. A failed one is logged and not
-  // retried: the note is advice.
-  private async note(state: RunState, note: Note) {
-    await this.deps.note(state.run, note).catch((error: unknown) =>
+  // Force-cancels the run and posts its note; false when the cancel failed.
+  private async cancel(
+    state: RunState,
+    reason: 'label' | 'limit',
+    note: Note,
+  ): Promise<boolean> {
+    const { run } = state;
+    try {
+      await this.deps.github.forceCancel(run, reason);
+    } catch (error) {
+      // Refused (the Worker's 403, such as for a run it doesn't see as a
+      // fork's), its jobs stay uncounted and are ended as they start, and
+      // the run isn't tried again.
+      state.refused =
+        error instanceof Error && 'status' in error && error.status === 403;
+      this.deps.log({
+        msg: 'fork run cancel failed',
+        run: keyOf(run),
+        error: String(error),
+      });
+      return false;
+    }
+    await this.deps.note(run, note).catch((error: unknown) =>
       this.deps.log({
         msg: 'note failed',
-        run: keyOf(state.run),
+        run: keyOf(run),
         error: String(error),
       }),
     );
+    return true;
   }
 
   private state(run: WorkflowRun): RunState {
@@ -274,21 +319,26 @@ export class Gate {
     }
   }
 
-  // Ends the run's runners on labels that aren't public, and notes the run
-  // once.
+  // Cancels the run, at most once a minute, and ends its runners on labels
+  // that aren't public.
   private async untrusted(state: RunState) {
     for (const runner of state.runners) await this.evict(state, runner);
-    if (!state.asked || state.noted) return;
-    state.noted = true;
+    const now = this.now();
+    if (!state.asked || state.refused) return;
+    if (state.cancelledAt !== undefined && now - state.cancelledAt < CANCEL_MS)
+      return;
+    state.cancelledAt = now;
     const { run } = state;
     const { job, label } = state.asked;
     const labels = this.deps.publicLabels.map((l) => `\`${l}\``).join(' or ');
-    this.deps.log({ msg: 'fork run held', run: keyOf(run), job, label });
-    await this.note(state, {
+    const cancelled = await this.cancel(state, 'label', {
       name: `fork run ${run.runId}`,
-      title: 'Fork run held',
-      summary: `\`${job}\` asked for \`${label}\`. In this public repository, pull requests from forks run only on ${labels || 'no backmesh label'}, so backmesh starts no runner for it and ends one that takes it. Use one of them, or a GitHub-hosted runner.`,
+      title: 'Fork run cancelled',
+      summary: `\`${job}\` asked for \`${label}\`. In this public repository, pull requests from forks run only on ${labels || 'no backmesh label'}, so backmesh cancelled the run. Use one of them, or a GitHub-hosted runner.`,
     });
+    if (!cancelled) return;
+    state.cancelled = now;
+    this.deps.log({ msg: 'fork run cancelled', run: keyOf(run), job, label });
   }
 
   private async evict(
@@ -315,7 +365,7 @@ export class Gate {
   }
 
   // The public repositories' queued and in-progress fork runs: each one
-  // with a job on a label that isn't public is noted, and this install's
+  // with a job on a label that isn't public is cancelled, and this install's
   // runners on those labels that run its jobs end.
   private async sweep() {
     const { github, log } = this.deps;

@@ -39,6 +39,13 @@ async function reached(token: string) {
     asUser(token, '/user/installations?per_page=100'),
   ]);
   if (user.status === 401 || installs.status === 401) return 'expired';
+  if (
+    [user, installs].some(
+      (r) => r.status === 403 && r.headers.has('X-GitHub-SSO'),
+    )
+  ) {
+    return 'sso';
+  }
   if (!user.ok || !installs.ok) {
     throw new GitHubError(
       `GitHub /user, /user/installations: ${user.status}, ${installs.status}`,
@@ -66,7 +73,7 @@ const memberOf = (
 
 async function orgMember(token: string, org: string) {
   const who = await reached(token);
-  return who === 'expired' ? who : memberOf(who, org);
+  return typeof who === 'string' ? who : memberOf(who, org);
 }
 
 const CREDENTIAL_TTL = 30 * 86_400_000;
@@ -89,6 +96,11 @@ async function credential(request: Request, env: Env) {
   const who = await reached(token);
   if (who === 'expired') {
     return json({ error: 'GitHub sign-in expired; sign in again.' }, 401);
+  }
+  if (who === 'sso') {
+    const error =
+      "Authorize the backmesh sign-in for your org's SAML SSO on GitHub, then sign in again.";
+    return json({ error }, 403);
   }
   if (!who.orgs.length) {
     const error =
@@ -142,13 +154,13 @@ export async function cueMember(
   token: string,
   org: string,
   admit: () => Promise<boolean>,
-): Promise<Member | null | 'expired' | 'limited'> {
+): Promise<Member | null | 'expired' | 'sso' | 'limited'> {
   const key = `${origin}/v1/cue/membership/${await sha256(token)}/${encodeURIComponent(org.toLowerCase())}`;
   const cached = await caches.default.match(key);
   if (cached) return (await cached.json()) as Member | null;
   if (!(await admit())) return 'limited';
   const member = await orgMember(token, org);
-  if (member === 'expired') return member;
+  if (member === 'expired' || member === 'sso') return member;
   await caches.default.put(
     key,
     Response.json(member, { headers: { 'Cache-Control': 'max-age=300' } }),
@@ -182,6 +194,10 @@ async function signIn(request: Request, env: Env, org: unknown) {
   }
   if (member === 'expired') {
     return json({ error: 'GitHub sign-in expired; sign in again.' }, 401);
+  }
+  if (member === 'sso') {
+    const error = `Authorize the backmesh sign-in for ${org}'s SAML SSO on GitHub, then sign in again.`;
+    return json({ error }, 403);
   }
   const error = `None of ${org}'s repositories that backmesh's GitHub App is on is open to you.`;
   return member ?? json({ error }, 403);

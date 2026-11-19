@@ -82,12 +82,14 @@ CLI encrypts them on your machine to your listener's key, and only the listener
 can read them. The listener holds one WebSocket open to receive cues and pings
 it every 20 seconds.
 
-To check you're a member of the org, the CLI signs in to backmesh's GitHub App
-once and trades that sign-in for a cue credential, which lasts 30 days and is
-kept on your machine. backmesh.com asks GitHub once, at the trade, which
-orgs' App installations you reach, as their members do; it keeps your GitHub
-user ID and login, those orgs and a hash of the credential, never a GitHub
-token. Later cues send only the credential. It keeps, for at most 10 minutes, your GitHub user ID per
+To check you may cue the org, the CLI signs in to backmesh's GitHub App once
+and trades that sign-in for a cue credential, which lasts 30 days and is kept
+on your machine. backmesh.com asks GitHub once, at the trade, which orgs' App
+installations you reach (you do when you can access one of their
+repositories: an outside collaborator too, a member with no repository not);
+it keeps your GitHub user ID and login, those orgs and a hash of the
+credential, never a GitHub token. Later cues send only the credential, and
+your listener acts on a cue only if you can push to its repository. It keeps, for at most 10 minutes, your GitHub user ID per
 cue for its rate limits, a random tag your CLI makes for each push (each repo
 and branch, new every 10 minutes) so a push's cues count once, a hash per cue
 that only its repeats match, and the encrypted cue for 60 seconds until your

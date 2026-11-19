@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-import { GitHubError, signInLogin } from '../../../src/app/github.js';
+import { GitHubError, signInCheck } from '../../../src/app/github.js';
 import { saveSignIn, signInAgain } from '../../../src/cli/github-sign-in.js';
 
 // Spies on all four console methods @octokit/rest's default logger can
@@ -31,11 +31,10 @@ describe('saveSignIn', () => {
     // A directory where the token goes: the rename fails.
     mkdirSync(join(dir, '.token'));
     await expect(
-      saveSignIn(
-        { BACKMESH_ANYCLOUD_DIR: dir },
-        'ghu_x',
-        async () => 'octocat',
-      ),
+      saveSignIn({ BACKMESH_ANYCLOUD_DIR: dir }, 'ghu_x', async () => ({
+        login: 'octocat',
+        appIds: [],
+      })),
     ).rejects.toThrow();
     expect(readdirSync(dir)).toEqual(['.token']);
   });
@@ -68,7 +67,7 @@ describe('signInAgain', () => {
   const scopes = async (token: string) => {
     if (token === 'ghu_revoked') throw new GitHubError(401, 'Bad credentials');
     if (token === 'ghu_down') throw new GitHubError(403, 'rate limited');
-    return 'octocat';
+    return { login: 'octocat', appIds: [] };
   };
   const again = async (saved: string | undefined) => {
     const dir = mkdtempSync(join(tmpdir(), 'backmesh-sign-in-'));
@@ -109,22 +108,25 @@ describe('signInAgain', () => {
   });
 });
 
-describe('signInLogin (the real GitHub client)', () => {
+describe('signInCheck (the real GitHub client)', () => {
   it("doesn't print @octokit/rest's own request-log line, on success or a 401", async () => {
     const { calls, restore } = spyOnConsole();
     try {
       const ok = (async () =>
-        Response.json({ login: 'octocat' })) as typeof globalThis.fetch;
+        Response.json({
+          login: 'octocat',
+          installations: [{ app_id: 5622376 }],
+        })) as typeof globalThis.fetch;
       await expect(
-        signInLogin('ghu_ok', { request: { fetch: ok } }),
-      ).resolves.toBe('octocat');
+        signInCheck('ghu_ok', { request: { fetch: ok } }),
+      ).resolves.toEqual({ login: 'octocat', appIds: [5622376] });
       const revoked = (async () =>
         Response.json(
           { message: 'Bad credentials' },
           { status: 401, headers: { 'x-github-request-id': 'DA94:1234' } },
         )) as typeof globalThis.fetch;
       await expect(
-        signInLogin('ghu_revoked', { request: { fetch: revoked } }),
+        signInCheck('ghu_revoked', { request: { fetch: revoked } }),
       ).rejects.toMatchObject({ status: 401 });
     } finally {
       restore();
@@ -137,21 +139,24 @@ describe('signInLogin (the real GitHub client)', () => {
 
   it('still prints a real warning, such as a deprecated endpoint', async () => {
     const { calls, restore } = spyOnConsole();
-    const deprecated = (async () =>
+    // GET /user is deprecated; /user/installations answers as usual.
+    const deprecated = (async (url: string) =>
       Response.json(
-        { login: 'octocat' },
-        {
-          headers: {
-            deprecation: 'true',
-            sunset: 'Wed, 11 Nov 2026 00:00:00 GMT',
-            link: '<https://docs.github.com/deprecation>; rel="deprecation"',
-          },
-        },
+        { login: 'octocat', installations: [] },
+        String(url).includes('/installations')
+          ? {}
+          : {
+              headers: {
+                deprecation: 'true',
+                sunset: 'Wed, 11 Nov 2026 00:00:00 GMT',
+                link: '<https://docs.github.com/deprecation>; rel="deprecation"',
+              },
+            },
       )) as typeof globalThis.fetch;
     try {
       await expect(
-        signInLogin('ghu_ok', { request: { fetch: deprecated } }),
-      ).resolves.toBe('octocat');
+        signInCheck('ghu_ok', { request: { fetch: deprecated } }),
+      ).resolves.toEqual({ login: 'octocat', appIds: [] });
     } finally {
       restore();
     }
@@ -171,7 +176,7 @@ describe('signInLogin (the real GitHub client)', () => {
     let error: unknown;
     try {
       await saveSignIn({ BACKMESH_ANYCLOUD_DIR: dir }, 'ghu_down', (token) =>
-        signInLogin(token, { request: { fetch: outage } }),
+        signInCheck(token, { request: { fetch: outage } }),
       ).catch((e: unknown) => {
         error = e;
       });
@@ -212,7 +217,10 @@ describe('signInAgain, with the real GitHub client', () => {
             { message: 'Bad credentials' },
             { status: 401, headers: { 'x-github-request-id': 'DA94:1234' } },
           )
-        : Response.json({ login: 'octocat' })) as typeof globalThis.fetch;
+        : Response.json({
+            login: 'octocat',
+            installations: [],
+          })) as typeof globalThis.fetch;
     try {
       await signInAgain(
         {
@@ -221,7 +229,7 @@ describe('signInAgain, with the real GitHub client', () => {
           print: (l) => lines.push(l),
           wait: async () => {},
         },
-        (token) => signInLogin(token, { request: { fetch: githubFetch } }),
+        (token) => signInCheck(token, { request: { fetch: githubFetch } }),
       )();
     } finally {
       restore();
