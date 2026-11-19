@@ -19,10 +19,11 @@ name: E2E
 # that same Worker, installs that release fresh for `org`,
 # the test org (backmesh-dryrun), once per leg: on AWS, running the label
 # member, and on Azure, in our Azure CI subscription, with the control plane
-# where install puts it by default, running one job. Each leg then
+# in centralus, running one job. Each leg then
 # uninstalls it and sweeps its cloud for anything left. Install and uninstall
-# each print a GitHub device sign-in, in the run's annotations and summary,
-# which an admin of the test org approves, as for ci-install.yml. The
+# each print a GitHub device sign-in, in the run's annotations and summary
+# and as a comment on the open "e2e sign-in codes" issue, which an admin of
+# the test org approves, as for ci-install.yml. The
 # backmesh App stays installed on the test org (`uninstall --keep-app`): only
 # an org owner can install it. The AWS leg runs in the `e2e` environment
 # (AWS_ROLE_ARN). The Azure leg runs in ci-install.yml's `ci-install`
@@ -191,9 +192,9 @@ jobs:
         run: test/e2e/worker-commit.sh
 
   # A fresh install of `version` on the test org, per leg, then the uninstall
-  # and a sweep, whatever came before them. AWS, with the control plane
-  # placed, runs the label member; Azure, where install picks the control
-  # plane's region as it does for a customer who names none, runs one job.
+  # and a sweep, whatever came before them. AWS runs the label member; Azure
+  # runs one job. Each leg names its control plane: install under --yes
+  # doesn't pick one.
   # One leg at a time: the test org holds one installation. On GitHub's
   # runners: it makes the runners it tests.
   test-org:
@@ -210,6 +211,8 @@ jobs:
             environment: e2e
           - cloud: azure
             placement: --runners azure
+            # Both control-plane sizes are offered here in our subscription.
+            control-plane-region: centralus
             # Our Azure CI subscription has 3 spot vCPUs per region: back to backmesh-4 once its quota is raised.
             label: backmesh-2
             environment: ci-install
@@ -221,12 +224,12 @@ jobs:
     permissions:
       contents: read # the release's assets
       id-token: write # the clouds' OIDC sign-ins
+      issues: write # the sign-in codes issue
     env:
       ORG: ${{ inputs.org }}
       VERSION: ${{ needs.plan.outputs.version }}
       CLOUD: ${{ matrix.cloud }}
-      # Where AWS's control plane goes and its sweep looks; Azure's is
-      # install's own choice.
+      # Where the leg's control plane goes, and AWS's sweep looks.
       CONTROL_PLANE_REGION: ${{ matrix.control-plane-region }}
       # Every sign-in, and the listener install makes, use the Worker the
       # `worker` job checks.
@@ -269,7 +272,7 @@ jobs:
           tar -xzf anycloud-linux-x64.tar.gz anycloud
           rm anycloud-linux-x64.tar.gz checksums.txt
           # A release before it can't uninstall without taking the App.
-          ./backmesh uninstall --help | grep -q -- --keep-app \
+          env -u GH_TOKEN ./backmesh uninstall --help | grep -q -- --keep-app \
             || { echo "::error::$VERSION has no uninstall --keep-app, which this needs"; exit 1; }
           install -D -m 755 anycloud ~/.backmesh/bin/"$anycloud"/anycloud
           echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
@@ -301,7 +304,7 @@ jobs:
 
       # Install generates the runners' Azure identity as this app, and
       # uninstall deletes it as the same. Only az is signed in, so install
-      # puts the control plane on Azure.
+      # can put the control plane on Azure.
       - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         if: matrix.cloud == 'azure'
         id: azure
@@ -315,20 +318,44 @@ jobs:
         if: matrix.cloud == 'azure'
         run: az group list --query "[?tags.anycloud_cluster && starts_with(name, 'anycloud-')].name" --output tsv >"$RUNNER_TEMP/groups-before"
 
+      # Nobody can read a running job's annotations or log through GitHub's
+      # API, so with-sign-in.sh also comments each code here, where GitHub
+      # notifies the owner. One open issue for every run, opened by a run.
+      # Without it, the codes are in the annotations and summary only.
+      - name: The sign-in codes issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: e2e sign-in codes
+        run: |
+          url=
+          if ! issue=$(gh issue list --repo "$GITHUB_REPOSITORY" --author app/github-actions --state open \
+            --limit 1000 --json number,title | jq -r --arg title "$TITLE" 'map(select(.title == $title))[0].number // empty') \
+            || { [[ -z $issue ]] && ! url=$(gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" \
+              --body "e2e.yml's test-org job comments each GitHub device sign-in here, for an admin of the test org to approve."); }; then
+            echo "::warning::Couldn't find or open the \"$TITLE\" issue: the sign-in codes are in the annotations and summary only"
+            exit 0
+          fi
+          echo "SIGN_IN_ISSUE=${issue:-${url##*/}}" >>"$GITHUB_ENV"
+
       # A maintainer who is an admin of the test org approves install's
-      # GitHub sign-in from the run's annotations or summary
+      # GitHub sign-in from the run's annotations or summary, or the issue
       # (with-sign-in.sh); the same sign-in is the control plane's. The plan
       # names where the control plane goes, which uninstall uses, and Azure's
-      # runner regions, which its one job checks.
+      # runner regions, which its one job checks. The job's token, which
+      # writes issues, goes to with-sign-in.sh's comments only, never to the
+      # release's binaries.
       - name: backmesh install
         id: install
         timeout-minutes: 90
         env:
           BACKMESH_UNSUPPORTED_CI_OVERRIDE: anycloud-ci
+          ISSUE_TOKEN: ${{ github.token }}
           PLACEMENT: ${{ matrix.placement }}
           LABEL: ${{ matrix.label }}
           MATRIX: ${{ needs.plan.outputs.matrix }}
         run: |
+          t=$ISSUE_TOKEN
+          unset ISSUE_TOKEN
           read -ra placement <<<"$PLACEMENT"
           if [[ -n $CONTROL_PLANE_REGION ]]; then placement+=(--control-plane "$CLOUD:$CONTROL_PLANE_REGION"); fi
           plan=$(backmesh install --org "$ORG" "${placement[@]}" --plan --json) || { echo "$plan"; exit 1; }
@@ -340,16 +367,18 @@ jobs:
               regions: [$plan.runners[] | select(.cloud == "azure") | .regions[]], kvm: false, gpu: false}]}' <<<"$MATRIX")
           fi
           echo "LABEL_MATRIX=$MATRIX" >>"$GITHUB_ENV"
-          test/e2e/with-sign-in.sh backmesh install --org "$ORG" "${placement[@]}" --yes --plan-id "$id"
+          ISSUE_TOKEN=$t test/e2e/with-sign-in.sh backmesh install --org "$ORG" "${placement[@]}" --yes --plan-id "$id"
 
       # The control plane's ID, for the sweep, also after a failed install
       # that got as far as creating it.
       - name: The control plane
         if: ${{ always() && steps.bin.outcome == 'success' }}
         env:
-          GH_TOKEN: ${{ github.token }}
+          TOKEN: ${{ github.token }}
         run: |
-          echo "ORG_ID=$(gh api "orgs/$ORG" --jq .id)" >>"$GITHUB_ENV"
+          t=$TOKEN
+          unset TOKEN
+          echo "ORG_ID=$(GH_TOKEN=$t gh api "orgs/$ORG" --jq .id)" >>"$GITHUB_ENV"
           [[ -f ~/.anycloud/api-url ]] || { echo "No control plane was created"; exit 0; }
           url=$(anycloud api status --json | jq -r .url)
           id=$(sed -nE 's|^https://([a-z0-9-]+)\.anycloud\.sh/?$|\1|p' <<<"$url")
@@ -386,7 +415,11 @@ jobs:
       - name: backmesh uninstall
         if: ${{ always() && steps.bin.outcome == 'success' }}
         timeout-minutes: 60
+        env:
+          ISSUE_TOKEN: ${{ github.token }}
         run: |
+          t=$ISSUE_TOKEN
+          unset ISSUE_TOKEN
           flags=(--org "$ORG" --yes --keep-app --delete-checkpoint-bucket --confirm backmesh)
           # A control plane that doesn't answer, such as a half-made one, is
           # deleted through the cloud CLI; uninstall refuses that for one that
@@ -397,7 +430,7 @@ jobs:
               flags+=(--control-plane "$CONTROL_PLANE")
             fi
           fi
-          test/e2e/with-sign-in.sh backmesh uninstall "${flags[@]}"
+          ISSUE_TOKEN=$t test/e2e/with-sign-in.sh backmesh uninstall "${flags[@]}"
 
       # The cost guard: fails, naming them, while anything this run's
       # installation made is still in AWS. Without the control plane's ID,
@@ -461,22 +494,24 @@ jobs:
         if: ${{ always() && steps.azure.outcome == 'success' }}
         run: |
           left=()
+          # az's empty answer is a blank line, not a name.
+          named() { sed -n "s|^.|$1&|p"; }
           before=$RUNNER_TEMP/groups-before
           [[ -f $before ]] || { echo "::error::No list of the resource groups before the install, so this run's can't be told apart"; exit 1; }
           if [[ -z ${CLUSTER_ID:-} ]]; then
             groups=$(az group list --query "[?tags.anycloud_cluster && starts_with(name, 'anycloud-')].name" --output tsv)
-            left+=($(comm -13 <(sort "$before") <(sort <<<"$groups") | sed 's/^/resource-group:/'))
+            left+=($(comm -13 <(sort "$before") <(sort <<<"$groups") | named resource-group:))
           else
             eval "$(node test/e2e/sweep-names.ts)"
             [[ $(az group exists --name "anycloud-$CLUSTER_ID") == false ]] || left+=("resource-group:anycloud-$CLUSTER_ID")
             for tag in "anycloud_cluster=$CLUSTER_ID" "anycloud_owner_api=$OWNER_API"; do
-              left+=($(az resource list --tag "$tag" --query '[].id' --output tsv | sed 's/^/resource:/'))
+              left+=($(az resource list --tag "$tag" --query '[].id' --output tsv | named resource:))
             done
-            left+=($(az ad app list --display-name "$AZURE_APP" --query '[].appId' --output tsv | sed "s/^/app:$AZURE_APP:/"))
+            left+=($(az ad app list --display-name "$AZURE_APP" --query '[].appId' --output tsv | named "app:$AZURE_APP:"))
             account="anycloud$(tr -d - <<<"$AZURE_SUBSCRIPTION_ID" | cut -c1-8)"
             if [[ $(az storage account check-name --name "$account" --query nameAvailable) == false ]]; then
               left+=($(az storage container-rm list --storage-account "$account" --resource-group anycloud-storage \
-                --query "[?name == '$CLUSTER_ID' || starts_with(name, '$CACHE_PREFIX')].name" --output tsv | sed 's/^/container:/'))
+                --query "[?name == '$CLUSTER_ID' || starts_with(name, '$CACHE_PREFIX')].name" --output tsv | named container:))
             fi
           fi
           left=($(printf '%s\n' "${left[@]}" | sort -u))
