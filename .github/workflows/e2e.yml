@@ -341,14 +341,19 @@ jobs:
       # GitHub sign-in from the run's annotations or summary, or the issue
       # (with-sign-in.sh); the same sign-in is the control plane's. The plan
       # names where the control plane goes, which uninstall uses, and Azure's
-      # runner regions, which its one job checks. The job's token, which
-      # writes issues, goes to with-sign-in.sh's comments only, never to the
-      # release's binaries.
+      # runner regions, which its one job checks. The release's binaries
+      # read GitHub with the job's token, as GH_TOKEN: a shared runner's IP
+      # soon spends GitHub's 60 anonymous reads an hour, and backmesh takes
+      # GITHUB_TOKEN for the control plane's sign-in, which the job's token
+      # isn't. That token writes issues: an accepted risk, as the binaries
+      # hold the leg's cloud credentials already. ISSUE_TOKEN, the same
+      # token, goes to with-sign-in.sh's comments only.
       - name: backmesh install
         id: install
         timeout-minutes: 90
         env:
           BACKMESH_UNSUPPORTED_CI_OVERRIDE: anycloud-ci
+          GH_TOKEN: ${{ github.token }}
           ISSUE_TOKEN: ${{ github.token }}
           PLACEMENT: ${{ matrix.placement }}
           LABEL: ${{ matrix.label }}
@@ -374,11 +379,9 @@ jobs:
       - name: The control plane
         if: ${{ always() && steps.bin.outcome == 'success' }}
         env:
-          TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          t=$TOKEN
-          unset TOKEN
-          echo "ORG_ID=$(GH_TOKEN=$t gh api "orgs/$ORG" --jq .id)" >>"$GITHUB_ENV"
+          echo "ORG_ID=$(gh api "orgs/$ORG" --jq .id)" >>"$GITHUB_ENV"
           [[ -f ~/.anycloud/api-url ]] || { echo "No control plane was created"; exit 0; }
           url=$(anycloud api status --json | jq -r .url)
           id=$(sed -nE 's|^https://([a-z0-9-]+)\.anycloud\.sh/?$|\1|p' <<<"$url")
@@ -411,11 +414,13 @@ jobs:
 
       # Always, after anything that may have made something, cancelled too:
       # everything but the App, and the checkpoint bucket with the rest. Its
-      # GitHub sign-in is approved as install's is.
+      # GitHub sign-in is approved as install's is, and it reads GitHub with
+      # the job's token as install does.
       - name: backmesh uninstall
         if: ${{ always() && steps.bin.outcome == 'success' }}
         timeout-minutes: 60
         env:
+          GH_TOKEN: ${{ github.token }}
           ISSUE_TOKEN: ${{ github.token }}
         run: |
           t=$ISSUE_TOKEN
