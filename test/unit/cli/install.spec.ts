@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { StepFailed } from '../../../src/anycloud/binary.js';
 import type { FeatureTable } from '../../../src/anycloud/features.js';
-import { signInLogin } from '../../../src/app/github.js';
+import { signInCheck } from '../../../src/app/github.js';
 import {
   install,
   parseControlPlane,
@@ -297,8 +297,8 @@ function setUp(
       }
       return '';
     },
-    signInLogin: (token) =>
-      signInLogin(token, { request: { fetch: github.fetch } }),
+    signInCheck: (token) =>
+      signInCheck(token, { request: { fetch: github.fetch } }),
     release: async () => images,
     ui: {
       print: (line) => lines.push(line),

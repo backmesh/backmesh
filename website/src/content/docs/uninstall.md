@@ -14,7 +14,8 @@ deleting anything. It says how many jobs are running: those jobs fail. Pass
 
 For each org, in order, it:
 
-1. Asks an owner of the org to sign in with GitHub, with a code to enter at
+1. Asks an owner of the org, or a member who manages its self-hosted
+   runners, to sign in with GitHub, with a code to enter at
    `https://github.com/login/device`. The code is printed as plain lines, so a
    CI job shows it in its log. backmesh.com then gives `uninstall` an
    hour-long token that can manage only the org's self-hosted runners. The

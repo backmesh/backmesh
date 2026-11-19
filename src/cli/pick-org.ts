@@ -8,7 +8,7 @@
 import { z } from 'zod';
 
 import { anycloudPath, readSaved } from '../anycloud/client.js';
-import { signInAgain, type SignInLogin } from './github-sign-in.js';
+import { signInAgain, type SignInCheck } from './github-sign-in.js';
 import { GITHUB_REMOTE } from './cue.js';
 import { UsageError } from './errors.js';
 import type { InstallUi } from './install.js';
@@ -18,7 +18,7 @@ import { workerDeps } from './worker.js';
 export interface PickOrgDeps {
   env: NodeJS.ProcessEnv;
   ui: InstallUi;
-  signInLogin: SignInLogin;
+  signInCheck: SignInCheck;
   // This checkout's `git`, rejecting outside one.
   git?: (args: string[]) => Promise<string>;
   fetch?: typeof globalThis.fetch;
@@ -96,7 +96,7 @@ export async function pickOrg(
   const owner = await remoteOwner(deps.git);
   let mine = await savedAppOrgs(deps);
   if (ask && !mine && !plan) {
-    await signInAgain(workerDeps(deps, print), deps.signInLogin)();
+    await signInAgain(workerDeps(deps, print), deps.signInCheck)();
     mine = await savedAppOrgs(deps);
     if (!mine) throw new Error('GitHub refused the new sign-in. Retry.');
   }

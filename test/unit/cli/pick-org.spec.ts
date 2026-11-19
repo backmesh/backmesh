@@ -94,7 +94,7 @@ async function pick({
         },
       }),
     },
-    signInLogin: async () => 'octocat',
+    signInCheck: async () => ({ login: 'octocat', appIds: [] }),
     git: async (args) => {
       expect(args).toEqual(['remote', '-v']);
       if (!remotes) throw new Error('not a git repository');

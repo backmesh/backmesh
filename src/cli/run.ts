@@ -26,7 +26,7 @@ import { workerDeps } from './worker.js';
 import { cue, type CueDeps } from './cue.js';
 import { signInAgain } from './github-sign-in.js';
 import { clusterIdOf, listenerName, readInstallation } from './installation.js';
-import { signInLogin } from '../app/github.js';
+import { signInCheck } from '../app/github.js';
 import { readCompatibility } from '../release/compatibility.js';
 import { install, type InstallDeps } from './install.js';
 import { pickOrg } from './pick-org.js';
@@ -107,7 +107,7 @@ function realInstallDeps(io: CliIo, json: boolean): InstallDeps {
     run: runAnycloud,
     runLong: anycloudBinary(0),
     command: cloudCommand,
-    signInLogin,
+    signInCheck,
     release: async () => readCompatibility(),
     ui: realUi(io, json),
     git: (args) => git(args, AbortSignal.timeout(10_000), io.env),
@@ -130,7 +130,7 @@ function realRotateKeyDeps(io: CliIo, json: boolean): RotateKeyDeps {
     env: io.env,
     run: runAnycloud,
     runLong: anycloudBinary(0),
-    signInLogin,
+    signInCheck,
     print: realUi(io, json).print,
   };
 }

@@ -178,8 +178,9 @@ for up to an hour.
 ### If your install's key leaks
 
 Your install's key gets GitHub tokens for your org, so the listener reads it on
-a control plane VM, which runs no job. If you think it leaked, an admin of your
-org runs `backmesh rotate-key --org <org>`, which signs in with GitHub again,
+a control plane VM, which runs no job. If you think it leaked, an owner of your
+org, or a member who manages its self-hosted runners, runs
+`backmesh rotate-key --org <org>`, which signs in with GitHub again,
 writes a new key to the listener and only then revokes the old one. A token
 already handed out works for up to an hour.
 

@@ -395,7 +395,7 @@ function setUp({
   const deps: UpgradeDeps = {
     // No saved anycloud files, whatever this machine holds.
     env: { BACKMESH_ANYCLOUD_DIR: mkdtempSync(join(tmpdir(), 'backmesh-')) },
-    signInLogin: async () => 'octocat',
+    signInCheck: async () => ({ login: 'octocat', appIds: [] }),
     run,
     runLong: run,
     release: async () => RELEASE,
@@ -471,10 +471,10 @@ describe('upgrade', () => {
     // anycloud's login relays a device code until backmesh has signed in.
     const dir = deps.env.BACKMESH_ANYCLOUD_DIR!;
     writeFileSync(join(dir, '.token'), 'ghu_revoked\n');
-    deps.signInLogin = async (token) => {
+    deps.signInCheck = async (token) => {
       if (token === 'ghu_revoked')
         throw new GitHubError(401, 'Bad credentials');
-      return 'octocat';
+      return { login: 'octocat', appIds: [] };
     };
     const run = deps.run;
     const logins: string[] = [];
