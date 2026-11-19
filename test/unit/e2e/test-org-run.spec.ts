@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   runOnTestOrg,
@@ -81,5 +81,21 @@ describe('runOnTestOrg', () => {
     };
     await expect(run(git)).rejects.toThrow('push refused');
     expect(deleted).toEqual(['run/n1']);
+  });
+
+  it("reports the run's own error when deleting the branch fails too, and warns about the branch", async () => {
+    const { git } = fakeGit();
+    git.push = async () => {
+      throw new Error('push refused');
+    };
+    git.remove = async () => {
+      throw new Error('delete refused');
+    };
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    await expect(run(git)).rejects.toThrow('push refused');
+    expect(log).toHaveBeenCalledWith(
+      "::warning::couldn't delete run/n1: Error: delete refused",
+    );
+    log.mockRestore();
   });
 });

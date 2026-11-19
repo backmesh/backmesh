@@ -47,6 +47,7 @@ type Job = {
 };
 type Workflow = {
   on: Record<string, unknown>;
+  concurrency?: unknown;
   env?: unknown;
   defaults?: unknown;
   permissions?: Permissions;
@@ -421,6 +422,7 @@ describe("the test org's label run", () => {
       (s) => s.name === "The label member on the test org's runners",
     )!;
     expect(step.env!.DEPLOY_KEY).toBe('${{ secrets.E2E_TEST_ORG_DEPLOY_KEY }}');
+    expect(step.run).toContain(`trap 'rm -f "$key"' EXIT`);
     expect(step.run).toMatch(
       /GIT_SSH_COMMAND="ssh -i \$key -o IdentitiesOnly=yes" node test\/e2e\/run-test-org-labels\.ts/,
     );
@@ -429,6 +431,11 @@ describe("the test org's label run", () => {
   it("runs on a push to run/** only, and calls e2e-labels.yml with run.json's matrix and ref", () => {
     expect(labels().on).toEqual({ push: { branches: ['run/**'] } });
     expect(labels().permissions).toEqual({});
+    // One run at a time: a leg's queued label jobs never reach the next's.
+    expect(labels().concurrency).toEqual({
+      group: 'labels',
+      'cancel-in-progress': true,
+    });
     const dir = mkdtempSync(join(tmpdir(), 'run-'));
     const matrix = { include: [{ label: 'backmesh-4', cloud: 'azure' }] };
     writeFileSync(
@@ -445,6 +452,15 @@ describe("the test org's label run", () => {
     expect(readFileSync(out, 'utf8')).toBe(
       `matrix=${JSON.stringify(matrix)}\nref=${'a'.repeat(40)}\n`,
     );
+    // Only a commit: run.json's ref is checked out on the test org's runners.
+    writeFileSync(
+      join(dir, 'run.json'),
+      JSON.stringify({ matrix, ref: 'main', nonce: 'n1' }),
+    );
+    expect(
+      runStep(`cd ${dir}\n${step.run!}`, { env: { GITHUB_OUTPUT: out } })
+        .status,
+    ).not.toBe(0);
     expect(labels().jobs.read!.outputs).toEqual({
       matrix: '${{ steps.run.outputs.matrix }}',
       ref: '${{ steps.run.outputs.ref }}',
@@ -459,7 +475,7 @@ describe("the test org's label run", () => {
     });
   });
 
-  it('pushes result.json to the same branch whatever the label jobs did', () => {
+  it("pushes result.json to the same branch whatever the label jobs did, but doesn't re-create a deleted one", () => {
     const job = labels().jobs.result!;
     expect(job.if).toBe('${{ always() }}');
     expect(job.needs).toEqual(['read', 'labels']);
@@ -473,6 +489,8 @@ describe("the test org's label run", () => {
       env: {
         CONCLUSION: 'failure',
         URL: 'https://github.com/backmesh-dryrun/e2e/actions/runs/7',
+        GITHUB_REF: 'refs/heads/run/n1',
+        GITHUB_SHA: 'b'.repeat(40),
       },
       commands: { git: `echo "$*" >>${dir}/git.log` },
     });
@@ -482,7 +500,9 @@ describe("the test org's label run", () => {
       url: 'https://github.com/backmesh-dryrun/e2e/actions/runs/7',
     });
     expect(readFileSync(join(dir, 'git.log'), 'utf8')).toMatch(
-      /^add result\.json\n.* commit .*\npush\n$/,
+      new RegExp(
+        `^add result\\.json\n.* commit .*\npush --force-with-lease=refs/heads/run/n1:${'b'.repeat(40)} origin HEAD:refs/heads/run/n1\n$`,
+      ),
     );
   });
 });
