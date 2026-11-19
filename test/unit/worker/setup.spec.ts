@@ -11,6 +11,7 @@ const ENV: Record<string, string> = {
   BILLING_GITHUB_CLIENT_ID: 'Iv1.client',
   BILLING_GITHUB_APP_ID: '1',
   BILLING_GITHUB_APP_PRIVATE_KEY: appKey(),
+  GITHUB_SHA: '0123456789abcdef0123456789abcdef01234567',
 };
 
 // Cloudflare and wrangler, in memory, recording every write.
@@ -18,6 +19,7 @@ const ENV: Record<string, string> = {
 // unless a test says otherwise.
 function world(deployed = ['17 3 * * *']) {
   const writes: string[] = [];
+  const deploys: string[][] = [];
   const secrets: Record<string, string> = {};
   const cf = {
     databases: [] as { uuid: string; name: string }[],
@@ -62,6 +64,7 @@ function world(deployed = ['17 3 * * *']) {
     writes.push(`wrangler ${command}`);
     // As wrangler deploy does: the config's triggers replace the Worker's.
     if (command === 'deploy') {
+      deploys.push(args);
       cf.crons = deployed;
       cf.deployed = true;
     }
@@ -81,7 +84,7 @@ function world(deployed = ['17 3 * * *']) {
       wrangler,
       log: (l) => log.push(l),
     });
-  return { cf, writes, log, run };
+  return { cf, writes, deploys, log, run };
 }
 
 afterEach(() => rmSync('worker/wrangler.setup.jsonc', { force: true }));
@@ -105,6 +108,23 @@ describe('Worker setup', () => {
     await expect(world(['* * * * *']).run(true)).rejects.toThrow(
       'They should be exactly 17 3 * * *',
     );
+  });
+
+  it('deploys the Worker with the commit it was built from', async () => {
+    const w = world();
+    await w.run(true);
+    expect(w.deploys).toEqual([
+      [
+        'deploy',
+        '--config',
+        'worker/wrangler.setup.jsonc',
+        '--var',
+        `COMMIT:${ENV.GITHUB_SHA}`,
+      ],
+    ]);
+
+    const { GITHUB_SHA: _, ...noCommit } = ENV;
+    await expect(world().run(true, noCommit)).rejects.toThrow('GITHUB_SHA');
   });
 
   it('names missing secrets', async () => {
