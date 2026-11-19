@@ -1,9 +1,9 @@
 name: Release
 
 # Cuts backmesh release vX.Y.Z from its tag: checks
-# the tag, publishes and signs both images, deploys the Worker on
-# api.backmesh.com from the tag's commit before anything publishes, and
-# attaches compatibility.json,
+# the tag, pushes and signs both images and checks they're public, deploys
+# the Worker on api.backmesh.com from the tag's commit, and only then
+# publishes the release with compatibility.json,
 # which names their digests and the one anycloud version the release pins,
 # and the CLI binaries that embed it. The binaries are mirrored to
 # backmesh/backmesh-releases, which install.sh and Homebrew's backmesh/tap
@@ -100,6 +100,17 @@ jobs:
         run: |
           node scripts/release-matrix.mjs "$RUNNER_IMAGE" "$LISTENER_IMAGE" >compatibility.json
           echo "compatibility=$(jq -c . compatibility.json)" >>"$GITHUB_OUTPUT"
+      # Customers pull without credentials, so a private package fails the
+      # release, before the Worker deploys. An empty Docker config keeps the
+      # pulls anonymous.
+      - name: Check both images are public
+        run: |
+          export DOCKER_CONFIG=$RUNNER_TEMP/anonymous
+          mkdir -p "$DOCKER_CONFIG"
+          for image in $(jq -r '.runnerImage, .listenerImage' compatibility.json); do
+            docker manifest inspect "$image" >/dev/null \
+              || { echo "::error::$image can't be pulled anonymously"; exit 1; }
+          done
       # Each binary embeds the tag's version, rc suffix included, and
       # compatibility.json; the linux-x64 one must report that version and
       # read its matrix, or the release fails.
@@ -113,8 +124,9 @@ jobs:
           if-no-files-found: error
 
   # The Worker the release's CLI signs in through, deployed from the tag's
-  # commit before anything publishes, so no published CLI meets an older
-  # Worker; a failed deploy publishes nothing. A release deploys production,
+  # commit after every check that can fail and before the release, the
+  # mirror, the cache action and the formula, so no published CLI meets an
+  # older Worker; a failed deploy publishes none of them. A release deploys production,
   # once the rc it was qualified as builds again; an rc deploys only the
   # staging Worker, which its e2e signs in through. As worker-setup.yml
   # does, with its secrets: the database's migrations, the Worker, and its
@@ -192,16 +204,6 @@ jobs:
             jq -r '"Pins anycloud `\(.anycloud)`; each CLI binary embeds `compatibility.json`, which `backmesh upgrade` reads. `checksums.txt` holds their sha256 digests."' compatibility.json
           } >notes.md
           cat notes.md >>"$GITHUB_STEP_SUMMARY"
-      # Customers pull without credentials, so a private package fails the
-      # release. An empty Docker config keeps the pulls anonymous.
-      - name: Check both images are public
-        run: |
-          export DOCKER_CONFIG=$RUNNER_TEMP/anonymous
-          mkdir -p "$DOCKER_CONFIG"
-          for image in $(jq -r '.runnerImage, .listenerImage' compatibility.json); do
-            docker manifest inspect "$image" >/dev/null \
-              || { echo "::error::$image can't be pulled anonymously"; exit 1; }
-          done
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}

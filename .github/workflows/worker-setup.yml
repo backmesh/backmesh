@@ -26,10 +26,10 @@ concurrency:
 
 jobs:
   setup:
-    # GitHub-hosted, as the recovery path: this deploys the Worker,
-    # which mints the listener's installation tokens,
-    # so a broken Worker stops backmesh's own runners. The publish
-    # environment is limited to main.
+    # GitHub-hosted: the Worker mints the listener's installation tokens, so
+    # a broken Worker stops backmesh's own runners. The publish environment
+    # is limited to main, so an apply redeploys main's Worker over the
+    # released one: a Worker fix ships as a release (release.yml's deploy).
     runs-on: ubuntu-24.04
     environment: publish
     timeout-minutes: 20

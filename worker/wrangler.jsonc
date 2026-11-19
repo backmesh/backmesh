@@ -63,7 +63,12 @@
   "env": {
     "staging": {
       "name": "backmesh-staging",
-      "vars": { "GITHUB_APP_SLUG": "backmesh" },
+      // It holds the App's key and runs rc code, so it serves only these
+      // test orgs (installs.ts, notServed).
+      "vars": {
+        "GITHUB_APP_SLUG": "backmesh",
+        "STAGING_ORGS": "backmesh-e2e,backmesh-dryrun",
+      },
       "d1_databases": [
         {
           "binding": "DB",

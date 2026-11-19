@@ -69,8 +69,8 @@ const GONE = pullRequest(null);
 const SAME_REPO = pullRequest('backmesh/backmesh');
 
 // The expression subset our runs-on and job ifs use: context names, strings,
-// ==, !=, !, &&, || (which return an operand, as JavaScript's do), parentheses,
-// startsWith and cancelled() (a run not cancelled). Anything else throws, so a new form fails here until added.
+// ==, !=, &&, || (which return an operand, as JavaScript's do), parentheses and
+// startsWith. Anything else throws, so a new form fails here until added.
 function evaluate(expression: string, context: Context): unknown {
   let expr = expression;
   for (const [name, v] of Object.entries(context).sort(
@@ -82,11 +82,9 @@ function evaluate(expression: string, context: Context): unknown {
   expr = expr.replace(/\bvars\.[A-Z_]+/g, "''");
   expr = expr.replaceAll('!=', '!==').replace(/([^!=])==/g, '$1===');
   const startsWith = (s: string, prefix: string) => s.startsWith(prefix);
-  return new Function(
-    'startsWith',
-    'cancelled',
-    `'use strict'; return (${expr});`,
-  )(startsWith, () => false);
+  return new Function('startsWith', `'use strict'; return (${expr});`)(
+    startsWith,
+  );
 }
 
 // Runs a step's script as Actions does (bash -eo pipefail), with `env` and,
@@ -234,15 +232,6 @@ describe("release.yml's Worker deploy", () => {
   const [name, deploy] = deploys[0] ?? ['', none];
   const needs = (job: string): string[] =>
     [release.jobs[job]!.needs ?? []].flat().flatMap((n) => [n, ...needs(n)]);
-  const runs = (job: string, context: Context) => {
-    const { if: condition } = release.jobs[job]!;
-    return (
-      condition === undefined ||
-      !!evaluate(unwrap(condition) ?? condition, context)
-    );
-  };
-  const final = { 'needs.check.outputs.rc': 'false' };
-  const rc = { 'needs.check.outputs.rc': 'true' };
 
   it("deploys backmesh-billing with the publish environment's Cloudflare token, as worker-setup.yml does", () => {
     expect(deploys.map(([n]) => n)).toHaveLength(1);
@@ -261,10 +250,10 @@ describe("release.yml's Worker deploy", () => {
   });
 
   // The step's own script, with node stubbed to print the setup it runs.
-  const setupOf = (context: Context) => {
+  const setupOf = (rc: 'true' | 'false') => {
     const step = deploy.steps!.find((s) => s.run?.includes(SETUP))!;
     const out = runStep(step.run!, {
-      env: { RC: context['needs.check.outputs.rc']! },
+      env: { RC: rc },
       commands: { node: 'echo "$@"' },
     });
     expect(step.env!.RC).toBe('${{ needs.check.outputs.rc }}');
@@ -272,10 +261,9 @@ describe("release.yml's Worker deploy", () => {
   };
 
   it('deploys production on a release, and staging only on an rc', () => {
-    expect(runs(name, final)).toBe(true);
-    expect(runs(name, rc)).toBe(true);
-    expect(setupOf(final)).toBe('worker/scripts/setup.ts --apply');
-    expect(setupOf(rc)).toBe('worker/scripts/setup.ts --apply --staging');
+    expect(deploy.if).toBeUndefined();
+    expect(setupOf('false')).toBe('worker/scripts/setup.ts --apply');
+    expect(setupOf('true')).toBe('worker/scripts/setup.ts --apply --staging');
   });
 
   it('deploys after the checks and builds, and before anything publishes', () => {
@@ -320,10 +308,13 @@ describe("e2e.yml's Worker and Azure checks", () => {
     }
   });
 
-  it("fails unless the target Worker runs the one built from the tag's commit", () => {
-    const check = e2e.jobs.worker!.steps!.find((s) =>
-      s.run?.includes('/v1/version'),
-    )!;
+  it("fails unless the target Worker runs the one built from the tag's commit, before and after the install", () => {
+    const CHECK = 'test/e2e/worker-commit.sh';
+    const check = e2e.jobs.worker!.steps!.find((s) => s.run === CHECK)!;
+    // Two rcs share staging: test-org rechecks once it's done.
+    const last = e2e.jobs['test-org']!.steps!.at(-1)!;
+    expect(last.run).toBe(CHECK);
+    expect(last.if).toBe('${{ always() }}');
     const want = 'a'.repeat(40);
     const run = (answer: string) =>
       runStep(check.run!, {
@@ -361,24 +352,5 @@ describe("e2e.yml's Worker and Azure checks", () => {
     expect(job.env).toMatchObject({
       AZURE_SUBSCRIPTION_ID: '${{ secrets.AZURE_SUBSCRIPTION_ID }}',
     });
-  });
-
-  it('always sweeps Azure, last, for what the run made', () => {
-    const steps = e2e.jobs['test-org']!.steps!;
-    const sweep = steps.find(
-      (s) => s.name === 'Sweep Azure for anything left',
-    )!;
-    expect(sweep.if).toMatch(/^\$\{\{ always\(\) &&/);
-    expect(steps.indexOf(sweep)).toBe(steps.length - 1);
-    for (const what of [
-      'groups-before',
-      'az group exists',
-      'anycloud_cluster=$CLUSTER_ID',
-      'anycloud_owner_api=$OWNER_API',
-      'az ad app list --display-name "$AZURE_APP"',
-      '$CACHE_PREFIX',
-    ]) {
-      expect(sweep.run, what).toContain(what);
-    }
   });
 });

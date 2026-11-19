@@ -16,6 +16,7 @@ import {
   AppRestricted,
   deviceToken,
   keyInstall,
+  notServed,
   orgAdmin,
   rememberLogin,
   sha256,
@@ -209,6 +210,8 @@ export async function cleanup(request: Request, env: Env) {
     const error = 'device_code and org are required';
     return Response.json({ error }, { status: 400 });
   }
+  const refused = notServed(env, org);
+  if (refused) return refused;
   const signedIn = await deviceToken(env, device_code);
   if (signedIn instanceof Response) {
     if (signedIn.status !== 202) await record('signin_failed');

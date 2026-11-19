@@ -176,17 +176,12 @@ jobs:
     env:
       BACKMESH_API_URL: ${{ needs.plan.outputs.api-url }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: The target Worker runs the one built from the tag under test
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.plan.outputs.version }}
-        run: |
-          want=$(gh api "repos/$GITHUB_REPOSITORY/commits/$VERSION" --jq .sha)
-          host=${BACKMESH_API_URL#https://}
-          got=$(curl -fsS --max-time 30 "$BACKMESH_API_URL/v1/version" | jq -r .commit) || got=
-          [[ $got == "$want" ]] \
-            || { echo "::error::$host runs the Worker built from ${got:-an unknown commit}, not $VERSION's $want"; exit 1; }
-          echo "$host runs $VERSION's Worker, $want."
+        run: test/e2e/worker-commit.sh
 
   # A fresh install of `version` on the test org, per leg, then the uninstall
   # and a sweep, whatever came before them. AWS, with the control plane
@@ -203,7 +198,8 @@ jobs:
       matrix:
         include:
           - cloud: aws
-            placement: --control-plane aws:us-east-2 --runners aws
+            placement: --runners aws
+            control-plane-region: us-east-2
           - cloud: azure
             placement: --runners azure
     runs-on: ubuntu-24.04
@@ -217,6 +213,9 @@ jobs:
       ORG: ${{ inputs.org }}
       VERSION: ${{ needs.plan.outputs.version }}
       CLOUD: ${{ matrix.cloud }}
+      # Where AWS's control plane goes and its sweep looks; Azure's is
+      # install's own choice.
+      CONTROL_PLANE_REGION: ${{ matrix.control-plane-region }}
       # Every sign-in, and the listener install makes, use the Worker the
       # `worker` job checks.
       BACKMESH_API_URL: ${{ needs.plan.outputs.api-url }}
@@ -273,7 +272,7 @@ jobs:
         id: aws
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-east-2
+          aws-region: ${{ env.CONTROL_PLANE_REGION }}
           role-duration-seconds: 14400
           output-credentials: true
       - name: Save the role's session as the default profile
@@ -302,7 +301,7 @@ jobs:
       # subscription by the ones there before it.
       - name: The anycloud resource groups before the install
         if: matrix.cloud == 'azure'
-        run: az group list --query '[?tags.anycloud_cluster].name' --output tsv >"$RUNNER_TEMP/groups-before"
+        run: az group list --query "[?tags.anycloud_cluster && starts_with(name, 'anycloud-')].name" --output tsv >"$RUNNER_TEMP/groups-before"
 
       # A maintainer who is an admin of the test org approves install's
       # GitHub sign-in from the run's annotations or summary
@@ -318,6 +317,7 @@ jobs:
           MATRIX: ${{ needs.plan.outputs.matrix }}
         run: |
           read -ra placement <<<"$PLACEMENT"
+          if [[ -n $CONTROL_PLANE_REGION ]]; then placement+=(--control-plane "$CLOUD:$CONTROL_PLANE_REGION"); fi
           plan=$(backmesh install --org "$ORG" "${placement[@]}" --plan --json) || { echo "$plan"; exit 1; }
           plan=$(tail -n1 <<<"$plan")
           id=$(jq -er .planId <<<"$plan") || { echo "$plan"; exit 1; }
@@ -380,7 +380,6 @@ jobs:
         if: ${{ always() && steps.aws.outcome == 'success' }}
         env:
           MATRIX: ${{ needs.plan.outputs.matrix }}
-          CONTROL_PLANE_REGION: us-east-2
         run: |
           left=()
           aws() { command aws --no-cli-pager --output json "$@"; }
@@ -428,16 +427,19 @@ jobs:
       # The same guard on Azure: this run's resource groups, anything tagged
       # with its control plane (VMs, disks, IPs, NICs, its managed identity),
       # the identity install generated, and the checkpoint and cache
-      # containers. Without the control plane's ID, a resource group made
-      # during the run, such as one a failed create left, can only be told
-      # apart by not being there before.
+      # containers. With it, this run's group is anycloud-<id>; without it,
+      # an anycloud group made during the run, such as one a failed create
+      # left, can only be told apart by not being there before.
       - name: Sweep Azure for anything left
         if: ${{ always() && steps.azure.outcome == 'success' }}
         run: |
           left=()
-          groups=$(az group list --query '[?tags.anycloud_cluster].name' --output tsv)
-          left+=($(comm -13 <(sort "$RUNNER_TEMP/groups-before") <(sort <<<"$groups") | sed 's/^/resource-group:/'))
-          if [[ -n ${CLUSTER_ID:-} ]]; then
+          before=$RUNNER_TEMP/groups-before
+          [[ -f $before ]] || { echo "::error::No list of the resource groups before the install, so this run's can't be told apart"; exit 1; }
+          if [[ -z ${CLUSTER_ID:-} ]]; then
+            groups=$(az group list --query "[?tags.anycloud_cluster && starts_with(name, 'anycloud-')].name" --output tsv)
+            left+=($(comm -13 <(sort "$before") <(sort <<<"$groups") | sed 's/^/resource-group:/'))
+          else
             eval "$(node test/e2e/sweep-names.ts)"
             [[ $(az group exists --name "anycloud-$CLUSTER_ID") == false ]] || left+=("resource-group:anycloud-$CLUSTER_ID")
             for tag in "anycloud_cluster=$CLUSTER_ID" "anycloud_owner_api=$OWNER_API"; do
@@ -456,3 +458,11 @@ jobs:
             exit 1
           fi
           echo "Nothing of this run's installation is left in Azure."
+
+      # Two rcs share the staging Worker: this run tested the tag's Worker
+      # only if it's still the one there once the run is done.
+      - name: The target Worker still runs the one built from the tag under test
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: test/e2e/worker-commit.sh

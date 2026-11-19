@@ -102,8 +102,7 @@ describe('the staging Worker', () => {
     const config = readFileSync('worker/wrangler.jsonc', 'utf8');
     const staging = config.slice(config.indexOf('"staging": {'));
     expect(staging).toContain('"STAGING_ORGS": "backmesh-e2e,backmesh-dryrun"');
-    expect(config.indexOf('STAGING_ORGS')).toBe(
-      config.indexOf('"STAGING_ORGS"', config.indexOf('"staging": {')),
-    );
+    // Nowhere else: production serves every org.
+    expect(config.split('STAGING_ORGS')).toHaveLength(2);
   });
 });
