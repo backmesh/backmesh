@@ -76,7 +76,13 @@ import {
   verboseDetail,
 } from './prerequisites.js';
 import { PlanChanged, UsageError } from './errors.js';
-import { alwaysOnRegions, noCapacity, type AlwaysOn } from './vm-sizes.js';
+import {
+  alwaysOnRegions,
+  candidateRegions,
+  noCapacity,
+  startedRegion,
+  type AlwaysOn,
+} from './vm-sizes.js';
 import {
   RUNNER_REGIONS,
   SUGGESTED_REGION,
@@ -562,33 +568,54 @@ export async function connectClouds(
 // cloud CLI with nothing stored here (anycloud 0.1.74's seed). Re-running
 // `cluster create` with the same name and region resumes it from the cloud's
 // own tags (`docs/reference/cli/cluster.md`). A new cluster Azure refuses
-// for capacity is deleted through `cluster delete`, by the ID its progress
-// names (`[<time>] Creating cluster <name> (ID: <id>)`, never `Resuming`),
-// which leaves no resource group, and tried in the plan's next region
-// (`alwaysOnRegions`).
+// for capacity is deleted by the ID its progress names (`[<time>] Creating
+// cluster <name> (ID: <id>)`, never `Resuming`), which leaves no resource
+// group, and tried in the plan's next region (`alwaysOnRegions`).
 async function bootstrapCluster(
-  first: CloudTarget,
+  controlPlane: CloudTarget,
   regions: readonly string[],
   deps: InstallDeps,
 ) {
-  const size = MANAGEMENT_VM[first.cloud];
-  for (const [i, region] of regions.entries()) {
+  const { cloud } = controlPlane;
+  const size = MANAGEMENT_VM[cloud];
+  for (let i = 0; ; i++) {
+    const region = regions[i]!;
     const out = await deps
       .runLong([
-        ...['cluster', 'create', CLUSTER, '--cloud', first.cloud],
+        ...['cluster', 'create', CLUSTER, '--cloud', cloud],
         ...['--region', region, '--vm-type', size, '--json'],
       ])
       .catch(async (error: unknown) => {
         const id =
           error instanceof StepFailed &&
           /\] Creating cluster \S+ \(ID: ([^)\s]+)\)/.exec(error.stderr)?.[1];
-        if (first.cloud !== 'azure' || !noCapacity(error) || !id) throw error;
+        if (cloud !== 'azure' || !noCapacity(error) || !id) throw error;
+        // `cluster delete` looks for the cluster's API first, and with this
+        // machine's local target and no local API it exits there; its own
+        // never answers, so delete goes on without it (`cluster.md`, "Delete
+        // with the hosted API gone").
         await deps
-          .runLong([
-            ...['cluster', 'delete', id, '--cloud', first.cloud],
-            ...['--region', region, '--delete-vms', '--delete-buckets'],
-            ...['--confirm', id, '--json'],
-          ])
+          .runLong(
+            [
+              ...[
+                'cluster',
+                'delete',
+                id,
+                '--cloud',
+                cloud,
+                '--region',
+                region,
+              ],
+              ...[
+                '--delete-vms',
+                '--delete-buckets',
+                '--confirm',
+                id,
+                '--json',
+              ],
+            ],
+            { API_URL: `https://${id}.anycloud.sh` },
+          )
           .catch((cause: unknown) => {
             throw new Error(
               `Azure has no capacity for the control plane's VM (${size}) in ${region}, and deleting what install started there failed: delete the resource group anycloud-${id}, then run install again.`,
@@ -619,7 +646,6 @@ async function bootstrapCluster(
     }
     return { url: cluster.managementApiUrl, region };
   }
-  throw new Error('No region to create the control plane in.');
 }
 
 const connectApi = (deps: InstallDeps) => hostedApi(deps, deps.ui.print);
@@ -1118,16 +1144,32 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
           },
         ]),
   ];
+  // A new Azure control plane that an earlier run started resumes where
+  // it is.
+  const started =
+    placed.cloud === 'azure' && !listeners
+      ? await startedRegion(CLUSTER, deps.command)
+      : undefined;
+  if (started && started !== placed.region) {
+    note.print(
+      `An earlier install started this control plane in azure ${started}, so install resumes it there.`,
+    );
+  }
   const regions =
     placed.cloud === 'azure' && alwaysOn.length
-      ? await alwaysOnRegions(placed.region, alwaysOn, deps.command, note)
+      ? await alwaysOnRegions(
+          started ? [started] : candidateRegions(placed.region),
+          alwaysOn,
+          !listeners,
+          deps.command,
+          note,
+        )
       : undefined;
   let place = regions ? { ...placed, region: regions[0]! } : placed;
   const controlPlane = listeners ? placement.controlPlane : place;
   const connections = placement.connections.map((c) =>
     c === placed ? place : c,
   );
-  const first = controlPlane;
   // A re-run for an org already on it agrees to nothing new.
   const orgs = (listeners ?? []).map((l) => orgOfListener(l.name)!);
   const sharedWith = orgs.includes(options.org.toLowerCase()) ? [] : orgs;
@@ -1138,10 +1180,10 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     images: { runner: release.runnerImage, listener: release.listenerImage },
     clouds: await accountsOf(connections, deps),
     controlPlane: {
-      cloud: first.cloud,
-      region: first.region,
-      managementVm: MANAGEMENT_VM[first.cloud],
-      monthlyUsd: MANAGEMENT_MONTHLY_USD[first.cloud],
+      cloud: controlPlane.cloud,
+      region: controlPlane.region,
+      managementVm: MANAGEMENT_VM[controlPlane.cloud],
+      monthlyUsd: MANAGEMENT_MONTHLY_USD[controlPlane.cloud],
       exists: !!listeners,
       sharedWith,
     },
@@ -1194,7 +1236,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   );
   if (!plan.controlPlane.exists) {
     ui.print(
-      `Always on: the control plane's VM (${MANAGEMENT_VM[first.cloud]}) on ${first.cloud} ${first.region}, about $${MANAGEMENT_MONTHLY_USD[first.cloud]} a month with its disk and address.`,
+      `Always on: the control plane's VM (${MANAGEMENT_VM[controlPlane.cloud]}) on ${controlPlane.cloud} ${controlPlane.region}, about $${MANAGEMENT_MONTHLY_USD[controlPlane.cloud]} a month with its disk and address.`,
     );
   }
   if (plan.listener) {
@@ -1323,12 +1365,16 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   let url: string;
   if (reused) {
     url = reused.url;
-    ui.print(`Using the control plane on ${first.cloud} ${first.region}.`);
+    ui.print(
+      `Using the control plane on ${controlPlane.cloud} ${controlPlane.region}.`,
+    );
   } else {
-    ui.print(`Creating the control plane on ${first.cloud} ${first.region}.`);
+    ui.print(
+      `Creating the control plane on ${controlPlane.cloud} ${controlPlane.region}.`,
+    );
     const created = await bootstrapCluster(
-      first,
-      (!plan.controlPlane.exists && regions) || [first.region],
+      controlPlane,
+      (!plan.controlPlane.exists && regions) || [controlPlane.region],
       deps,
     );
     url = created.url;

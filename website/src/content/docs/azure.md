@@ -36,13 +36,16 @@ capacity or quota. [More](/install/#regions).
 ## The control plane's region
 
 Before any sign-in, the plan reads `az vm list-skus` for the sizes of the
-always-on VMs install creates, `Standard_D2s_v5` and `Standard_B2s`. When your
+always-on VMs install creates: the control plane's `Standard_D2s_v5` when it's
+new, and the org's listener's `Standard_B2s` when it has none yet. When your
 subscription may not create one in the region you chose
 (`NotAvailableForSubscription`, as on some sponsorship and trial offers), the
-plan says so and puts them in the first of the regions above that offers both,
-such as `centralus`. The plan also lists the regions after it: if Azure has no
-capacity for the control plane's VM when install creates it, install deletes
-what it started there and tries the next, without signing in again.
+plan says so and puts them in the first of the regions above that offers every
+one, such as `centralus`. For a new control plane, it also lists the regions
+after it: if Azure has no capacity for the control plane's VM when install
+creates it, install deletes what it started there and tries the next, without
+signing in again. A re-run resumes a control plane an earlier run started in its own
+region.
 
 ## What install creates
 

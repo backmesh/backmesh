@@ -33,70 +33,102 @@ const refused = (skus: readonly Sku[], size: string, region: string) => {
     (s) => same(s.name ?? '')(size) && s.locations?.some(same(region)),
   );
   if (!sku) return "it isn't offered there";
-  return sku.restrictions?.find(
+  const restriction = sku.restrictions?.find(
     (r) =>
       r.type === 'Location' && r.restrictionInfo?.locations?.some(same(region)),
-  )?.reasonCode;
+  );
+  return restriction && (restriction.reasonCode ?? 'restricted');
 };
 
-/**
- * The regions install tries, in order, for `vms`: `region` and then, for a
- * US region, backmesh's other US regions, each offering every size. A
- * capacity refusal on create moves them to the next. Undefined when `az`
- * couldn't be read, so install tries `region` alone.
- */
-export async function alwaysOnRegions(
+// A region's entries for `vms`' sizes, projected to what `refused` reads.
+const readSkus = (
   region: string,
   vms: readonly AlwaysOn[],
   command: RunCommand,
+) =>
+  command([
+    ...['az', 'vm', 'list-skus', '--all', '--location', region],
+    ...['--resource-type', 'virtualMachines', '--query'],
+    `[?${vms.map((vm) => `name=='${vm.size}'`).join(' || ')}].{name:name,locations:locations,restrictions:restrictions}`,
+    ...['--output', 'json'],
+  ]).then((out) => JSON.parse(out) as Sku[]);
+
+/**
+ * Where install creates `vms`: the first of `candidates` offering every
+ * size, and with `fallback` (a new control plane) the passing regions after
+ * it, which install tries in turn when Azure has no capacity on create.
+ * Undefined when `az` couldn't be read, so install tries `candidates[0]`
+ * alone.
+ */
+export async function alwaysOnRegions(
+  candidates: readonly string[],
+  vms: readonly AlwaysOn[],
+  fallback: boolean,
+  command: RunCommand,
   report: { print: (line: string) => void },
 ): Promise<string[] | undefined> {
-  const names = vms.map((vm) => `name=='${vm.size}'`).join(' || ');
-  const skus = await command([
-    ...['az', 'vm', 'list-skus', '--all'],
-    ...['--resource-type', 'virtualMachines', '--query', `[?${names}]`],
-    ...['--output', 'json'],
-  ])
-    .then((out) => JSON.parse(out) as Sku[])
-    .catch(() => undefined);
+  const region = candidates[0]!;
+  const skus = await Promise.all(
+    candidates.map((r) => readSkus(r, vms, command)),
+  ).catch(() => undefined);
   if (!skus) {
     report.print(
       `Azure's VM sizes couldn't be read, so install tries ${region} alone.`,
     );
     return undefined;
   }
+  const all = skus.flat();
   const lines = vms.flatMap((vm) => {
-    const why = refused(skus, vm.size, region);
+    const why = refused(all, vm.size, region);
     return why
       ? [
           `Azure won't create ${vm.what} (${vm.size}) in ${region} for this subscription: ${why}.`,
         ]
       : [];
   });
-  const candidates = RUNNER_REGIONS.azure.includes(region)
-    ? [region, ...RUNNER_REGIONS.azure.filter((r) => r !== region)]
-    : [region];
-  const regions = candidates.filter((r) =>
-    vms.every((vm) => !refused(skus, vm.size, r)),
+  const passing = candidates.filter((r) =>
+    vms.every((vm) => !refused(all, vm.size, r)),
   );
-  const all = vms.map((vm) => `${vm.what} (${vm.size})`).join(' and ');
-  if (!regions.length) {
+  if (!passing.length) {
+    const what = vms.map((vm) => `${vm.what} (${vm.size})`).join(' and ');
     throw new UsageError(
       [
         ...lines,
-        `No Azure region backmesh tries offers this subscription ${vms.length > 1 ? 'both ' : ''}${all}: ${candidates.join(', ')}. Pass --control-plane azure:<region> with one that does, or use another subscription.`,
+        `No Azure region install tries (${candidates.join(', ')}) offers this subscription ${what}. ${fallback ? 'Pass --control-plane azure:<region> with a region that does, or use another subscription.' : 'Use another subscription.'}`,
       ].join('\n'),
     );
   }
   lines.forEach((line) => report.print(line));
-  const [first, ...rest] = regions;
+  const [first, ...rest] = passing;
+  if (!fallback) return [first!];
   if (rest.length) {
     report.print(
-      `If Azure has no capacity for ${vms.length > 1 ? 'them' : 'it'} in ${first}, install tries ${rest.join(', ')}, in turn.`,
+      `If Azure has no capacity for the control plane's VM in ${first} when install creates it, install tries ${rest.join(', ')}, in turn.`,
     );
   }
-  return regions;
+  return passing;
 }
+
+/** `region` first, then backmesh's other US regions when it's one of them. */
+export const candidateRegions = (region: string) =>
+  RUNNER_REGIONS.azure.includes(region)
+    ? [region, ...RUNNER_REGIONS.azure.filter((r) => r !== region)]
+    : [region];
+
+/**
+ * Where an earlier install's Azure control plane named `name` was started,
+ * such as one stopped after a capacity fallback: `cluster create` resumes it
+ * by its name tag in any region (`seed/azure.ts`'s `findByName`), so a
+ * re-run must use its region.
+ */
+export const startedRegion = (name: string, command: RunCommand) =>
+  command([
+    ...['az', 'group', 'list', '--tag', `anycloud_cluster_name=${name}`],
+    ...['--query', '[0].location', '--output', 'tsv'],
+  ]).then(
+    (out) => out.trim() || undefined,
+    () => undefined,
+  );
 
 // Azure's refusal of a create for capacity or a size the region can't take
 // now: `SkuNotAvailable`, or an allocation failure.
