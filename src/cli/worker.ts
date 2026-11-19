@@ -84,9 +84,10 @@ async function call<T>(
 // The backmesh App's client ID, which is public: the device flow needs no
 // secret.
 export const GITHUB_APP_CLIENT_ID = 'Iv23li6e0q0gl3GOQ9ny';
-// The App's ID, the one App whose user tokens the hosted API exchanges
-// (`--github-apps` on `cluster create` and `api upgrade`).
+// The App's ID, the one App whose user tokens the hosted API exchanges,
+// and the flag of `cluster create` and `api upgrade` that names it.
 export const GITHUB_APP_ID = '5622376';
+export const GITHUB_APPS_FLAG = '--github-apps';
 // A sign-in waits this long for someone to enter a code, with a fresh code
 // whenever one expires: an agent's human may be away for a while.
 const SIGN_IN_MS = 6 * 3_600_000;
