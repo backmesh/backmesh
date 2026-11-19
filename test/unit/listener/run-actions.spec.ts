@@ -46,7 +46,10 @@ describe('workerRerun', () => {
 
   it("throws the Worker's refusal with its status, as retry reads GitHub's", async () => {
     const { fetch } = fake(
-      Response.json({ error: 'not ours' }, { status: 403 }),
+      Response.json(
+        { error: 'not ours', code: 'not_our_runners' },
+        { status: 403 },
+      ),
     );
     const rerun = workerRerun({
       url: 'https://x',
@@ -58,6 +61,7 @@ describe('workerRerun', () => {
     await expect(rerun(RUN)).rejects.toMatchObject({
       message: 'not ours',
       status: 403,
+      code: 'not_our_runners',
     });
   });
 

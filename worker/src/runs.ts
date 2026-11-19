@@ -7,7 +7,7 @@
 // one call and is dropped. `install` is the install's runner tag, bound to
 // the key on its first action: `bm<install>-…` runners are its own. Every
 // call is a run_actions row, which also counts toward the hourly limit.
-import { gitHub, GitHubError, mintToken } from './app.js';
+import { gitHub, GitHubError, installationOf, mintToken } from './app.js';
 import { notInstalled } from './broker.js';
 import type { Env } from './index.js';
 
@@ -19,8 +19,14 @@ const PER_HOUR = 20;
 // anywhere.
 const FAILED = new Set(['failure', 'timed_out']);
 const ATTEMPT_CAP = 3;
-// The gate's rules (`src/listener/gate.ts`).
-const LIMIT_MS = 60 * 60_000;
+// The gate's rules (`src/listener/gate.ts`): a fork's pull-request run, and
+// the runtime limit, less 2 minutes for the listener's clock.
+const PR_EVENTS = [
+  'pull_request',
+  'pull_request_review',
+  'pull_request_review_comment',
+];
+const LIMIT_MS = 58 * 60_000;
 const NOT_ACCESSIBLE = 'Resource not accessible by integration';
 const NAME = /^[A-Za-z0-9_.-]{1,100}$/;
 
@@ -35,6 +41,7 @@ interface Job {
 }
 interface Run {
   status: string;
+  event?: string;
   run_attempt: number;
   repository?: { full_name: string };
   head_repository?: { full_name: string } | null;
@@ -54,14 +61,16 @@ interface Target {
 }
 
 // Checks the request, counts it, reads the repository and run, and hands
-// them to `act`, which answers a refusal or the GitHub write to make.
+// them to `decide`, which answers a refusal or the GitHub write to make.
 async function runAction(
   request: Request,
   env: Env,
   install: { id: string; org: number },
   action: 'rerun' | 'cancel',
   extra: (body: Record<string, unknown>) => boolean,
-  act: (target: Target) => Promise<Response | { path: string; done: object }>,
+  decide: (
+    target: Target,
+  ) => Promise<Response | { path: string; done: object }>,
 ) {
   const body = (await request.json().catch(() => ({}))) as Record<
     string,
@@ -88,7 +97,7 @@ async function runAction(
     );
   }
   const run = `${owner}/${repo}/${runId}`;
-  // Counted first, so calls at once can't pass the limit together.
+  // Recorded first, so calls at once can't pass the limit together.
   const row = await env.DB.prepare(
     `INSERT INTO run_actions (at, action, install, org, run, outcome, ip, ray)
      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?) RETURNING rowid AS id`,
@@ -107,13 +116,54 @@ async function runAction(
     env.DB.prepare('UPDATE run_actions SET outcome = ? WHERE rowid = ?')
       .bind(outcome, row!.id)
       .run();
-  const refuse = async (outcome: string, status: number, error: string) => {
+  // `code` tells the listener which refusal it is.
+  const refuse = async (
+    outcome: string,
+    status: number,
+    error: string,
+    more: object = {},
+  ) => {
     await record(outcome);
-    return json({ error }, status);
+    return json({ error, code: outcome, ...more }, status);
   };
+  // A call GitHub fails isn't left pending.
+  try {
+    return await act(
+      { env, install, action, owner, repo, runId, tag, record, refuse },
+      decide,
+    );
+  } catch (error) {
+    await record('github_failed');
+    throw error;
+  }
+}
+
+async function act(
+  c: {
+    env: Env;
+    install: { id: string; org: number };
+    action: 'rerun' | 'cancel';
+    owner: string;
+    repo: string;
+    runId: number;
+    tag: string;
+    record: (outcome: string) => Promise<unknown>;
+    refuse: (
+      outcome: string,
+      status: number,
+      error: string,
+      more?: object,
+    ) => Promise<Response>;
+  },
+  decide: (
+    target: Target,
+  ) => Promise<Response | { path: string; done: object }>,
+) {
+  const { env, install, action, owner, repo, runId, tag, record, refuse } = c;
+  // Actions made and under way count; refusals don't.
   const recent = await env.DB.prepare(
     `SELECT count(*) AS n FROM run_actions WHERE install = ? AND action = ?
-     AND at > ? AND outcome != 'rate_limited'`,
+     AND at > ? AND outcome IN ('ok', 'pending')`,
   )
     .bind(install.id, action, Date.now() - HOUR)
     .first<{ n: number }>();
@@ -191,7 +241,7 @@ async function runAction(
     }
     return listed;
   };
-  const decided = await act({
+  const decided = await decide({
     owner,
     repo,
     runId,
@@ -215,6 +265,14 @@ async function runAction(
   if ((await bound()) !== tag) {
     return refuse('bad_tag', 403, "That isn't this install's runner tag.");
   }
+  // The App's Actions write is an owner's to accept on each installation.
+  const installation = await installationOf(env, install.org);
+  if (installation?.permissions.actions !== 'write') {
+    const accept = `https://github.com/organizations/${installation?.login ?? owner}/settings/installations/${installation?.id ?? ''}`;
+    return refuse('actions_write_needed', 409, 'actions_write_needed', {
+      accept_url: accept,
+    });
+  }
   const writer = await mintToken(env, install.org, {
     actions: 'write',
     metadata: 'read',
@@ -224,23 +282,28 @@ async function runAction(
     return notInstalled(env, install.org);
   }
   const res = await as(writer.answer.token, decided.path, { method: 'POST' });
-  if (!res.ok) {
-    const { message } = (await res.json().catch(() => ({}))) as {
-      message?: string;
-    };
-    // GitHub's own refusal won't change by asking again: its 4xx goes back.
-    if (res.status < 500) {
-      return refuse(
-        'github_refused',
-        res.status,
-        `GitHub refused the ${action}: ${message ?? res.status}`,
-      );
-    }
-    await record('github_failed');
-    throw new GitHubError(`GitHub failed the ${action}: ${res.status}`);
+  if (res.ok) {
+    await record('ok');
+    return json(decided.done);
   }
-  await record('ok');
-  return json(decided.done);
+  const { message } = (await res.json().catch(() => ({}))) as {
+    message?: string;
+  };
+  const limited =
+    res.status === 429 ||
+    res.headers.get('x-ratelimit-remaining') === '0' ||
+    res.headers.has('retry-after') ||
+    /rate limit/i.test(message ?? '');
+  // GitHub's own refusal won't change by asking again: its 4xx goes back.
+  // A rate limit or a failure is GitHub's (502), tried again later.
+  if (res.status < 500 && !limited) {
+    return refuse(
+      'github_refused',
+      res.status,
+      `GitHub refused the ${action}: ${message ?? res.status}`,
+    );
+  }
+  throw new GitHubError(`GitHub failed the ${action}: ${res.status}`);
 }
 
 // The spot-reclaim retry: a finished run below attempt 3 whose failed or
@@ -286,7 +349,8 @@ export const rerun = (
 // The public-repository gate: a fork's pull-request run in one of the org's
 // public repositories that's still going, and either asks for a backmesh
 // label that isn't public (`label`) or has a job on this install's runner
-// past the 60-minute limit (`limit`).
+// past the 60-minute limit (`limit`), less 2 minutes for the listener's
+// clock.
 export const cancel = (
   request: Request,
   env: Env,
@@ -306,7 +370,11 @@ export const cancel = (
       const fork =
         t.run.head_repository?.full_name.toLowerCase() !==
         t.run.repository?.full_name.toLowerCase();
-      if (t.repository.private || !fork) {
+      if (
+        t.repository.private ||
+        !fork ||
+        !PR_EVENTS.includes(t.run.event ?? '')
+      ) {
         return t.refuse(
           'not_fork_run',
           403,

@@ -229,7 +229,7 @@ export async function mintToken(
       permissions: minted.permissions,
       org: { id: org, login },
     };
-    return { answer, installation: id };
+    return { answer, installation: id, granted: installation.permissions };
   }
   throw new GitHubError('GitHub refused a token for a fresh installation.');
 }

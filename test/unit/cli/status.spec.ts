@@ -581,10 +581,12 @@ describe('status', () => {
 
   // The listener's token asks for Actions read only (owner, 2026-11-19):
   // the Worker reruns for it.
-  it('asks for Actions until the installation has it, quiet for an older listener', async () => {
+  // The installation's Actions permission, which backmesh.com's reruns and
+  // cancels need at write (the listener's own token reads only).
+  it('asks for Actions: write until the installation grants it, quiet for an older listener', async () => {
     for (const [actionsPermission, warned] of [
+      ['read', true],
       ['none', true],
-      ['read', false],
       ['write', false],
       [null, false],
       [undefined, false],
@@ -597,7 +599,7 @@ describe('status', () => {
         warned
           ? [
               expect.stringContaining(
-                'has no Actions permission; it needs Actions to rerun reclaimed jobs and start runners ahead of predicted jobs',
+                `The backmesh App has Actions: ${actionsPermission} on ${LISTENER.org ?? 'acme'}; backmesh.com needs Actions: write there to rerun reclaimed jobs and cancel fork runs.`,
               ),
             ]
           : [],

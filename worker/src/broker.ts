@@ -105,7 +105,7 @@ export async function token(
     console.log(`token refused: ${install.id} app_not_installed`);
     return notInstalled(env, install.org);
   }
-  const { answer, installation } = minted;
+  const { answer, installation, granted } = minted;
   await audit(env, request, {
     action: 'token',
     outcome: 'ok',
@@ -115,7 +115,9 @@ export async function token(
     permissions: answer.permissions,
     expires_at: answer.expires_at,
   });
-  return Response.json(answer);
+  // And what the installation grants the App: the listener says when an
+  // owner hasn't accepted the Actions write backmesh.com's run actions use.
+  return Response.json({ ...answer, installation_permissions: granted });
 }
 
 // What a cleanup token may do: manage the org's self-hosted runners, scale

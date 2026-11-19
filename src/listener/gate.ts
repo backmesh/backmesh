@@ -245,8 +245,10 @@ export class Gate {
       // Refused (the Worker's 403, such as for a run it doesn't see as a
       // fork's), its jobs stay uncounted and are ended as they start, and
       // the run isn't tried again.
-      state.refused =
-        error instanceof Error && 'status' in error && error.status === 403;
+      // `not_gated` is the Worker not seeing the limit yet, by its clock:
+      // tried again.
+      const { status, code } = error as { status?: number; code?: string };
+      state.refused = status === 403 && code !== 'not_gated';
       this.deps.log({
         msg: 'fork run cancel failed',
         run: keyOf(run),

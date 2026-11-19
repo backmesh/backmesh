@@ -325,6 +325,30 @@ describe('Gate', () => {
     expect(calls.filter((c) => c === 'run')).toHaveLength(2);
   });
 
+  // The Worker's own clock may be a little behind; its refusal says it
+  // didn't see the limit, which isn't a refusal for good.
+  it('tries a cancel the Worker found not yet due again after a minute', async () => {
+    let early = true;
+    const { gate, calls, clock, settle } = setup({
+      forceCancel: async () => {
+        calls.push('cancel');
+        if (early) {
+          throw Object.assign(new Error('not yet'), {
+            status: 403,
+            code: 'not_gated',
+          });
+        }
+      },
+    });
+    gate.observe(KVM, pr('JobAssigned'));
+    await settle();
+    early = false;
+    clock.now = 60_000;
+    gate.observe(KVM, pr('JobAssigned', { jobId: 'job-2' }));
+    await settle();
+    expect(calls.filter((c) => c === 'cancel')).toHaveLength(2);
+  });
+
   it('tries a cancel GitHub failed for another reason again after a minute', async () => {
     let fail = true;
     const { gate, calls, clock, settle } = setup({

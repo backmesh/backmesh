@@ -168,6 +168,7 @@ describe('POST /v1/token', () => {
       token: 'ghs_7',
       expires_at: '2026-11-06T13:00:00Z',
       permissions: KEY_TOKEN,
+      installation_permissions: ALL,
       org: { id: 11, login: 'acme-old' },
     });
   });
@@ -178,7 +179,12 @@ describe('POST /v1/token', () => {
     const res = await mint(11);
 
     expect(upstream.mints).toEqual([KEY_TOKEN]);
-    expect(await res.json()).toMatchObject({ permissions: KEY_TOKEN });
+    // And what the installation grants the App, so the listener can say
+    // when an owner hasn't accepted Actions write for backmesh.com.
+    expect(await res.json()).toMatchObject({
+      permissions: KEY_TOKEN,
+      installation_permissions: ALL,
+    });
   });
 
   it('asks only for those, narrowed to what the installation grants', async () => {

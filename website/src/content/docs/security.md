@@ -67,7 +67,7 @@ On a locked-down network, the control plane needs outbound HTTPS to GitHub and
 `api.backmesh.com`, and runners to GitHub. Cloud accounts with default
 networking already allow both.
 
-The listener makes three kinds of calls to `api.backmesh.com`, all with your
+The listener makes five kinds of calls to `api.backmesh.com`, all with your
 install's key:
 
 - **One event per job started**, in batches about once a minute. It describes
@@ -79,6 +79,9 @@ install's key:
   [audit row](/telemetry/#how-its-counted-and-kept) of each one it hands out.
 - **One WebSocket for cues**, held open, which receives what `backmesh cue`
   sends.
+- **A rerun** of a run's failed jobs after a spot reclaim, and **a cancel** of
+  a fork's run the public-repository gate stops: backmesh.com checks and
+  makes them with the App's Actions write ([below](#the-github-app)).
 
 `backmesh cue` warns your listener that a push is coming. A cue tells
 api.backmesh.com your org, your GitHub user and the time. It never sends the
@@ -197,8 +200,8 @@ a control plane VM, which runs no job. If you think it leaked, an owner of your
 org, or a member who manages its self-hosted runners, runs
 `backmesh rotate-key --org <org>`, which signs in with GitHub again,
 writes a new key to the listener and only then revokes the old one. A token
-already handed out works for up to an hour. Until then, whoever holds the key
-can also ask backmesh.com to rerun or cancel runs, within the checks above.
+already handed out works for up to an hour. Every call with the old key,
+reruns and cancels included, stops once it's revoked.
 
 ## Which jobs run
 
