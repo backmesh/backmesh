@@ -113,10 +113,11 @@ function runStep(
   });
 }
 
-// A release binary's stub that fails if the job's token, which writes
-// issues, reached it.
-const noToken = (name: string, body: string) =>
-  `[[ -z \${ISSUE_TOKEN:-}\${TOKEN:-}\${GH_TOKEN:-} ]] || { echo "${name} got the job's token" >&2; exit 9; }\n${body}`;
+// A release binary's stub that fails unless the job's token reached it as
+// GH_TOKEN, for GitHub's rate limit, and not as GITHUB_TOKEN, which backmesh
+// would take for the control plane's sign-in, or as ISSUE_TOKEN.
+const jobToken = (name: string, body: string) =>
+  `[[ \${GH_TOKEN:-} == t0k && -z \${GITHUB_TOKEN:-}\${ISSUE_TOKEN:-} ]] || { echo "${name} didn't get the job's token as GH_TOKEN only" >&2; exit 9; }\n${body}`;
 // with-sign-in.sh runs its command without the token (spec below).
 const signedIn = (run: string) =>
   run.replace('test/e2e/with-sign-in.sh ', 'env -u ISSUE_TOKEN ');
@@ -385,6 +386,7 @@ describe("e2e.yml's Worker and Azure checks", () => {
     ).find((l) => l.cloud === cloud)!;
     const step = job.steps!.find((s) => s.id === 'install')!;
     expect(step.env!.LABEL).toBe('${{ matrix.label }}');
+    expect(step.env!.GH_TOKEN).toBe('${{ github.token }}');
     const dir = mkdtempSync(join(tmpdir(), 'install-'));
     const env = join(dir, 'env');
     writeFileSync(env, '');
@@ -399,8 +401,8 @@ describe("e2e.yml's Worker and Azure checks", () => {
     const args = join(dir, 'args');
     const out = runStep(signedIn(step.run!), {
       env: {
-        // As in Actions, where only the step's env names a token.
-        GH_TOKEN: '',
+        GITHUB_TOKEN: '',
+        GH_TOKEN: 't0k',
         ISSUE_TOKEN: 't0k',
         CLOUD: cloud,
         PLACEMENT: leg.placement!,
@@ -410,7 +412,7 @@ describe("e2e.yml's Worker and Azure checks", () => {
         GITHUB_ENV: env,
       },
       commands: {
-        backmesh: noToken(
+        backmesh: jobToken(
           'backmesh',
           `echo "$*" >>${args}\necho '${JSON.stringify(plan)}'`,
         ),
@@ -595,7 +597,10 @@ esac`,
     }
   });
 
-  it("keeps the job's token from the release's binaries", () => {
+  // A shared runner's IP soon spends GitHub's 60 anonymous reads an hour,
+  // so the binaries read GitHub with the job's token (accepted risk: it
+  // writes issues, and they hold the leg's cloud credentials already).
+  it("gives the release's binaries the job's token as GH_TOKEN only", () => {
     const step = (name: string) => job.steps!.find((s) => s.name === name)!;
     const home = mkdtempSync(join(tmpdir(), 'home-'));
     mkdirSync(join(home, '.anycloud'));
@@ -603,24 +608,31 @@ esac`,
     const env = join(home, 'env');
     writeFileSync(env, '');
     const commands = {
-      backmesh: noToken('backmesh', ''),
-      anycloud: noToken(
+      backmesh: jobToken('backmesh', ''),
+      anycloud: jobToken(
         'anycloud',
         `echo '{"url":"https://abc123.anycloud.sh"}'`,
       ),
       curl: '',
-      // The org's ID, read with the job's token.
       gh: '[[ $GH_TOKEN == t0k ]] && echo 12345',
     };
     const base = {
       HOME: home,
       GITHUB_ENV: env,
       ORG: 'backmesh-dryrun',
-      GH_TOKEN: '',
+      GITHUB_TOKEN: '',
+      GH_TOKEN: 't0k',
     };
-    expect(step('The control plane').env!.TOKEN).toBe('${{ github.token }}');
+    for (const name of [
+      'backmesh install',
+      'The control plane',
+      'backmesh uninstall',
+    ]) {
+      expect(step(name).env!.GH_TOKEN, name).toBe('${{ github.token }}');
+      expect(step(name).env!.GITHUB_TOKEN, name).toBeUndefined();
+    }
     const plane = runStep(step('The control plane').run!, {
-      env: { ...base, TOKEN: 't0k' },
+      env: base,
       commands,
     });
     expect(plane.status, plane.stderr).toBe(0);
