@@ -115,7 +115,10 @@ function setUp(
     hostedVersion = ANYCLOUD_VERSION,
     answers = [] as string[],
     cacheBuckets,
+    restricted = {},
   }: {
+    // The Azure sizes this subscription may not create, by region (`skus`).
+    restricted?: Record<string, string[]>;
     // bm-aws's cache buckets, when a previous install made them: the
     // connection an installation before 0.4.1 named, which `RUNNERS` records.
     cacheBuckets?: string[];
@@ -258,6 +261,7 @@ function setUp(
         if (value === undefined) throw new Error('OptInRequired');
         return `${value}\n`;
       }
+      if (args[0] === 'az' && args[2] === 'list-skus') return skus(restricted);
       if (args[0] === 'az' && args[2] === 'list-usage') {
         return JSON.stringify(
           ['lowPriorityCores', 'cores'].map((value) => ({
@@ -2502,22 +2506,19 @@ describe('install', () => {
 // Azure documents it (learn.microsoft.com, "Resolve errors for SKU not
 // available"): one entry per size and region, and a `Location` restriction
 // with `NotAvailableForSubscription` where the subscription may not create
-// it. The outside org's sponsorship subscription: Standard_B2s restricted in
-// eastus, eastus2 and westus2; `restricted` adds more.
-const skus = (restricted: Record<string, string[]> = {}) =>
-  JSON.stringify(
+// it, by `restricted`'s size and regions.
+function skus(restricted: Record<string, string[]>) {
+  return JSON.stringify(
     ['Standard_D2s_v5', 'Standard_B2s'].flatMap((name) =>
       RUNNER_REGIONS.azure.map((location) => {
-        const denied = [
-          ...(name === 'Standard_B2s' ? ['eastus', 'eastus2', 'westus2'] : []),
-          ...(restricted[name] ?? []),
-        ].includes(location);
+        const denied = (restricted[name] ?? []).includes(location);
         return {
           apiVersions: null,
           capabilities: [{ name: 'vCPUs', value: '2' }],
           capacity: null,
           costs: null,
-          family: name === 'Standard_B2s' ? 'standardBSFamily' : 'standardDSv5Family',
+          family:
+            name === 'Standard_B2s' ? 'standardBSFamily' : 'standardDSv5Family',
           kind: null,
           locationInfo: [{ location, zoneDetails: [], zones: ['1', '2', '3'] }],
           locations: [location],
@@ -2539,6 +2540,9 @@ const skus = (restricted: Record<string, string[]> = {}) =>
       }),
     ),
   );
+}
+// The outside org's sponsorship subscription.
+const SPONSORSHIP = { Standard_B2s: ['eastus', 'eastus2', 'westus2'] };
 
 describe("install's always-on VM sizes on Azure", () => {
   const binary = Object.fromEntries(
@@ -2547,15 +2551,17 @@ describe("install's always-on VM sizes on Azure", () => {
       JSON.stringify(CATALOG.azure),
     ]),
   );
-  const azure = (restricted?: Record<string, string[]>) => {
-    const set = setUp({ tty: false }, binary);
-    const { command } = set.deps;
-    set.deps.command = async (args, env) =>
-      args.slice(0, 3).join(' ') === 'az vm list-skus'
-        ? skus(restricted)
-        : command(args, env);
-    return set;
-  };
+  const azure = (restricted: Record<string, string[]> = {}) =>
+    setUp(
+      {
+        tty: false,
+        restricted: {
+          ...SPONSORSHIP,
+          ...restricted,
+        },
+      },
+      binary,
+    );
   const opts = { ...options, controlPlane: 'azure:eastus' };
 
   it('names each restricted size in the region before any sign-in, and places them where all are offered', async () => {
@@ -2601,10 +2607,11 @@ describe("install's always-on VM sizes on Azure", () => {
     const { runLong } = deps;
     deps.runLong = async (args, env) => {
       if (args[1] === 'create' && args.includes('centralus')) {
+        calls.push(args.join(' '));
         throw new StepFailed(
           args,
           '{"error":{"code":"UNEXPECTED","message":"az deployment group create failed: (SkuNotAvailable) The requested VM size for resource \'Following SKUs have failed for Capacity Restrictions: Standard_D2s_v5\' is currently not available in location \'centralus\'. Please try another size or deploy to a different location or zones. See https://aka.ms/azureskunotavailable for details."}}\n',
-          '[12:00:00] Using azure account sub-1 as ops@example.com\n[12:00:01] Creating cluster backmesh (ID: backmesh-2611191200abc)\n[12:00:02] Deploying the management VM in centralus\n',
+          '   [12:00:00 PM] Using azure account sub-1 as ops@example.com\n   [12:00:01 PM] Creating cluster backmesh (ID: backmesh-2611191200abc)\n   [12:00:02 PM] Deploying the management VM in centralus\n',
           { cause: new Error('exit 1') },
         );
       }

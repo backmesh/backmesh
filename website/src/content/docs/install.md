@@ -107,6 +107,12 @@ deleted when it ends, can be in other clouds; the control plane's cloud gets pla
 only — `--runners aws:us-west-2` is refused, since runner regions aren't
 chosen (below).
 
+On Azure, the plan first checks that your subscription may create the
+control plane's and listener's VM sizes in that region, since some offers,
+such as sponsorships, can't. If it can't, the plan names each refused size and
+puts both VMs in the first of backmesh's [Azure regions](/azure/#regions)
+that offers them. [More](/azure/#the-control-plane-region).
+
 ## Regions
 
 Each runner cloud's regions are fixed, not something you choose: every US

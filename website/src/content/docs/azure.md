@@ -33,6 +33,17 @@ above — every US region qualifies — narrowed to the ones your account allows
 Each job tries the cheapest region first, then another when Azure refuses for
 capacity or quota. [More](/install/#regions).
 
+## The control plane's region
+
+Before any sign-in, the plan reads `az vm list-skus` for the sizes of the
+always-on VMs install creates, `Standard_D2s_v5` and `Standard_B2s`. When your
+subscription may not create one in the region you chose
+(`NotAvailableForSubscription`, as on some sponsorship and trial offers), the
+plan says so and puts them in the first of the regions above that offers both,
+such as `centralus`. The plan also lists the regions after it: if Azure has no
+capacity for the control plane's VM when install creates it, install deletes
+what it started there and tries the next, without signing in again.
+
 ## What install creates
 
 Install works through your `az` CLI, signed in with a subscription, and

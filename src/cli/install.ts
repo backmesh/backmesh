@@ -76,6 +76,7 @@ import {
   verboseDetail,
 } from './prerequisites.js';
 import { PlanChanged, UsageError } from './errors.js';
+import { alwaysOnRegions, noCapacity, type AlwaysOn } from './vm-sizes.js';
 import {
   RUNNER_REGIONS,
   SUGGESTED_REGION,
@@ -560,21 +561,65 @@ export async function connectClouds(
 // Step 5: the hosted API on the `--control-plane`, created through the user's
 // cloud CLI with nothing stored here (anycloud 0.1.74's seed). Re-running
 // `cluster create` with the same name and region resumes it from the cloud's
-// own tags (`docs/reference/cli/cluster.md`).
-async function bootstrapCluster(first: CloudTarget, deps: InstallDeps) {
-  const cluster = JSON.parse(
-    await deps.runLong([
-      ...['cluster', 'create', CLUSTER, '--cloud', first.cloud],
-      ...['--region', first.region, '--vm-type', MANAGEMENT_VM[first.cloud]],
-      '--json',
-    ]),
-  ) as { state: string; managementApiUrl: string | null };
-  if (cluster.state !== 'running' || !cluster.managementApiUrl) {
-    throw new Error(
-      `The control plane is ${cluster.state}. Run install again to resume it.`,
-    );
+// own tags (`docs/reference/cli/cluster.md`). A new cluster Azure refuses
+// for capacity is deleted through `cluster delete`, by the ID its progress
+// names (`[<time>] Creating cluster <name> (ID: <id>)`, never `Resuming`),
+// which leaves no resource group, and tried in the plan's next region
+// (`alwaysOnRegions`).
+async function bootstrapCluster(
+  first: CloudTarget,
+  regions: readonly string[],
+  deps: InstallDeps,
+) {
+  const size = MANAGEMENT_VM[first.cloud];
+  for (const [i, region] of regions.entries()) {
+    const out = await deps
+      .runLong([
+        ...['cluster', 'create', CLUSTER, '--cloud', first.cloud],
+        ...['--region', region, '--vm-type', size, '--json'],
+      ])
+      .catch(async (error: unknown) => {
+        const id =
+          error instanceof StepFailed &&
+          /\] Creating cluster \S+ \(ID: ([^)\s]+)\)/.exec(error.stderr)?.[1];
+        if (first.cloud !== 'azure' || !noCapacity(error) || !id) throw error;
+        await deps
+          .runLong([
+            ...['cluster', 'delete', id, '--cloud', first.cloud],
+            ...['--region', region, '--delete-vms', '--delete-buckets'],
+            ...['--confirm', id, '--json'],
+          ])
+          .catch((cause: unknown) => {
+            throw new Error(
+              `Azure has no capacity for the control plane's VM (${size}) in ${region}, and deleting what install started there failed: delete the resource group anycloud-${id}, then run install again.`,
+              { cause },
+            );
+          });
+        const next = regions[i + 1];
+        if (!next) {
+          throw new Error(
+            `Azure has no capacity for the control plane's VM (${size}) in ${regions.join(', ')} now. Install deleted what it started; run it again later.`,
+            { cause: error },
+          );
+        }
+        deps.ui.print(
+          `Azure has no capacity for the control plane's VM (${size}) in ${region} now: install deleted what it started there, and tries ${next}.`,
+        );
+        return undefined;
+      });
+    if (out === undefined) continue;
+    const cluster = JSON.parse(out) as {
+      state: string;
+      managementApiUrl: string | null;
+    };
+    if (cluster.state !== 'running' || !cluster.managementApiUrl) {
+      throw new Error(
+        `The control plane is ${cluster.state}. Run install again to resume it.`,
+      );
+    }
+    return { url: cluster.managementApiUrl, region };
   }
-  return cluster.managementApiUrl;
+  throw new Error('No region to create the control plane in.');
 }
 
 const connectApi = (deps: InstallDeps) => hostedApi(deps, deps.ui.print);
@@ -963,15 +1008,16 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       ? targeted
       : undefined;
   const current = await currentListener(options.org, targeted, release);
-  const { controlPlane, runners, connections } = await placementOf(
+  const placement = await placementOf(
     options,
     deps,
     targeted,
     current && targetsOf(current.routes),
     !!(reused?.orgs.length || reused?.pool),
   );
+  const { runners } = placement;
   const { identities, signedIn } = await checkPrerequisites(
-    connections,
+    placement.connections,
     deps,
     !options.plan,
   );
@@ -991,7 +1037,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     runners,
     anycloudRunners(deps.run),
     planRegions(multiRegion, note),
-    controlPlane.cloud,
+    placement.controlPlane.cloud,
     publicRepos,
   );
   const regionsOf = (cloud: Cloud) => [
@@ -1001,7 +1047,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   // The public labels are the control plane's cloud's.
   if (publicRepos && !classPlan.classes.some((c) => c.public)) {
     problems.push(
-      `--public-repos needs runners on the control plane's cloud, ${controlPlane.cloud}: backmesh-public-2 and -4 run there.`,
+      `--public-repos needs runners on the control plane's cloud, ${placement.controlPlane.cloud}: backmesh-public-2 and -4 run there.`,
     );
   }
   const quotas = [];
@@ -1050,12 +1096,40 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   if (problems.length) {
     throw new Error(`Can't run the runners:\n- ${problems.join('\n- ')}`);
   }
-  const first = controlPlane;
   const listeners = targeted?.orgs;
+  // A new listener's VM; a re-run's stays where it runs. With a new
+  // control plane, it's the control plane's cloud and region.
+  const placed = listenerPlace(placement.controlPlane, placement.connections);
+  // The always-on VMs this run creates there: on Azure, in the first region
+  // that offers this subscription every size, and on a capacity refusal the
+  // next (`vm-sizes.ts`).
+  const alwaysOn: AlwaysOn[] = [
+    ...(listeners
+      ? []
+      : [
+          { what: "the control plane's VM", size: MANAGEMENT_VM[placed.cloud] },
+        ]),
+    ...(current
+      ? []
+      : [
+          {
+            what: `${options.org}'s listener VM`,
+            size: LISTENER_VM_TYPE[placed.cloud],
+          },
+        ]),
+  ];
+  const regions =
+    placed.cloud === 'azure' && alwaysOn.length
+      ? await alwaysOnRegions(placed.region, alwaysOn, deps.command, note)
+      : undefined;
+  let place = regions ? { ...placed, region: regions[0]! } : placed;
+  const controlPlane = listeners ? placement.controlPlane : place;
+  const connections = placement.connections.map((c) =>
+    c === placed ? place : c,
+  );
+  const first = controlPlane;
   // A re-run for an org already on it agrees to nothing new.
   const orgs = (listeners ?? []).map((l) => orgOfListener(l.name)!);
-  // A new listener's VM; a re-run's stays where it runs.
-  const place = listenerPlace(controlPlane, connections);
   const sharedWith = orgs.includes(options.org.toLowerCase()) ? [] : orgs;
   const plan: InstallPlan = {
     org: options.org.toLowerCase(),
@@ -1079,6 +1153,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
           vmType: LISTENER_VM_TYPE[place.cloud],
           monthlyUsd: LISTENER_VM_MONTHLY_USD[place.cloud],
         },
+    alwaysOnRegions: regions,
     runners: runners.map((target) => ({
       cloud: target.cloud,
       regions: regionsOf(target.cloud),
@@ -1251,7 +1326,14 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     ui.print(`Using the control plane on ${first.cloud} ${first.region}.`);
   } else {
     ui.print(`Creating the control plane on ${first.cloud} ${first.region}.`);
-    url = await bootstrapCluster(first, deps);
+    const created = await bootstrapCluster(
+      first,
+      (!plan.controlPlane.exists && regions) || [first.region],
+      deps,
+    );
+    url = created.url;
+    // The listener goes with a new control plane.
+    if (!plan.controlPlane.exists) place = { ...place, region: created.region };
   }
   await deps.run(['api', 'use', url]);
   // `cluster create` may have resumed a control plane on another release,
