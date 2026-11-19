@@ -43,9 +43,11 @@ subscription may not create one in the region you chose
 plan says so and puts them in the first of the regions above that offers every
 one, such as `centralus`. For a new control plane, it also lists the regions
 after it: if Azure has no capacity for the control plane's VM when install
-creates it, install deletes what it started there and tries the next, without
-signing in again. A re-run resumes a control plane an earlier run started in its own
-region.
+creates it, install deletes that cluster's resource group and checkpoint bucket
+and tries the next, without signing in again. The `anycloud-storage` resource
+group and storage account that your subscription's first control plane made
+stay, as other control planes use them. A control plane named `backmesh` that
+already exists in the subscription is resumed in its own region.
 
 ## What install creates
 

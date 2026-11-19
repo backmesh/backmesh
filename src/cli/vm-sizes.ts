@@ -56,28 +56,30 @@ const readSkus = (
 /**
  * Where install creates `vms`: the first of `candidates` offering every
  * size, and with `fallback` (a new control plane) the passing regions after
- * it, which install tries in turn when Azure has no capacity on create.
- * Undefined when `az` couldn't be read, so install tries `candidates[0]`
- * alone.
+ * it, which install tries in turn when Azure has no capacity on create; a
+ * region whose sizes couldn't be read is left out. `advice` ends the error
+ * when none passes. Undefined when the first candidate couldn't be read, so
+ * install tries it alone.
  */
 export async function alwaysOnRegions(
   candidates: readonly string[],
   vms: readonly AlwaysOn[],
-  fallback: boolean,
+  { fallback, advice }: { fallback: boolean; advice: string },
   command: RunCommand,
   report: { print: (line: string) => void },
 ): Promise<string[] | undefined> {
   const region = candidates[0]!;
-  const skus = await Promise.all(
+  const read = await Promise.allSettled(
     candidates.map((r) => readSkus(r, vms, command)),
-  ).catch(() => undefined);
-  if (!skus) {
+  );
+  if (read[0]!.status === 'rejected') {
     report.print(
       `Azure's VM sizes couldn't be read, so install tries ${region} alone.`,
     );
     return undefined;
   }
-  const all = skus.flat();
+  const readable = candidates.filter((_, i) => read[i]!.status === 'fulfilled');
+  const all = read.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
   const lines = vms.flatMap((vm) => {
     const why = refused(all, vm.size, region);
     return why
@@ -86,7 +88,7 @@ export async function alwaysOnRegions(
         ]
       : [];
   });
-  const passing = candidates.filter((r) =>
+  const passing = readable.filter((r) =>
     vms.every((vm) => !refused(all, vm.size, r)),
   );
   if (!passing.length) {
@@ -94,7 +96,7 @@ export async function alwaysOnRegions(
     throw new UsageError(
       [
         ...lines,
-        `No Azure region install tries (${candidates.join(', ')}) offers this subscription ${what}. ${fallback ? 'Pass --control-plane azure:<region> with a region that does, or use another subscription.' : 'Use another subscription.'}`,
+        `No Azure region install tries (${candidates.join(', ')}) offers this subscription ${what}. ${advice}`,
       ].join('\n'),
     );
   }
@@ -116,23 +118,37 @@ export const candidateRegions = (region: string) =>
     : [region];
 
 /**
- * Where an earlier install's Azure control plane named `name` was started,
- * such as one stopped after a capacity fallback: `cluster create` resumes it
- * by its name tag in any region (`seed/azure.ts`'s `findByName`), so a
- * re-run must use its region.
+ * The region of the Azure control plane named `name` in this subscription,
+ * if one exists, such as one an earlier run started: `cluster create`
+ * resumes it by its name tag in any region (`seed/azure.ts`'s
+ * `findByName`), so install must use its region. Two of them stop install,
+ * as `cluster create` would.
  */
-export const startedRegion = (name: string, command: RunCommand) =>
-  command([
-    ...['az', 'group', 'list', '--tag', `anycloud_cluster_name=${name}`],
-    ...['--query', '[0].location', '--output', 'tsv'],
-  ]).then(
-    (out) => out.trim() || undefined,
-    () => undefined,
-  );
+export async function startedRegion(name: string, command: RunCommand) {
+  const groups = JSON.parse(
+    await command([
+      ...['az', 'group', 'list', '--tag', `anycloud_cluster_name=${name}`],
+      ...['--query', '[].{id:tags.anycloud_cluster,location:location}'],
+      ...['--output', 'json'],
+    ]).catch((cause: unknown) => {
+      throw new Error(
+        `az couldn't list this subscription's resource groups, so install can't tell whether a control plane named ${name} exists.`,
+        { cause },
+      );
+    }),
+  ) as { id: string; location: string }[];
+  const ids = [...new Set(groups.map((g) => g.id))];
+  if (ids.length > 1) {
+    throw new UsageError(
+      `This subscription has ${ids.length} control planes named ${name}: ${groups.map((g) => `${g.id} in ${g.location}`).join(', ')}. install can't tell which to resume: run it from the machine that created the one you use, or delete the others' resource groups (anycloud-<id>), then run install again.`,
+    );
+  }
+  return groups[0]?.location;
+}
 
 // Azure's refusal of a create for capacity or a size the region can't take
 // now: `SkuNotAvailable`, or an allocation failure.
 export const noCapacity = (error: unknown) =>
-  /SkuNotAvailable|AllocationFailed|OverconstrainedAllocationRequest/.test(
+  /SkuNotAvailable|AllocationFailed|Overconstrained\w*AllocationRequest/.test(
     String(error),
   );

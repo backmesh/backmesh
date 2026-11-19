@@ -568,9 +568,10 @@ export async function connectClouds(
 // cloud CLI with nothing stored here (anycloud 0.1.74's seed). Re-running
 // `cluster create` with the same name and region resumes it from the cloud's
 // own tags (`docs/reference/cli/cluster.md`). A new cluster Azure refuses
-// for capacity is deleted by the ID its progress names (`[<time>] Creating
-// cluster <name> (ID: <id>)`, never `Resuming`), which leaves no resource
-// group, and tried in the plan's next region (`alwaysOnRegions`).
+// for capacity, by the ID its progress names (`[<time>] Creating cluster
+// <name> (ID: <id>)`, never `Resuming`), is deleted: its resource group and
+// checkpoint bucket, not the subscription's shared `anycloud-storage`. It's
+// then tried in the plan's next region (`alwaysOnRegions`).
 async function bootstrapCluster(
   controlPlane: CloudTarget,
   regions: readonly string[],
@@ -580,61 +581,65 @@ async function bootstrapCluster(
   const size = MANAGEMENT_VM[cloud];
   for (let i = 0; ; i++) {
     const region = regions[i]!;
-    const out = await deps
-      .runLong([
-        ...['cluster', 'create', CLUSTER, '--cloud', cloud],
-        ...['--region', region, '--vm-type', size, '--json'],
-      ])
-      .catch(async (error: unknown) => {
-        const id =
-          error instanceof StepFailed &&
-          /\] Creating cluster \S+ \(ID: ([^)\s]+)\)/.exec(error.stderr)?.[1];
-        if (cloud !== 'azure' || !noCapacity(error) || !id) throw error;
-        // `cluster delete` looks for the cluster's API first, and with this
-        // machine's local target and no local API it exits there; its own
-        // never answers, so delete goes on without it (`cluster.md`, "Delete
-        // with the hosted API gone").
-        await deps
-          .runLong(
-            [
-              ...[
-                'cluster',
-                'delete',
-                id,
-                '--cloud',
-                cloud,
-                '--region',
-                region,
-              ],
-              ...[
-                '--delete-vms',
-                '--delete-buckets',
-                '--confirm',
-                id,
-                '--json',
-              ],
-            ],
-            { API_URL: `https://${id}.anycloud.sh` },
-          )
-          .catch((cause: unknown) => {
-            throw new Error(
-              `Azure has no capacity for the control plane's VM (${size}) in ${region}, and deleting what install started there failed: delete the resource group anycloud-${id}, then run install again.`,
-              { cause },
-            );
-          });
-        const next = regions[i + 1];
-        if (!next) {
+    let out: string;
+    try {
+      out = await deps.runLong([
+        'cluster',
+        'create',
+        CLUSTER,
+        '--cloud',
+        cloud,
+        '--region',
+        region,
+        '--vm-type',
+        size,
+        '--json',
+      ]);
+    } catch (error) {
+      const id =
+        error instanceof StepFailed &&
+        /\] Creating cluster \S+ \(ID: ([^)\s]+)\)/.exec(error.stderr)?.[1];
+      if (cloud !== 'azure' || !noCapacity(error) || !id) throw error;
+      // `cluster delete` looks for the cluster's API first, and with this
+      // machine's local target and no local API it exits there; its own
+      // never answers, so delete goes on without it (`cluster.md`, "Delete
+      // with the hosted API gone").
+      await deps
+        .runLong(
+          [
+            'cluster',
+            'delete',
+            id,
+            '--cloud',
+            cloud,
+            '--region',
+            region,
+            '--delete-vms',
+            '--delete-buckets',
+            '--confirm',
+            id,
+            '--json',
+          ],
+          { API_URL: `https://${id}.anycloud.sh` },
+        )
+        .catch((cause: unknown) => {
           throw new Error(
-            `Azure has no capacity for the control plane's VM (${size}) in ${regions.join(', ')} now. Install deleted what it started; run it again later.`,
-            { cause: error },
+            `Azure has no capacity for the control plane's VM (${size}) in ${region}, and deleting what install started there failed: delete the resource group anycloud-${id}, then run install again.`,
+            { cause },
           );
-        }
-        deps.ui.print(
-          `Azure has no capacity for the control plane's VM (${size}) in ${region} now: install deleted what it started there, and tries ${next}.`,
+        });
+      const next = regions[i + 1];
+      if (!next) {
+        throw new Error(
+          `Azure has no capacity for the control plane's VM (${size}) in ${regions.join(', ')} now. Install deleted what it started; run it again later.`,
+          { cause: error },
         );
-        return undefined;
-      });
-    if (out === undefined) continue;
+      }
+      deps.ui.print(
+        `Azure has no capacity for the control plane's VM (${size}) in ${region} now: install deleted what it started there, and tries ${next}.`,
+      );
+      continue;
+    }
     const cluster = JSON.parse(out) as {
       state: string;
       managementApiUrl: string | null;
@@ -1144,15 +1149,15 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
           },
         ]),
   ];
-  // A new Azure control plane that an earlier run started resumes where
-  // it is.
+  // A new Azure control plane named `backmesh` that already exists, such
+  // as one an earlier run started, resumes where it is.
   const started =
     placed.cloud === 'azure' && !listeners
       ? await startedRegion(CLUSTER, deps.command)
       : undefined;
-  if (started && started !== placed.region) {
+  if (started) {
     note.print(
-      `An earlier install started this control plane in azure ${started}, so install resumes it there.`,
+      `A control plane named ${CLUSTER} exists in azure ${started}; install resumes it there.`,
     );
   }
   const regions =
@@ -1160,16 +1165,21 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       ? await alwaysOnRegions(
           started ? [started] : candidateRegions(placed.region),
           alwaysOn,
-          !listeners,
+          {
+            fallback: !listeners && !started,
+            advice: started
+              ? `Delete the control plane named ${CLUSTER} in ${started}, or use another subscription.`
+              : listeners
+                ? 'Use another subscription.'
+                : 'Pass --control-plane azure:<region> with a region that does, or use another subscription.',
+          },
           deps.command,
           note,
         )
       : undefined;
   let place = regions ? { ...placed, region: regions[0]! } : placed;
   const controlPlane = listeners ? placement.controlPlane : place;
-  const connections = placement.connections.map((c) =>
-    c === placed ? place : c,
-  );
+  const { connections } = placement;
   // A re-run for an org already on it agrees to nothing new.
   const orgs = (listeners ?? []).map((l) => orgOfListener(l.name)!);
   const sharedWith = orgs.includes(options.org.toLowerCase()) ? [] : orgs;
