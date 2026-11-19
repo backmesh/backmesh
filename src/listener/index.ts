@@ -5,7 +5,7 @@ import { hostname } from 'node:os';
 
 import { anycloudApi } from '../anycloud/client.js';
 import { ActionsClient } from '../github/actions-client.js';
-import { checkRunPoster } from '../github/checks.js';
+import type { Note, WorkflowRun } from '../github/checks.js';
 import {
   cacheRun,
   gateGitHub,
@@ -20,6 +20,7 @@ import {
 } from '../github/installation-token.js';
 import { retryingFetch, type Log } from '../github/retry.js';
 import { isOurRunnerGroup } from '../github/runner-group.js';
+import { workerCancel, workerRerun } from './run-actions.js';
 import { apiUrl, Telemetry } from './telemetry.js';
 import { ListenerControl, serve } from './control.js';
 import { CacheTokens } from './cache.js';
@@ -160,11 +161,19 @@ const listening = control.listen(async (signal) => {
     log,
   });
   void telemetry.run(shutdown.signal);
-  // Retry needs Actions: write on this org's installation, and reruns with
-  // this org's token.
+  const worker = {
+    url: apiUrl(),
+    key: installKey,
+    install,
+    fetch: globalThis.fetch,
+  };
+  // Retry reads with this org's token and reruns through the Worker, which
+  // holds the App's Actions write (owner, 2026-11-19).
   const retrier = new Retrier({
-    runs: workflowRuns(octokit),
-    canRerun: () => tokens.permissions?.actions === 'write',
+    runs: {
+      ...workflowRuns(octokit),
+      rerunFailedJobs: workerRerun(worker),
+    },
     ours: (runner) => codeOf(install, runner) !== undefined,
     log,
   });
@@ -193,14 +202,17 @@ const listening = control.listen(async (signal) => {
     log,
   });
   const jobs = anycloudRunnerJobs(api, install, env('BACKMESH_RUNNER_IMAGE'));
-  const note = checkRunPoster(octokit, log);
+  // A note on a run (a reclaim, a fork run held, the runtime limit), in the
+  // listener's log: the App posts no check runs.
+  const note = async (run: WorkflowRun, n: Note) =>
+    log({ msg: 'note', run: `${run.owner}/${run.repo}/${run.runId}`, ...n });
   const privateCodes = new Set(
     routes.filter((route) => !route.public).map((route) => route.code),
   );
   const publicCodes = new Set(publicRoutes.map((route) => route.code));
   const gate = publicRoutes.length
     ? new Gate({
-        github: gateGitHub(octokit),
+        github: { ...gateGitHub(octokit), forceCancel: workerCancel(worker) },
         note,
         terminate: (runner) => jobs.terminate(runner),
         privateRunner: (name) => privateCodes.has(codeOf(install, name) ?? ''),
@@ -284,8 +296,7 @@ const listening = control.listen(async (signal) => {
   control.ready({
     scaler,
     telemetry: () => telemetry.status(),
-    actionsPermission: () =>
-      tokens.permissions && (tokens.permissions.actions ?? 'none'),
+    actionsPermission: () => tokens.actionsPermission(),
     drain: (progress) => drain({ scaler, log }, progress),
   });
   await runListener(

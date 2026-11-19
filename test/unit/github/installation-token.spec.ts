@@ -38,6 +38,7 @@ function setup(
         token: `ghs_${minted}`,
         expires_at: new Date(now.value.getTime() + 60 * 60_000).toISOString(),
         permissions: { actions: 'read', checks: 'write' },
+        installation_permissions: { actions: 'write', checks: 'write' },
         org: { id: 9, login: answer === 'other-org' ? 'evil' : 'Acme' },
       })();
     },
@@ -67,6 +68,11 @@ describe('InstallationTokens', () => {
     expect(tokens.permissions).toBeUndefined();
     await tokens.get();
     expect(tokens.permissions?.actions).toBe('read');
+    // What the installation grants the App: backmesh.com's run actions need
+    // Actions write there.
+    expect(tokens.installationPermissions?.actions).toBe('write');
+    // What the listener's status reports.
+    expect(tokens.actionsPermission()).toBe('write');
   });
 
   it('refreshes in the background from 30 minutes before expiry', async () => {

@@ -53,15 +53,16 @@ export const audit = (env: Env, request: Request, row: AuditRow) =>
     )
     .run();
 
-// Daily (the cron): audit rows are kept 90 days.
+// Daily (the cron): audit and run action rows are kept 90 days.
 // Expired cleanups go too.
 export const trimAudit = (env: Env, now = Date.now()) =>
   env.DB.batch([
     env.DB.prepare('DELETE FROM audit WHERE at < ?').bind(now - 90 * DAY),
     env.DB.prepare('DELETE FROM cleanups WHERE expires_at < ?').bind(now),
+    env.DB.prepare('DELETE FROM run_actions WHERE at < ?').bind(now - 90 * DAY),
   ]);
 
-const notInstalled = (env: Env, org: number) =>
+export const notInstalled = (env: Env, org: number) =>
   Response.json(
     { error: 'app_not_installed', install_url: installUrl(env, org) },
     { status: 409 },
@@ -95,12 +96,18 @@ export async function token(
   env: Env,
   install: { id: string; org: number },
 ) {
+  // A cached grant without Actions write is read again, so an owner's
+  // acceptance shows in the answer at once.
+  const cached = await installationOf(env, install.org);
+  if (cached && cached.permissions.actions !== 'write') {
+    await forget(env, install.org);
+  }
   const minted = await mintToken(env, install.org);
   if (!minted) {
     console.log(`token refused: ${install.id} app_not_installed`);
     return notInstalled(env, install.org);
   }
-  const { answer, installation } = minted;
+  const { answer, installation, granted } = minted;
   await audit(env, request, {
     action: 'token',
     outcome: 'ok',
@@ -110,7 +117,9 @@ export async function token(
     permissions: answer.permissions,
     expires_at: answer.expires_at,
   });
-  return Response.json(answer);
+  // And what the installation grants the App: the listener says when an
+  // owner hasn't accepted the Actions write backmesh.com's run actions use.
+  return Response.json({ ...answer, installation_permissions: granted });
 }
 
 // What a cleanup token may do: manage the org's self-hosted runners, scale

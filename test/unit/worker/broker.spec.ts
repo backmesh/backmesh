@@ -16,10 +16,17 @@ import {
   Upstream,
 } from './fakes.js';
 
+// What the App holds (owner, 2026-11-19): Actions write is the Worker's
+// own, for /v1/rerun.
 const ALL = {
   organization_self_hosted_runners: 'write',
   actions: 'write',
-  checks: 'write',
+  metadata: 'read',
+};
+// What an install key's token gets: no more than a runner manager's role.
+const KEY_TOKEN = {
+  organization_self_hosted_runners: 'write',
+  actions: 'read',
   metadata: 'read',
 };
 
@@ -160,12 +167,43 @@ describe('POST /v1/token', () => {
     expect(await res.json()).toEqual({
       token: 'ghs_7',
       expires_at: '2026-11-06T13:00:00Z',
-      permissions: ALL,
+      permissions: KEY_TOKEN,
+      installation_permissions: ALL,
       org: { id: 11, login: 'acme-old' },
     });
   });
 
-  it('asks only for the four permissions, narrowed to what the installation grants', async () => {
+  it("mints a key's token with Self-hosted runners write, Actions read and Metadata only", async () => {
+    await installed(11, { id: 7, login: 'acme', permissions: ALL });
+
+    const res = await mint(11);
+
+    expect(upstream.mints).toEqual([KEY_TOKEN]);
+    // And what the installation grants the App, so the listener can say
+    // when an owner hasn't accepted Actions write for backmesh.com.
+    expect(await res.json()).toMatchObject({
+      permissions: KEY_TOKEN,
+      installation_permissions: ALL,
+    });
+  });
+
+  it("reads the installation again when its cached grant isn't Actions write, so an owner's acceptance shows", async () => {
+    await installed(11, {
+      id: 7,
+      login: 'acme',
+      permissions: { ...ALL, actions: 'read' },
+    });
+    expect(await (await mint(11)).json()).toMatchObject({
+      installation_permissions: { actions: 'read' },
+    });
+    upstream.installations.get(11)!.permissions.actions = 'write';
+
+    expect(await (await mint(11)).json()).toMatchObject({
+      installation_permissions: { actions: 'write' },
+    });
+  });
+
+  it('asks only for those, narrowed to what the installation grants', async () => {
     await installed(11, {
       id: 7,
       login: 'acme',
@@ -221,7 +259,7 @@ describe('POST /v1/token', () => {
     const res = await mint(11);
 
     expect(await res.json()).toMatchObject({
-      permissions: ALL,
+      permissions: KEY_TOKEN,
       org: { id: 11, login: 'acme-renamed' },
     });
     expect(upstream.calls).toContain('GET api.github.com/app/installations/7');
@@ -238,7 +276,7 @@ describe('POST /v1/token', () => {
         outcome: 'ok',
         org: 11,
         installation: 7,
-        permissions: JSON.stringify(ALL),
+        permissions: JSON.stringify(KEY_TOKEN),
         expires_at: '2026-11-06T13:00:00Z',
         ip: '203.0.113.7',
         ray: 'ray-1',

@@ -203,6 +203,32 @@ export class Upstream {
   appPublicKey = publicKey;
   // Each token mint's requested permissions.
   mints: Record<string, string>[] = [];
+  // The repositories installation tokens can read, by `owner/repo`, with
+  // their owner's ID, and their workflow runs by `owner/repo/id`.
+  repos = new Map<string, { ownerId: number; private?: boolean }>();
+  runs = new Map<
+    string,
+    {
+      status: string;
+      attempt: number;
+      // The head repository's `owner/repo`: a fork's when it isn't the run's.
+      head?: string;
+      // GitHub's event, `pull_request` unless set.
+      event?: string;
+      jobs: {
+        conclusion: string | null;
+        runner_name: string | null;
+        labels?: string[];
+        status?: string;
+        started_at?: string | null;
+      }[];
+    }
+  >();
+  // Each `rerun-failed-jobs` call: its run, and the permissions of the
+  // token it was made with (the latest mint).
+  reruns: { run: string; permissions: Record<string, string> }[] = [];
+  // Each `force-cancel` call, the same way.
+  cancels: { run: string; permissions: Record<string, string> }[] = [];
   // The scopes GitHub grants a sign-in's token, as its answer lists them.
   oauthScope = 'read:org,read:packages';
   // Paths GitHub never answers: the request waits until it's aborted.
@@ -314,6 +340,7 @@ export class Upstream {
     }
     if (path.startsWith('/app') || /^\/orgs\/[^/]+\/installation$/.test(path))
       return this.app(path, init);
+    if (auth.startsWith('Bearer ghs_')) return this.installation(path, init);
     return new Response(`unexpected ${path}`, { status: 500 });
   };
 
@@ -324,6 +351,52 @@ export class Upstream {
       ...[...this.installations].map(([id, i]) => ({ id, login: i.login })),
     ].find((o) => o.login.toLowerCase() === login.toLowerCase());
     return known && { id: known.id, login: known.login };
+  }
+
+  // A repository and its runs, as an installation token reads them.
+  private installation(path: string, init: RequestInit) {
+    const [, owner, repo, rest] =
+      path.match(/^\/repos\/([^/]+)\/([^/]+)(\/.*)?$/) ?? [];
+    const found = this.repos.get(`${owner}/${repo}`);
+    if (!found) return Response.json({ message: 'Not Found' }, { status: 404 });
+    if (!rest) {
+      return Response.json({
+        full_name: `${owner}/${repo}`,
+        private: found.private ?? true,
+        owner: { id: found.ownerId, login: owner },
+      });
+    }
+    const [, id, more] = rest.match(/^\/actions\/runs\/(\d+)(\/.*)?$/) ?? [];
+    const run = this.runs.get(`${owner}/${repo}/${id}`);
+    if (!run) return Response.json({ message: 'Not Found' }, { status: 404 });
+    if (!more) {
+      return Response.json({
+        id: Number(id),
+        status: run.status,
+        run_attempt: run.attempt,
+        event: run.event ?? 'pull_request',
+        repository: { full_name: `${owner}/${repo}` },
+        head_repository: { full_name: run.head ?? `${owner}/${repo}` },
+      });
+    }
+    if (more === '/rerun-failed-jobs' && init.method === 'POST') {
+      this.reruns.push({
+        run: `${owner}/${repo}/${id}`,
+        permissions: this.mints.at(-1)!,
+      });
+      return new Response(null, { status: 201 });
+    }
+    if (more === '/force-cancel' && init.method === 'POST') {
+      this.cancels.push({
+        run: `${owner}/${repo}/${id}`,
+        permissions: this.mints.at(-1)!,
+      });
+      return new Response(null, { status: 202 });
+    }
+    if (more === `/attempts/${run.attempt}/jobs` || more === '/jobs') {
+      return Response.json({ total_count: run.jobs.length, jobs: run.jobs });
+    }
+    return new Response(`unexpected ${path}`, { status: 500 });
   }
 
   private userId(login: string) {

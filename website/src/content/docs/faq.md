@@ -35,12 +35,12 @@ preinstalled toolchains, which setup actions add. See
 [label](/labels/) runs in one cloud. When a VM type has no spot capacity, the
 job's VM is the next VM type in the same cloud.
 
-**What happens when a backmesh job's spot VM is reclaimed?** The job fails, and a check run on
-the commit lists every reclaimed job. When reclaims were the run's only
-failures, backmesh reruns its failed jobs once the run finishes, preferring an
-on-demand runner, at most twice. When it can't rerun them (the job uses
-`backmesh-noretry`, the run is already on its third attempt, or the App lacks
-Actions: write), the check run says to rerun them from the Actions tab. When
+**What happens when a backmesh job's spot VM is reclaimed?** The job fails, and
+the listener's log notes every reclaimed job (`backmesh logs`). When reclaims
+were the run's only failures, backmesh reruns its failed jobs once the run
+finishes, preferring an on-demand runner, at most twice. When it can't rerun
+them (the job uses `backmesh-noretry`, or the run is already on its third
+attempt), the note says to rerun them from the Actions tab. When
 another job failed too, backmesh reruns nothing; rerun the failed jobs as
 usual. See [on demand](/labels/#on-demand).
 

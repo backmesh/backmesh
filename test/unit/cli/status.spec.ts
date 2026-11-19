@@ -579,7 +579,11 @@ describe('status', () => {
     expect(formatStatus(report)).toContain('Warnings:');
   });
 
-  it('asks for Actions: write until the installation has it, quiet for an older listener', async () => {
+  // The listener's token asks for Actions read only (owner, 2026-11-19):
+  // the Worker reruns for it.
+  // The installation's Actions permission, which backmesh.com's reruns and
+  // cancels need at write (the listener's own token reads only).
+  it('asks for Actions: write until the installation grants it, quiet for an older listener', async () => {
     for (const [actionsPermission, warned] of [
       ['read', true],
       ['none', true],
@@ -595,28 +599,12 @@ describe('status', () => {
         warned
           ? [
               expect.stringContaining(
-                `has Actions: ${actionsPermission}; it needs Actions: write`,
+                `The backmesh App has Actions: ${actionsPermission} on ${LISTENER.org ?? 'acme'}; backmesh.com needs Actions: write there to rerun reclaimed jobs and cancel fork runs.`,
               ),
             ]
           : [],
       );
     }
-  });
-
-  it('names cancelling fork runs too when the install has public labels', async () => {
-    const [set] = LISTENER.status.scaleSets;
-    const { read } = setUp({
-      listener: probed({
-        ...LISTENER.status,
-        actionsPermission: 'read',
-        scaleSets: [set!, { ...set!, label: 'backmesh-public-4' }],
-      }),
-    });
-    expect((await read()).warnings).toEqual([
-      expect.stringContaining(
-        'it needs Actions: write to rerun reclaimed jobs and to cancel fork runs that ask for a label other than backmesh-public-*.',
-      ),
-    ]);
   });
 
   it.each([

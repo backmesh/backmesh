@@ -119,7 +119,10 @@ receives, such as sign-in details.
 - Each token backmesh hands out, and each uninstall sign-in and App removal,
   refused or not, writes one audit row: the install, org and App
   installation, the token's permissions and expiry when there is one, and the
-  caller's IP address and Cloudflare ray ID. Audit rows are deleted after 90
+  caller's IP address and Cloudflare ray ID. Each rerun or cancel the listener
+  asks for writes one row too: the install and org, the repository's owner
+  and name, the run's ID, the outcome, and the caller's IP address and
+  Cloudflare ray ID. Audit rows are deleted after 90
   days.
 
 ## Installs

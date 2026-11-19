@@ -2,8 +2,10 @@
 // a fork's pull request in a public repository is untrusted, and runs only on
 // `backmesh-public-<n>`. GitHub assigns a job before the listener hears of
 // it, so the gate can't hold one back: it leaves untrusted and unclassified
-// jobs out of their set's desired count, force-cancels an untrusted run, and
-// terminates any runner on another label that starts one of its jobs. A
+// jobs out of their set's desired count, force-cancels an untrusted run
+// through the Worker's /v1/cancel (the listener's token reads Actions only,
+// owner 2026-11-19), and terminates any runner on another label that starts
+// one of its jobs. A
 // sweep of the public repositories' active runs covers what a restart's lost
 // messages miss.
 import type { Note, WorkflowRun } from '../github/checks.js';
@@ -65,10 +67,12 @@ interface RunState {
   cancelledAt?: number;
   // When a cancel last went through.
   cancelled?: number;
-  // GitHub refused the cancel: no Actions: write, so no more tries.
+  // The cancel was refused, so no more tries.
   refused?: boolean;
   // Runners on a label that isn't public that started one of its jobs.
   runners: Set<string>;
+  // Past the runtime limit: a later public job of the run ends as it starts.
+  limited?: boolean;
   evicted: Set<string>;
 }
 
@@ -116,6 +120,11 @@ export class Gate {
     if (route.public) {
       if (job.messageType === 'JobCompleted') this.timed.delete(job.runnerName);
       if (job.messageType !== 'JobStarted' || !job.runnerName) return;
+      const limited = this.runs.get(key);
+      if (limited?.limited) {
+        void this.evict(limited, job.runnerName, 'runtime limit terminate');
+        return;
+      }
       if (!this.timed.has(job.runnerName)) {
         this.timed.set(job.runnerName, {
           key,
@@ -204,12 +213,16 @@ export class Gate {
       if (state.trusted !== false) continue;
       if (timed.limited === undefined) {
         if (now - timed.at < LIMIT_MS) continue;
-        // The cancel is the run's: its other jobs end with this one.
+        // The cancel is the run's: its other jobs end with this one, and
+        // one that starts later ends at once.
         for (const other of this.timed.values()) {
           if (other.key === timed.key) other.limited ??= now;
         }
+        state.limited = true;
+        // A limit cancel the Worker refuses isn't tried again (only the
+        // label path is): the runners end at the grace either way.
         this.deps.log({ msg: 'runtime limit', run: timed.key, runner });
-        await this.cancel(state, {
+        await this.cancel(state, 'limit', {
           name: `runtime limit in run ${state.run.runId}`,
           title: 'Runtime limit',
           summary: `\`${timed.job}\` ran on \`${timed.label}\` for 60 minutes, the limit for pull requests from forks, so backmesh cancelled the run.`,
@@ -222,15 +235,22 @@ export class Gate {
   }
 
   // Force-cancels the run and posts its note; false when the cancel failed.
-  private async cancel(state: RunState, note: Note): Promise<boolean> {
+  private async cancel(
+    state: RunState,
+    reason: 'label' | 'limit',
+    note: Note,
+  ): Promise<boolean> {
     const { run } = state;
     try {
-      await this.deps.github.forceCancel(run);
+      await this.deps.github.forceCancel(run, reason);
     } catch (error) {
-      // Without Actions: write, its jobs stay uncounted and are ended as
-      // they start, and the run isn't tried again.
-      state.refused =
-        error instanceof Error && 'status' in error && error.status === 403;
+      // Refused (the Worker's 403, such as for a run it doesn't see as a
+      // fork's), its jobs stay uncounted and are ended as they start, and
+      // the run isn't tried again.
+      // `not_gated` is the Worker not seeing the limit yet, by its clock:
+      // tried again.
+      const { status, code } = error as { status?: number; code?: string };
+      state.refused = status === 403 && code !== 'not_gated';
       this.deps.log({
         msg: 'fork run cancel failed',
         run: keyOf(run),
@@ -240,7 +260,7 @@ export class Gate {
     }
     await this.deps.note(run, note).catch((error: unknown) =>
       this.deps.log({
-        msg: 'check-run note failed',
+        msg: 'note failed',
         run: keyOf(run),
         error: String(error),
       }),
@@ -315,7 +335,7 @@ export class Gate {
     const { run } = state;
     const { job, label } = state.asked;
     const labels = this.deps.publicLabels.map((l) => `\`${l}\``).join(' or ');
-    const cancelled = await this.cancel(state, {
+    const cancelled = await this.cancel(state, 'label', {
       name: `fork run ${run.runId}`,
       title: 'Fork run cancelled',
       summary: `\`${job}\` asked for \`${label}\`. In this public repository, pull requests from forks run only on ${labels || 'no backmesh label'}, so backmesh cancelled the run. Use one of them, or a GitHub-hosted runner.`,
