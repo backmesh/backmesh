@@ -18,6 +18,7 @@ import { runnerGroupName } from '../github/runner-group.js';
 import type { Compatibility } from '../release/compatibility.js';
 import {
   GITHUB_APP_ID,
+  GITHUB_APPS_FLAG,
   keyAccepted,
   waitForApp,
   workerDeps,
@@ -155,7 +156,7 @@ async function upgradeApi(
 ): Promise<boolean> {
   if (from === to) return false;
   deps.print('Upgrading the control plane.');
-  await deps.runLong(['api', 'upgrade', '--github-apps', GITHUB_APP_ID]);
+  await deps.runLong(['api', 'upgrade', GITHUB_APPS_FLAG, GITHUB_APP_ID]);
   const status = apiStatusLine(
     await deps.runLong(['api', 'status', '--watch', '--json']),
   );

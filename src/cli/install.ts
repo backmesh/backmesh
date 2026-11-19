@@ -15,6 +15,7 @@ import { missingFeatures, type FeatureTable } from '../anycloud/features.js';
 import { anycloudControl } from '../app/anycloud.js';
 import {
   GITHUB_APP_ID,
+  GITHUB_APPS_FLAG,
   signInForKey,
   waitForApp,
   workerDeps,
@@ -598,7 +599,7 @@ async function bootstrapCluster(
         region,
         '--vm-type',
         size,
-        '--github-apps',
+        GITHUB_APPS_FLAG,
         GITHUB_APP_ID,
         '--json',
       ]);
