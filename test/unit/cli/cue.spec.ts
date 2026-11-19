@@ -35,6 +35,8 @@ class Relay {
   calls: string[] = [];
   // Each request's Authorization header.
   auths: (string | null)[] = [];
+  // Each trade's body.
+  trades: object[] = [];
   // The next POST's answer, when set.
   answer?: { status: number; body: object };
   hang = false;
@@ -53,9 +55,17 @@ class Relay {
     // A fresh App sign-in, traded once for the cue credential; the cue
     // routes take only that, and GitHub is never asked.
     if (url.pathname === '/v1/cue/sign-in') {
-      // A sign-in that reaches none of the App's installations.
+      this.trades.push(JSON.parse(String(init.body ?? '{}')));
+      // A sign-in that reaches none of the App's installations, and one
+      // the org's SAML SSO holds back.
       if (auth === 'Bearer ghu_nobody') {
-        return Response.json({ error: 'No org.' }, { status: 403 });
+        return Response.json(
+          { error: 'No org.', code: 'no_org' },
+          { status: 403 },
+        );
+      }
+      if (auth === 'Bearer ghu_sso') {
+        return Response.json({ error: 'SSO.', code: 'sso' }, { status: 403 });
       }
       if (auth !== 'Bearer ghu_alice') {
         return Response.json(
@@ -205,13 +215,38 @@ describe('backmesh cue', () => {
       expect(readFileSync(saved(), 'utf8')).toBe(`${CREDENTIAL}\n`);
     });
 
-    it("trades again when the saved credential doesn't reach the org", async () => {
+    // A trade can't add an org the App isn't on, and the saved sign-in may
+    // have expired: the credential stays, and the user is told.
+    it("keeps a credential that doesn't reach the org, and says how to refresh it", async () => {
       writeFileSync(saved(), `${STALE}\n`);
+      writeFileSync(join(dir, '.token'), 'ghu_expired\n');
 
-      expect((await cue({ inS: 120, signIn: false }, deps)).outcome).toBe(
-        'sent',
+      expect(await cue({ inS: 120, signIn: false }, deps)).toEqual({
+        outcome: 'refused',
+        message:
+          "Your cue credential doesn't reach acme. If backmesh's GitHub App was installed on it since, run `backmesh cue --sign-in`. Nothing was sent.",
+      });
+      expect(readFileSync(saved(), 'utf8')).toBe(`${STALE}\n`);
+      expect(relay.calls).not.toContain(
+        'POST api.backmesh.test/v1/cue/sign-in',
       );
-      expect(readFileSync(saved(), 'utf8')).toBe(`${CREDENTIAL}\n`);
+    });
+
+    it("revokes other credentials only at --sign-in; a cue's own trade adds one", async () => {
+      await cue({ inS: 120, signIn: false }, deps);
+      await cue({ signIn: true }, deps);
+
+      expect(relay.trades).toEqual([{ revoke: false }, { revoke: true }]);
+    });
+
+    it('tells the user to authorize SAML SSO when the org holds the sign-in back', async () => {
+      writeFileSync(join(dir, '.token'), 'ghu_sso\n');
+
+      expect(await cue({ inS: 120, signIn: false }, deps)).toEqual({
+        outcome: 'refused',
+        message:
+          "Authorize the backmesh sign-in for your org's SAML SSO on GitHub, then run `backmesh cue --sign-in`. Nothing was sent.",
+      });
     });
 
     it('says so when the sign-in reaches none of the orgs the App is on', async () => {

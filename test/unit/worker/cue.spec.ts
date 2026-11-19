@@ -263,8 +263,14 @@ describe('cueMember', () => {
 describe('the cue credential', () => {
   // A fresh App sign-in, traded once: cue sends no GitHub token after
   // (owner, 2026-11-19; App user tokens last 8 hours).
-  const trade = (login: string) =>
-    request('/v1/cue/sign-in', { method: 'POST', headers: as(login) });
+  // `revoke`: an explicit `cue --sign-in`, which revokes the user's other
+  // credentials; a CLI's automatic trade adds one.
+  const trade = (login: string, revoke = false) =>
+    request('/v1/cue/sign-in', {
+      method: 'POST',
+      headers: as(login),
+      body: JSON.stringify({ revoke }),
+    });
   const withCredential = (credential: string, path = '/v1/cue/keys?org=acme') =>
     request(path, { headers: { Authorization: `Bearer ${credential}` } });
 
@@ -320,13 +326,32 @@ describe('the cue credential', () => {
     expect((await withCredential(`bmc_${'0'.repeat(64)}`)).status).toBe(401);
   });
 
-  it("revokes the user's earlier credentials at a new trade", async () => {
+  it("revokes the user's other credentials only at an explicit sign-in", async () => {
     const first = (await (await trade('alice')).json()) as {
       credential: string;
     };
+    // Another machine's automatic trade: the first one keeps working.
     await trade('alice');
-
+    expect((await withCredential(first.credential)).status).toBe(200);
+    // `backmesh cue --sign-in` revokes it.
+    await trade('alice', true);
     expect((await withCredential(first.credential)).status).toBe(401);
+  });
+
+  it('tells a sign-in that reaches no org from one SAML SSO holds back', async () => {
+    upstream.reaches.set('nora', []);
+    const none = await trade('nora');
+    expect(none.status).toBe(403);
+    expect(await none.json()).toMatchObject({ code: 'no_org' });
+    upstream.answers.set('/user/installations', () =>
+      Response.json(
+        { message: 'Resource protected by organization SAML enforcement.' },
+        { status: 403, headers: { 'X-GitHub-SSO': 'required; url=x' } },
+      ),
+    );
+    const sso = await trade('alice');
+    expect(sso.status).toBe(403);
+    expect(await sso.json()).toMatchObject({ code: 'sso' });
   });
 
   it('checks the format before any lookup, and counts a refused one against the client IP', async () => {
