@@ -77,6 +77,13 @@ import {
 } from './prerequisites.js';
 import { PlanChanged, UsageError } from './errors.js';
 import {
+  alwaysOnRegions,
+  candidateRegions,
+  noCapacity,
+  startedRegion,
+  type AlwaysOn,
+} from './vm-sizes.js';
+import {
   RUNNER_REGIONS,
   SUGGESTED_REGION,
   type RunCommand,
@@ -560,21 +567,90 @@ export async function connectClouds(
 // Step 5: the hosted API on the `--control-plane`, created through the user's
 // cloud CLI with nothing stored here (anycloud 0.1.74's seed). Re-running
 // `cluster create` with the same name and region resumes it from the cloud's
-// own tags (`docs/reference/cli/cluster.md`).
-async function bootstrapCluster(first: CloudTarget, deps: InstallDeps) {
-  const cluster = JSON.parse(
-    await deps.runLong([
-      ...['cluster', 'create', CLUSTER, '--cloud', first.cloud],
-      ...['--region', first.region, '--vm-type', MANAGEMENT_VM[first.cloud]],
-      '--json',
-    ]),
-  ) as { state: string; managementApiUrl: string | null };
-  if (cluster.state !== 'running' || !cluster.managementApiUrl) {
-    throw new Error(
-      `The control plane is ${cluster.state}. Run install again to resume it.`,
-    );
+// own tags (`docs/reference/cli/cluster.md`). A new cluster Azure refuses
+// for capacity, by the ID its progress names (`[<time>] Creating cluster
+// <name> (ID: <id>)`, never `Resuming`), is deleted: its resource group and
+// checkpoint bucket, not the subscription's shared `anycloud-storage`. It's
+// then tried in the plan's next region (`alwaysOnRegions`).
+async function bootstrapCluster(
+  controlPlane: CloudTarget,
+  regions: readonly string[],
+  deps: InstallDeps,
+) {
+  const { cloud } = controlPlane;
+  const size = MANAGEMENT_VM[cloud];
+  for (let i = 0; ; i++) {
+    const region = regions[i]!;
+    let out: string;
+    try {
+      out = await deps.runLong([
+        'cluster',
+        'create',
+        CLUSTER,
+        '--cloud',
+        cloud,
+        '--region',
+        region,
+        '--vm-type',
+        size,
+        '--json',
+      ]);
+    } catch (error) {
+      const id =
+        error instanceof StepFailed &&
+        /\] Creating cluster \S+ \(ID: ([^)\s]+)\)/.exec(error.stderr)?.[1];
+      if (cloud !== 'azure' || !noCapacity(error) || !id) throw error;
+      // `cluster delete` looks for the cluster's API first, and with this
+      // machine's local target and no local API it exits there; its own
+      // never answers, so delete goes on without it (`cluster.md`, "Delete
+      // with the hosted API gone").
+      await deps
+        .runLong(
+          [
+            'cluster',
+            'delete',
+            id,
+            '--cloud',
+            cloud,
+            '--region',
+            region,
+            '--delete-vms',
+            '--delete-buckets',
+            '--confirm',
+            id,
+            '--json',
+          ],
+          { API_URL: `https://${id}.anycloud.sh` },
+        )
+        .catch((cause: unknown) => {
+          throw new Error(
+            `Azure has no capacity for the control plane's VM (${size}) in ${region}, and deleting what install started there failed: delete the resource group anycloud-${id}, then run install again.`,
+            { cause },
+          );
+        });
+      const next = regions[i + 1];
+      if (!next) {
+        throw new Error(
+          `Azure has no capacity for the control plane's VM (${size}) in ${regions.join(', ')} now. Install deleted what it started; run it again later.`,
+          { cause: error },
+        );
+      }
+      deps.ui.print(
+        `Azure has no capacity for the control plane's VM (${size}) in ${region} now: install deleted what it started there, and tries ${next}.`,
+      );
+      continue;
+    }
+    const cluster = JSON.parse(out) as {
+      state: string;
+      managementApiUrl: string | null;
+    };
+    if (cluster.state !== 'running' || !cluster.managementApiUrl) {
+      throw new Error(
+        `The control plane is ${cluster.state}. Run install again to resume it.`,
+      );
+    }
+    return { url: cluster.managementApiUrl, region };
   }
-  return cluster.managementApiUrl;
 }
 
 const connectApi = (deps: InstallDeps) => hostedApi(deps, deps.ui.print);
@@ -963,15 +1039,16 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       ? targeted
       : undefined;
   const current = await currentListener(options.org, targeted, release);
-  const { controlPlane, runners, connections } = await placementOf(
+  const placement = await placementOf(
     options,
     deps,
     targeted,
     current && targetsOf(current.routes),
     !!(reused?.orgs.length || reused?.pool),
   );
+  const { runners } = placement;
   const { identities, signedIn } = await checkPrerequisites(
-    connections,
+    placement.connections,
     deps,
     !options.plan,
   );
@@ -991,7 +1068,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     runners,
     anycloudRunners(deps.run),
     planRegions(multiRegion, note),
-    controlPlane.cloud,
+    placement.controlPlane.cloud,
     publicRepos,
   );
   const regionsOf = (cloud: Cloud) => [
@@ -1001,7 +1078,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   // The public labels are the control plane's cloud's.
   if (publicRepos && !classPlan.classes.some((c) => c.public)) {
     problems.push(
-      `--public-repos needs runners on the control plane's cloud, ${controlPlane.cloud}: backmesh-public-2 and -4 run there.`,
+      `--public-repos needs runners on the control plane's cloud, ${placement.controlPlane.cloud}: backmesh-public-2 and -4 run there.`,
     );
   }
   const quotas = [];
@@ -1050,12 +1127,61 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   if (problems.length) {
     throw new Error(`Can't run the runners:\n- ${problems.join('\n- ')}`);
   }
-  const first = controlPlane;
   const listeners = targeted?.orgs;
+  // A new listener's VM; a re-run's stays where it runs. With a new
+  // control plane, it's the control plane's cloud and region.
+  const placed = listenerPlace(placement.controlPlane, placement.connections);
+  // The always-on VMs this run creates there: on Azure, in the first region
+  // that offers this subscription every size, and on a capacity refusal the
+  // next (`vm-sizes.ts`).
+  const alwaysOn: AlwaysOn[] = [
+    ...(listeners
+      ? []
+      : [
+          { what: "the control plane's VM", size: MANAGEMENT_VM[placed.cloud] },
+        ]),
+    ...(current
+      ? []
+      : [
+          {
+            what: `${options.org}'s listener VM`,
+            size: LISTENER_VM_TYPE[placed.cloud],
+          },
+        ]),
+  ];
+  // A new Azure control plane named `backmesh` that already exists, such
+  // as one an earlier run started, resumes where it is.
+  const started =
+    placed.cloud === 'azure' && !listeners
+      ? await startedRegion(CLUSTER, deps.command)
+      : undefined;
+  if (started) {
+    note.print(
+      `A control plane named ${CLUSTER} exists in azure ${started}; install resumes it there.`,
+    );
+  }
+  const regions =
+    placed.cloud === 'azure' && alwaysOn.length
+      ? await alwaysOnRegions(
+          started ? [started] : candidateRegions(placed.region),
+          alwaysOn,
+          {
+            fallback: !listeners && !started,
+            advice: started
+              ? `Delete the control plane named ${CLUSTER} in ${started}, or use another subscription.`
+              : listeners
+                ? 'Use another subscription.'
+                : 'Pass --control-plane azure:<region> with a region that does, or use another subscription.',
+          },
+          deps.command,
+          note,
+        )
+      : undefined;
+  let place = regions ? { ...placed, region: regions[0]! } : placed;
+  const controlPlane = listeners ? placement.controlPlane : place;
+  const { connections } = placement;
   // A re-run for an org already on it agrees to nothing new.
   const orgs = (listeners ?? []).map((l) => orgOfListener(l.name)!);
-  // A new listener's VM; a re-run's stays where it runs.
-  const place = listenerPlace(controlPlane, connections);
   const sharedWith = orgs.includes(options.org.toLowerCase()) ? [] : orgs;
   const plan: InstallPlan = {
     org: options.org.toLowerCase(),
@@ -1064,10 +1190,10 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     images: { runner: release.runnerImage, listener: release.listenerImage },
     clouds: await accountsOf(connections, deps),
     controlPlane: {
-      cloud: first.cloud,
-      region: first.region,
-      managementVm: MANAGEMENT_VM[first.cloud],
-      monthlyUsd: MANAGEMENT_MONTHLY_USD[first.cloud],
+      cloud: controlPlane.cloud,
+      region: controlPlane.region,
+      managementVm: MANAGEMENT_VM[controlPlane.cloud],
+      monthlyUsd: MANAGEMENT_MONTHLY_USD[controlPlane.cloud],
       exists: !!listeners,
       sharedWith,
     },
@@ -1079,6 +1205,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
           vmType: LISTENER_VM_TYPE[place.cloud],
           monthlyUsd: LISTENER_VM_MONTHLY_USD[place.cloud],
         },
+    alwaysOnRegions: regions,
     runners: runners.map((target) => ({
       cloud: target.cloud,
       regions: regionsOf(target.cloud),
@@ -1119,7 +1246,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   );
   if (!plan.controlPlane.exists) {
     ui.print(
-      `Always on: the control plane's VM (${MANAGEMENT_VM[first.cloud]}) on ${first.cloud} ${first.region}, about $${MANAGEMENT_MONTHLY_USD[first.cloud]} a month with its disk and address.`,
+      `Always on: the control plane's VM (${MANAGEMENT_VM[controlPlane.cloud]}) on ${controlPlane.cloud} ${controlPlane.region}, about $${MANAGEMENT_MONTHLY_USD[controlPlane.cloud]} a month with its disk and address.`,
     );
   }
   if (plan.listener) {
@@ -1248,10 +1375,21 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   let url: string;
   if (reused) {
     url = reused.url;
-    ui.print(`Using the control plane on ${first.cloud} ${first.region}.`);
+    ui.print(
+      `Using the control plane on ${controlPlane.cloud} ${controlPlane.region}.`,
+    );
   } else {
-    ui.print(`Creating the control plane on ${first.cloud} ${first.region}.`);
-    url = await bootstrapCluster(first, deps);
+    ui.print(
+      `Creating the control plane on ${controlPlane.cloud} ${controlPlane.region}.`,
+    );
+    const created = await bootstrapCluster(
+      controlPlane,
+      (!plan.controlPlane.exists && regions) || [controlPlane.region],
+      deps,
+    );
+    url = created.url;
+    // The listener goes with a new control plane.
+    if (!plan.controlPlane.exists) place = { ...place, region: created.region };
   }
   await deps.run(['api', 'use', url]);
   // `cluster create` may have resumed a control plane on another release,

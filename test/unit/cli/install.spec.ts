@@ -107,7 +107,13 @@ function setUp(
     hostedVersion = ANYCLOUD_VERSION,
     answers = [] as string[],
     cacheBuckets,
+    restricted = {},
+    groups = [],
   }: {
+    // The Azure sizes this subscription may not create, by region (`skus`).
+    restricted?: Record<string, string[]>;
+    // The resource groups of Azure control planes named `backmesh`.
+    groups?: { id: string; location: string }[];
     // bm-aws's cache buckets, when a previous install made them: the
     // connection an installation before 0.4.1 named, which `RUNNERS` records.
     cacheBuckets?: string[];
@@ -249,6 +255,12 @@ function setUp(
         const value = quota[`${code}@${region}`] ?? quota[code];
         if (value === undefined) throw new Error('OptInRequired');
         return `${value}\n`;
+      }
+      if (args.slice(0, 3).join(' ') === 'az group list') {
+        return JSON.stringify(groups);
+      }
+      if (args[0] === 'az' && args[2] === 'list-skus') {
+        return skus(restricted, args[args.indexOf('--location') + 1]!);
       }
       if (args[0] === 'az' && args[2] === 'list-usage') {
         return JSON.stringify(
@@ -2477,5 +2489,360 @@ describe('install', () => {
       );
       expect(calls.some((c) => c.startsWith('vm '))).toBe(false);
     });
+  });
+});
+
+// `az vm list-skus --all --location <region> --resource-type
+// virtualMachines` as Azure documents it (learn.microsoft.com, "Resolve
+// errors for SKU not available"), projected as install's `--query` does:
+// each size's entry for the region, with a `Location` restriction,
+// `NotAvailableForSubscription`, where `restricted` says the subscription
+// may not create it.
+function skus(restricted: Record<string, string[]>, location: string) {
+  return JSON.stringify(
+    ['Standard_D2s_v5', 'Standard_B2s'].map((name) => ({
+      name,
+      locations: [location],
+      restrictions: (restricted[name] ?? []).includes(location)
+        ? [
+            {
+              reasonCode: 'NotAvailableForSubscription',
+              restrictionInfo: { locations: [location], zones: null },
+              type: 'Location',
+              values: [location],
+            },
+          ]
+        : [],
+    })),
+  );
+}
+// The outside org's sponsorship subscription.
+const SPONSORSHIP = { Standard_B2s: ['eastus', 'eastus2', 'westus2'] };
+
+describe("install's always-on VM sizes on Azure", () => {
+  const binary = Object.fromEntries(
+    RUNNER_REGIONS.azure.map((r) => [
+      `vm-types azure ${r}`,
+      JSON.stringify(CATALOG.azure),
+    ]),
+  );
+  // A machine with no control plane, signed in to a subscription that
+  // `restricted` adds to the sponsorship's restrictions.
+  const azure = (
+    restricted: Record<string, string[]> = {},
+    more: Parameters<typeof setUp>[0] = {},
+  ) => {
+    const set = setUp(
+      { tty: false, restricted: { ...SPONSORSHIP, ...restricted }, ...more },
+      binary,
+    );
+    const { runLong } = set.deps;
+    // Each `cluster delete`'s environment.
+    const envs: (NodeJS.ProcessEnv | undefined)[] = [];
+    set.deps.runLong = async (args, env) => {
+      if (args[1] === 'delete') envs.push(env);
+      return runLong(args, env);
+    };
+    return { ...set, envs };
+  };
+  const planned = async (opts: InstallOptions, deps: InstallDeps) => {
+    const plan = (await install(
+      { ...opts, plan: true },
+      deps,
+    )) as InstallPlan & {
+      planId: string;
+    };
+    return { plan, run: () => install({ ...opts, planId: plan.planId }, deps) };
+  };
+  const eastus = { ...options, controlPlane: 'azure:eastus' };
+  // Azure's capacity refusal, as `cluster create --json` relays it.
+  const CAPACITY = (region: string) =>
+    `{"error":{"code":"UNEXPECTED","message":"az deployment group create failed: (SkuNotAvailable) The requested VM size for resource 'Following SKUs have failed for Capacity Restrictions: Standard_D2s_v5' is currently not available in location '${region}'. Please try another size or deploy to a different location or zones. See https://aka.ms/azureskunotavailable for details."}}\n`;
+  // A create that fails in `region` with `stdout`, Azure's capacity refusal
+  // by default, after the progress `cluster create` prints on stderr for a
+  // new cluster or a resumed one.
+  const refusedIn = (
+    deps: InstallDeps,
+    calls: string[],
+    region: string,
+    started = 'Creating cluster backmesh (ID: backmesh-1763553600000-x7k2p9)',
+    stdout = CAPACITY(region),
+  ) => {
+    const { runLong } = deps;
+    deps.runLong = async (args, env) => {
+      if (
+        /^(cluster create|vm) /.test(args.join(' ')) &&
+        args.includes(region)
+      ) {
+        calls.push(args.join(' '));
+        throw new StepFailed(
+          args,
+          stdout,
+          `   [12:00:00 PM] Using azure account sub-1 as ops@example.com\n   [12:00:01 PM] ${started}\n   [12:00:02 PM] Deploying the management VM in ${region}\n`,
+          { cause: new Error('exit 1') },
+        );
+      }
+      return runLong(args, env);
+    };
+  };
+  const steps = (calls: string[]) =>
+    calls.filter((c) => /^(cluster (create|delete)|vm )/.test(c));
+
+  it('names a restricted size before any sign-in, and places the VMs where every size is offered', async () => {
+    const { deps, lines, worker, commands } = azure();
+    const { plan } = await planned(eastus, deps);
+    expect(commands).toContain(
+      "az vm list-skus --all --location eastus --resource-type virtualMachines --query [?name=='Standard_D2s_v5' || name=='Standard_B2s'].{name:name,locations:locations,restrictions:restrictions} --output json",
+    );
+    expect(
+      commands.filter((c) => c.startsWith('az vm list-skus')),
+    ).toHaveLength(RUNNER_REGIONS.azure.length);
+    expect(lines.filter((l) => l.startsWith("Azure won't create"))).toEqual([
+      expect.stringContaining(
+        '(Standard_B2s) in eastus for this subscription: NotAvailableForSubscription',
+      ),
+    ]);
+    expect(plan).toMatchObject({
+      controlPlane: { region: 'centralus', exists: false },
+      listener: { region: 'centralus', vmType: 'Standard_B2s' },
+      alwaysOnRegions: [
+        'centralus',
+        'northcentralus',
+        'southcentralus',
+        'westcentralus',
+        'westus',
+        'westus3',
+      ],
+    });
+    expect(worker.calls).toEqual([]);
+  });
+
+  it('names every restricted size', async () => {
+    const { deps, lines } = azure({ Standard_D2s_v5: ['eastus'] });
+    await planned(eastus, deps);
+    expect(lines.filter((l) => l.startsWith("Azure won't create"))).toEqual([
+      expect.stringContaining('(Standard_D2s_v5) in eastus'),
+      expect.stringContaining('(Standard_B2s) in eastus'),
+    ]);
+  });
+
+  it('stops before any sign-in when no region offers every size', async () => {
+    const { deps, worker } = azure({ Standard_D2s_v5: RUNNER_REGIONS.azure });
+    const error = await install({ ...eastus, plan: true }, deps).catch(
+      (e: unknown) => e as Error,
+    );
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toMatch(
+      /\(Standard_D2s_v5\) in eastus .*NotAvailableForSubscription[\s\S]*No Azure region install tries/,
+    );
+    expect(worker.calls).toEqual([]);
+  });
+
+  it('deletes what a capacity-refused cluster create started and tries the next region, signing in once', async () => {
+    const { deps, calls, worker, envs } = azure();
+    refusedIn(deps, calls, 'centralus');
+    await (await planned(eastus, deps)).run();
+    const id = 'backmesh-1763553600000-x7k2p9';
+    expect(steps(calls)).toEqual([
+      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --json',
+      `cluster delete ${id} --cloud azure --region centralus --delete-vms --delete-buckets --confirm ${id} --json`,
+      'cluster create backmesh --cloud azure --region northcentralus --vm-type Standard_D2s_v5 --json',
+      expect.stringContaining(
+        '--region northcentralus --vm-type Standard_B2s --secret backmesh-acme --wait',
+      ),
+    ]);
+    // Its API never answered, so delete goes on without it.
+    expect(envs).toEqual([{ API_URL: `https://${id}.anycloud.sh` }]);
+    expect(
+      worker.calls.filter((c) => c === 'POST /v1/installs/device'),
+    ).toHaveLength(1);
+  });
+
+  it('never deletes a resumed cluster that Azure refuses for capacity', async () => {
+    const { deps, calls } = azure();
+    refusedIn(
+      deps,
+      calls,
+      'centralus',
+      'Resuming cluster backmesh (ID: backmesh-1763553600000-x7k2p9)',
+    );
+    await expect((await planned(eastus, deps)).run()).rejects.toThrow(
+      'SkuNotAvailable',
+    );
+    expect(steps(calls)).toEqual([
+      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --json',
+    ]);
+  });
+
+  it('leaves a new cluster that failed for another reason as it is', async () => {
+    const { deps, calls } = azure();
+    refusedIn(
+      deps,
+      calls,
+      'centralus',
+      undefined,
+      '{"error":{"code":"API_NOT_READY","message":"The API at https://backmesh-1763553600000-x7k2p9.anycloud.sh did not answer within 25 minutes"}}\n',
+    );
+    await expect((await planned(eastus, deps)).run()).rejects.toThrow(
+      'API_NOT_READY',
+    );
+    expect(steps(calls)).toEqual([
+      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --json',
+    ]);
+  });
+
+  it('resumes a control plane named backmesh where it exists', async () => {
+    const { deps, calls, commands, lines } = azure(
+      {},
+      {
+        groups: [
+          { id: 'backmesh-1763553600000-x7k2p9', location: 'northcentralus' },
+        ],
+      },
+    );
+    const { plan, run } = await planned(eastus, deps);
+    expect(commands).toContain(
+      'az group list --tag anycloud_cluster_name=backmesh --query [].{id:tags.anycloud_cluster,location:location} --output json',
+    );
+    expect(plan).toMatchObject({
+      controlPlane: { region: 'northcentralus' },
+      listener: { region: 'northcentralus' },
+      alwaysOnRegions: ['northcentralus'],
+    });
+    expect(lines).toContain(
+      'A control plane named backmesh exists in azure northcentralus; install resumes it there.',
+    );
+    await run();
+    expect(steps(calls)[0]).toBe(
+      'cluster create backmesh --cloud azure --region northcentralus --vm-type Standard_D2s_v5 --json',
+    );
+  });
+
+  it('stops before any sign-in on two control planes named backmesh, or none it can read', async () => {
+    const two = azure(
+      {},
+      {
+        groups: [
+          { id: 'backmesh-1763553600000-x7k2p9', location: 'northcentralus' },
+          { id: 'backmesh-1763640000000-q4w5e6', location: 'westus' },
+        ],
+      },
+    );
+    await expect(install({ ...eastus, plan: true }, two.deps)).rejects.toThrow(
+      'This subscription has 2 control planes named backmesh: backmesh-1763553600000-x7k2p9 in northcentralus, backmesh-1763640000000-q4w5e6 in westus.',
+    );
+    const unread = azure();
+    const { command } = unread.deps;
+    unread.deps.command = async (args, env) => {
+      if (args.slice(0, 3).join(' ') === 'az group list') {
+        throw new Error('AuthorizationFailed');
+      }
+      return command(args, env);
+    };
+    await expect(
+      install({ ...eastus, plan: true }, unread.deps),
+    ).rejects.toThrow(
+      "az couldn't list this subscription's resource groups, so install can't tell whether a control plane named backmesh exists.",
+    );
+    expect([...two.worker.calls, ...unread.worker.calls]).toEqual([]);
+  });
+
+  it("names no other region for a control plane that exists where its size isn't offered", async () => {
+    const { deps } = azure(
+      {},
+      {
+        groups: [{ id: 'backmesh-1763553600000-x7k2p9', location: 'eastus' }],
+      },
+    );
+    const error = (await install({ ...eastus, plan: true }, deps).catch(
+      (e: unknown) => e,
+    )) as Error;
+    expect(error.message).toMatch(
+      /No Azure region install tries \(eastus\) .* Delete the control plane named backmesh in eastus, or use another subscription\.$/,
+    );
+    expect(error.message).not.toContain('--control-plane');
+  });
+
+  it("leaves out a region whose sizes can't be read, and tries the chosen one alone when it can't be", async () => {
+    const unreadable = (region: string) => {
+      const set = azure();
+      const { command } = set.deps;
+      set.deps.command = async (args, env) => {
+        if (args[2] === 'list-skus' && args.includes(region)) {
+          throw new Error('timed out');
+        }
+        return command(args, env);
+      };
+      return set;
+    };
+    const other = unreadable('northcentralus');
+    expect((await planned(eastus, other.deps)).plan.alwaysOnRegions).toEqual([
+      'centralus',
+      'southcentralus',
+      'westcentralus',
+      'westus',
+      'westus3',
+    ]);
+    const chosen = unreadable('eastus');
+    const { plan } = await planned(eastus, chosen.deps);
+    expect(plan.alwaysOnRegions).toBeUndefined();
+    expect(plan.controlPlane.region).toBe('eastus');
+    expect(chosen.lines).toContain(
+      "Azure's VM sizes couldn't be read, so install tries eastus alone.",
+    );
+  });
+
+  it("checks only a new listener's size on an existing control plane, and never retries it", async () => {
+    // beta's AWS control plane; acme adds Azure runners, so its listener
+    // goes on Azure's anchor, eastus, where the sponsorship refuses B2s.
+    const { deps, calls, lines } = azure(
+      {},
+      {
+        hosted: true,
+        vms: [listenerVm('beta', 'bml-q2w3e-beta00', { region: 'us-east-2' })],
+      },
+    );
+    const { plan, run } = await planned(
+      { ...options, runners: ['azure'] },
+      deps,
+    );
+    expect(plan).toMatchObject({
+      controlPlane: { cloud: 'aws', exists: true },
+      listener: { cloud: 'azure', region: 'centralus' },
+      alwaysOnRegions: ['centralus'],
+    });
+    expect(lines.some((l) => l.startsWith('If Azure has no capacity'))).toBe(
+      false,
+    );
+    refusedIn(deps, calls, 'centralus');
+    await expect(run()).rejects.toThrow('SkuNotAvailable');
+    expect(steps(calls)).toEqual([
+      expect.stringMatching(
+        /^vm .* --region centralus --vm-type Standard_B2s /,
+      ),
+    ]);
+  });
+
+  it("leaves another cloud's failed create as it is", async () => {
+    const { deps, calls } = setUp({ tty: false });
+    const { runLong } = deps;
+    deps.runLong = async (args, env) => {
+      if (args[1] === 'create') {
+        calls.push(args.join(' '));
+        throw new StepFailed(
+          args,
+          '{"error":{"code":"UNEXPECTED","message":"CREATE_FAILED: We currently do not have sufficient t3.large capacity in the Availability Zone you requested (us-east-2a). (InsufficientInstanceCapacity)"}}\n',
+          '   [12:00:01 PM] Creating cluster backmesh (ID: backmesh-1763553600000-x7k2p9)\n',
+          { cause: new Error('exit 1') },
+        );
+      }
+      return runLong(args, env);
+    };
+    await expect((await planned(options, deps)).run()).rejects.toThrow(
+      'InsufficientInstanceCapacity',
+    );
+    expect(steps(calls)).toEqual([
+      'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --json',
+    ]);
   });
 });

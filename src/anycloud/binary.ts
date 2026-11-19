@@ -107,12 +107,12 @@ const childEnv = () => ({
 
 // A failed call names the step and anycloud's own reason, never the
 // `Command failed: <path> <args>` line, and keeps stdout for
-// `relayedAction`.
+// `relayedAction`, and stderr for `cluster create`'s progress.
 export class StepFailed extends Error {
   constructor(
     args: readonly string[],
     readonly stdout: string,
-    stderr: string,
+    readonly stderr: string,
     options: { cause: unknown },
   ) {
     // With `--json`, `cluster create` and `cluster delete` print their
