@@ -14,8 +14,8 @@ gh workflow run spike.yml --repo backmesh/backmesh --ref main \
   -f experiment=app-user-runner-groups -f source_sha=<full SHA>
 ```
 
-The job log prints two codes, one per role; an owner and a plain member of
-`ORG` each open the link and enter theirs. `report.json` in the evidence
+The job log prints two codes, `OWNER CODE` and `MEMBER CODE`; an owner and a
+plain member of `ORG` each open the link and enter theirs. `report.json` in the evidence
 artifact records each request's status, GitHub's message and
 `X-Accepted-GitHub-Permissions`. Each person revokes the token afterwards at
 https://github.com/settings/apps/authorizations.

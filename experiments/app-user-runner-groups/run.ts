@@ -23,9 +23,13 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const ORG = 'backmesh-e2e';
+const ORG = 'backmesh-dryrun';
 const CLIENT_ID = 'Iv23li6e0q0gl3GOQ9ny';
 const ROLES = ['owner', 'member'] as const;
+const WHO = {
+  owner: 'OWNER CODE (sign in as an org owner)',
+  member: 'MEMBER CODE (sign in as a plain member, not an owner)',
+};
 const SIGN_IN_MS = 35 * 60_000;
 const OUT = process.env.SPIKE_OUTPUT_DIR ?? 'spike-evidence';
 
@@ -45,14 +49,17 @@ const form = async (path: string, body: Record<string, string>) =>
   ).json()) as Record<string, unknown>;
 
 // One sign-in: a fresh code whenever the last one expired.
-async function signIn(role: string, deadline: number): Promise<string> {
+async function signIn(
+  role: (typeof ROLES)[number],
+  deadline: number,
+): Promise<string> {
   while (Date.now() < deadline) {
     const code = await form('/login/device/code', { client_id: CLIENT_ID });
     if (typeof code.device_code !== 'string') {
       throw new Error(`device code refused: ${JSON.stringify(code)}`);
     }
     log(
-      `${role} of ${ORG}: open ${String(code.verification_uri)} and enter ${String(code.user_code)} (expires in ${String(code.expires_in)} s)`,
+      `${WHO[role]} of ${ORG}: open ${String(code.verification_uri)} and enter ${String(code.user_code)} (expires in ${String(code.expires_in)} s)`,
     );
     let interval = Number(code.interval) * 1000;
     const expires = Date.now() + Number(code.expires_in) * 1000;
