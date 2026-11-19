@@ -202,10 +202,9 @@ describe('POST /v1/rerun', () => {
 
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({
-      error: 'actions_write_needed',
+      error:
+        "An owner of acme accepts the backmesh App's Actions write at https://github.com/organizations/acme/settings/installations/7, so backmesh.com can rerun and cancel runs.",
       code: 'actions_write_needed',
-      accept_url:
-        'https://github.com/organizations/acme/settings/installations/7',
     });
     expect(upstream.reruns).toEqual([]);
     expect(upstream.mints).not.toContainEqual({
@@ -214,7 +213,44 @@ describe('POST /v1/rerun', () => {
     });
   });
 
+  it('reruns once an owner accepts Actions write, though the installation was cached read only', async () => {
+    upstream.installations.get(11)!.permissions.actions = 'read';
+    expect((await rerun()).status).toBe(409);
+
+    upstream.installations.get(11)!.permissions.actions = 'write';
+
+    expect((await rerun()).status).toBe(200);
+    expect(upstream.reruns).toHaveLength(1);
+  });
+
+  it('caps every call, refused ones too, at 200 an hour per install', async () => {
+    upstream.runs.get('acme/app/42')!.jobs = [
+      { conclusion: 'failure', runner_name: 'GitHub Actions 2' },
+    ];
+    for (let i = 0; i < 200; i++) expect((await rerun()).status).toBe(403);
+
+    expect((await rerun()).status).toBe(429);
+  });
+
   it.each([
+    [
+      'a 403 with retry-after',
+      () =>
+        Response.json(
+          { message: 'You have exceeded a secondary rate limit.' },
+          { status: 403, headers: { 'retry-after': '60' } },
+        ),
+      502,
+    ],
+    [
+      "a 403 that says it's a rate limit",
+      () =>
+        Response.json(
+          { message: 'You have exceeded a secondary rate limit.' },
+          { status: 403 },
+        ),
+      502,
+    ],
     [
       "GitHub's rate limit",
       () =>

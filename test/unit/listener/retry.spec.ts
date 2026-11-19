@@ -39,7 +39,8 @@ function fakeRuns() {
   ];
   const calls: string[] = [];
   let failRerun:
-    { status: number; headers: Record<string, string> } | undefined;
+    | { status: number; headers: Record<string, string>; code?: string }
+    | undefined;
   const logs: ({ msg: string } & Record<string, unknown>)[] = [];
   const retrier = new Retrier({
     runs: {
@@ -55,6 +56,7 @@ function fakeRuns() {
         if (failRerun) {
           throw Object.assign(new Error('refused'), {
             status: failRerun.status,
+            code: failRerun.code,
             response: { headers: failRerun.headers },
           });
         }
@@ -79,8 +81,11 @@ function fakeRuns() {
     logs,
     finish,
     setJobs: (next: AttemptJob[]) => (jobs = next),
-    failRerun: (status?: number, headers: Record<string, string> = {}) =>
-      (failRerun = status ? { status, headers } : undefined),
+    failRerun: (
+      status?: number,
+      headers: Record<string, string> = {},
+      code?: string,
+    ) => (failRerun = status ? { status, headers, code } : undefined),
   };
 }
 
@@ -236,6 +241,18 @@ describe('Retrier', () => {
     await env.retrier.poll(4 * MIN);
     expect(env.retrier.status(0).waiting).toBe(0);
     expect(env.logs.at(-1)).toMatchObject({ msg: 'rerun refused; dropped' });
+  });
+
+  it('keeps a run waiting while the installation lacks Actions write, as an owner accepts it', async () => {
+    const env = fakeRuns();
+    await env.retrier.decide(RUN, [reclaim('r1')]);
+    env.finish();
+    env.failRerun(409, {}, 'actions_write_needed');
+    await env.retrier.poll(2 * MIN);
+    expect(env.retrier.status(0).waiting).toBe(1);
+    env.failRerun();
+    await env.retrier.poll(4 * MIN);
+    expect(env.calls).toContain('rerun');
   });
 
   it.each<Record<string, string>>([
