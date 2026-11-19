@@ -6,8 +6,14 @@
 // already, so check both when changing either's roll condition).
 import { createHash } from 'node:crypto';
 
-import type { RunAnycloud } from '../anycloud/binary.js';
+import type { AnycloudExec } from '../anycloud/client.js';
 import type { AnycloudControl } from '../app/anycloud.js';
+import {
+  API_TOKEN_ENV,
+  API_URL_ENV,
+  LISTENER_IMAGE_ENV,
+  RUNNER_GROUP_ENV,
+} from '../listener/env.js';
 import type { Route } from '../listener/routes.js';
 import { RUNNERS_ENV } from '../listener/routes.js';
 import {
@@ -16,15 +22,24 @@ import {
   type CloudTarget,
   type RunnerClass,
 } from '../runners/classes.js';
-import { API_URL_ENV, INSTALL_KEY_ENV, ROTATING_FROM_ENV } from './worker.js';
-import { LISTENER_CPUS } from './installation.js';
+import {
+  API_URL_ENV as WORKER_URL_ENV,
+  INSTALL_KEY_ENV,
+  ROTATING_FROM_ENV,
+} from './worker.js';
+import { rollListenerVm } from './listener-vm.js';
+import { execListener } from './status.js';
 import { CACHE_CAP_ENV } from '../listener/sweep.js';
 
-/** The org's listener as it runs: its Deployment's image and its Secret. */
+/** The org's listener as it runs: its VM and its Secret's values. */
 export interface RunningListener {
   name: string;
   org: string;
   orgId: number;
+  // Its VM's ID.
+  vm: string;
+  // What the Secret holds beside the fields a roll changes.
+  identity: ListenerIdentity;
   image: string;
   runnerImage?: string;
   // `BACKMESH_RUNNERS`, absent before VM Jobs.
@@ -199,6 +214,17 @@ export function changeLines(
   return lines;
 }
 
+// The Secret's values no roll changes but a new service token.
+export interface ListenerIdentity {
+  // The org's install tag.
+  install: string;
+  runnerGroup: string;
+  apiUrl: string;
+  apiToken: string;
+  // Our CI's override (`readOverride`).
+  override?: Record<string, string>;
+}
+
 export interface Roll {
   image: string;
   runnerImage: string;
@@ -213,9 +239,11 @@ export interface Roll {
   // the runner fields, neither is ever rolled back, so a rerun can still
   // find it.
   rotatingFrom?: string;
+  // A new service token (`upgrade`), also never rolled back.
+  apiToken?: string;
   // The Worker the install key is from, when not production's (the CLI's
   // BACKMESH_API_URL, as an rc's e2e sets for staging).
-  apiUrl?: string;
+  workerUrl?: string;
 }
 
 /** The Secret's full value set, so every writer (a roll, its restore, and
@@ -224,17 +252,21 @@ export interface Roll {
 export function secretValues({
   org,
   orgId,
+  identity,
+  image,
   installKey,
   runnerImage,
   runners,
   rotatingFrom,
   cacheCapGb,
-  apiUrl,
+  workerUrl,
 }: {
   org: string;
   orgId: number;
+  identity: ListenerIdentity;
+  image: string;
   installKey: string;
-  apiUrl?: string;
+  workerUrl?: string;
   // A listener from before this Secret uses its built-in image.
   runnerImage?: string;
   runners?: string;
@@ -244,59 +276,71 @@ export function secretValues({
   return {
     ORG: org,
     ORG_ID: String(orgId),
+    BACKMESH_INSTALL: identity.install,
+    [LISTENER_IMAGE_ENV]: image,
+    [RUNNER_GROUP_ENV]: identity.runnerGroup,
+    [API_URL_ENV]: identity.apiUrl,
+    [API_TOKEN_ENV]: identity.apiToken,
+    ...identity.override,
     ...(runnerImage && { BACKMESH_RUNNER_IMAGE: runnerImage }),
     [INSTALL_KEY_ENV]: installKey,
     ...(runners && { [RUNNERS_ENV]: runners }),
     ...(rotatingFrom && { [ROTATING_FROM_ENV]: rotatingFrom }),
     ...(cacheCapGb && { [CACHE_CAP_ENV]: String(cacheCapGb) }),
-    ...(apiUrl && { [API_URL_ENV]: apiUrl }),
+    ...(workerUrl && { [WORKER_URL_ENV]: workerUrl }),
   };
 }
 
 /**
- * Saves the org's Secret with `next` and rolls its listener: `--secret`
- * replaces the list, so the Secret is saved first, and `Recreate` stops the
- * old Pod before the new one starts. A failed roll goes back to the old
- * image and runner fields, keeping `next`'s install key (and `rotatingFrom`,
- * if set), which minting revoked the old one for.
+ * Saves the org's Secret with `next`, writes it to the listener's VM and
+ * restarts the listener there, then waits for it to answer. A failed roll
+ * goes back to the old image and runner fields, keeping `next`'s install
+ * key, service token and `rotatingFrom`, which minting revoked the old ones
+ * for.
  */
 export async function rollListener(
   running: RunningListener,
   next: Roll,
   deps: {
     control: Pick<AnycloudControl, 'saveSecret'>;
-    runLong: RunAnycloud;
+    exec: AnycloudExec;
     // The command to run again, for the failure's message; omitted when the
     // caller's own message already says what to do next.
     again?: string;
+    // Between reads of a restarted listener.
+    wait?: (ms: number) => Promise<void>;
   },
 ) {
-  const { name, org, orgId } = running;
-  const save = (runnerImage: string | undefined, runners?: string) =>
-    deps.control.saveSecret(
-      name,
-      secretValues({
-        org,
-        orgId,
-        installKey: next.installKey,
-        runnerImage,
-        runners,
-        rotatingFrom: next.rotatingFrom,
-        cacheCapGb: next.cacheCapGb,
-        apiUrl: next.apiUrl,
-      }),
-    );
-  await save(next.runnerImage, next.runners);
-  const rollTo = (image: string) =>
-    deps.runLong([
-      ...['deployment', 'upgrade', name],
-      ...['--image', image, '--secret', name],
-      ...['--cpus', LISTENER_CPUS, '--wait'],
-    ]);
+  const { name, org, orgId, vm } = running;
+  const identity = {
+    ...running.identity,
+    apiToken: next.apiToken ?? running.identity.apiToken,
+  };
+  const rollTo = async (
+    image: string,
+    runnerImage: string | undefined,
+    runners: string | undefined,
+  ) => {
+    const values = secretValues({
+      org,
+      orgId,
+      identity,
+      image,
+      installKey: next.installKey,
+      runnerImage,
+      runners,
+      rotatingFrom: next.rotatingFrom,
+      cacheCapGb: next.cacheCapGb,
+      workerUrl: next.workerUrl,
+    });
+    await deps.control.saveSecret(name, values);
+    await rollListenerVm(deps.exec, vm, values);
+    await answering(deps.exec, running, deps.wait);
+  };
   // Rotate-key's two calls always roll to the image they're already on,
   // with the same runner image and classes too: there's genuinely nothing
   // to restore, since `running` and `next` name the same target and the
-  // restore-save would write the same install key and marker again.
+  // restore would write the same install key and marker again.
   // Retrying the identical roll would only repeat whatever just failed, so
   // it's skipped, rather than claimed fixed. `upgrade` can still change
   // just the runner image or classes with the listener's own image
@@ -307,24 +351,52 @@ export async function rollListener(
     next.runnerImage === running.runnerImage &&
     next.runners === running.runners &&
     next.cacheCapGb === running.cacheCapGb;
-  await rollTo(next.image).catch(async (cause: unknown) => {
-    if (unchanged) {
-      throw new Error(
-        `${org}'s listener's roll to ${next.image} failed.${deps.again ? ` Run ${deps.again} again.` : ''}`,
-        { cause },
-      );
-    }
-    const back = await save(running.runnerImage, running.runners)
-      .then(() => rollTo(running.image))
-      .then(
+  await rollTo(next.image, next.runnerImage, next.runners).catch(
+    async (cause: unknown) => {
+      if (unchanged) {
+        throw new Error(
+          `${org}'s listener's roll to ${next.image} failed.${deps.again ? ` Run ${deps.again} again.` : ''}`,
+          { cause },
+        );
+      }
+      const back = await rollTo(
+        running.image,
+        running.runnerImage,
+        running.runners,
+      ).then(
         () => `it's back on ${running.image}`,
         () => `going back to ${running.image} failed too`,
       );
-    throw new Error(
-      `${org}'s listener's roll to ${next.image} failed, and ${back}.${deps.again ? ` Run ${deps.again} again.` : ''}`,
-      { cause },
-    );
-  });
+      throw new Error(
+        `${org}'s listener's roll to ${next.image} failed, and ${back}.${deps.again ? ` Run ${deps.again} again.` : ''}`,
+        { cause },
+      );
+    },
+  );
+}
+
+// A restarted listener answers `/status` within seconds; a crashing one
+// never does. About 2 minutes.
+export async function answering(
+  exec: AnycloudExec,
+  listener: { org: string; vm: string },
+  wait = (ms: number) => new Promise((r) => setTimeout(r, ms)),
+) {
+  let last: unknown;
+  for (let i = 0; i < 24; i++) {
+    if (i) await wait(5000);
+    try {
+      return await execListener(exec, { vm: { id: listener.vm } }, '/status');
+    } catch (error) {
+      last = error;
+    }
+  }
+  throw new Error(
+    `${listener.org}'s listener didn't start on ${listener.vm}.`,
+    {
+      cause: last,
+    },
+  );
 }
 
 /**

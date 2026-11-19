@@ -40,21 +40,21 @@ async function call<T>(request: () => Promise<T>): Promise<T> {
   }
 }
 
-// The scopes GitHub granted a sign-in: GET /user's `x-oauth-scopes`, read as
-// anycloud's hosted API reads them (`gateways/github.ts:185-196` at v0.1.72).
-export async function signInScopes(
+// A sign-in's user (GET /user, which fails with GitHub's 401 for a token it
+// refuses) and the IDs of the Apps whose installations it reaches (GET
+// /user/installations): a GitHub App's user token reaches only its own
+// App's.
+export async function signInCheck(
   token: string,
   options: ConstructorParameters<typeof Octokit>[0] = {},
-): Promise<string[]> {
-  const { headers } = await call(() =>
-    new Octokit({
-      log: quietLog,
-      ...options,
-      auth: token,
-    }).rest.users.getAuthenticated(),
+): Promise<{ login: string; appIds: number[] }> {
+  const octokit = new Octokit({ log: quietLog, ...options, auth: token });
+  const { data } = await call(() => octokit.rest.users.getAuthenticated());
+  const installs = await call(() =>
+    octokit.rest.apps.listInstallationsForAuthenticatedUser({ per_page: 100 }),
   );
-  return (headers['x-oauth-scopes'] ?? '')
-    .split(',')
-    .map((scope) => scope.trim())
-    .filter(Boolean);
+  return {
+    login: data.login,
+    appIds: installs.data.installations.map((i) => i.app_id),
+  };
 }

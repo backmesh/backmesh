@@ -17,8 +17,9 @@ vi.mock('../../../src/cli/upgrade.js', async (original) => {
   return { ...real, upgrade: vi.fn(real.upgrade) };
 });
 
-// The control plane's listeners, for `logs` without `--org`.
-let listeners = ['backmesh-acme'];
+// The control plane's listeners, for `logs`.
+const ACME = { name: 'backmesh-acme', vm: 'bml-l8u5e-abc123' };
+let listeners: { name: string; vm?: string; deployment?: string }[] = [ACME];
 
 async function run(...argv: string[]) {
   const output = { stdout: '', stderr: '' };
@@ -33,7 +34,7 @@ async function run(...argv: string[]) {
     run: never,
     runLong: never,
     command: never,
-    signInScopes: never,
+    signInCheck: never,
     release: never,
     ui: { print: () => undefined },
   }));
@@ -70,8 +71,14 @@ async function run(...argv: string[]) {
 
 describe('backmesh CLI', () => {
   it("streams an org's listener's log, or a runner's by name", async () => {
+    // A VM's own log is anycloud's keepalive: the listener's is its
+    // container's.
     const listener = await run('logs', '--org', 'Acme');
-    expect(listener.streamLogs).toHaveBeenCalledWith(['logs', 'backmesh-acme']);
+    expect(listener.streamLogs).toHaveBeenCalledWith([
+      'exec',
+      'bml-l8u5e-abc123',
+      'docker logs --tail 1000 backmesh-listener',
+    ]);
     // The stream's exit code is the command's.
     expect(listener.code).toBe(3);
     const runner = await run('logs', 'bm0a1b2-4x-k3j9x0qz', '-f');
@@ -90,15 +97,37 @@ describe('backmesh CLI', () => {
     expect(both.code).toBe(2);
     expect(both.stderr).toContain('not both');
     // Without either, the only listener's, and a usage error with several.
+    expect((await run('logs', '-f')).streamLogs).toHaveBeenCalledWith([
+      'exec',
+      'bml-l8u5e-abc123',
+      'docker logs --tail 1000 --follow backmesh-listener',
+    ]);
+    // One `upgrade` hasn't moved off its Deployment yet.
+    listeners = [{ name: 'backmesh-beta', deployment: 'backmesh-beta' }];
     expect((await run('logs')).streamLogs).toHaveBeenCalledWith([
       'logs',
-      'backmesh-acme',
+      'backmesh-beta',
     ]);
-    listeners = ['backmesh-acme', 'backmesh-beta'];
+    // Mid-move, the Deployment still runs.
+    listeners = [
+      {
+        name: 'backmesh-beta',
+        vm: 'bml-q2w3e-abc123',
+        deployment: 'backmesh-beta',
+      },
+    ];
+    expect((await run('logs')).streamLogs).toHaveBeenCalledWith([
+      'logs',
+      'backmesh-beta',
+    ]);
+    listeners = [ACME, { name: 'backmesh-beta', vm: 'bml-q2w3e-abc123' }];
     const several = await run('logs');
     expect(several.code).toBe(2);
     expect(several.stderr).toContain('this control plane runs 2 listeners');
-    listeners = ['backmesh-acme'];
+    const none = await run('logs', '--org', 'gamma');
+    expect(none.code).toBe(2);
+    expect(none.stderr).toContain("There's no listener for gamma");
+    listeners = [ACME];
   });
 
   it('prints the package version', async () => {
@@ -130,7 +159,6 @@ describe('backmesh CLI', () => {
         version: '0.2.0',
         missingFeatures: [],
       },
-      controlPool: undefined,
       orgs: [],
       warnings: ['a warning'],
     };

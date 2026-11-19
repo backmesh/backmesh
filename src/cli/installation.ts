@@ -1,5 +1,6 @@
 // What `install` and `status` both read: the installation's identity from the
-// hosted API's URL, each org's listener, and invariant 3 on `bm-control`.
+// hosted API's URL, each org's listener on its VM, and, until `upgrade`
+// moves it to one, a listener still on `bm-control` with invariant 3 there.
 import { createHash } from 'node:crypto';
 
 import { ORPCError } from '@orpc/client';
@@ -8,15 +9,10 @@ import { z } from 'zod';
 import type { AnycloudApi } from '../anycloud/client.js';
 import { ANYCLOUD_VERSION } from '../anycloud/contract.generated.js';
 import { CLOUDS, type Cloud } from '../runners/classes.js';
+import { listListenerVms, type ListenerVm } from './listener-vm.js';
 
+// Where listeners ran before each had its own VM; `upgrade` moves them.
 export const CONTROL_POOL = 'bm-control';
-// Each listener's CPU share of `bm-control`'s one Node, set on every create
-// and roll. Without it anycloud sizes a replica to a whole vCPU's share of
-// the Node's memory, so a second org's listener stays Pending. At 0.5 a
-// listener requests 512 MiB on AWS's and GCP's 2 GiB Node, 921 MiB on
-// Azure's 4 GiB one, so at least two orgs fit on each. The Pod is
-// Guaranteed, so that memory and the 0.5 CPU are its limits as well.
-export const LISTENER_CPUS = '0.5';
 
 // The hosted API's URL is `https://<cluster-id>.anycloud.sh`
 // (`docs/reference/cli/cluster.md:90` at v0.1.71).
@@ -121,9 +117,9 @@ const rateLimited = ({ status, headers }: Response, body: string) =>
     headers.has('retry-after') ||
     /secondary rate limit/i.test(body));
 
-// Each org's listener Deployment, its ServiceAccount (C29) and its Secret
-// share one name: `backmesh-` and the lower-cased login, since GitHub logins
-// are case-insensitive.
+// Each org's Secret and its anycloud service share one name, as a listener
+// from before its VM's Deployment and ServiceAccount (C29) do: `backmesh-` and
+// the lower-cased login, since GitHub logins are case-insensitive.
 export const listenerName = (org: string) => `backmesh-${org.toLowerCase()}`;
 // A GitHub login: up to 39 letters, digits and single inner hyphens.
 const LISTENER = /^backmesh-([a-z0-9](?:-?[a-z0-9]){0,38})$/;
@@ -134,7 +130,7 @@ export const sessionOf = (tag: string) => `bm-${tag}`;
 export type NodePool = Awaited<
   ReturnType<AnycloudApi['listNodePools']>
 >['nodePools'][number];
-type Deployment = Awaited<
+export type Deployment = Awaited<
   ReturnType<AnycloudApi['listDeployments']>
 >['deployments'][number];
 
@@ -272,4 +268,49 @@ export async function controlPlaneOf(
     }
   }
   return undefined;
+}
+
+/**
+ * An org's listener: on its VM, or still a Deployment on `bm-control` that
+ * `upgrade` moves to one. Both while a move is under way.
+ */
+export interface Listener {
+  // `backmesh-<org>`.
+  name: string;
+  vm?: ListenerVm;
+  deployment?: Deployment;
+}
+
+export interface Installation extends ControlPool {
+  // Every org's listener, by name.
+  orgs: Listener[];
+}
+
+// `bm-control` first, whose read maps a control plane on another anycloud
+// to its message.
+export async function readInstallation(
+  api: AnycloudApi,
+): Promise<Installation> {
+  const control = await readControlPool(api);
+  const vms = await listListenerVms(api);
+  const names = [
+    ...new Set([...vms, ...control.listeners].map(({ name }) => name)),
+  ].sort();
+  return {
+    ...control,
+    problems: [
+      ...control.problems,
+      ...vms
+        .filter((vm) => vm.others.length)
+        .map(
+          (vm) =>
+            `${vm.org} has more than one listener VM: ${[vm.id, ...vm.others].join(', ')}; two listeners contend for its runner group, so terminate all but one`,
+        ),
+    ],
+    orgs: names.map((name) => ({
+      name,
+      vm: vms.find((vm) => vm.name === name),
+      deployment: control.listeners.find((d) => d.name === name),
+    })),
+  };
 }

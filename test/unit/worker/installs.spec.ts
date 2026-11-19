@@ -16,6 +16,9 @@ beforeEach(() => {
   env = testEnv();
   upstream = new Upstream();
   vi.stubGlobal('fetch', upstream.fetch);
+  // The App is on acme: a user token's runner-groups read says who manages
+  // its runners.
+  upstream.installations.set(7, { id: 70, login: 'acme', permissions: {} });
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -44,7 +47,50 @@ const statusCall = (key: string) =>
     env,
   );
 
+// A cue credential bound to the orgs, as `/v1/cue/sign-in` keeps one.
+const cueCredential = (hash: string, ...orgs: [number, string][]) =>
+  env.DB.prepare(
+    'INSERT INTO cue_credentials (hash, user_id, login, orgs, expires_at) VALUES (?, 1, ?, ?, ?)',
+  )
+    .bind(
+      hash,
+      'alice',
+      JSON.stringify(orgs.map(([id, login]) => ({ id, login }))),
+      Date.now() + 86_400_000,
+    )
+    .run();
+const cueCredentials = async () =>
+  (
+    await env.DB.prepare(
+      'SELECT hash, orgs FROM cue_credentials ORDER BY hash',
+    ).all<{ hash: string; orgs: string }>()
+  ).results.map((r) => ({ hash: r.hash, orgs: JSON.parse(r.orgs) }));
+
 describe('POST /v1/installs/revoke', () => {
+  it("revokes the org's cue credentials with the old install", async () => {
+    await remember(7, 'acme');
+    upstream.memberships.set('alice', [
+      { id: 7, login: 'acme', role: 'admin' },
+    ]);
+    await cueCredential('only-acme', [7, 'acme']);
+    await cueCredential('only-globex', [8, 'globex']);
+    await cueCredential('both', [7, 'acme'], [8, 'globex']);
+    const { install: oldInstall } = await mintKey(env.DB, 7);
+    const { key: newKey } = await mintKey(env.DB, 7);
+
+    const res = await call(newKey, {
+      install: oldInstall,
+      github_token: 'token-alice',
+    });
+
+    expect(res.status).toBe(200);
+    // A credential for other orgs too keeps them.
+    expect(await cueCredentials()).toEqual([
+      { hash: 'both', orgs: [{ id: 8, login: 'globex' }] },
+      { hash: 'only-globex', orgs: [{ id: 8, login: 'globex' }] },
+    ]);
+  });
+
   it("revokes another install of the bearer's own org when its admin token checks out, which then gets 401", async () => {
     await remember(7, 'acme');
     upstream.memberships.set('alice', [
@@ -116,24 +162,6 @@ describe('POST /v1/installs/revoke', () => {
     });
 
     expect(res.status).toBe(403);
-  });
-
-  it("names the org's OAuth app restriction to rotate-key", async () => {
-    await remember(7, 'acme');
-    upstream.restricted.add('acme');
-    const { install: oldInstall } = await mintKey(env.DB, 7);
-    const { key: newKey } = await mintKey(env.DB, 7);
-
-    const res = await call(newKey, {
-      install: oldInstall,
-      github_token: 'token-alice',
-    });
-
-    expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({
-      error:
-        "acme restricts third-party apps. An org owner: run rotate-key again and click Grant next to acme on GitHub's sign-in page. Anyone else: run rotate-key again and click Request there, have an org owner approve it at https://github.com/organizations/acme/settings/oauth_application_policy, then run rotate-key once more.",
-    });
   });
 
   it('refuses a missing github_token', async () => {
@@ -256,9 +284,12 @@ describe('POST /v1/installs/revoke', () => {
     expect(res.status).toBe(403);
   });
 
-  it("answers 502 when GitHub's membership check fails, revoking nothing", async () => {
+  it("answers 502 when GitHub's runner-groups check fails, revoking nothing", async () => {
     await remember(7, 'acme');
-    upstream.membershipStatus = 500;
+    upstream.memberships.set('alice', [
+      { id: 7, login: 'acme', role: 'admin' },
+    ]);
+    upstream.failing.set('/orgs/acme/actions/runner-groups', 500);
     const { key: oldKey, install: oldInstall } = await mintKey(env.DB, 7);
     const { key: newKey } = await mintKey(env.DB, 7);
 

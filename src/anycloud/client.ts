@@ -145,3 +145,90 @@ export function anycloudApi(
     }),
   );
 }
+
+export interface ExecResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+/** Runs `command` under `/bin/sh` in a workload's container. */
+export type AnycloudExec = (id: string, command: string) => Promise<ExecResult>;
+
+// `anycloud exec` as its own API route (`POST /v1/workloads/{id}/exec`,
+// newline-delimited JSON events, as `executeWorkloadCommand` reads them
+// at v0.1.78), so a command that writes a listener's settings is never in
+// argv on this machine or in the API's records: the API records the call
+// but not its command. A refused bearer is refreshed once for the client,
+// as `anycloudApi` does.
+export function anycloudExec(
+  url: string,
+  token: string,
+  fetch: typeof globalThis.fetch = globalThis.fetch,
+  refresh?: (refusal: unknown) => Promise<string>,
+): AnycloudExec {
+  let bearer = token;
+  let refreshed: Promise<string> | undefined;
+  const post = (id: string, command: string) =>
+    fetch(`${url}/v1/workloads/${encodeURIComponent(id)}/exec`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/x-ndjson',
+        authorization: `Bearer ${bearer}`,
+        'anycloud-client-version': ANYCLOUD_VERSION,
+      },
+      body: JSON.stringify({ command }),
+    });
+  return async (id, command) => {
+    let response = await post(id, command);
+    if (response.status === 401 && refresh) {
+      bearer = await (refreshed ??= refresh(response));
+      response = await post(id, command);
+    }
+    const text = await response.text();
+    if (!response.ok) {
+      const reason = (() => {
+        try {
+          return (JSON.parse(text) as { message?: string }).message;
+        } catch {
+          return undefined;
+        }
+      })();
+      throw new Error(
+        `anycloud exec ${id} failed: ${reason ?? `HTTP ${response.status}`}`,
+      );
+    }
+    // Each stream's chunks are decoded together, so a character split
+    // across two events stays whole.
+    const out: Record<'stdout' | 'stderr', Buffer[]> = {
+      stdout: [],
+      stderr: [],
+    };
+    let code: number | undefined;
+    for (const line of text.split('\n')) {
+      if (!line.trim()) continue;
+      let event: { type: string; data?: string; code?: number; error?: string };
+      try {
+        event = JSON.parse(line) as typeof event;
+      } catch (cause) {
+        throw new Error(`anycloud exec ${id} answered with something else.`, {
+          cause,
+        });
+      }
+      if (event.type === 'stdout' || event.type === 'stderr')
+        out[event.type].push(Buffer.from(event.data ?? '', 'base64'));
+      else if (event.type === 'exit') code = event.code;
+      else if (event.type === 'error')
+        throw new Error(`anycloud exec ${id} failed: ${event.error}`);
+    }
+    if (code === undefined) {
+      throw new Error(`anycloud exec ${id} ended without an exit code.`);
+    }
+    return {
+      code,
+      stdout: Buffer.concat(out.stdout).toString(),
+      stderr: Buffer.concat(out.stderr).toString(),
+    };
+  };
+}

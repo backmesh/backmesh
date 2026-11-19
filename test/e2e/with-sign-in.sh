@@ -19,7 +19,7 @@ what="$1 ${2:-}"
 run=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
 comment() {
   local code
-  code=$(sed -nE 's|.*github\.com/login/device and enter ([A-Z0-9]{4}-[A-Z0-9]{4})\.?$|\1|p' <<<"$1")
+  code=$(sed -nE 's|.*github\.com/login/device and enter ([A-Z0-9]{4}-[A-Z0-9]{4})( \(it expires at [0-9:]+ UTC\))?\.?$|\1|p' <<<"$1")
   [[ -n $code && -n ${SIGN_IN_ISSUE:-} ]] || { echo "::warning::No sign-in code commented on the issue"; return; }
   # Up to 5 s after GitHub issued it, so a minute early.
   GH_TOKEN=${ISSUE_TOKEN:-} gh issue comment "$SIGN_IN_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file - \

@@ -13,13 +13,14 @@ import {
 } from './app.js';
 import type { Env } from './index.js';
 import {
-  AppRestricted,
-  deviceToken,
+  forgetCueCredentials,
   keyInstall,
+  notRunnersAdmin,
   notServed,
-  orgAdmin,
-  rememberLogin,
+  runnersAdmin,
   sha256,
+  SignInRefused,
+  signInBody,
 } from './installs.js';
 
 const HOUR = 3_600_000;
@@ -54,15 +55,19 @@ export const audit = (env: Env, request: Request, row: AuditRow) =>
     )
     .run();
 
-// Daily (the cron): audit rows are kept 90 days.
-// Expired cleanups go too.
+// Daily (the cron): audit and run action rows are kept 90 days.
+// Expired cleanups and cue credentials go too.
 export const trimAudit = (env: Env, now = Date.now()) =>
   env.DB.batch([
     env.DB.prepare('DELETE FROM audit WHERE at < ?').bind(now - 90 * DAY),
     env.DB.prepare('DELETE FROM cleanups WHERE expires_at < ?').bind(now),
+    env.DB.prepare('DELETE FROM run_actions WHERE at < ?').bind(now - 90 * DAY),
+    env.DB.prepare('DELETE FROM cue_credentials WHERE expires_at < ?').bind(
+      now,
+    ),
   ]);
 
-const notInstalled = (env: Env, org: number) =>
+export const notInstalled = (env: Env, org: number) =>
   Response.json(
     { error: 'app_not_installed', install_url: installUrl(env, org) },
     { status: 409 },
@@ -96,12 +101,18 @@ export async function token(
   env: Env,
   install: { id: string; org: number },
 ) {
+  // A cached grant without Actions write is read again, so an owner's
+  // acceptance shows in the answer at once.
+  const cached = await installationOf(env, install.org);
+  if (cached && cached.permissions.actions !== 'write') {
+    await forget(env, install.org);
+  }
   const minted = await mintToken(env, install.org);
   if (!minted) {
     console.log(`token refused: ${install.id} app_not_installed`);
     return notInstalled(env, install.org);
   }
-  const { answer, installation } = minted;
+  const { answer, installation, granted } = minted;
   await audit(env, request, {
     action: 'token',
     outcome: 'ok',
@@ -111,7 +122,9 @@ export async function token(
     permissions: answer.permissions,
     expires_at: answer.expires_at,
   });
-  return Response.json(answer);
+  // And what the installation grants the App: the listener says when an
+  // owner hasn't accepted the Actions write backmesh.com's run actions use.
+  return Response.json({ ...answer, installation_permissions: granted });
 }
 
 // What a cleanup token may do: manage the org's self-hosted runners, scale
@@ -190,59 +203,71 @@ async function cleanupToken(
   });
 }
 
-// POST /v1/installs/cleanup { device_code, org }, with the install key as
-// the bearer when the CLI could read it: an admin of `org` signs
-// in through the device flow, polled here (202 while pending). The key, if
-// sent, must be the org's; its own last mint doesn't count as live, and it's
-// revoked before the mint. Answers a runners-only token and a
-// `cleanup_id` for the re-mint and the App's removal, bound to the org and
-// the admin, so uninstall needs one sign-in. No key names the org when the
-// control plane is gone, so the admin check does, and the installation's
-// account.id must be that org (installationOf).
+// POST /v1/installs/cleanup { github_token, org }, with the install key as
+// the bearer when the CLI could read it: the App user token of someone who
+// can manage `org`'s runners (`runnersAdmin`). The key, if sent, must be the
+// org's; its own last mint doesn't count as live, and it's revoked before
+// the mint. Answers a runners-only token and a `cleanup_id` for the
+// re-mint and the App's removal, bound to the org and the signer, so
+// uninstall needs one sign-in. Where the App isn't installed GitHub can't
+// say who manages the runners, and there's nothing of backmesh's there to
+// remove: the answer has no token and no cleanup, and only the sent key's
+// install is revoked. No key names the org when the control plane is gone, so the
+// sign-in does, and the installation's account.id must be that org
+// (installationOf).
 export async function cleanup(request: Request, env: Env) {
   const record = recorder(env, request);
-  const { device_code, org } = (await request.json().catch(() => ({}))) as {
-    device_code?: unknown;
-    org?: unknown;
-  };
-  if (typeof device_code !== 'string' || typeof org !== 'string') {
+  const body = await signInBody(request, ['github_token', 'org']);
+  if (body instanceof Response) {
     await record('bad_request');
-    const error = 'device_code and org are required';
-    return Response.json({ error }, { status: 400 });
+    return body;
   }
+  const { github_token, org } = body as { github_token: string; org: string };
   const refused = notServed(env, org);
   if (refused) return refused;
-  const signedIn = await deviceToken(env, device_code);
-  if (signedIn instanceof Response) {
-    if (signedIn.status !== 202) await record('signin_failed');
-    return signedIn;
-  }
-  const admin = await orgAdmin(signedIn, org, 'uninstall').catch(
+  const admin = await runnersAdmin(env, github_token, org).catch(
     async (error: unknown) => {
       await record(
-        error instanceof AppRestricted ? 'app_restricted' : 'github_failed',
+        error instanceof SignInRefused ? 'signin_failed' : 'github_failed',
       );
       throw error;
     },
   );
-  if (!admin) {
-    await record('not_admin');
-    const error = `Uninstalling backmesh from ${org} needs its admin role.`;
-    return Response.json({ error }, { status: 403 });
+  if (!admin || admin.can === 'refused') {
+    await record('not_admin', admin?.id);
+    return notRunnersAdmin(
+      env,
+      org,
+      admin,
+      `Uninstalling backmesh from ${admin?.login ?? org}`,
+    );
   }
   let install: string | null = null;
   if (request.headers.has('Authorization')) {
     // A revoked key still names its install: a rerun after this revoked it.
     const key = await keyInstall(env, request);
-    if (key?.org !== admin.id) {
+    if (!key || key.org !== admin.id) {
       await record('bad_key', admin.id);
       const error = `The install key isn't one of ${admin.login}'s.`;
       return Response.json({ error }, { status: 403 });
     }
     install = key.id;
   }
-  // The admin's current login finds the installation when none is cached.
-  await rememberLogin(env, admin.id, admin.login);
+  if (admin.can === 'app_not_installed') {
+    if (install) {
+      await env.DB.prepare('UPDATE installs SET revoked = 1 WHERE id = ?')
+        .bind(install)
+        .run();
+    }
+    await forgetCueCredentials(env, admin.id);
+    await record('app_not_installed', admin.id, install ? { install } : {});
+    return Response.json({
+      token: null,
+      expires_at: null,
+      org: { id: admin.id, login: admin.login },
+      cleanup_id: null,
+    });
+  }
   const id = randomHex() + randomHex();
   const answer = await cleanupToken(
     env,
@@ -337,6 +362,8 @@ export async function cleanupFinish(request: Request, env: Env) {
       .bind(org)
       .run();
   }
+  // Cues end with the install, the App kept or not.
+  await forgetCueCredentials(env, org);
   await env.DB.prepare('UPDATE cleanups SET finished = 1 WHERE id = ?')
     .bind(await sha256(cleanup.id))
     .run();

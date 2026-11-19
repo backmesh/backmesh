@@ -155,7 +155,7 @@ export interface ScalerDeps {
     ActionsClient,
     'generateJitConfig' | 'getRunnerByName' | 'removeRunner'
   >;
-  // Posts a note as a check run on the run's head SHA.
+  // Puts a note on the run in the listener's log.
   note: (run: WorkflowRun, note: Note) => Promise<void>;
   // The retry decision for a run's reclaims; `unavailable`
   // without, or when it fails.
@@ -1468,7 +1468,7 @@ export class Scaler {
   private async post(run: WorkflowRun, note: Note): Promise<void> {
     await this.deps.note(run, note).catch((error: unknown) =>
       this.deps.log({
-        msg: 'check-run note failed',
+        msg: 'note failed',
         run: `${run.owner}/${run.repo}/${run.runId}`,
         error: String(error),
       }),

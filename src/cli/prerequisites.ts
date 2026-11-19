@@ -5,8 +5,10 @@
 // with `waitForApp` (`worker.ts`) once its install key is known.
 import {
   anycloudApi,
+  anycloudExec,
   apiTarget,
   type AnycloudApi,
+  type AnycloudExec,
 } from '../anycloud/client.js';
 import {
   missingFeatures,
@@ -18,7 +20,7 @@ import type { Cloud, CloudTarget } from '../runners/classes.js';
 import type { RunCommand } from '../runners/regions.js';
 import { workerDeps, type WorkerDeps } from './worker.js';
 import { UsageError } from './errors.js';
-import { signInAgain, type SignInScopes } from './github-sign-in.js';
+import { signInAgain, type SignInCheck } from './github-sign-in.js';
 
 /** What both commands need of the pinned anycloud. */
 const PINNED: Feature[] = [
@@ -26,6 +28,8 @@ const PINNED: Feature[] = [
   'c26',
   'role-connections',
   'role-apply',
+  // Each org's listener VM authenticates with one.
+  'service-tokens',
 ];
 
 export function checkPinned(version: string, features?: FeatureTable) {
@@ -160,24 +164,27 @@ export async function hostedApi(
     run: (args: string[]) => Promise<string>;
     fetch?: typeof globalThis.fetch;
     api?: typeof anycloudApi;
-    signInScopes?: SignInScopes;
+    exec?: typeof anycloudExec;
+    signInCheck?: SignInCheck;
   },
   print: (line: string) => void,
 ): Promise<{
   url: string;
   api: AnycloudApi;
+  exec: AnycloudExec;
   // The same API with another release's client header.
   as: (clientVersion: string) => AnycloudApi;
 }> {
   const { url, token, refresh } = await apiTarget(
     deps.env,
     deps.run,
-    signInAgain(workerDeps(deps, print), deps.signInScopes),
+    signInAgain(workerDeps(deps, print), deps.signInCheck),
   );
   const client = deps.api ?? anycloudApi;
   return {
     url,
     api: client(url, token, undefined, refresh),
+    exec: (deps.exec ?? anycloudExec)(url, token, undefined, refresh),
     as: (clientVersion) =>
       client(url, token, undefined, refresh, clientVersion),
   };

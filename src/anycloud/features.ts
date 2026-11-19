@@ -21,6 +21,10 @@ export const FEATURES = {
   // places and fails over within (anycloud 0.1.74; owner, 2026-11-09: in
   // rc.5).
   'vm-job-regions': '0.1.74',
+  // Owner-issued service tokens, `api access add|remove --service` and
+  // `api token rotate --service` (anycloud phase 2a): each org's listener
+  // VM authenticates with one.
+  'service-tokens': '0.1.79',
 } satisfies Record<string, string | undefined>;
 
 export type Feature = keyof typeof FEATURES;

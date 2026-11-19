@@ -1,19 +1,32 @@
 // `backmesh install`: an anycloud installation with the
-// GitHub App and the listener on `bm-control`, whose runners are VM Jobs.
-import { setTimeout as sleep } from 'node:timers/promises';
+// GitHub App and the org's listener on its own VM, whose runners are VM Jobs.
+import { z } from 'zod';
 
 import { StepFailed, type RunAnycloud } from '../anycloud/binary.js';
 import {
   activeApiUrl,
   anycloudApi,
+  anycloudExec,
   apiToken,
   type AnycloudApi,
 } from '../anycloud/client.js';
 import { ANYCLOUD_VERSION } from '../anycloud/contract.generated.js';
 import { missingFeatures, type FeatureTable } from '../anycloud/features.js';
 import { anycloudControl } from '../app/anycloud.js';
-import { API_URL_ENV, workerDeps, signInForKey, waitForApp } from './worker.js';
-import { checkSignIn, saveSignIn, signInAgain } from './github-sign-in.js';
+import {
+  API_URL_ENV,
+  GITHUB_APP_ID,
+  GITHUB_APPS_FLAG,
+  signInForKey,
+  waitForApp,
+  workerDeps,
+} from './worker.js';
+import {
+  checkSignIn,
+  saveSignIn,
+  signInAgain,
+  type SignInCheck,
+} from './github-sign-in.js';
 import { readApiVersion, readListener } from './status.js';
 import { readOverride } from '../app/override.js';
 import { parseRoutes } from '../listener/routes.js';
@@ -54,10 +67,18 @@ import {
   rollListener,
   routesJson,
   runnerChanges,
+  answering,
   secretValues,
   targetsOf,
   type RunningListener,
 } from './converge.js';
+import { runnerGroupName } from '../github/runner-group.js';
+import {
+  createListenerVm,
+  LISTENER_VM_MONTHLY_USD,
+  LISTENER_VM_TYPE,
+  listenerVmId,
+} from './listener-vm.js';
 import {
   checkClouds,
   checkHosted,
@@ -70,22 +91,29 @@ import {
 } from './prerequisites.js';
 import { PlanChanged, UsageError } from './errors.js';
 import {
+  alwaysOnRegions,
+  candidateRegions,
+  noCapacity,
+  startedRegion,
+  type AlwaysOn,
+} from './vm-sizes.js';
+import {
   RUNNER_REGIONS,
   SUGGESTED_REGION,
   type RunCommand,
 } from '../runners/regions.js';
 import {
   CONTROL_POOL,
-  LISTENER_CPUS,
   clusterIdOf,
   connectionName,
   installConnection,
   installTag,
   listenerName,
   orgOfListener,
-  readControlPool,
+  readInstallation,
   readOrgId,
   controlPlaneOf,
+  type Listener,
 } from './installation.js';
 import { lowerManagementDisk } from './control-disks.js';
 
@@ -171,25 +199,21 @@ export const noGpuLine = (
     ? "gcp gets no GPU labels: anycloud can't launch a T4 VM on GCP yet."
     : `${where(cloud, regions)} ${regions.length > 1 ? 'offer' : 'offers'} no ${GPU_TYPES[cloud].join(' or ')}, so ${cloud} gets no GPU labels.`;
 
-// The management VM and `bm-control`'s one Node: AWS's are backmesh's sizing;
-// GCP's are the nearest sizes _(inference)_. Azure's management VM
-// is the size anycloud qualifies the management VM on.
+// The management VM: AWS's is backmesh's sizing; GCP's the nearest size
+// _(inference)_. Azure's is the size anycloud qualifies the management VM
+// on.
 const MANAGEMENT_VM: Record<Cloud, string> = {
   aws: 't3.large',
   gcp: 'e2-standard-2',
   azure: 'Standard_D2s_v5',
 };
-const CONTROL_VM: Record<Cloud, string> = {
-  aws: 't3.small',
-  gcp: 'e2-small',
-  azure: 'Standard_B2s',
-};
-// Both VMs, their disks and public addresses, $/month: the installation's
-// whole floor, since runners have no VM while idle.
-const CONTROL_PLANE_MONTHLY_USD: Record<Cloud, number> = {
-  aws: 86,
-  gcp: 74,
-  azure: 111,
+// It, its disk and public address, $/month: with each org's listener VM
+// (`LISTENER_VM_MONTHLY_USD`), the installation's whole floor, since runners
+// have no VM while idle.
+const MANAGEMENT_MONTHLY_USD: Record<Cloud, number> = {
+  aws: 69,
+  gcp: 59,
+  azure: 79,
 };
 
 export interface InstallOptions {
@@ -230,15 +254,15 @@ export interface InstallDeps {
   // minutes.
   runLong: RunAnycloud;
   command: RunCommand;
-  // The scopes GitHub granted a sign-in (`signInScopes`).
-  signInScopes: (token: string) => Promise<string[]>;
+  // The login of a sign-in's user (`signInCheck`).
+  signInCheck: SignInCheck;
   release: () => Promise<Pick<Compatibility, 'runnerImage' | 'listenerImage'>>;
   ui: InstallUi;
   api?: typeof anycloudApi;
+  exec?: typeof anycloudExec;
   features?: FeatureTable;
-  // How long install waits for `bm-control` to run.
-  retry?: RetryTiming;
-  // The Worker, and the wait of its device flow's polling.
+  // The Worker, and the wait of its device flow's polling and of a new
+  // listener's start.
   fetch?: typeof globalThis.fetch;
   wait?: (ms: number) => Promise<void>;
   // `--verbose`: the cloud CLIs' own errors under install's lines.
@@ -246,8 +270,6 @@ export interface InstallDeps {
   // This checkout's `git`, for the org without `--org` (`pickOrg`).
   git?: (args: string[]) => Promise<string>;
 }
-
-export type RetryTiming = { intervalMs?: number; attempts?: number };
 
 const cloudOf = (value: string, flag: string, example: string): Cloud => {
   if (!CLOUDS.includes(value as Cloud)) {
@@ -258,7 +280,7 @@ const cloudOf = (value: string, flag: string, example: string): Cloud => {
   return value as Cloud;
 };
 
-/** `--control-plane <cloud>:<region>`: where the management VM and `bm-control` run. */
+/** `--control-plane <cloud>:<region>`: where the management VM runs, and the listeners' VMs. */
 export function parseControlPlane(value: string): CloudTarget {
   const [name = '', region, extra] = value.split(':');
   const example = '--control-plane aws:us-east-1';
@@ -325,7 +347,7 @@ async function checkPrerequisites(
 ): Promise<{ identities: Map<Cloud, string>; signedIn: boolean }> {
   checkPinned(ANYCLOUD_VERSION, deps.features);
   const { signedIn, problems } = signIn
-    ? await checkSignIn(deps.env, deps.signInScopes, deps.ui.print)
+    ? await checkSignIn(deps.env, deps.signInCheck, deps.ui.print)
     : { signedIn: false, problems: [] };
   const identities = await checkClouds(targets, deps, problems);
   return { identities, signedIn };
@@ -568,50 +590,100 @@ export async function connectClouds(
 // Step 5: the hosted API on the `--control-plane`, created through the user's
 // cloud CLI with nothing stored here (anycloud 0.1.74's seed). Re-running
 // `cluster create` with the same name and region resumes it from the cloud's
-// own tags (`docs/reference/cli/cluster.md`).
-async function bootstrapCluster(first: CloudTarget, deps: InstallDeps) {
-  const cluster = JSON.parse(
-    await deps.runLong([
-      ...['cluster', 'create', CLUSTER, '--cloud', first.cloud],
-      ...['--region', first.region, '--vm-type', MANAGEMENT_VM[first.cloud]],
-      '--json',
-    ]),
-  ) as { state: string; managementApiUrl: string | null };
-  if (cluster.state !== 'running' || !cluster.managementApiUrl) {
-    throw new Error(
-      `The control plane is ${cluster.state}. Run install again to resume it.`,
-    );
+// own tags (`docs/reference/cli/cluster.md`). A new cluster Azure refuses
+// for capacity, by the ID its progress names (`[<time>] Creating cluster
+// <name> (ID: <id>)`, never `Resuming`), is deleted: its resource group and
+// checkpoint bucket, not the subscription's shared `anycloud-storage`. It's
+// then tried in the plan's next region (`alwaysOnRegions`).
+async function bootstrapCluster(
+  controlPlane: CloudTarget,
+  regions: readonly string[],
+  deps: InstallDeps,
+) {
+  const { cloud } = controlPlane;
+  const size = MANAGEMENT_VM[cloud];
+  for (let i = 0; ; i++) {
+    const region = regions[i]!;
+    let out: string;
+    try {
+      out = await deps.runLong([
+        'cluster',
+        'create',
+        CLUSTER,
+        '--cloud',
+        cloud,
+        '--region',
+        region,
+        '--vm-type',
+        size,
+        GITHUB_APPS_FLAG,
+        GITHUB_APP_ID,
+        '--json',
+      ]);
+    } catch (error) {
+      const id =
+        error instanceof StepFailed &&
+        /\] Creating cluster \S+ \(ID: ([^)\s]+)\)/.exec(error.stderr)?.[1];
+      if (cloud !== 'azure' || !noCapacity(error) || !id) throw error;
+      // `cluster delete` looks for the cluster's API first, and with this
+      // machine's local target and no local API it exits there; its own
+      // never answers, so delete goes on without it (`cluster.md`, "Delete
+      // with the hosted API gone").
+      await deps
+        .runLong(
+          [
+            'cluster',
+            'delete',
+            id,
+            '--cloud',
+            cloud,
+            '--region',
+            region,
+            '--delete-vms',
+            '--delete-buckets',
+            '--confirm',
+            id,
+            '--json',
+          ],
+          { API_URL: `https://${id}.anycloud.sh` },
+        )
+        .catch((cause: unknown) => {
+          throw new Error(
+            `Azure has no capacity for the control plane's VM (${size}) in ${region}, and deleting what install started there failed: delete the resource group anycloud-${id}, then run install again.`,
+            { cause },
+          );
+        });
+      const next = regions[i + 1];
+      if (!next) {
+        throw new Error(
+          `Azure has no capacity for the control plane's VM (${size}) in ${regions.join(', ')} now. Install deleted what it started; run it again later.`,
+          { cause: error },
+        );
+      }
+      deps.ui.print(
+        `Azure has no capacity for the control plane's VM (${size}) in ${region} now: install deleted what it started there, and tries ${next}.`,
+      );
+      continue;
+    }
+    const cluster = JSON.parse(out) as {
+      state: string;
+      managementApiUrl: string | null;
+    };
+    if (cluster.state !== 'running' || !cluster.managementApiUrl) {
+      throw new Error(
+        `The control plane is ${cluster.state}. Run install again to resume it.`,
+      );
+    }
+    return { url: cluster.managementApiUrl, region };
   }
-  return cluster.managementApiUrl;
 }
 
 const connectApi = (deps: InstallDeps) => hostedApi(deps, deps.ui.print);
 
-// Polls until `name` is running: about 25 minutes by default, more than a
-// pool's first VM takes to join.
-async function waitForPool(
-  api: AnycloudApi,
-  name: string,
-  { intervalMs = 5000, attempts = 300 }: RetryTiming = {},
-) {
-  for (let i = 0; i < attempts; i++) {
-    if (i > 0) await sleep(intervalMs);
-    const { nodePools } = await api.listNodePools({ query: {} });
-    const pool = nodePools.find((p) => p.name === name);
-    if (pool?.state === 'running') return;
-    if (pool?.state === 'failed') {
-      throw new Error(
-        `${name} failed${pool.lastError ? `: ${pool.lastError}` : ''}. Fix the cause and run install again, which replaces it.`,
-      );
-    }
-  }
-  throw new Error(`${name} isn't running yet. Run install again once it is.`);
-}
-
 // Backmesh, not the API, keeps `bm-control` to the listeners alone,
-// unprivileged (invariant 3, plan B).
-async function checkControlPool(api: AnycloudApi) {
-  const control = await readControlPool(api);
+// unprivileged (invariant 3, plan B), until `upgrade` moves them to VMs.
+async function checkInstallation(api: AnycloudApi) {
+  const control = await readInstallation(api);
   if (control.problems.length) {
     throw new Error(
       `${CONTROL_POOL} must run only the listeners, unprivileged (invariant 3):\n- ${control.problems.join('\n- ')}`,
@@ -628,7 +700,7 @@ async function checkControlPool(api: AnycloudApi) {
 async function checkAddedOrg(
   options: InstallOptions,
   plan: InstallPlan,
-  listeners: readonly { name: string }[],
+  listeners: readonly Listener[],
   deps: InstallDeps,
 ) {
   const name = listenerName(options.org);
@@ -685,14 +757,13 @@ async function existingControlPlane(deps: InstallDeps) {
   });
   checkHosted(hosted, ANYCLOUD_VERSION, 'install');
   try {
-    const api = (deps.api ?? anycloudApi)(
-      url,
-      await apiToken(deps.env, deps.run),
-    );
-    const control = await readControlPool(api);
+    const token = await apiToken(deps.env, deps.run);
+    const api = (deps.api ?? anycloudApi)(url, token);
+    const control = await readInstallation(api);
     return {
       ...control,
       url,
+      exec: (deps.exec ?? anycloudExec)(url, token),
       location: await controlPlaneOf(deps.run, url, control.pool),
     };
   } catch (cause) {
@@ -753,7 +824,7 @@ async function placementOf(
   // The org's runners when its listener runs there: a re-run keeps them
   // unless told otherwise.
   kept?: CloudTarget[],
-  // This machine's control plane is reused with `bm-control` running:
+  // This machine's control plane is reused with a listener on it:
   // `connections` then excludes its cloud unless it's also a runner cloud.
   reuse = false,
 ) {
@@ -863,13 +934,14 @@ async function placementOf(
   };
 }
 
-// The clouds install connects: the control plane's, for `bm-control`'s
-// pool, then each other runner cloud. A reused control plane whose
-// `bm-control` already runs (`reuse`) needs no connection or sign-in check
-// of its own, so its cloud counts only when it's also a runner cloud: adding
-// or changing runners on another cloud then needs just that cloud's CLI and
-// rights (owner, 2026-11-10). One reused without `bm-control`, a first
-// install stopped before step 7, still needs its cloud's connection.
+// The clouds install connects: the control plane's, for the listener's VM,
+// then each other runner cloud. A reused control plane with a listener
+// already on it (`reuse`) needs no connection or sign-in check of its own,
+// so its cloud counts only when it's also a runner cloud: adding or
+// changing runners on another cloud then needs just that cloud's CLI and
+// rights (owner, 2026-11-10), and the new listener goes on the first runner
+// cloud (`listenerPlace`). One reused without a listener, a first install
+// stopped before step 7, still needs its cloud's connection.
 const connectionsOf = (
   controlPlane: CloudTarget,
   runners: readonly CloudTarget[],
@@ -879,6 +951,16 @@ const connectionsOf = (
     ? runners
     : [controlPlane, ...runners.filter((r) => r.cloud !== controlPlane.cloud)];
 
+// Where a new listener's VM goes: the control plane's cloud and region when
+// install connects it, else the first runner cloud's (`connectionsOf`).
+const listenerPlace = (
+  controlPlane: CloudTarget,
+  connections: readonly CloudTarget[],
+) =>
+  connections.find((c) => c.cloud === controlPlane.cloud) ??
+  connections[0] ??
+  controlPlane;
+
 // The org's listener on this machine's control plane, read before the plan
 // so a re-run shows what it changes. It must run this backmesh's release:
 // moving releases is `upgrade`'s.
@@ -886,19 +968,26 @@ async function currentListener(
   org: string,
   targeted: Awaited<ReturnType<typeof existingControlPlane>>,
   release: Pick<Compatibility, 'runnerImage' | 'listenerImage'>,
-  deps: InstallDeps,
 ) {
   const name = listenerName(org);
-  const deployed = targeted?.listeners.find((l) => l.name === name);
-  if (!deployed) return undefined;
-  const running = await readListener(deps.run, name).catch((cause: unknown) => {
-    throw new Error(
-      `${org}'s listener didn't answer, so install can't tell what it would change. Run \`backmesh status\`, then install again.`,
-      { cause },
+  const found = targeted?.orgs.find((l) => l.name === name);
+  if (!found) return undefined;
+  // `upgrade` moves a listener from `bm-control` to its VM.
+  if (!found.vm) {
+    throw new UsageError(
+      `${org}'s listener still runs on ${CONTROL_POOL}: run \`backmesh upgrade\` first, which moves it to its own VM, then install again.`,
     );
-  });
+  }
+  const running = await readListener(targeted!.exec, found).catch(
+    (cause: unknown) => {
+      throw new Error(
+        `${org}'s listener didn't answer, so install can't tell what it would change. Run \`backmesh status\`, then install again.`,
+        { cause },
+      );
+    },
+  );
   if (
-    deployed.image !== release.listenerImage ||
+    running.image !== release.listenerImage ||
     running.runnerImage !== release.runnerImage
   ) {
     throw new UsageError(
@@ -911,23 +1000,31 @@ async function currentListener(
       `${org}'s listener has no labels, so it's from before VM Jobs. Run \`backmesh uninstall\`, then \`backmesh install\`.`,
     );
   }
-  // Its ID is GitHub's, which install reads anyway.
-  const listener: Omit<RunningListener, 'orgId'> = {
+  // Its ID is GitHub's, which install reads anyway, and its tag with it.
+  const listener: Omit<RunningListener, 'orgId' | 'identity'> = {
     name,
     org: running.org,
-    image: deployed.image,
+    vm: found.vm.id,
+    image: running.image,
     runnerImage: running.runnerImage,
     runners: running.runners,
+  };
+  const identity = {
+    runnerGroup: z.string().parse(running.runnerGroup),
+    apiToken: z.string().parse(running.apiToken),
   };
   const live = new Set(running.status.scaleSets.map((set) => set.label));
   return {
     listener,
+    identity,
     installKey: running.installKey,
     // Carried through to a re-run's roll so install never silently drops
     // an unfinished `rotate-key` rotation; install itself never
     // sets or clears it.
     rotatingFrom: running.rotatingFrom,
     cacheCapGb: running.cacheCapGb,
+    // Left in standby by a move that didn't finish: a roll ends it.
+    standby: running.standby,
     routes,
     live,
   };
@@ -953,25 +1050,30 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   const release = await deps.release();
   const targeted = await existingControlPlane(deps);
   // Reusable: found answering, its location known, and recognizably
-  // this installation's own control plane — `bm-control` exists, or its
-  // cluster record (when the API offers one) is named `backmesh` — not some
+  // this installation's own control plane — a listener or `bm-control` is
+  // there, or its cluster record (when the API offers one) is named
+  // `backmesh` — not some
   // other anycloud cluster this machine happens to target. Anything else
   // keeps today's path: placement still follows `targeted.location` when
   // it's known, but `cluster create` and every connection run as before.
   const reused =
-    targeted?.location && (targeted.pool || targeted.location.name === CLUSTER)
+    targeted?.location &&
+    (targeted.orgs.length ||
+      targeted.pool ||
+      targeted.location.name === CLUSTER)
       ? targeted
       : undefined;
-  const current = await currentListener(options.org, targeted, release, deps);
-  const { controlPlane, runners, connections } = await placementOf(
+  const current = await currentListener(options.org, targeted, release);
+  const placement = await placementOf(
     options,
     deps,
     targeted,
     current && targetsOf(current.routes),
-    !!reused?.pool,
+    !!(reused?.orgs.length || reused?.pool),
   );
+  const { runners } = placement;
   const { identities, signedIn } = await checkPrerequisites(
-    connections,
+    placement.connections,
     deps,
     !options.plan,
   );
@@ -991,7 +1093,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     runners,
     anycloudRunners(deps.run),
     planRegions(multiRegion, note),
-    controlPlane.cloud,
+    placement.controlPlane.cloud,
     publicRepos,
   );
   const regionsOf = (cloud: Cloud) => [
@@ -1001,7 +1103,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   // The public labels are the control plane's cloud's.
   if (publicRepos && !classPlan.classes.some((c) => c.public)) {
     problems.push(
-      `--public-repos needs runners on the control plane's cloud, ${controlPlane.cloud}: backmesh-public-2 and -4 run there.`,
+      `--public-repos needs runners on the control plane's cloud, ${placement.controlPlane.cloud}: backmesh-public-2 and -4 run there.`,
     );
   }
   const quotas = [];
@@ -1053,8 +1155,59 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   if (problems.length) {
     throw new Error(`Can't run the runners:\n- ${problems.join('\n- ')}`);
   }
-  const first = controlPlane;
-  const listeners = targeted?.listeners;
+  const listeners = targeted?.orgs;
+  // A new listener's VM; a re-run's stays where it runs. With a new
+  // control plane, it's the control plane's cloud and region.
+  const placed = listenerPlace(placement.controlPlane, placement.connections);
+  // The always-on VMs this run creates there: on Azure, in the first region
+  // that offers this subscription every size, and on a capacity refusal the
+  // next (`vm-sizes.ts`).
+  const alwaysOn: AlwaysOn[] = [
+    ...(listeners
+      ? []
+      : [
+          { what: "the control plane's VM", size: MANAGEMENT_VM[placed.cloud] },
+        ]),
+    ...(current
+      ? []
+      : [
+          {
+            what: `${options.org}'s listener VM`,
+            size: LISTENER_VM_TYPE[placed.cloud],
+          },
+        ]),
+  ];
+  // A new Azure control plane named `backmesh` that already exists, such
+  // as one an earlier run started, resumes where it is.
+  const started =
+    placed.cloud === 'azure' && !listeners
+      ? await startedRegion(CLUSTER, deps.command)
+      : undefined;
+  if (started) {
+    note.print(
+      `A control plane named ${CLUSTER} exists in azure ${started}; install resumes it there.`,
+    );
+  }
+  const regions =
+    placed.cloud === 'azure' && alwaysOn.length
+      ? await alwaysOnRegions(
+          started ? [started] : candidateRegions(placed.region),
+          alwaysOn,
+          {
+            fallback: !listeners && !started,
+            advice: started
+              ? `Delete the control plane named ${CLUSTER} in ${started}, or use another subscription.`
+              : listeners
+                ? 'Use another subscription.'
+                : 'Pass --control-plane azure:<region> with a region that does, or use another subscription.',
+          },
+          deps.command,
+          note,
+        )
+      : undefined;
+  let place = regions ? { ...placed, region: regions[0]! } : placed;
+  const controlPlane = listeners ? placement.controlPlane : place;
+  const { connections } = placement;
   // A re-run for an org already on it agrees to nothing new.
   const orgs = (listeners ?? []).map((l) => orgOfListener(l.name)!);
   const sharedWith = orgs.includes(options.org.toLowerCase()) ? [] : orgs;
@@ -1065,14 +1218,22 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     images: { runner: release.runnerImage, listener: release.listenerImage },
     clouds: await accountsOf(connections, deps),
     controlPlane: {
-      cloud: first.cloud,
-      region: first.region,
-      managementVm: MANAGEMENT_VM[first.cloud],
-      controlVm: CONTROL_VM[first.cloud],
-      monthlyUsd: CONTROL_PLANE_MONTHLY_USD[first.cloud],
+      cloud: controlPlane.cloud,
+      region: controlPlane.region,
+      managementVm: MANAGEMENT_VM[controlPlane.cloud],
+      monthlyUsd: MANAGEMENT_MONTHLY_USD[controlPlane.cloud],
       exists: !!listeners,
       sharedWith,
     },
+    listener: current
+      ? null
+      : {
+          cloud: place.cloud,
+          region: place.region,
+          vmType: LISTENER_VM_TYPE[place.cloud],
+          monthlyUsd: LISTENER_VM_MONTHLY_USD[place.cloud],
+        },
+    alwaysOnRegions: regions,
     runners: runners.map((target) => ({
       cloud: target.cloud,
       regions: regionsOf(target.cloud),
@@ -1115,9 +1276,16 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   [...notes, ...plan.rates, ...quotas, ...plan.noKvm, ...plan.noGpu].forEach(
     (line) => ui.print(line),
   );
-  ui.print(
-    `Always on: 2 VMs that run backmesh (${MANAGEMENT_VM[first.cloud]} and ${CONTROL_VM[first.cloud]}) on ${first.cloud} ${first.region}, about $${CONTROL_PLANE_MONTHLY_USD[first.cloud]} a month with their disks and addresses.`,
-  );
+  if (!plan.controlPlane.exists) {
+    ui.print(
+      `Always on: the control plane's VM (${MANAGEMENT_VM[controlPlane.cloud]}) on ${controlPlane.cloud} ${controlPlane.region}, about $${MANAGEMENT_MONTHLY_USD[controlPlane.cloud]} a month with its disk and address.`,
+    );
+  }
+  if (plan.listener) {
+    ui.print(
+      `Always on: ${options.org}'s listener VM (${plan.listener.vmType}) on ${plan.listener.cloud} ${plan.listener.region}, about $${plan.listener.monthlyUsd} a month with its disk and address.`,
+    );
+  }
   if (plan.sameOwner) ui.print(plan.sameOwner);
   if (plan.cacheCapGb !== current?.cacheCapGb)
     ui.print(
@@ -1209,12 +1377,12 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   const name = listenerName(options.org);
   let installKey = current?.installKey;
   if (installKey) {
-    if (!signedIn) await signInAgain(worker, deps.signInScopes)();
+    if (!signedIn) await signInAgain(worker, deps.signInCheck)();
   } else {
     const signed = await signInForKey(options.org, worker);
     installKey = signed.key;
     if (!signedIn) {
-      await saveSignIn(deps.env, signed.token, deps.signInScopes);
+      await saveSignIn(deps.env, signed.token, deps.signInCheck);
     }
   }
   // Step 4, before anything is billed: backmesh's App on the org.
@@ -1239,17 +1407,28 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   let url: string;
   if (reused) {
     url = reused.url;
-    ui.print(`Using the control plane on ${first.cloud} ${first.region}.`);
+    ui.print(
+      `Using the control plane on ${controlPlane.cloud} ${controlPlane.region}.`,
+    );
   } else {
-    ui.print(`Creating the control plane on ${first.cloud} ${first.region}.`);
-    url = await bootstrapCluster(first, deps);
+    ui.print(
+      `Creating the control plane on ${controlPlane.cloud} ${controlPlane.region}.`,
+    );
+    const created = await bootstrapCluster(
+      controlPlane,
+      (!plan.controlPlane.exists && regions) || [controlPlane.region],
+      deps,
+    );
+    url = created.url;
+    // The listener goes with a new control plane.
+    if (!plan.controlPlane.exists) place = { ...place, region: created.region };
     // The management VM's disk at gp3's baseline until anycloud's template
-    // makes it so; `bm-control`'s comes from its tier (control-disks.ts).
-    // A resumed `cluster create` lowers it too.
-    if (first.cloud === 'aws') {
+    // makes it so (control-disks.ts). A resumed `cluster create` lowers it
+    // too.
+    if (controlPlane.cloud === 'aws') {
       await lowerManagementDisk(
         clusterIdOf(url),
-        first.region,
+        created.region,
         now.find((target) => target.cloud === 'aws')?.account,
         deps.command,
         ui.print,
@@ -1264,10 +1443,10 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     ANYCLOUD_VERSION,
     'install',
   );
-  const { api } = await connectApi(deps);
+  const { api, exec } = await connectApi(deps);
   // Invariant 3, before step 6: the cluster may predate this run.
-  const existing = await checkControlPool(api);
-  await checkAddedOrg(options, plan, existing.listeners, deps);
+  const existing = await checkInstallation(api);
+  await checkAddedOrg(options, plan, existing.orgs, deps);
   // Each cloud's connection, now that the control plane is known: the one
   // the org's listener records, else the one install made there, else a
   // new one named for it.
@@ -1294,29 +1473,8 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   );
   const control = anycloudControl(api, deps.run);
 
-  // Step 6: the listener's identity, before its Deployment (C29).
-  await control.addServiceAccount(name);
-
-  // Step 7: the control pool, never with privileged Jobs.
-  if (!existing.pool) {
-    await api.createNodePool({
-      body: {
-        name: CONTROL_POOL,
-        credentialName: named(first).credentials,
-        region: first.region,
-        vmTypes: [CONTROL_VM[first.cloud]],
-        minVmCount: 1,
-        maxVmCount: 1,
-        allowPrivilegedJobs: false,
-        // gp3's baseline, not anycloud's default `high` (control-disks.ts).
-        ...(first.cloud === 'aws' && { osDiskTier: 'medium' as const }),
-      },
-    });
-  }
-
-  // The listener's configuration is its Deployment's environment,
-  // and the runner image and classes are in a Secret that `upgrade`
-  // changes, since `deployment upgrade` takes no `--env`.
+  // The listener's configuration is the org's Secret, which its VM gets at
+  // create and `upgrade` changes.
   const tag = installTag(clusterId, orgId);
   // `RUNNER_REGIONS`, narrowed to the ones this account can actually use:
   // a region a cloud policy or a narrower permission denies drops out
@@ -1341,7 +1499,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   // first; already created or confirmed
   // above, so this only double-checks.
   await ensureCacheBuckets(api, tag, parseRoutes(finalRunners), ui.print);
-  if (existing.listeners.some((listener) => listener.name === name)) {
+  if (existing.orgs.some((listener) => listener.name === name)) {
     // A re-run applies the plan's changes: the Secret, then a roll. The
     // plan named the listener it read, so one that appeared since is
     // another plan.
@@ -1357,7 +1515,8 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     // listener's Secret.
     if (
       finalRunners !== current.listener.runners ||
-      plan.cacheCapGb !== current.cacheCapGb
+      plan.cacheCapGb !== current.cacheCapGb ||
+      current.standby
     ) {
       const line = reorderedOnlyLine(
         undefined,
@@ -1368,7 +1527,16 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       if (line) ui.print(line);
       ui.print(`Rolling ${options.org}'s listener with the new settings.`);
       await rollListener(
-        { ...current.listener, orgId },
+        {
+          ...current.listener,
+          orgId,
+          identity: {
+            ...current.identity,
+            install: tag,
+            apiUrl: url,
+            override: override?.env,
+          },
+        },
         {
           image: release.listenerImage,
           runnerImage: release.runnerImage,
@@ -1376,40 +1544,44 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
           installKey,
           rotatingFrom: current.rotatingFrom,
           cacheCapGb: plan.cacheCapGb,
-          apiUrl: deps.env[API_URL_ENV],
+          workerUrl: deps.env[API_URL_ENV],
         },
-        { control, runLong: deps.runLong, again: 'install' },
+        { control, exec, again: 'install', wait: deps.wait },
       );
     }
   } else {
-    await control.saveSecret(
-      name,
-      secretValues({
-        org: options.org,
-        orgId,
-        runnerImage: release.runnerImage,
-        installKey,
-        runners: finalRunners,
-        cacheCapGb: plan.cacheCapGb,
-        apiUrl: deps.env[API_URL_ENV],
-      }),
+    // Step 6: the listener's identity, a service token only it holds, and
+    // its runner group, named for its VM (`runnerGroupName`).
+    const vm = listenerVmId(tag);
+    const values = secretValues({
+      org: options.org,
+      orgId,
+      identity: {
+        install: tag,
+        runnerGroup: runnerGroupName(tag, vm),
+        apiUrl: url,
+        apiToken: await control.issueServiceToken(name),
+        override: override?.env,
+      },
+      image: release.listenerImage,
+      runnerImage: release.runnerImage,
+      installKey,
+      runners: finalRunners,
+      cacheCapGb: plan.cacheCapGb,
+      workerUrl: deps.env[API_URL_ENV],
+    });
+    await control.saveSecret(name, values);
+    // Step 7: its VM.
+    ui.print(
+      `Creating ${options.org}'s listener VM on ${place.cloud} ${place.region}.`,
     );
-    // anycloud refuses a Deployment on a pool that isn't running yet.
-    await waitForPool(api, CONTROL_POOL, deps.retry);
-    const env = {
-      BACKMESH_INSTALL: tag,
-      ...override?.env,
-    };
-    await deps.runLong([
-      ...['deployment', 'create', name, release.listenerImage],
-      ...['--node-pool', CONTROL_POOL, '--cpus', LISTENER_CPUS],
-      ...['--secret', name],
-      ...Object.entries(env).flatMap(([key, value]) => [
-        '-e',
-        `${key}=${value}`,
-      ]),
-      '--wait',
-    ]);
+    await createListenerVm(
+      options.org,
+      vm,
+      { ...place, credentials: named(place).credentials },
+      { exec, runLong: deps.runLong },
+    );
+    await answering(exec, { org: options.org, vm }, deps.wait);
   }
 
   // Step 9.

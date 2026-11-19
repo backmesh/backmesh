@@ -43,9 +43,9 @@ Install works through your signed-in `aws` CLI, and creates:
   on another cloud, unless `AWS_REGION` is set. The role trusts only your control plane, so no AWS keys are stored.
 - **Cache buckets**, through that connection: one per runner region,
   `bm-cache-<id>-<region>`, for the [cache](/cache/).
-- **The control plane**, when AWS is its cloud: a `t3.large` VM and a
-  `t3.small` VM for the listener, with their disks and public addresses, and a
-  checkpoint bucket for its backups.
+- **The control plane**, when AWS is its cloud: a `t3.large` VM, with its disk
+  and public address, and a checkpoint bucket for its backups; and each org's
+  listener on its own `t3.small` VM, with its disk and public address.
 
 [Uninstall](/uninstall/) deletes the VMs and buckets. It asks before deleting
 the checkpoint bucket, and leaves the role connection's setup for you to

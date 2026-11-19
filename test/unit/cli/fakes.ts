@@ -1,6 +1,10 @@
 import { vi } from 'vitest';
 
-import { anycloudApi } from '../../../src/anycloud/client.js';
+import {
+  anycloudApi,
+  type AnycloudExec,
+  type ExecResult,
+} from '../../../src/anycloud/client.js';
 import {
   adminRoutes,
   fakeGitHub,
@@ -85,6 +89,43 @@ export function fakeApi(
     clientVersion,
   );
   return { api, requests };
+}
+
+// An org's listener VM as `GET /v1/workloads` lists it.
+export const listenerVm = (
+  org: string,
+  id: string,
+  {
+    state = 'running',
+    startedAt = 0,
+    cloudProvider = 'AWS',
+    region = 'us-east-1',
+  } = {},
+) => ({
+  id,
+  workloadType: 'vm',
+  state,
+  startedAt,
+  cloudProvider,
+  region,
+  secretNames: [`backmesh-${org}`],
+});
+
+// `anycloud exec`'s API route: `answer` gives each call's output, or its
+// result with an exit code, or throws; every call is recorded.
+export function fakeExec(
+  answer: (id: string, command: string) => string | ExecResult | Error,
+) {
+  const calls: [string, string][] = [];
+  const exec: AnycloudExec = async (id, command) => {
+    calls.push([id, command]);
+    const reply = answer(id, command);
+    if (reply instanceof Error) throw reply;
+    return typeof reply === 'string'
+      ? { code: 0, stdout: reply, stderr: '' }
+      : reply;
+  };
+  return { exec, calls };
 }
 
 // The anycloud binary: answers by the longest matching argument prefix and
@@ -196,7 +237,8 @@ export const githubOrg = (path: string) => {
 };
 
 export const INSTALL_KEY = `bmk_${'ab'.repeat(32)}`;
-const DEVICE = {
+// GitHub's answer to the device code request.
+export const DEVICE = {
   device_code: 'dev-3584e1',
   user_code: 'ABCD-1234',
   verification_uri: 'https://github.com/login/device',
@@ -204,27 +246,39 @@ const DEVICE = {
   expires_in: 900,
 };
 
-// The token backmesh's GitHub sign-in returns.
-export const SIGNED_IN = 'gho_signedin';
+// The backmesh App's user token, from its device sign-in.
+export const SIGNED_IN = 'ghu_signedin';
+// A later code, after the first expired.
+export const NEXT_DEVICE = {
+  ...DEVICE,
+  device_code: 'dev-2',
+  user_code: 'WXYZ-5678',
+};
+// GitHub's answer to a token poll once the person has signed in.
+export const GITHUB_TOKEN = Response.json({
+  access_token: SIGNED_IN,
+  token_type: 'bearer',
+  scope: '',
+});
 
-// The Worker's install and status routes. `installs` answers
-// each `POST /v1/installs` poll in turn and `status` each `GET /v1/status`,
-// both repeating the last. An Error answer is a connection failure.
+// GitHub's device flow on github.com, then the Worker's routes. `codes`
+// answers each device code request and `polls` each token poll, in turn;
+// `installs` each `POST /v1/installs` and `status` each `GET /v1/status`;
+// every list repeats its last. An Error answer is a connection failure, and
+// a function answer is called with the request's signal.
+type Answer = Response | Error | ((signal?: AbortSignal) => Promise<Response>);
 export function fakeWorker({
-  status = [Response.json({ org_id: 7 })] as (Response | Error)[],
+  status = [Response.json({ org_id: 7 })] as Answer[],
   installs = [
     Response.json({
       org_id: 7,
       org: 'acme',
       install: 'i1',
       key: INSTALL_KEY,
-      github_token: SIGNED_IN,
     }),
-  ] as (Response | Error)[],
-  signIns = [Response.json({ github_token: SIGNED_IN })] as (
-    Response | Error
-  )[],
-  device = Response.json(DEVICE) as Response | Error,
+  ] as Answer[],
+  codes = [Response.json(DEVICE)] as Answer[],
+  polls = [GITHUB_TOKEN] as Answer[],
   // The token broker's answers: a token for acme unless told otherwise.
   tokens = [
     Response.json({
@@ -233,7 +287,7 @@ export function fakeWorker({
       permissions: {},
       org: { id: 7, login: 'acme' },
     }),
-  ] as (Response | Error)[],
+  ] as Answer[],
   // Uninstall's cleanup: the sign-in's answers, the re-mints and the finish.
   cleanups = [
     Response.json({
@@ -242,46 +296,65 @@ export function fakeWorker({
       org: { id: 7, login: 'acme' },
       cleanup_id: 'c'.repeat(64),
     }),
-  ] as (Response | Error)[],
+  ] as Answer[],
   refreshes = [
     Response.json({
       token: 'ghs_8',
       expires_at: '2100-01-01T00:00:00Z',
       org: { id: 7, login: 'acme' },
     }),
-  ] as (Response | Error)[],
-  finishes = [Response.json({ removed: true, still_used_by: [] })] as (
-    Response | Error
-  )[],
+  ] as Answer[],
+  finishes = [Response.json({ removed: true, still_used_by: [] })] as Answer[],
   // `backmesh rotate-key`'s last step.
-  revokes = [Response.json({ revoked: true })] as (Response | Error)[],
+  revokes = [Response.json({ revoked: true })] as Answer[],
 } = {}) {
   const calls: string[] = [];
   // What each `POST /v1/installs` and `/v1/installs/cleanup*` sent.
   const bodies: Record<string, unknown>[] = [];
-  // What each `POST /v1/installs/device` sent: which scopes it asks for.
-  const devices: Record<string, unknown>[] = [];
+  // Each form sent to GitHub's device flow: the device code requests and
+  // the token polls.
+  const github: {
+    path: string;
+    form: Record<string, string>;
+    at: number;
+  }[] = [];
+  // Where in `calls` each sign-in finished: the token poll GitHub answered
+  // with a token.
+  const signedIn: number[] = [];
   // Each `POST /v1/installs/revoke`'s bearer key and install ID.
   const revoked: {
     key: string | undefined;
     install: unknown;
     token: unknown;
   }[] = [];
-  const next = (answers: (Response | Error)[]) => {
+  const next = async (answers: Answer[], signal?: AbortSignal | null) => {
     const answer = answers.length > 1 ? answers.shift() : answers[0];
-    return answer instanceof Response ? answer.clone() : answer;
+    if (typeof answer === 'function') return answer(signal ?? undefined);
+    if (answer instanceof Error) throw answer;
+    return answer?.clone();
   };
   const fetch = async (url: string | URL | Request, init: RequestInit = {}) => {
     const { host, pathname: path } = new URL(String(url));
     // GitHub's public org read (`readOrgId`).
     if (host === 'api.github.com') return githubOrg(path);
+    calls.push(
+      `${init.method ?? 'GET'} ${host === 'github.com' ? host : ''}${path}`,
+    );
+    if (host === 'github.com') {
+      const form = Object.fromEntries(new URLSearchParams(String(init.body)));
+      github.push({ path, form, at: Date.now() });
+      const answers = path === '/login/device/code' ? codes : polls;
+      const answer = (await next(answers, init.signal))!;
+      const json = (await answer
+        .clone()
+        .json()
+        .catch(() => ({}))) as { access_token?: string };
+      if (json.access_token) signedIn.push(calls.length - 1);
+      return answer;
+    }
     const body = init.body && JSON.parse(String(init.body));
-    calls.push(`${init.method ?? 'GET'} ${path}`);
     if (path === '/v1/installs' || path.startsWith('/v1/installs/cleanup')) {
       bodies.push(body);
-    }
-    if (path === '/v1/installs/device') {
-      devices.push(JSON.parse(String(init.body)));
     }
     if (path === '/v1/installs/revoke') {
       revoked.push({
@@ -293,18 +366,15 @@ export function fakeWorker({
         token: body?.github_token,
       });
     }
-    const answers: Record<string, (Response | Error)[]> = {
-      '/v1/installs/device': [device],
+    const answers: Record<string, Answer[]> = {
       '/v1/installs': installs,
       '/v1/token': tokens,
       '/v1/installs/cleanup': cleanups,
       '/v1/installs/cleanup/token': refreshes,
       '/v1/installs/cleanup/finish': finishes,
-      '/v1/sign-in': signIns,
       '/v1/installs/revoke': revokes,
     };
-    const answer = next(answers[path] ?? status);
-    if (answer instanceof Error) throw answer;
+    const answer = await next(answers[path] ?? status, init.signal);
     // The cleanup's sign-in answers for the org it was asked about.
     if (path === '/v1/installs/cleanup' && answer?.ok && body?.org) {
       const json = (await answer.json()) as { org?: { login: string } };
@@ -313,7 +383,20 @@ export function fakeWorker({
     }
     return answer ?? new Response('', { status: 500 });
   };
-  return { fetch, calls, bodies, devices, revoked };
+  // The codes GitHub was asked for, and the token polls, in order.
+  const signIns = () => github.filter((g) => g.path === '/login/device/code');
+  const tokenPolls = () =>
+    github.filter((g) => g.path === '/login/oauth/access_token');
+  return {
+    fetch,
+    calls,
+    bodies,
+    github,
+    signIns,
+    tokenPolls,
+    signedIn,
+    revoked,
+  };
 }
 
 // An org's GitHub as uninstall's cleanup token sees it: the group of acme's

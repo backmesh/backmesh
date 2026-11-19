@@ -7,17 +7,21 @@ description: What runs where, what reaches backmesh, the GitHub App's permission
 
 Everything backmesh runs is in your own accounts:
 
-- **backmesh's control plane**, two always-on VMs (t3.large and t3.small on
-  AWS) in the first cloud you install, with a checkpoint bucket for its backups.
-- **The listener**, which scales runners, alone on one of those VMs. It
-  long-polls GitHub, so nothing needs an inbound port or a webhook.
+- **backmesh's control plane**, an always-on VM (t3.large on AWS) in the first
+  cloud you install, with a checkpoint bucket for its backups.
+- **The listener**, which scales runners, alone on a small always-on VM of its
+  own (t3.small on AWS) for each org. It long-polls GitHub, so nothing needs an
+  inbound port or a webhook. It's never on the control plane's VM, which keeps
+  the control plane's keys away from the code that reads GitHub's messages.
 - **The runners**: each job gets its own spot or on-demand VM, which is deleted
   when the job ends.
 
 Your cloud credentials, code, secrets, caches, logs and runners stay in your
 accounts. Install connects each cloud with a role from your own cloud CLI session, so no
-cloud keys are stored. The listener's identity is a short-lived token bound to
-its own container, not a stored token.
+cloud keys are stored. The listener's identity is a control plane token that
+only it holds, issued by your control plane for that listener alone and kept on
+its VM; `backmesh upgrade` issues a new one whenever the control plane refuses
+it.
 
 One credential that reaches your org isn't in your accounts: the private key of
 backmesh's GitHub App, which backmesh holds. Whoever holds it can register
@@ -67,7 +71,7 @@ On a locked-down network, the control plane needs outbound HTTPS to GitHub and
 `api.backmesh.com`, and runners to GitHub. Cloud accounts with default
 networking already allow both.
 
-The listener makes three kinds of calls to `api.backmesh.com`, all with your
+The listener makes five kinds of calls to `api.backmesh.com`, all with your
 install's key:
 
 - **One event per job started**, in batches about once a minute. It describes
@@ -79,6 +83,9 @@ install's key:
   [audit row](/telemetry/#how-its-counted-and-kept) of each one it hands out.
 - **One WebSocket for cues**, held open, which receives what `backmesh cue`
   sends.
+- **A rerun** of a run's failed jobs after a spot reclaim, and **a cancel** of
+  a fork's run the public-repository gate stops: backmesh.com checks and
+  makes them with the App's Actions write ([below](#the-github-app)).
 
 `backmesh cue` warns your listener that a push is coming. A cue tells
 api.backmesh.com your org, your GitHub user and the time. It never sends the
@@ -91,18 +98,26 @@ the CLI a key of its own and read cues sent while it does, so treat a cue's
 repository and branch names as no more secret from backmesh than its GitHub
 App's reach already makes them.
 
-The CLI calls it too. During `backmesh install`, an org admin signs in with
-GitHub once with GitHub's device flow, asking for `read:org` and
-`read:packages`: the CLI prints a code, and the admin enters it at
-`https://github.com/login/device` on any device. That GitHub page is the only
-check that the code is yours: it names backmesh and the scopes, so enter a code
-only if your own terminal printed it. backmesh checks the admin role with that
-GitHub token, mints the install key, and returns both to the CLI over HTTPS,
-keeping neither: the token stays on your machine as the control plane's
-sign-in. If backmesh's App isn't on the org, the CLI then prints GitHub's own
-install link for it. Every later sign-in (an install re-run, `upgrade`,
-`rotate-key`, `cue --sign-in`, and `status`, `logs` or `uninstall` replacing an
-expired one) uses the same device code. `backmesh upgrade` checks backmesh still accepts the install's key. `backmesh uninstall` asks an org admin to sign in the
+The CLI calls it too. During `backmesh install`, an org owner (or a member who
+manages the org's self-hosted runners) signs in to
+backmesh's GitHub App once with GitHub's device flow: the CLI prints a code and
+when it expires, and the owner enters it at `https://github.com/login/device`
+on any device. That GitHub page is the only check that the code is yours: it
+names backmesh, so enter a code only if your own terminal printed it. A code
+that expires is replaced by a new one. The sign-in is a GitHub App user token
+that lasts 8 hours, and can do only what both [the App](#the-github-app) and
+you can: manage the org's self-hosted runners, read workflow runs and their
+logs, rerun or cancel them, and read repositories' metadata.
+It can't read code, secrets or the org's member list. The CLI sends it to
+backmesh once, which
+checks with it that you can manage the org's self-hosted runners, mints the
+install key, and returns the key over HTTPS, keeping neither: the token stays
+on your machine as the control plane's sign-in. If backmesh's App isn't on the
+org, the CLI first prints GitHub's own install link for it and waits. Every
+later sign-in (an install re-run, `upgrade`, `rotate-key`, `cue --sign-in`,
+and `status`, `logs` or `uninstall` replacing an expired one) is the same
+device flow. `backmesh upgrade` checks backmesh still accepts the install's key. `backmesh uninstall` asks an org owner, or a member who manages the org's
+self-hosted runners, to sign in the
 same way, then gets an hour-long token that can manage only your org's
 self-hosted runners, which it keeps in memory to delete backmesh's runners,
 scale sets and runner group, and finally removes the App from your org.
@@ -127,14 +142,30 @@ backmesh uses one public GitHub App, `backmesh`. During install, an org owner
 installs it on your org with one click. Its webhook is off, and it has only
 these permissions:
 
-| Permission                       | Why backmesh needs it                                                                                                                         |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Self-hosted runners: write (org) | Scale sets, runner registration, the runner group, removing idle runners                                                                      |
-| Actions: write                   | Read a run's commit for reclaim notes, jobs' runner names, and past runs' jobs to start runners ahead of predicted jobs; rerun reclaimed jobs |
-| Checks: write                    | Post a check run when spot reclaims fail jobs                                                                                                 |
-| Metadata: read                   | Required by GitHub                                                                                                                            |
+| Permission                       | Why backmesh needs it                                                                                                                                            |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Self-hosted runners: write (org) | Scale sets, runner registration, the runner group, removing idle runners                                                                                         |
+| Actions: write                   | Your listener reads runs and jobs (read only); backmesh.com reruns jobs a spot reclaim failed, and cancels a fork's run the public-repository gate stops (write) |
+| Metadata: read                   | Required by GitHub                                                                                                                                               |
 
-It has no Contents, Secrets, Members or Administration permission.
+It has no Contents, Secrets, Members, Checks or Administration permission.
+
+Your listener's tokens are narrower than the App: Self-hosted runners write,
+Actions read and Metadata read, so your install's key grants no more than
+someone who manages your org's runners. The App's Actions write is used only
+by `api.backmesh.com` itself, with a token that lasts for that one call, for
+two things your listener asks for with your install's key:
+
+- **Rerun a run's failed jobs after a spot reclaim** (`/v1/rerun`): only when
+  your org owns the repository, the run finished at its first or second
+  attempt, and every job that failed or timed out ran on your install's
+  runners.
+- **Cancel a fork's run** (`/v1/cancel`, with `--public-repos`): only a pull
+  request run from a fork in one of your org's public repositories that is
+  still going, and either asks for a backmesh label that isn't public or has
+  run 60 minutes on your install's runner.
+
+Each is limited to 20 an hour per install, and each call is logged.
 
 backmesh holds the App's private key, as a secret of the service at
 `api.backmesh.com`. It's never in your accounts, and the listener never holds
@@ -153,7 +184,6 @@ holds it, backmesh or anyone who steals it from backmesh, can:
   which cloud trust policies match on. Together with the runner permission, it
   can dispatch or rerun a job on a backmesh label and take it with its own runner,
   reaching that job's secrets.
-- **Checks: write**: write misleading check runs.
 - **Metadata: read**: list the installation's repositories.
 
 Through GitHub's API it can't read code or Secrets or change Administration
@@ -170,10 +200,12 @@ for up to an hour.
 ### If your install's key leaks
 
 Your install's key gets GitHub tokens for your org, so the listener reads it on
-a control plane VM, which runs no job. If you think it leaked, an admin of your
-org runs `backmesh rotate-key --org <org>`, which signs in with GitHub again,
+a control plane VM, which runs no job. If you think it leaked, an owner of your
+org, or a member who manages its self-hosted runners, runs
+`backmesh rotate-key --org <org>`, which signs in with GitHub again,
 writes a new key to the listener and only then revokes the old one. A token
-already handed out works for up to an hour.
+already handed out works for up to an hour. Every call with the old key,
+reruns and cancels included, stops once it's revoked.
 
 ## Which jobs run
 
@@ -207,5 +239,5 @@ its own VM; the job controls that VM's Docker. Jobs from every repository in the
 org use the same labels, so only run code you'd trust your org's members to
 run. Jobs on the [KVM labels](/labels/#kvm) also get `/dev/kvm`.
 
-The listener runs on a control plane VM, which runs no job. Per-repository
+The listener runs on its own VM, which runs no job. Per-repository
 runner groups are planned.

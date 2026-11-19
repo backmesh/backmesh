@@ -10,7 +10,7 @@ import { removeFromGitHub } from '../../../src/cli/cleanup.js';
 import type { Env } from '../../../worker/src/index.js';
 import worker from '../../../worker/src/index.js';
 import { mintKey, rememberLogin } from '../../../worker/src/installs.js';
-import { limiter, ORIGIN, testEnv, Upstream } from '../worker/fakes.js';
+import { ORIGIN, testEnv, Upstream } from '../worker/fakes.js';
 import { fakeOrg, GROUP } from './fakes.js';
 
 // The CLI's side of uninstall's cleanup against the real Worker,
@@ -47,6 +47,10 @@ function setUp(org = fakeOrg()) {
       calls.push(new URL(String(url)).pathname);
       return worker.fetch(new Request(url, init), env);
     }
+    // GitHub's device flow, from the same fake GitHub as the Worker's.
+    if (new URL(String(url)).host === 'github.com') {
+      return upstream.fetch(url as string, init);
+    }
     return org.fetch(url, init);
   }) as typeof globalThis.fetch;
   const print = (line: string) => lines.push(line);
@@ -72,13 +76,19 @@ describe("uninstall's cleanup", () => {
       cleanup.token!,
       github,
     );
-    const app = await finishCleanup(cleanup.cleanup_id, client);
+    const app = await finishCleanup(cleanup.cleanup_id!, client);
 
+    // GitHub's device flow on github.com, then one call with its token.
     expect(calls).toEqual([
-      '/v1/installs/device',
-      '/v1/installs/cleanup',
       '/v1/installs/cleanup',
       '/v1/installs/cleanup/finish',
+    ]);
+    expect(
+      upstream.calls.filter((c) => c.startsWith('POST github.com/')),
+    ).toEqual([
+      'POST github.com/login/device/code',
+      'POST github.com/login/oauth/access_token',
+      'POST github.com/login/oauth/access_token',
     ]);
     expect(upstream.mints).toEqual([
       { organization_self_hosted_runners: 'write' },
@@ -102,7 +112,9 @@ describe("uninstall's cleanup", () => {
       new Set(['token ghs_7']),
     );
     expect(lines).toEqual([
-      'Sign in with GitHub as an admin of acme, so backmesh removes itself from acme: open https://github.com/login/device and enter ABCD-1234.',
+      expect.stringMatching(
+        /^Sign in with GitHub as an owner of acme, so backmesh removes itself from acme: open https:\/\/github\.com\/login\/device and enter ABCD-1234 \(it expires at \d\d:\d\d UTC\)\.$/,
+      ),
     ]);
   });
 
@@ -126,26 +138,26 @@ describe("uninstall's cleanup", () => {
     ).resolves.toMatchObject({ token: 'ghs_7' });
   });
 
-  it('stops at a 429 and says to retry later', async () => {
-    upstream.devicePending = 5;
-    env.SIGNIN_LIMIT = limiter(2);
-    const { client, calls } = setUp();
+  it('waits out a 429 with the same sign-in', async () => {
+    // The client IP's limit refuses the first call only.
+    let calls = 0;
+    env.SIGNIN_LIMIT = { limit: async () => ({ success: ++calls > 1 }) };
+    const { client, calls: sent } = setUp();
 
-    await expect(signInForCleanup('acme', undefined, client)).rejects.toThrow(
-      'Too many requests; retry later.',
-    );
-    expect(calls).toEqual([
-      '/v1/installs/device',
-      '/v1/installs/cleanup',
-      '/v1/installs/cleanup',
-    ]);
+    const cleanup = await signInForCleanup('acme', undefined, client);
+
+    expect(cleanup.token).toBe('ghs_7');
+    expect(sent).toEqual(['/v1/installs/cleanup', '/v1/installs/cleanup']);
+    expect(
+      upstream.calls.filter((c) => c === 'POST github.com/login/device/code'),
+    ).toHaveLength(1);
   });
 
   it('re-mints with the cleanup_id', async () => {
     const { client } = setUp();
     const cleanup = await signInForCleanup('acme', undefined, client);
 
-    expect(await refreshCleanupToken(cleanup.cleanup_id, client)).toEqual({
+    expect(await refreshCleanupToken(cleanup.cleanup_id!, client)).toEqual({
       token: 'ghs_7',
       expires_at: '2026-11-06T13:00:00Z',
       org: { id: 11, login: 'acme' },

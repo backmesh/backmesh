@@ -28,15 +28,24 @@ from the job's run.
 
 ### GitHub sign-in
 
-You sign in with GitHub with `backmesh install` and `backmesh upgrade`, which
-ask for `read:org`, to check
-you're an admin of the org, and `read:packages`, for your control plane.
-Each sign-in is a GitHub device code. `api.backmesh.com` passes that GitHub
-token to your machine and keeps none. Uninstall's admin check asks only for `read:org`. We store the
+You sign in with GitHub to backmesh's GitHub App with `backmesh install` and
+`backmesh upgrade`, with a GitHub device code. The sign-in is a GitHub App user
+token that lasts 8 hours, and can do only what both the App and you can:
+manage the org's self-hosted runners, read, rerun or cancel workflow runs and
+read their logs, and read repositories' metadata; not code,
+secrets or the org's member list. Your machine keeps it for your control plane, and
+sends it to `api.backmesh.com` once to check you can manage the org's
+self-hosted runners; we keep no token. Uninstall's check is the same. We store the
 org's numeric GitHub ID, an install ID, when the install was created, and a
-SHA-256 hash of the install's key, never the key itself.
+SHA-256 hash of the install's key, never the key itself, and, once your
+listener asks backmesh.com to rerun or cancel a run, the install's runner
+tag: the 5 characters that start its runners' names.
 
 For your orgs, we store their numeric GitHub IDs and names.
+
+When you sign in for `backmesh cue`, we keep your GitHub user ID and login,
+the orgs whose backmesh App your sign-in reached, and a SHA-256 hash of the
+cue credential your machine keeps, for its 30 days.
 
 ### backmesh's GitHub App
 
@@ -47,6 +56,9 @@ for an hour-long installation token about every 30 minutes; we hand it over
 and keep none. Each token issued, and each uninstall call, refused or not,
 writes one audit row: the install, org and installation, the token's
 permissions and expiry, and the caller's IP address and Cloudflare ray ID.
+Each rerun or cancel your listener asks for, refused or not, writes one row
+too: the install and org, the repository's owner and name and the run's ID,
+the outcome, and the caller's IP address and Cloudflare ray ID.
 
 ### Cookies
 
@@ -78,7 +90,7 @@ We use these processors to run backmesh:
 | Processor  | What for                                                                  |
 | ---------- | ------------------------------------------------------------------------- |
 | Cloudflare | Hosting backmesh.com and `api.backmesh.com`, and the database behind them |
-| GitHub     | Sign-in and org membership checks                                         |
+| GitHub     | Sign-in, runner-management and org checks                                 |
 
 Otherwise we share your information only when the law requires it, and we
 disclose only the minimum needed. If backmesh is acquired or merges with
@@ -93,6 +105,7 @@ different privacy policy.
 | Daily job counts                              | Kept                                                               |
 | Install sign-ins' and App installation tokens | Not kept                                                           |
 | Token and uninstall audit rows                | 90 days                                                            |
+| Rerun and cancel rows                         | 90 days                                                            |
 | App installation records                      | Until the App is uninstalled or GitHub reports it gone             |
 | Org and install records                       | Kept, so an org's installs survive renames; ask us to delete them  |
 | API request logs                              | Up to 7 days, at Cloudflare                                        |

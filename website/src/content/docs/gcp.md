@@ -45,9 +45,9 @@ the Compute, IAM, IAM Credentials and Security Token Service APIs, and creates:
   control plane, so no service account keys are stored.
 - **Cache buckets**, through that connection: one per runner region,
   `bm-cache-<id>-<region>`, for the [cache](/cache/).
-- **The control plane**, when GCP is its cloud: an `e2-standard-2` VM and an
-  `e2-small` VM for the listener, with their disks and public addresses, and a
-  checkpoint bucket for its backups.
+- **The control plane**, when GCP is its cloud: an `e2-standard-2` VM, with its
+  disk and public address, and a checkpoint bucket for its backups; and each
+  org's listener on its own `e2-small` VM, with its disk and public address.
 
 [Uninstall](/uninstall/) deletes the VMs and buckets. It asks before deleting
 the checkpoint bucket, and leaves the role connection's setup for you to

@@ -14,7 +14,6 @@ import { ORIGIN, testEnv, Upstream } from './fakes.js';
 const ALL = {
   organization_self_hosted_runners: 'write',
   actions: 'write',
-  checks: 'write',
   metadata: 'read',
 };
 
@@ -63,10 +62,10 @@ describe('the staging Worker', () => {
   it('refuses an install, a cleanup and a cue sign-in for any other org, before GitHub', async () => {
     const refused = [
       await call('/v1/installs', {
-        body: { org: 'acme', device_code: 'alice' },
+        body: { org: 'acme', github_token: 'token-alice' },
       }),
       await call('/v1/installs/cleanup', {
-        body: { org: 'acme', device_code: 'alice' },
+        body: { org: 'acme', github_token: 'token-alice' },
       }),
       await call('/v1/cue/keys?org=acme', { token: 'token-alice' }),
     ];
@@ -89,7 +88,7 @@ describe('the staging Worker', () => {
 
   it('serves its test orgs, whatever their case', async () => {
     const signedIn = await call('/v1/installs', {
-      body: { org: 'Backmesh-Dryrun', device_code: 'alice' },
+      body: { org: 'Backmesh-Dryrun', github_token: 'token-alice' },
     });
     expect(signedIn.status).toBe(200);
     const { key } = (await signedIn.json()) as { key: string };

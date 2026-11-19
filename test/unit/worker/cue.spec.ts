@@ -34,6 +34,7 @@ beforeEach(() => {
   env = testEnv();
   relays = env.RELAY as FakeRelays;
   upstream = new Upstream();
+  upstream.installations.set(ORG, { id: 7, login: 'acme', permissions: {} });
   for (const login of ['alice', 'bob', 'carol']) {
     upstream.memberships.set(login, [
       { id: ORG, login: 'acme', role: 'member' },
@@ -199,26 +200,32 @@ describe('admit', () => {
 describe('cueMember', () => {
   const member = (token: string, org: string) =>
     cueMember(ORIGIN, token, org, async () => true);
-  const stub = (status: number, body: unknown, headers = {}) => {
-    const fetch = vi.fn(async () => Response.json(body, { status, headers }));
+  const stub = (status: number, body: unknown) => {
+    const fetch = vi.fn(async (url: string) =>
+      url.endsWith('/user')
+        ? Response.json({ id: 5, login: 'alice' })
+        : Response.json(body, { status }),
+    );
     vi.stubGlobal('fetch', fetch);
     return fetch;
   };
-  const membership = (state: string) => ({
-    state,
-    role: 'member',
-    organization: { id: ORG, login: 'acme' },
-    user: { id: 5, login: 'alice' },
+  const installations = (...logins: string[]) => ({
+    total_count: logins.length,
+    installations: logins.map((login, i) => ({
+      id: i + 1,
+      account: { id: login === 'acme' ? ORG : 100 + i, login },
+    })),
   });
 
   it('asks GitHub once per token and org for five minutes', async () => {
-    const fetch = stub(200, membership('active'));
+    const fetch = stub(200, installations('globex', 'acme'));
     const alice = { id: 5, login: 'alice', org_id: ORG };
     expect(await member('t', 'acme')).toEqual(alice);
     expect(await member('t', 'ACME')).toEqual(alice);
-    expect(fetch).toHaveBeenCalledTimes(1);
+    // The user, and the App's installations the user's token reaches.
+    expect(fetch).toHaveBeenCalledTimes(2);
     expect(fetch).toHaveBeenCalledWith(
-      'https://api.github.com/user/memberships/orgs/acme',
+      'https://api.github.com/user/installations?per_page=100',
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer t' }),
       }),
@@ -226,42 +233,26 @@ describe('cueMember', () => {
     const [response] = [...cache.values()];
     expect(response!.headers.get('Cache-Control')).toBe('max-age=300');
     await member('other', 'acme');
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(4);
   });
 
-  it('refuses a pending invitation and a non-member', async () => {
-    stub(200, membership('pending'));
-    expect(await member('t', 'acme')).toBeNull();
-    cache.clear();
-    stub(404, { message: 'Not Found' });
+  it('refuses a user whose token reaches no installation on the org', async () => {
+    stub(200, installations('globex'));
     expect(await member('t', 'acme')).toBeNull();
   });
 
   it('reports an expired token, and caches neither that nor a failure', async () => {
     stub(401, { message: 'Bad credentials' });
     expect(await member('t', 'acme')).toBe('expired');
-    const fetch = stub(403, { message: 'SAML enforcement' });
+    const fetch = stub(403, { message: 'rate limited' });
     await expect(member('t', 'acme')).rejects.toThrow('403');
     await expect(member('t', 'acme')).rejects.toThrow('403');
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(4);
     expect(cache.size).toBe(0);
   });
 
-  it('names a token SAML SSO hasn’t authorized, and caches that', async () => {
-    const fetch = stub(
-      403,
-      { message: 'SAML enforcement' },
-      {
-        'X-GitHub-SSO': 'required; url=https://github.com/orgs/acme/sso',
-      },
-    );
-    expect(await member('t', 'acme')).toBe('sso');
-    expect(await member('t', 'acme')).toBe('sso');
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
-
   it('asks GitHub only when the limit admits it', async () => {
-    const fetch = stub(200, membership('active'));
+    const fetch = stub(200, installations('acme'));
     expect(await cueMember(ORIGIN, 't', 'acme', async () => false)).toBe(
       'limited',
     );
@@ -269,7 +260,194 @@ describe('cueMember', () => {
   });
 });
 
+describe('the cue credential', () => {
+  // A fresh App sign-in, traded once: cue sends no GitHub token after
+  // (owner, 2026-11-19; App user tokens last 8 hours).
+  // `revoke`: an explicit `cue --sign-in`, which revokes the user's other
+  // credentials; a CLI's automatic trade adds one.
+  const trade = (login: string, revoke = false) =>
+    request('/v1/cue/sign-in', {
+      method: 'POST',
+      headers: as(login),
+      body: JSON.stringify({ revoke }),
+    });
+  const withCredential = (credential: string, path = '/v1/cue/keys?org=acme') =>
+    request(path, { headers: { Authorization: `Bearer ${credential}` } });
+
+  it('trades a sign-in for a 30-day credential bound to the orgs it reaches, keeping only its hash', async () => {
+    const res = await trade('alice');
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      credential: string;
+      login: string;
+      expires_at: string;
+    };
+    expect(body).toEqual({
+      credential: expect.stringMatching(/^bmc_[0-9a-f]{64}$/),
+      login: 'alice',
+      expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+    });
+    const stored = JSON.stringify(
+      (await env.DB.prepare('SELECT * FROM cue_credentials').all()).results,
+    );
+    expect(stored).not.toContain(body.credential);
+    expect(stored).not.toContain('token-alice');
+  });
+
+  it('answers the cue routes for its orgs with no GitHub call, until it expires', async () => {
+    const { credential } = (await (await trade('alice')).json()) as {
+      credential: string;
+    };
+    const calls = upstream.calls.length;
+
+    const listed = await withCredential(credential);
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toMatchObject({ org_id: ORG, login: 'alice' });
+    expect(upstream.calls).toHaveLength(calls);
+    // Not an org it didn't reach.
+    expect(
+      (await withCredential(credential, '/v1/cue/keys?org=globex')).status,
+    ).toBe(403);
+    advance(30 * 86_400_000);
+    const expired = await withCredential(credential);
+    expect(expired.status).toBe(401);
+    expect(await expired.json()).toEqual({
+      error: 'Cue sign-in expired; run `backmesh cue --sign-in`.',
+    });
+  });
+
+  it('refuses a sign-in GitHub refuses, and one that reaches no installation', async () => {
+    upstream.revoked.add('mallory');
+    upstream.reaches.set('nora', []);
+
+    expect((await trade('mallory')).status).toBe(401);
+    expect((await trade('nora')).status).toBe(403);
+    expect((await withCredential(`bmc_${'0'.repeat(64)}`)).status).toBe(401);
+  });
+
+  it("revokes the user's other credentials only at an explicit sign-in", async () => {
+    const first = (await (await trade('alice')).json()) as {
+      credential: string;
+    };
+    // Another machine's automatic trade: the first one keeps working.
+    await trade('alice');
+    expect((await withCredential(first.credential)).status).toBe(200);
+    // `backmesh cue --sign-in` revokes it.
+    await trade('alice', true);
+    expect((await withCredential(first.credential)).status).toBe(401);
+  });
+
+  it('revokes at an explicit sign-in even when the trade is refused, and says so', async () => {
+    const first = (await (await trade('alice')).json()) as {
+      credential: string;
+    };
+    upstream.reaches.set('alice', []);
+
+    const refused = await trade('alice', true);
+
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({
+      code: 'no_org',
+      revoked: true,
+    });
+    expect((await withCredential(first.credential)).status).toBe(401);
+  });
+
+  it("keeps a user's newest 10 credentials", async () => {
+    const issued: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      advance(1000);
+      issued.push(
+        ((await (await trade('alice')).json()) as { credential: string })
+          .credential,
+      );
+    }
+
+    expect((await withCredential(issued[0]!)).status).toBe(401);
+    expect((await withCredential(issued[1]!)).status).toBe(401);
+    expect((await withCredential(issued[2]!)).status).toBe(200);
+    expect((await withCredential(issued[11]!)).status).toBe(200);
+  });
+
+  it('tells a sign-in that reaches no org from one SAML SSO holds back', async () => {
+    upstream.reaches.set('nora', []);
+    const none = await trade('nora');
+    expect(none.status).toBe(403);
+    expect(await none.json()).toMatchObject({ code: 'no_org' });
+    upstream.answers.set('/user/installations', () =>
+      Response.json(
+        { message: 'Resource protected by organization SAML enforcement.' },
+        { status: 403, headers: { 'X-GitHub-SSO': 'required; url=x' } },
+      ),
+    );
+    const sso = await trade('alice');
+    expect(sso.status).toBe(403);
+    expect(await sso.json()).toMatchObject({ code: 'sso' });
+  });
+
+  it('checks the format before any lookup, and counts a refused one against the client IP', async () => {
+    env.SIGNIN_LIMIT = limiter(2);
+    const bogus = () => withCredential(`bmc_${'0'.repeat(64)}`);
+
+    expect((await withCredential('bmc_short')).status).toBe(401);
+    expect((await bogus()).status).toBe(401);
+    expect((await bogus()).status).toBe(429);
+  });
+
+  it('lets the daily cron delete expired credentials', async () => {
+    await trade('alice');
+    advance(30 * 86_400_000 + 1);
+
+    await worker.scheduled({ cron: '17 3 * * *' }, env);
+
+    expect(
+      (await env.DB.prepare('SELECT * FROM cue_credentials').all()).results,
+    ).toEqual([]);
+  });
+
+  it('names the signed-in login with the keys', async () => {
+    expect(await keys()).toMatchObject({ org_id: ORG, login: 'alice' });
+  });
+});
+
 describe('sign-ins', () => {
+  it("names the org's SAML SSO when GitHub asks for it", async () => {
+    upstream.answers.set('/user/installations', () =>
+      Response.json(
+        { message: 'Resource protected by organization SAML enforcement.' },
+        { status: 403, headers: { 'X-GitHub-SSO': 'required; url=x' } },
+      ),
+    );
+
+    const res = await request('/v1/cue/keys?org=acme', {
+      headers: as('alice'),
+    });
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      error:
+        "Authorize the backmesh sign-in for acme's SAML SSO on GitHub, then sign in again.",
+    });
+  });
+
+  // The listener acts on a cue only for a user GitHub says can push to its
+  // repository, so the Worker's check is who reaches the org's App
+  // installation through a repository, member or not.
+  it('admits an outside collaborator with a repository, and refuses a member with none', async () => {
+    const path = '/v1/cue/keys?org=acme';
+    upstream.reaches.set('olivia', [ORG]);
+    upstream.reaches.set('bob', []);
+
+    expect((await request(path, { headers: as('olivia') })).status).toBe(200);
+    const refused = await request(path, { headers: as('bob') });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toEqual({
+      error:
+        "None of acme's repositories that backmesh's GitHub App is on is open to you.",
+    });
+  });
+
   it('refuses a missing or expired sign-in and a non-member', async () => {
     const path = '/v1/cue/keys?org=acme';
     expect((await request(path)).status).toBe(401);
@@ -277,11 +455,12 @@ describe('sign-ins', () => {
     expect((await post(['a'.repeat(16)], { login: 'mallory' })).status).toBe(
       403,
     );
-    upstream.membershipStatus = 401;
+    upstream.revoked.add('alice');
     const expired = await request(path, { headers: as('alice') });
     expect(expired.status).toBe(401);
-    upstream.membershipStatus = 502;
-    expect((await request(path, { headers: as('alice') })).status).toBe(502);
+    upstream.revoked.delete('alice');
+    upstream.failing.set('/user/installations', 502);
+    expect((await request(path, { headers: as('bob') })).status).toBe(502);
   });
 
   it('counts GitHub checks and refused install keys against the client IP', async () => {
@@ -299,34 +478,6 @@ describe('sign-ins', () => {
     const calls = upstream.calls.length;
     expect((await request(path, { headers: as('bob') })).status).toBe(429);
     expect(upstream.calls).toHaveLength(calls);
-  });
-
-  it('tells a member to authorize the sign-in for SAML SSO', async () => {
-    vi.stubGlobal('fetch', async () =>
-      Response.json(
-        { message: 'SAML enforcement' },
-        { status: 403, headers: { 'X-GitHub-SSO': 'required' } },
-      ),
-    );
-    const res = await request('/v1/cue/keys?org=acme', {
-      headers: as('alice'),
-    });
-    expect(res.status).toBe(403);
-    expect(await res.json()).toMatchObject({
-      error: expect.stringContaining('SSO'),
-    });
-  });
-
-  it("names the org's OAuth app restriction to cue", async () => {
-    upstream.restricted.add('acme');
-    const res = await request('/v1/cue/keys?org=acme', {
-      headers: as('alice'),
-    });
-    expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({
-      error:
-        "acme restricts third-party apps. An org owner: run cue again and click Grant next to acme on GitHub's sign-in page. Anyone else: run cue again and click Request there, have an org owner approve it at https://github.com/organizations/acme/settings/oauth_application_policy, then run cue once more.",
-    });
   });
 
   it('connects only a listener with a live install key, by WebSocket', async () => {
@@ -366,7 +517,7 @@ describe('the relay', () => {
   it('delivers a cue to the listener holding its key, with the signed-in user', async () => {
     const key = await newKey();
     const ws = await listen(key);
-    expect(await keys()).toEqual({ org_id: ORG, keys: [key] });
+    expect(await keys()).toEqual({ org_id: ORG, login: 'alice', keys: [key] });
     // A client can't name another user: the Worker sets x-user itself.
     const forged = JSON.stringify({ id: 1, login: 'root' });
     const res = await post([key.kid], { headers: { 'x-user': forged } });

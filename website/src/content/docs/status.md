@@ -11,7 +11,7 @@ It shows the shared control plane once, then one section for each org on it.
 `--org` shows only that org's. It shows:
 
 - **Runners**: that each job gets its own VM and controls that VM's Docker,
-  the listeners' VM state and count, and each org's runner VMs: their cloud,
+  each org's listener VM, and its runner VMs: their cloud,
   regions, number of labels and vCPU quotas summed over the regions, read by
   the control plane with that cloud's connection, so no cloud CLI is needed;
   a quota it can't read shows as unread, with why.
@@ -36,8 +36,12 @@ It shows the shared control plane once, then one section for each org on it.
 - **Telemetry**: a line when the listener's events can't reach backmesh.com,
   and how many wait to be sent. Jobs aren't affected. See
   [Telemetry](/telemetry/).
-- **Checks**: whether the listeners' VM runs anything but the orgs' listeners,
-  whether each listener can get GitHub tokens from backmesh.com, and other
+- **Checks**: whether a listener's VM is gone, which `backmesh upgrade`
+  creates again; whether the control plane refuses a listener's token, such
+  as after a restore from an older backup, which `backmesh upgrade` replaces;
+  whether a listener is in standby, taking no jobs, because a move off the
+  old shared listener pool didn't finish, which `backmesh upgrade` finishes;
+  whether each listener can get GitHub tokens from backmesh.com; and other
   warnings.
 
 ```text
@@ -65,8 +69,8 @@ the run finishes, at most twice, unless a job sets `backmesh-noretry`. Each labe
 counts the runs rerun, `--json` adds where their retries started, and a
 `Retry:` line shows the runs waiting to be rerun.
 
-Either way, backmesh posts one neutral check run per workflow run, named
-`reclaims in run <id>`, on the run's commit. It lists every reclaimed job with
+Either way, the listener logs one note per workflow run (`backmesh logs`),
+named `reclaims in run <id>`. It lists every reclaimed job with
 its VM type and capacity. Titled "Spot reclaim", it says backmesh will rerun
 them; titled "Rerun needed", it says why backmesh won't and to rerun the failed
 jobs from the Actions tab once the run finishes.

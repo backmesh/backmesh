@@ -61,12 +61,12 @@ preinstalled toolchains, which setup actions add. See
 [label](/labels/) runs in one cloud. When a VM type has no spot capacity, the
 job's VM is the next VM type in the same cloud.
 
-**What happens when a backmesh job's spot VM is reclaimed?** The job fails, and a check run on
-the commit lists every reclaimed job. When reclaims were the run's only
-failures, backmesh reruns its failed jobs once the run finishes, preferring an
-on-demand runner, at most twice. When it can't rerun them (the job uses
-`backmesh-noretry`, the run is already on its third attempt, or the App lacks
-Actions: write), the check run says to rerun them from the Actions tab. When
+**What happens when a backmesh job's spot VM is reclaimed?** The job fails, and
+the listener's log notes every reclaimed job (`backmesh logs`). When reclaims
+were the run's only failures, backmesh reruns its failed jobs once the run
+finishes, preferring an on-demand runner, at most twice. When it can't rerun
+them (the job uses `backmesh-noretry`, or the run is already on its third
+attempt), the note says to rerun them from the Actions tab. When
 another job failed too, backmesh reruns nothing; rerun the failed jobs as
 usual. See [on demand](/labels/#on-demand).
 
@@ -79,14 +79,9 @@ VM, so no image layers carry over.
 
 ## Installing
 
-**Can I install backmesh when my org restricts OAuth apps?** Yes. An org with
-OAuth app access restrictions, the default for a new org, refuses install's
-sign-in until backmesh is allowed. On GitHub's sign-in page, an org owner clicks
-**Grant** next to the org. Anyone else clicks **Request**, and an org owner
-approves it at
-`https://github.com/organizations/<org>/settings/oauth_application_policy`;
-backmesh isn't listed there until someone has requested it. Then run install
-again.
+**Can I install backmesh when my org restricts OAuth apps?** Yes. backmesh
+signs in through its GitHub App, and GitHub Apps aren't subject to an org's
+OAuth app access restrictions.
 
 **Where does backmesh put its control plane?** With several cloud CLIs signed in and no
 `--control-plane`, install picks the first of AWS, GCP and Azure, and the plan
@@ -101,11 +96,13 @@ VM type backmesh's labels use, narrowed to the ones your account allows.
 [More](/install/#regions).
 
 **Can several orgs share one backmesh control plane?** Yes, when they have the same owner:
-run install with the other org and the same `--control-plane`. An admin of that
-org signs in, and install adds only that org's listener. Its plan says the org
+run install with the other org and the same `--control-plane`. An owner of
+that org, or a member who manages its self-hosted runners, signs in, and install adds only that org's listener. Its plan says the org
 joins the others' control plane, and that every org on it must have the same
-owner: their runners use the same cloud connections, and each org's listener
-can read the others' install keys. Agreeing to the plan agrees to that. Run it
+owner: their runners use the same cloud connections, and each org's listener,
+on its own VM, holds a control plane token that can reach the others' install
+keys. Agreeing to the plan agrees to that, and each org adds its own small
+listener VM to the bill. Run it
 from the machine that installed the first org, so the plan can see them. From
 another machine, install finds them only once it reaches the control plane, and
 stops before adding the org, for a new plan; at a terminal, it asks instead.
@@ -145,12 +142,19 @@ api.backmesh.com can't read them, and never the commit. The agent pushes even
 if `cue` fails: when backmesh.com is down, the cue is dropped and CI runs cold,
 as it would without one.
 
-**Can a coding agent in a sandbox cue backmesh?** Yes, with a copied sign-in. A sandbox that starts fresh each time can't
-keep a sign-in. A human can copy one from a machine where backmesh is signed
-in, `~/.backmesh/anycloud/.token`, into the sandbox's secrets as
-`BACKMESH_CUE_TOKEN`, which `backmesh cue` uses first. It is that human's full
-backmesh sign-in, not a cue-only key, so keep it secret; a later sign-in on
-that machine can revoke it.
+**Can a coding agent in a sandbox cue backmesh?** Yes, with a copied cue
+credential. A sandbox that starts fresh each time can't keep a sign-in. On a
+machine, run `backmesh cue --sign-in`, then copy
+`~/.backmesh/anycloud/backmesh-cue-credential` into the sandbox's secrets as
+`BACKMESH_CUE_TOKEN`, which `backmesh cue` uses first. It works only for cues,
+for the orgs whose backmesh App your sign-in reached, for 30 days; keep it
+secret, and copy a new one when it expires. Running `backmesh cue --sign-in`
+again revokes it and any other copy (a cue's own sign-in doesn't), and
+`rotate-key` and `uninstall` end it for their org. Its orgs are those your
+sign-in reached when it was made, for its 30 days even if you leave one; your
+listener still acts only on a cue from someone who can push to the
+repository. After you or an org is renamed on GitHub, run `backmesh cue --sign-in`
+again.
 
 ## Is it safe?
 

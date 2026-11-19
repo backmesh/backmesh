@@ -1,9 +1,8 @@
-// The control plane's AWS disks at gp3's baseline, 3,000 IOPS and 125 MiB/s
-// (owner, 2026-11-18): its t3 VMs can't sustain more, and AWS bills
-// provisioned IOPS and MiB/s monthly. `bm-control` is created at that tier;
-// anycloud 0.1.78 makes the management VM at 8,000 IOPS, about $25 a month
-// more, so install lowers it in place through the user's AWS CLI, with no
-// restart.
+// The management VM's AWS disk at gp3's baseline, 3,000 IOPS and 125 MiB/s
+// (owner, 2026-11-18): its t3 VM can't sustain more, and AWS bills
+// provisioned IOPS and MiB/s monthly. anycloud makes it at 8,000 IOPS, about
+// $25 a month more, so install lowers it in place through the user's AWS
+// CLI, with no restart.
 import type { RunCommand } from '../runners/regions.js';
 
 const GP3_BASELINE_IOPS = 3_000;

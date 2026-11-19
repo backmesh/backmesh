@@ -25,8 +25,8 @@ Or with Homebrew: `brew install backmesh/tap/backmesh`.
 You need:
 
 - A GitHub org owner, who signs in and installs backmesh's GitHub App during
-  install. An org that restricts OAuth apps
-  [approves backmesh first](/faq/#installing).
+  install. A member who manages the org's self-hosted runners can sign in
+  too, once the App is on the org.
 - A signed-in cloud CLI on your `PATH` for each cloud: `aws`, `gcloud` with
   a project, or `az` with a subscription, with
   [the rights install needs](/security/#what-install-needs). What install
@@ -40,13 +40,15 @@ backmesh install --org acme
 ```
 
 Without `--org`, install offers the org of the current repo's GitHub remote,
-else signs you in and lists the orgs you're an admin of to pick from. Without a
-terminal it asks nothing and names your orgs and the command to run instead.
+else signs you in and lists your orgs backmesh's GitHub App is already on to
+pick from; for a new org, pass `--org`. Without a terminal it asks nothing and
+names those orgs and the command to run instead.
 
 With nothing else, the control plane and runners go on the cloud your CLI is
-signed in to, near GitHub's US East. The control plane is two always-on VMs
-(t3.large and t3.small on AWS) in your account that start runners for your
-jobs (about $74–$111 a month).
+signed in to, near GitHub's US East. The control plane is an always-on VM
+(t3.large on AWS) in your account, and each org's listener, which starts runners
+for your jobs, a small one (t3.small on AWS) of its own (together about
+$74–$111 a month for one org).
 To choose, see [Control plane and runners](#control-plane-and-runners). To see
 the plan first:
 
@@ -67,7 +69,8 @@ Install then:
    regions, `backmesh-4` spot and on-demand prices, the [quotas](#quotas) read
    through your cloud CLI, and the control plane's monthly cost, and asks once.
 2. **Prints a code.** The org owner opens `https://github.com/login/device` on
-   any device and enters the code. If backmesh's GitHub App isn't on the org
+   any device and enters the code; one that expires is replaced by a new one,
+   printed with when it expires. If backmesh's GitHub App isn't on the org
    yet, install then prints GitHub's install link for it
    ([its permissions](/security/#the-github-app)) and waits until it's there.
    That sign-in also owns the control plane and is saved in `~/.backmesh`.
@@ -107,6 +110,12 @@ deleted when it ends, can be in other clouds; the control plane's cloud gets pla
 `--control-plane` still takes `<cloud>:<region>`. `--runners` takes a cloud
 only — `--runners aws:us-west-2` is refused, since runner regions aren't
 chosen (below).
+
+On Azure, the plan first checks that your subscription may create the VM
+sizes of the always-on VMs install creates in that region, since some offers,
+such as sponsorships, can't. If it can't, the plan names each refused size and
+puts them in the first of backmesh's [Azure regions](/azure/#regions) that
+offers every one. [More](/azure/#the-control-planes-region).
 
 ## Regions
 

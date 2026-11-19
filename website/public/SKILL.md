@@ -32,9 +32,7 @@ Or `brew install backmesh/tap/backmesh`. Then run `backmesh --version`.
 
 1. **Human:** confirm who owns the GitHub org. During install, the org owner
    enters a code on GitHub, and installs the App if it isn't on the org yet.
-   Only the org's private repositories can use the runners. An org that
-   restricts OAuth apps approves backmesh first
-   (https://backmesh.com/faq/#installing).
+   Only the org's private repositories can use the runners.
 2. Each cloud the human wants needs its CLI signed in: `aws`, `gcloud` with
    a project, or `az` with a subscription. The plan in section 3
    prints a fix for anything missing; ask the human to run it. The signed-in
@@ -64,8 +62,9 @@ stops for them twice:
 
 1. **Human:** `Proceed?`, before anything is billed, and, when adding an org
    to a shared control plane, whether all its orgs have the same owner.
-2. **Human:** install prints a code. The org owner enters it at
-   `https://github.com/login/device` on any device. If the App isn't on the org
+2. **Human:** install prints a code and when it expires. The org owner
+   enters it at `https://github.com/login/device` on any device; install
+   prints a new code when one expires, so keep waiting. If the App isn't on the org
    yet, install prints GitHub's install link; the owner opens it and installs
    the App. Nothing is copied back.
 

@@ -67,9 +67,8 @@ interface Waiting {
 }
 
 export interface RetrierDeps {
+  // Reads with the install's token; reruns through the Worker's /v1/rerun.
   runs: WorkflowRuns;
-  // The installation token has Actions: write.
-  canRerun: () => boolean;
   // A runner name this installation minted.
   ours: (runner: string) => boolean;
   log: Log;
@@ -99,7 +98,6 @@ export class Retrier implements Routing {
   // Step 1, at reclaim detection: `ScalerDeps.retry`. A rejection is
   // `unavailable` there.
   async decide(run: WorkflowRun, reclaims: Reclaim[]): Promise<RetryDecision> {
-    if (!this.deps.canRerun()) return 'unavailable';
     const { attempt } = await this.deps.runs.get(run);
     if (attempt >= ATTEMPT_CAP) return 'attempt-cap';
     const jobs = await this.deps.runs.jobs(run, attempt);
@@ -135,8 +133,8 @@ export class Retrier implements Routing {
   }
 
   // Steps 2 and 3: polls each waiting run that's due and, once it's
-  // completed, reruns its failed jobs or drops it with a log line and no
-  // check run. Returns the rerun rows.
+  // completed, reruns its failed jobs through the Worker or drops it with a
+  // log line. Returns the rerun rows.
   async poll(now: number): Promise<JobRow[]> {
     for (const [key, at] of this.expected) {
       if (now - at >= DAY_MS) this.expected.delete(key);
@@ -184,14 +182,24 @@ export class Retrier implements Routing {
       } catch (error) {
         // GitHub refusing the call won't change by asking again; a rate
         // limit, a 429 or a 403 that says so, will.
-        const status = (error as { status?: unknown }).status;
+        // The Worker's 409 while the installation lacks Actions write waits
+        // for an owner to accept it.
+        const { status, code } = error as { status?: unknown; code?: unknown };
         const refused =
           typeof status === 'number' &&
           status < 500 &&
           status !== 429 &&
+          code !== 'actions_write_needed' &&
           !(status === 403 && rateLimited(error));
         if (refused) this.waiting.delete(key);
-        else entry.nextAt = now + entry.delayMs;
+        else {
+          // The Worker's 409 (no Actions write yet) or 429 (its limit)
+          // backs off, doubling up to MAX_POLL_MS.
+          if (status === 409 || status === 429) {
+            entry.delayMs = Math.min(entry.delayMs * 2, MAX_POLL_MS);
+          }
+          entry.nextAt = now + entry.delayMs;
+        }
         this.deps.log({
           msg: refused ? 'rerun refused; dropped' : 'run read failed; retrying',
           run: key,

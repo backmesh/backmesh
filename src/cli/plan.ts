@@ -16,7 +16,7 @@ export interface InstallPlan {
   anycloud: string;
   images: { runner: string; listener: string };
   // The clouds install connects: the control plane's first, unless this run
-  // reuses it with `bm-control` running and it's no runner cloud, when it's
+  // reuses it with a listener on it and it's no runner cloud, when it's
   // left out. `account`
   // is the AWS account, GCP project or Azure subscription that bills it.
   clouds: { cloud: string; region: string; account: string }[];
@@ -24,13 +24,22 @@ export interface InstallPlan {
     cloud: string;
     region: string;
     managementVm: string;
-    controlVm: string;
     monthlyUsd: number;
     // Read from this machine's control plane when it has one; a new one
     // otherwise, and install checks again once `cluster create` resumes it.
     exists: boolean;
     sharedWith: string[];
   };
+  // The org's own listener VM, which a re-run keeps: null then.
+  listener: {
+    cloud: string;
+    region: string;
+    vmType: string;
+    monthlyUsd: number;
+  } | null;
+  // Azure's: the regions install tries, in order, for the always-on VMs it
+  // creates, each offering every size (`vm-sizes.ts`); absent elsewhere.
+  alwaysOnRegions?: string[];
   // Each runner cloud's regions, fixed (`RUNNER_REGIONS`, `regions.ts`) and
   // account-allowed; hashed with the classes' regions, so another account
   // or placement is another plan.
@@ -63,7 +72,7 @@ export interface InstallPlan {
 }
 
 export const sameOwnerLine = (org: string, others: readonly string[]) =>
-  `${org} joins the control plane of ${others.join(', ')}. Each org's listener can read the others' install keys, and their runners use the same cloud connections, so every one of them must have the same owner.`;
+  `${org} joins the control plane of ${others.join(', ')}. Each org's listener holds a control plane token that can reach the others' install keys, and their runners use the same cloud connections, so every one of them must have the same owner.`;
 
 // The plan as built, in install's fixed key order. The quotas and rates
 // are shown, not agreed to: usage moves the quotas, and the catalog behind
@@ -91,6 +100,8 @@ export interface UpgradePlan {
     org: string;
     // The listener it read (`fingerprint`), and what changes in its runners.
     current: string | null;
+    // Its listener moves from `bm-control` to its own VM.
+    moves: boolean;
     changes: RunnerChanges;
     classes: Pick<RunnerClass, 'label' | 'cloud' | 'vmTypes' | 'regions'>[];
   }[];

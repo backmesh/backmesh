@@ -17,9 +17,16 @@ import {
   fakeApi,
   fakeBinary,
   fakeCloud,
+  fakeExec,
   fakeOrg,
   fakeWorker,
+  githubOrg,
   INSTALL_KEY,
+  DEVICE,
+  GITHUB_TOKEN,
+  NEXT_DEVICE,
+  SIGNED_IN,
+  listenerVm,
 } from './fakes.js';
 
 const HOSTED = 'https://c1.anycloud.sh';
@@ -44,6 +51,7 @@ const RELEASED: FeatureTable = {
   'role-apply': '0.1.0',
   c28: '0.1.0',
   'vm-job-regions': undefined,
+  'service-tokens': '0.1.0',
 };
 const DELETE_HOSTED = 'cluster delete c1 --delete-buckets --confirm c1 --json';
 
@@ -55,13 +63,19 @@ const pool = (id: string, name: string) => ({
   allowPrivilegedJobs: name !== 'bm-control',
 });
 
+// Each org's listener VM.
+const vmOf = (org: string) => `bml-l8u5e-${org.padEnd(6, '0').slice(0, 6)}`;
+
 // A machine targeting the control plane at HOSTED, whose connections are
-// aws's role and gcp's generated key, the listener on `bm-control` with one
-// running job, and a drain that ends `drained`. Deletes change what the API
-// lists next.
+// aws's role and gcp's generated key, each org's listener on its VM (or
+// still on `bm-control` with `legacy`) with one running job, and a drain
+// that ends `drained`. Deletes change what the API lists next.
 function setUp({
   url = HOSTED,
   listener = true,
+  legacy = false,
+  lost = false,
+  duplicate = false,
   orgs = ['acme'],
   secrets = orgs,
   others = [],
@@ -77,7 +91,13 @@ function setUp({
 }: {
   url?: string;
   listener?: boolean;
-  // The orgs whose listeners run on `bm-control`.
+  // The listeners are Deployments on `bm-control`, from before their VMs.
+  legacy?: boolean;
+  // anycloud found the listeners' VMs gone.
+  lost?: boolean;
+  // acme has a second running listener VM.
+  duplicate?: boolean;
+  // The orgs whose listeners run.
   orgs?: string[];
   // The orgs whose `backmesh-<org>` Secret exists.
   secrets?: string[];
@@ -123,15 +143,35 @@ function setUp({
       ]);
     }
     if (/^(deployment|node-pool) delete /.test(line)) deleted.add(args[2]!);
+    if (/^terminate /.test(line)) deleted.add(args[1]!);
     if (/^secrets delete /.test(line)) deleted.add(`secret ${args[2]}`);
+    if (
+      line.startsWith('api access remove --service-account ') &&
+      !(
+        listener &&
+        legacy &&
+        orgs.includes(args.at(-1)!.replace('backmesh-', ''))
+      )
+    ) {
+      void calls.push(line);
+      throw new Error('not a member');
+    }
+    return answer(args);
+  };
+  // `anycloud exec` into a listener, recorded as its Secret's name.
+  const listenerOf = (id: string) =>
+    `backmesh-${orgs.find((org) => vmOf(org) === id || `backmesh-${org}` === id)}`;
+  const { exec } = fakeExec((id, line) => {
+    const name = listenerOf(id);
     if (line.includes('8080/status')) {
-      calls.push(`exec ${args[1]} /status`);
+      calls.push(`exec ${name} /status`);
       if (!listener) throw new Error('no such Deployment');
       return JSON.stringify({
         code: 200,
         env: {
-          ORG: args[1]!.replace('backmesh-', ''),
+          ORG: name.replace('backmesh-', ''),
           BACKMESH_INSTALL_KEY: INSTALL_KEY,
+          BACKMESH_LISTENER_IMAGE: LISTENER_IMAGE,
         },
         body: {
           installed: true,
@@ -156,7 +196,7 @@ function setUp({
     }
     if (line.includes('8080/drain')) {
       const post = line.includes('"POST"');
-      calls.push(`exec ${args[1]} ${post ? 'POST' : 'GET'} /drain`);
+      calls.push(`exec ${name} ${post ? 'POST' : 'GET'} /drain`);
       const reply = post
         ? { ...DONE, state: 'running' }
         : reads.length
@@ -165,15 +205,8 @@ function setUp({
       if (reply instanceof Error) throw reply;
       return JSON.stringify({ code: 200, env: {}, body: reply });
     }
-    if (
-      line.startsWith('api access remove --service-account ') &&
-      !(listener && orgs.includes(args.at(-1)!.replace('backmesh-', '')))
-    ) {
-      void calls.push(line);
-      throw new Error('not a member');
-    }
-    return answer(args);
-  };
+    throw new Error(`unexpected exec ${line}`);
+  });
   const { api } = fakeApi({
     'GET /v1/node-pools': () => ({
       nodePools: [pool('np-1', 'bm-control'), pool('np-2', 'bm-aws-spot')].map(
@@ -182,19 +215,38 @@ function setUp({
     }),
     'GET /v1/deployments': () => ({
       deployments: [
-        ...(listener
+        ...(listener && legacy
           ? orgs.map((org) => ({ name: `backmesh-${org}`, managed: false }))
           : []),
         ...others,
       ].map((d) => ({
         ...d,
+        id: d.name,
         nodePoolId: 'np-1',
         deletedAt: deleted.has(d.name) ? 1 : null,
         image: LISTENER_IMAGE,
       })),
     }),
-    'GET /v1/workloads': () =>
-      runners.flatMap((id) => {
+    'GET /v1/workloads': () => [
+      ...(listener && !legacy
+        ? orgs.map((org) =>
+            listenerVm(org, vmOf(org), {
+              state: lost
+                ? 'failed'
+                : deleted.has(vmOf(org))
+                  ? 'terminated'
+                  : 'running',
+            }),
+          )
+        : []),
+      ...(duplicate
+        ? [
+            listenerVm('acme', 'bml-l8u5e-dup000', {
+              state: deleted.has('bml-l8u5e-dup000') ? 'terminated' : 'running',
+            }),
+          ]
+        : []),
+      ...runners.flatMap((id) => {
         const phase = phases.get(id) ?? 0;
         if (phase === 1) phases.set(id, 2);
         return phase === 2
@@ -209,6 +261,7 @@ function setUp({
               },
             ];
       }),
+    ],
     ...Object.fromEntries(
       runners.map((id) => [
         `DELETE /v1/workloads/${id}`,
@@ -257,15 +310,19 @@ function setUp({
       if (refresh) refreshable.push(apiUrl);
       return api;
     },
+    exec: () => exec,
     fetch: async (url, init) => {
       const { host, pathname } = new URL(String(url));
       const method = init?.method ?? 'GET';
-      if (host === 'api.backmesh.com') {
+      if (host === 'api.backmesh.com' || host === 'github.com') {
         // In `calls` too, to order the cleanup against the binary's steps.
         calls.push(`${method} ${pathname}`);
         bearers.push(new Headers(init?.headers).get('authorization'));
         return worker.fetch(url, init);
       }
+      // GitHub's public org read (`readOrgId`).
+      if (host === 'api.github.com' && /^\/orgs\/[^/]+$/.test(pathname))
+        return githubOrg(pathname);
       if (host !== 'c1.anycloud.sh') {
         if (method === 'DELETE') calls.push(`github DELETE ${pathname}`);
         // One GitHub org fake answers for every org.
@@ -303,23 +360,28 @@ const scripted: UninstallOptions = {
 
 const changes = (calls: string[]) =>
   calls.filter((c) =>
-    /^(exec backmesh-\w+ POST|POST \/v1\/installs\/cleanup|github DELETE|deployment (delete|upgrade)|api access|node-pool delete|cluster delete|credentials delete|secrets delete)/.test(
+    /^(exec backmesh-\w+ POST|POST \/v1\/installs\/cleanup|github DELETE|deployment (delete|upgrade)|terminate bml-|api access|node-pool delete|cluster delete|credentials delete|secrets delete)/.test(
       c,
     ),
   );
 
 describe('uninstall', () => {
   it('signs in, drains and deletes the listener, cleans up GitHub, deletes the cloud side, then removes the App', async () => {
-    const { deps, calls, lines, refreshable, worker, bearers, github } =
-      setUp();
+    const { deps, calls, lines, refreshable, worker, bearers, github } = setUp({
+      // The first code expires before anyone enters it.
+      worker: fakeWorker({
+        codes: [Response.json(DEVICE), Response.json(NEXT_DEVICE)],
+        polls: [Response.json({ error: 'expired_token' }), GITHUB_TOKEN],
+      }),
+    });
     const result = await uninstall(scripted, deps);
 
     expect(changes(calls)).toEqual([
       // The sign-in, with the listener's install key, before any change.
       'POST /v1/installs/cleanup',
       'exec backmesh-acme POST /drain',
-      'deployment delete backmesh-acme',
-      'api access remove --service-account backmesh-acme',
+      'terminate bml-l8u5e-acme00',
+      'api access remove --service backmesh-acme',
       ...GITHUB_DELETES,
       'POST /v1/installs/cleanup/finish',
       'secrets delete backmesh-acme',
@@ -339,22 +401,33 @@ describe('uninstall', () => {
     // The hosted API's saved token can go stale, so its client refreshes it.
     expect(refreshable).toEqual([HOSTED]);
     expect(worker.calls).toEqual([
-      'POST /v1/installs/device',
+      'POST github.com/login/device/code',
+      'POST github.com/login/oauth/access_token',
+      'POST github.com/login/device/code',
+      'POST github.com/login/oauth/access_token',
       'POST /v1/installs/cleanup',
       'POST /v1/installs/cleanup/finish',
     ]);
     expect(worker.bodies).toEqual([
-      { device_code: 'dev-3584e1', org: 'acme' },
+      { github_token: SIGNED_IN, org: 'acme' },
       { cleanup_id: CLEANUP_ID },
     ]);
-    // Its admin check keeps no token, so it asks only for read:org.
-    expect(worker.devices).toEqual([{ control_plane: false }]);
-    expect(bearers).toEqual([null, `Bearer ${INSTALL_KEY}`, null]);
+    expect(bearers).toEqual([
+      null,
+      null,
+      null,
+      null,
+      `Bearer ${INSTALL_KEY}`,
+      null,
+    ]);
     // Only backmesh's runners go.
     expect([...github.runners.values()]).toEqual(['build-box', 'bmaster-ci']);
-    expect(lines).toContain(
-      'Sign in with GitHub as an admin of acme, so backmesh removes itself from acme: open https://github.com/login/device and enter ABCD-1234.',
-    );
+    expect(lines.filter((l) => l.startsWith('Sign in'))).toEqual([
+      expect.stringMatching(
+        /^Sign in with GitHub as an owner of acme, so backmesh removes itself from acme: open https:\/\/github\.com\/login\/device and enter ABCD-1234 \(it expires at \d\d:\d\d UTC\)\.$/,
+      ),
+      expect.stringContaining('enter WXYZ-5678'),
+    ]);
     expect(lines).toContain('Removed the backmesh GitHub App from acme.');
     expect(lines.join('\n')).not.toContain('ghs_');
     expect(lines[0]).toMatch(/1 running job will fail/);
@@ -404,7 +477,8 @@ describe('uninstall', () => {
         'POST /v1/installs/cleanup/finish',
       ]);
       // No install key to send.
-      expect(bearers).toEqual([null, null, null]);
+      // GitHub's device flow, then the cleanup and its finish, no key.
+      expect(bearers).toEqual([null, null, null, null]);
       expect(lines).toContain(
         `Removed backmesh's scale sets, runners and runner groups ${groups} from acme.`,
       );
@@ -806,8 +880,8 @@ describe('uninstall', () => {
         ['POST /v1/installs/cleanup'],
       ],
       [
-        fakeWorker({ device: new TypeError('fetch failed') }),
-        "Couldn't reach backmesh.com for the GitHub sign-in",
+        fakeWorker({ polls: [Response.json({ error: 'access_denied' })] }),
+        'The GitHub sign-in was denied.',
         [],
       ],
     ] as const) {
@@ -840,7 +914,8 @@ describe('uninstall', () => {
     const { deps, github } = setUp({ worker });
     await uninstall(scripted, deps);
     expect(worker.calls).toEqual([
-      'POST /v1/installs/device',
+      'POST github.com/login/device/code',
+      'POST github.com/login/oauth/access_token',
       'POST /v1/installs/cleanup',
       'POST /v1/installs/cleanup/token',
       'POST /v1/installs/cleanup/finish',
@@ -861,13 +936,16 @@ describe('uninstall', () => {
           token: null,
           expires_at: null,
           org: { id: 7, login: 'acme' },
-          cleanup_id: CLEANUP_ID,
+          // Nothing for the Worker to finish.
+          cleanup_id: null,
         }),
       ],
     });
     const { deps, calls, lines } = setUp({ worker });
-    await uninstall(scripted, deps);
+    const result = await uninstall(scripted, deps);
     expect(changes(calls).filter((c) => c.startsWith('github'))).toEqual([]);
+    expect(worker.calls).not.toContain('POST /v1/installs/cleanup/finish');
+    expect(result.orgs).toEqual([{ org: 'acme', appRemoved: true }]);
     expect(calls).toContain(DELETE_HOSTED);
     expect(lines).toContain(
       "The backmesh GitHub App isn't installed on acme, so backmesh can't reach its runners there. Check the org's Actions settings for runner groups backmesh-l8u5e-*.",
@@ -886,8 +964,8 @@ describe('uninstall', () => {
     expect(changes(calls)).toEqual([
       'POST /v1/installs/cleanup',
       'exec backmesh-acme POST /drain',
-      'deployment delete backmesh-acme',
-      'api access remove --service-account backmesh-acme',
+      'terminate bml-l8u5e-acme00',
+      'api access remove --service backmesh-acme',
       ...GITHUB_DELETES,
       'POST /v1/installs/cleanup/finish',
       'secrets delete backmesh-acme',
@@ -1009,6 +1087,7 @@ describe('uninstall', () => {
     expect(changes(calls)).toEqual([
       'POST /v1/installs/cleanup',
       'api access remove --service-account backmesh-acme',
+      'api access remove --service backmesh-acme',
       ...GITHUB_DELETES,
       'POST /v1/installs/cleanup/finish',
       'secrets delete backmesh-acme',
@@ -1020,6 +1099,75 @@ describe('uninstall', () => {
     expect(bearers[1]).toBeNull();
   });
 
+  it('removes a listener still on bm-control: its Deployment and ServiceAccount', async () => {
+    const { deps, calls } = setUp({ legacy: true });
+    await uninstall(scripted, deps);
+    expect(changes(calls).slice(0, 5)).toEqual([
+      'POST /v1/installs/cleanup',
+      'exec backmesh-acme POST /drain',
+      'deployment delete backmesh-acme',
+      'api access remove --service-account backmesh-acme',
+      // Idempotent: an install never moved to a VM has no service.
+      'api access remove --service backmesh-acme',
+    ]);
+  });
+
+  it('removes an org whose listener VM is gone: no drain, its runners stopped instead, and the VM left to anycloud', async () => {
+    const { deps, calls, lines } = setUp({
+      lost: true,
+      runners: ['bmabc12-a4-x'],
+    });
+    await uninstall(scripted, deps);
+    // Counted through the org's session, as the listener can't say.
+    expect(lines[0]).toMatch(/1 running job will fail/);
+    expect(
+      calls.filter((c) => /^(terminate|api access|github DELETE)/.test(c)),
+    ).toEqual([
+      'terminate bmabc12-a4-x',
+      'api access remove --service backmesh-acme',
+      ...GITHUB_DELETES,
+    ]);
+    expect(calls).not.toContain('exec backmesh-acme /status');
+  });
+
+  it("revokes the service on a rerun past the VM's end, and fails when the revoke does", async () => {
+    const { deps, calls } = setUp({ listener: false });
+    const run = deps.run;
+    deps.run = async (args) => {
+      if (args.join(' ') === 'api access remove --service backmesh-acme') {
+        calls.push(args.join(' '));
+        throw new Error('anycloud API unavailable');
+      }
+      return run(args);
+    };
+    await expect(uninstall(scripted, deps)).rejects.toThrow(
+      'anycloud API unavailable',
+    );
+    // The Secret, the org's record that it isn't finished, stays.
+    expect(calls).not.toContain('secrets delete backmesh-acme');
+  });
+
+  it("terminates an org's other listener VMs before the drain, then its own", async () => {
+    const { deps, calls, lines } = setUp({ duplicate: true });
+    await uninstall(scripted, deps);
+    expect(lines[0]).toContain(
+      'The extra listener VM bml-l8u5e-dup000 goes too.',
+    );
+    expect(changes(calls).slice(0, 4)).toEqual([
+      'POST /v1/installs/cleanup',
+      'terminate bml-l8u5e-dup000',
+      'exec backmesh-acme POST /drain',
+      'terminate bml-l8u5e-acme00',
+    ]);
+  });
+
+  it('revokes no service with an anycloud that has no service tokens', async () => {
+    const { deps, calls } = setUp();
+    deps.features = { ...RELEASED, 'service-tokens': undefined };
+    await uninstall(scripted, deps);
+    expect(calls).not.toContain('api access remove --service backmesh-acme');
+  });
+
   it('removes one org of several and keeps the control plane', async () => {
     const { deps, calls, lines } = setUp({ orgs: ['acme', 'beta'] });
     const result = await uninstall({ ...scripted, org: 'Beta' }, deps);
@@ -1027,8 +1175,8 @@ describe('uninstall', () => {
     expect(changes(calls)).toEqual([
       'POST /v1/installs/cleanup',
       'exec backmesh-beta POST /drain',
-      'deployment delete backmesh-beta',
-      'api access remove --service-account backmesh-beta',
+      'terminate bml-l8u5e-beta00',
+      'api access remove --service backmesh-beta',
       ...githubDeletes('beta'),
       'POST /v1/installs/cleanup/finish',
       'secrets delete backmesh-beta',
@@ -1054,14 +1202,14 @@ describe('uninstall', () => {
     expect(steps).toEqual([
       'POST /v1/installs/cleanup',
       'exec backmesh-acme POST /drain',
-      'deployment delete backmesh-acme',
-      'api access remove --service-account backmesh-acme',
+      'terminate bml-l8u5e-acme00',
+      'api access remove --service backmesh-acme',
       'POST /v1/installs/cleanup/finish',
       'secrets delete backmesh-acme',
       'POST /v1/installs/cleanup',
       'exec backmesh-beta POST /drain',
-      'deployment delete backmesh-beta',
-      'api access remove --service-account backmesh-beta',
+      'terminate bml-l8u5e-beta00',
+      'api access remove --service backmesh-beta',
       'POST /v1/installs/cleanup/finish',
       'secrets delete backmesh-beta',
       'node-pool delete np-1',
@@ -1077,6 +1225,7 @@ describe('uninstall', () => {
     expect(changes(calls)).toEqual([
       'POST /v1/installs/cleanup',
       'api access remove --service-account backmesh-beta',
+      'api access remove --service backmesh-beta',
       ...githubDeletes('beta'),
       'POST /v1/installs/cleanup/finish',
       'secrets delete backmesh-beta',
@@ -1115,6 +1264,7 @@ describe('uninstall', () => {
     expect(changes(calls)).toEqual([
       'POST /v1/installs/cleanup',
       'api access remove --service-account backmesh-acme',
+      'api access remove --service backmesh-acme',
       // Stopped before the GitHub cleanup; anycloud's managed one stays.
       'deployment delete backmesh',
       ...GITHUB_DELETES,

@@ -660,7 +660,7 @@ esac`,
     const command = [
       'echo "secret-ish detail"',
       'echo "child sees ${ISSUE_TOKEN:-no token}"',
-      'echo "Sign in with GitHub to install: open https://github.com/login/device and enter ABCD-1234."',
+      'echo "Sign in with GitHub once, as an owner of backmesh-dryrun: open https://github.com/login/device and enter ABCD-1234 (it expires at 05:45 UTC)."',
       'echo "Sign in with GitHub to approve the control plane: open https://github.com/login/device and enter WXYZ-9876."',
     ].join('; ');
     const out = spawnSync('test/e2e/with-sign-in.sh', ['bash', '-c', command], {
