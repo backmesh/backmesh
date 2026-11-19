@@ -482,7 +482,7 @@ describe("the test org's label run", () => {
       url: 'https://github.com/backmesh-dryrun/e2e/actions/runs/7',
     });
     expect(readFileSync(join(dir, 'git.log'), 'utf8')).toMatch(
-      /add result\.json\n(.*\n)*commit .*\n(.*\n)*push\n?$/,
+      /^add result\.json\n.* commit .*\npush\n$/,
     );
   });
 });

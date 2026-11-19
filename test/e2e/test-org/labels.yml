@@ -1,0 +1,65 @@
+name: labels
+
+# backmesh-dryrun/e2e's labels.yml; this copy is what backmesh/backmesh's
+# tests check. backmesh/backmesh's e2e.yml (run-test-org-labels.ts) pushes
+# run.json to a run/<nonce> branch with this repository's write deploy key;
+# its runners take jobs only from this org's repositories. This calls
+# e2e-labels.yml with run.json's matrix and ref, then pushes result.json to
+# the same branch, which e2e.yml reads back with the deploy key and then
+# deletes. GITHUB_TOKEN's push starts no workflow.
+run-name: labels ${{ github.ref_name }}
+
+on:
+  push:
+    branches: ['run/**']
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.run.outputs.matrix }}
+      ref: ${{ steps.run.outputs.ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: run
+        run: |
+          echo "matrix=$(jq -c .matrix run.json)" >>"$GITHUB_OUTPUT"
+          echo "ref=$(jq -er .ref run.json)" >>"$GITHUB_OUTPUT"
+
+  labels:
+    needs: read
+    permissions:
+      contents: read
+    uses: backmesh/backmesh/.github/workflows/e2e-labels.yml@main
+    with:
+      matrix: ${{ needs.read.outputs.matrix }}
+      ref: ${{ needs.read.outputs.ref }}
+
+  result:
+    needs: [read, labels]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - env:
+          CONCLUSION: ${{ needs.labels.result }}
+          URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          jq -n --arg conclusion "$CONCLUSION" --arg url "$URL" '{$conclusion, $url}' >result.json
+          git add result.json
+          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -qm result
+          git push

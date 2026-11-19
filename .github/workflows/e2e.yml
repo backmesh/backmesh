@@ -31,9 +31,9 @@ name: E2E
 # subject only, and can't add a federated credential for another (no Graph
 # rights to edit itself). So the Azure leg runs from main and waits for
 # ci-install's reviewer. The owner's one-time setup is
-# E2E_TEST_ORG_DISPATCH_TOKEN in both environments, AWS_ROLE_ARN in `e2e`,
-# and the test org's e2e repository with its labels.yml (the owner's setup
-# notes). It refuses an org ANYCLOUD_API_URLS names: those are live.
+# E2E_TEST_ORG_DEPLOY_KEY (a write deploy key on the test org's e2e
+# repository) in both environments, AWS_ROLE_ARN in `e2e`, and that
+# repository with test/e2e/test-org/labels.yml as its labels.yml. It refuses an org ANYCLOUD_API_URLS names: those are live.
 
 on:
   workflow_dispatch:
@@ -350,14 +350,22 @@ jobs:
           echo "CLUSTER_ID=$id" >>"$GITHUB_ENV"
 
       # The label member, through the test org's own repository, whose
-      # runners these are: `labels` on AWS, one backmesh-4 job on Azure.
+      # runners these are: `labels` on AWS, one backmesh-4 job on Azure. Its
+      # write deploy key pushes the run's branch, which starts its labels.yml.
       - name: The label member on the test org's runners
         env:
-          GH_TOKEN: ${{ secrets.E2E_TEST_ORG_DISPATCH_TOKEN }}
+          DEPLOY_KEY: ${{ secrets.E2E_TEST_ORG_DEPLOY_KEY }}
           TEST_ORG_REPO: ${{ inputs.org }}/e2e
           MATRIX: ${{ env.LABEL_MATRIX }}
           REF: ${{ github.sha }}
-        run: node test/e2e/run-test-org-labels.ts
+        run: |
+          key=$RUNNER_TEMP/test-org-key
+          install -m 600 /dev/null "$key"
+          printf '%s\n' "$DEPLOY_KEY" >"$key"
+          # GitHub's host keys, over HTTPS.
+          install -m 700 -d ~/.ssh
+          curl -fsS https://api.github.com/meta | jq -r '.ssh_keys[] | "github.com " + .' >>~/.ssh/known_hosts
+          GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes" node test/e2e/run-test-org-labels.ts
 
       # Always, after anything that may have made something, cancelled too:
       # everything but the App, and the checkpoint bucket with the rest. Its
