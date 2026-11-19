@@ -41,17 +41,28 @@ describe('saveSignIn', () => {
 });
 
 describe('signInAgain', () => {
-  // The Worker's device flow, answering at once.
-  const fetch = (async (url: string) =>
-    url.endsWith('/v1/installs/device')
-      ? Response.json({
-          device_code: 'd',
+  // GitHub's device flow with the App, on github.com: the first code
+  // expires before anyone enters it, then the second signs in.
+  const github = () => {
+    let codes = 0;
+    return (async (url: string) => {
+      const { host, pathname } = new URL(url);
+      if (host !== 'github.com') throw new Error(`unexpected ${url}`);
+      if (pathname === '/login/device/code') {
+        codes++;
+        return Response.json({
+          device_code: `d${codes}`,
           user_code: 'ABCD-1234',
           verification_uri: 'https://github.com/login/device',
           interval: 0,
           expires_in: 900,
-        })
-      : Response.json({ github_token: 'gho_new' })) as typeof globalThis.fetch;
+        });
+      }
+      return Response.json(
+        codes === 1 ? { error: 'expired_token' } : { access_token: 'ghu_new' },
+      );
+    }) as typeof globalThis.fetch;
+  };
   // GitHub answers 401 for a revoked token, and can't check `gho_down`.
   const scopes = async (token: string) => {
     if (token === 'gho_revoked') throw new GitHubError(401, 'Bad credentials');
@@ -66,13 +77,15 @@ describe('signInAgain', () => {
     await signInAgain(
       {
         env: { BACKMESH_ANYCLOUD_DIR: dir },
-        fetch,
+        fetch: github(),
         print: (l) => lines.push(l),
         wait: async () => {},
       },
       scopes,
     )();
-    expect(readFileSync(join(dir, '.token'), 'utf8')).toBe('gho_new\n');
+    expect(readFileSync(join(dir, '.token'), 'utf8')).toBe('ghu_new\n');
+    // `cue --sign-in`'s sign-in gets a fresh code for the expired one.
+    expect(lines.filter((l) => l.startsWith('Sign in'))).toHaveLength(2);
     return { said: lines.filter((l) => l.includes('revoked')) };
   };
 

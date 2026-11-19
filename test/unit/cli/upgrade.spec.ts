@@ -19,6 +19,9 @@ import {
   listenerVm,
   githubOrg,
   INSTALL_KEY,
+  DEVICE,
+  GITHUB_TOKEN,
+  NEXT_DEVICE,
   SIGNED_IN,
   versionMismatch,
 } from './fakes.js';
@@ -385,6 +388,9 @@ function setUp({
     status: Array.isArray(keyStatus) ? keyStatus : [keyStatus],
     installs,
     tokens: beta ? [token('acme'), token('beta')] : [token('acme')],
+    // The first code expires before anyone enters it.
+    codes: [Response.json(DEVICE), Response.json(NEXT_DEVICE)],
+    polls: [Response.json({ error: 'expired_token' }), GITHUB_TOKEN],
   });
   const deps: UpgradeDeps = {
     // No saved anycloud files, whatever this machine holds.
@@ -400,7 +406,7 @@ function setUp({
       clientVersion ? fakeApi(routes, refusal, clientVersion).api : api,
     exec: () => exec,
     fetch: async (url, init) =>
-      String(url).startsWith('https://api.backmesh.com/')
+      /^https:\/\/(api\.backmesh\.com|github\.com)\//.test(String(url))
         ? worker.fetch(url, init)
         : String(url).startsWith('https://api.github.com/')
           ? githubOrg(new URL(String(url)).pathname)
@@ -1273,19 +1279,19 @@ describe('upgrade', () => {
         Response.json({
           install: 'cd'.repeat(16),
           key: replaced,
-          github_token: SIGNED_IN,
         }),
       ],
     });
   const replaced = `bmk_${'cd'.repeat(16)}${'ef'.repeat(16)}`;
 
-  it('signs in again for a refused key, saves the replacement and rolls', async () => {
+  it('signs in again for a refused key, on a fresh code once the first expires, saves the replacement and rolls', async () => {
     const { deps, calls, requests, worker } = refusedKey();
 
     await upgrade(deps);
 
+    expect(worker.signIns()).toHaveLength(2);
     expect(worker.bodies).toEqual([
-      { org: 'acme', device_code: 'dev-3584e1', install: 'ab'.repeat(16) },
+      { org: 'acme', github_token: SIGNED_IN, install: 'ab'.repeat(16) },
     ]);
     expect(savedKey(requests)).toBe(replaced);
     expect(rolled(calls)).toBe(true);

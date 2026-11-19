@@ -18,6 +18,9 @@ import {
   listenerVm,
   githubOrg,
   INSTALL_KEY,
+  DEVICE,
+  GITHUB_TOKEN,
+  NEXT_DEVICE,
   SIGNED_IN,
 } from './fakes.js';
 
@@ -220,9 +223,11 @@ function fixture({
         org: 'acme',
         install: NEW_INSTALL,
         key: NEW_KEY,
-        github_token: SIGNED_IN,
       }),
     ],
+    // The first code expires before anyone enters it.
+    codes: [Response.json(DEVICE), Response.json(NEXT_DEVICE)],
+    polls: [Response.json({ error: 'expired_token' }), GITHUB_TOKEN],
     ...(revokes && { revokes }),
   });
   const deps: RotateKeyDeps = {
@@ -236,7 +241,7 @@ function fixture({
     fetch: async (url, init) => {
       const path = new URL(String(url)).pathname;
       if (path === '/v1/installs/revoke') order.push('revoke');
-      return String(url).startsWith('https://api.backmesh.com/')
+      return /^https:\/\/(api\.backmesh\.com|github\.com)\//.test(String(url))
         ? worker.fetch(url, init)
         : String(url).startsWith('https://api.github.com/')
           ? githubOrg(new URL(String(url)).pathname)
@@ -337,16 +342,24 @@ describe('reason', () => {
 });
 
 describe('rotateKey', () => {
-  it('signs in with GitHub’s device flow', async () => {
+  it('signs in with the App’s device flow, on a fresh code once the first expires', async () => {
     const { deps, worker, lines } = fixture();
 
     const result = await rotateKey(deps, { org: 'acme' });
 
     expect(result).toEqual({ org: 'acme' });
-    expect(worker.devices).toEqual([{ control_plane: true }]);
-    expect(lines).toContain(
-      'Sign in with GitHub as an admin of acme, to replace its install key: open https://github.com/login/device and enter ABCD-1234.',
-    );
+    expect(worker.signIns()).toHaveLength(2);
+    expect(lines.filter((l) => l.startsWith('Sign in'))).toEqual([
+      expect.stringMatching(
+        /^Sign in with GitHub as an admin of acme, to replace its install key: open https:\/\/github\.com\/login\/device and enter ABCD-1234 \(it expires at \d\d:\d\d UTC\)\.$/,
+      ),
+      expect.stringContaining('enter WXYZ-5678 (it expires at '),
+    ]);
+    expect(worker.bodies[0]).toEqual({
+      org: 'acme',
+      github_token: SIGNED_IN,
+      install: expect.any(String),
+    });
   });
 
   it('signs in, mints, rolls, confirms, revokes the old install and clears the marker with a real roll, in that order, with no install IDs in any line', async () => {

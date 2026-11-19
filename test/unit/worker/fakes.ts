@@ -210,6 +210,10 @@ export class Upstream {
   mints: Record<string, string>[] = [];
   // The scopes GitHub grants a sign-in's token, as its answer lists them.
   oauthScope = 'read:org,read:packages';
+  // Paths GitHub never answers: the request waits until it's aborted.
+  silent = new Set<string>();
+  // Users whose token GitHub refuses (401).
+  revoked = new Set<string>();
 
   fetch = async (input: string | URL | Request, init: RequestInit = {}) => {
     const url = new URL(String(input));
@@ -223,6 +227,16 @@ export class Upstream {
     const path = url.pathname;
     this.calls.push(`${init.method ?? 'GET'} ${url.host}${path}`);
     this.forms.push([path, form]);
+    if (this.silent.has(path)) {
+      return new Promise<Response>((_, reject) =>
+        init.signal?.addEventListener('abort', () =>
+          reject(init.signal!.reason),
+        ),
+      );
+    }
+    if (this.revoked.has(user)) {
+      return Response.json({ message: 'Bad credentials' }, { status: 401 });
+    }
     if (path === '/login/device/code') {
       return Response.json({
         device_code: 'device',
@@ -281,10 +295,43 @@ export class Upstream {
     if (path === '/user') {
       return Response.json({ id: this.userId(user), login: user });
     }
+    // The App's user token reaches an org's runner groups only where the
+    // App is installed and the person can manage the org's runners.
+    const groups = path.match(/^\/orgs\/([^/]+)\/actions\/runner-groups$/);
+    if (groups) {
+      const org = this.org(groups[1]!);
+      const m = this.memberships.get(user)?.find((o) => o.id === org?.id);
+      if (!org || !m) {
+        return Response.json({ message: 'Not Found' }, { status: 404 });
+      }
+      if (!this.installations.has(org.id) || m.role !== 'admin') {
+        return Response.json(
+          { message: 'Resource not accessible by integration' },
+          { status: 403 },
+        );
+      }
+      return Response.json({ total_count: 1, runner_groups: [] });
+    }
+    const org = path.match(/^\/orgs\/([^/]+)$/);
+    if (org) {
+      const found = this.org(org[1]!);
+      return found
+        ? Response.json(found)
+        : Response.json({ message: 'Not Found' }, { status: 404 });
+    }
     if (path.startsWith('/app') || /^\/orgs\/[^/]+\/installation$/.test(path))
       return this.app(path, init);
     return new Response(`unexpected ${path}`, { status: 500 });
   };
+
+  // GitHub's public `GET /orgs/{org}`, from the orgs the fixtures name.
+  private org(login: string) {
+    const known = [
+      ...[...this.memberships.values()].flat(),
+      ...[...this.installations].map(([id, i]) => ({ id, login: i.login })),
+    ].find((o) => o.login.toLowerCase() === login.toLowerCase());
+    return known && { id: known.id, login: known.login };
+  }
 
   private userId(login: string) {
     if (!this.userIds.has(login))

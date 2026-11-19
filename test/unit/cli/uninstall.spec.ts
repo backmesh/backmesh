@@ -22,6 +22,10 @@ import {
   fakeWorker,
   githubOrg,
   INSTALL_KEY,
+  DEVICE,
+  GITHUB_TOKEN,
+  NEXT_DEVICE,
+  SIGNED_IN,
   listenerVm,
 } from './fakes.js';
 
@@ -310,7 +314,7 @@ function setUp({
     fetch: async (url, init) => {
       const { host, pathname } = new URL(String(url));
       const method = init?.method ?? 'GET';
-      if (host === 'api.backmesh.com') {
+      if (host === 'api.backmesh.com' || host === 'github.com') {
         // In `calls` too, to order the cleanup against the binary's steps.
         calls.push(`${method} ${pathname}`);
         bearers.push(new Headers(init?.headers).get('authorization'));
@@ -363,8 +367,13 @@ const changes = (calls: string[]) =>
 
 describe('uninstall', () => {
   it('signs in, drains and deletes the listener, cleans up GitHub, deletes the cloud side, then removes the App', async () => {
-    const { deps, calls, lines, refreshable, worker, bearers, github } =
-      setUp();
+    const { deps, calls, lines, refreshable, worker, bearers, github } = setUp({
+      // The first code expires before anyone enters it.
+      worker: fakeWorker({
+        codes: [Response.json(DEVICE), Response.json(NEXT_DEVICE)],
+        polls: [Response.json({ error: 'expired_token' }), GITHUB_TOKEN],
+      }),
+    });
     const result = await uninstall(scripted, deps);
 
     expect(changes(calls)).toEqual([
@@ -392,22 +401,33 @@ describe('uninstall', () => {
     // The hosted API's saved token can go stale, so its client refreshes it.
     expect(refreshable).toEqual([HOSTED]);
     expect(worker.calls).toEqual([
-      'POST /v1/installs/device',
+      'POST github.com/login/device/code',
+      'POST github.com/login/oauth/access_token',
+      'POST github.com/login/device/code',
+      'POST github.com/login/oauth/access_token',
       'POST /v1/installs/cleanup',
       'POST /v1/installs/cleanup/finish',
     ]);
     expect(worker.bodies).toEqual([
-      { device_code: 'dev-3584e1', org: 'acme' },
+      { github_token: SIGNED_IN, org: 'acme' },
       { cleanup_id: CLEANUP_ID },
     ]);
-    // Its admin check keeps no token, so it asks only for read:org.
-    expect(worker.devices).toEqual([{ control_plane: false }]);
-    expect(bearers).toEqual([null, `Bearer ${INSTALL_KEY}`, null]);
+    expect(bearers).toEqual([
+      null,
+      null,
+      null,
+      null,
+      `Bearer ${INSTALL_KEY}`,
+      null,
+    ]);
     // Only backmesh's runners go.
     expect([...github.runners.values()]).toEqual(['build-box', 'bmaster-ci']);
-    expect(lines).toContain(
-      'Sign in with GitHub as an admin of acme, so backmesh removes itself from acme: open https://github.com/login/device and enter ABCD-1234.',
-    );
+    expect(lines.filter((l) => l.startsWith('Sign in'))).toEqual([
+      expect.stringMatching(
+        /^Sign in with GitHub as an admin of acme, so backmesh removes itself from acme: open https:\/\/github\.com\/login\/device and enter ABCD-1234 \(it expires at \d\d:\d\d UTC\)\.$/,
+      ),
+      expect.stringContaining('enter WXYZ-5678'),
+    ]);
     expect(lines).toContain('Removed the backmesh GitHub App from acme.');
     expect(lines.join('\n')).not.toContain('ghs_');
     expect(lines[0]).toMatch(/1 running job will fail/);

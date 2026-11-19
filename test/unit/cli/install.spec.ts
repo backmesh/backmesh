@@ -1707,7 +1707,9 @@ describe('install', () => {
       worker.calls.filter(
         (c) => c.startsWith('POST /v1/') && c !== 'POST /v1/token',
       );
-    expect(signIns()).toEqual(['POST /v1/installs/device', 'POST /v1/sign-in']);
+    // GitHub's device flow alone: the Worker isn't part of it.
+    expect(signIns()).toEqual([]);
+    expect(worker.signIns()).toHaveLength(1);
     const saved = join(deps.env.BACKMESH_ANYCLOUD_DIR!, '.token');
     expect(readFileSync(saved, 'utf8').trim()).toBe(SIGNED_IN);
   });
@@ -1752,12 +1754,13 @@ describe('install', () => {
     expect(readFileSync(join(dir, '.token'), 'utf8').trim()).toBe(SIGNED_IN);
     expect(statSync(join(dir, '.token')).mode & 0o777).toBe(0o600);
     expect(fresh.worker.calls.filter((c) => c.startsWith('POST'))).toEqual([
-      'POST /v1/installs/device',
+      'POST github.com/login/device/code',
+      'POST github.com/login/oauth/access_token',
       'POST /v1/installs',
       'POST /v1/token',
     ]);
     expect(fresh.worker.bodies).toEqual([
-      { org: 'acme', device_code: 'dev-3584e1' },
+      { org: 'acme', github_token: SIGNED_IN },
     ]);
     expect(fresh.calls.some((c) => c.startsWith('login'))).toBe(false);
 
@@ -1957,7 +1960,9 @@ describe('install', () => {
         (line) => line.includes('https://') && !line.startsWith('Done.'),
       ),
     ).toEqual([
-      'Sign in with GitHub once, as an admin of acme, so backmesh can connect to it: open https://github.com/login/device and enter ABCD-1234.',
+      expect.stringMatching(
+        /^Sign in with GitHub once, as an admin of acme, so backmesh can connect to it: open https:\/\/github\.com\/login\/device and enter ABCD-1234 \(it expires at \d\d:\d\d UTC\)\.$/,
+      ),
       'An owner of acme installs the backmesh GitHub App: open https://github.com/apps/backmesh/installations/new/permissions?target_id=7 and click Install. Waiting for it.',
     ]);
     expect(lines).toContain(
