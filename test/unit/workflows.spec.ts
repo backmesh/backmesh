@@ -343,7 +343,10 @@ describe("e2e.yml's Worker and Azure checks", () => {
     expect(run('exit 22').status).toBe(1);
   });
 
-  it('installs fresh on Azure too, one leg at a time, with no control plane named', () => {
+  // v0.4.3's install under --yes refuses to pick a control plane: each leg
+  // names its own, and Azure's is centralus, where our subscription offers
+  // both control-plane sizes.
+  it('installs fresh on Azure too, one leg at a time, with its control plane named', () => {
     const job = e2e.jobs['test-org']!;
     expect(job.strategy!['max-parallel']).toBe(1);
     expect(job.strategy!.matrix!.include).toEqual(
@@ -351,8 +354,17 @@ describe("e2e.yml's Worker and Azure checks", () => {
         expect.objectContaining({
           cloud: 'azure',
           placement: '--runners azure',
+          'control-plane-region': 'centralus',
         }),
       ]),
+    );
+    const { args } = labelMatrix('azure');
+    expect(args).toHaveLength(2);
+    for (const call of args) {
+      expect(call).toContain('--control-plane azure:centralus');
+    }
+    expect(labelMatrix('aws').args[1]).toContain(
+      '--control-plane aws:us-east-2',
     );
   });
 
@@ -376,6 +388,7 @@ describe("e2e.yml's Worker and Azure checks", () => {
     const matrix = {
       include: [{ label: 'backmesh-4', cloud: 'aws', regions: ['us-east-2'] }],
     };
+    const args = join(dir, 'args');
     const out = runStep(step.run!.replace('test/e2e/with-sign-in.sh ', ''), {
       env: {
         CLOUD: cloud,
@@ -385,11 +398,17 @@ describe("e2e.yml's Worker and Azure checks", () => {
         MATRIX: JSON.stringify(matrix),
         GITHUB_ENV: env,
       },
-      commands: { backmesh: `echo '${JSON.stringify(plan)}'` },
+      commands: {
+        backmesh: `echo "$*" >>${args}\necho '${JSON.stringify(plan)}'`,
+      },
     });
     expect(out.status, out.stderr).toBe(0);
     const line = /^LABEL_MATRIX=(.*)$/m.exec(readFileSync(env, 'utf8'))![1]!;
-    return { matrix, got: JSON.parse(line) as typeof matrix };
+    return {
+      matrix,
+      got: JSON.parse(line) as typeof matrix,
+      args: readFileSync(args, 'utf8').trim().split('\n'),
+    };
   };
 
   // Our Azure CI subscription has 3 spot vCPUs per region until its quota
@@ -455,6 +474,160 @@ describe("e2e.yml's Worker and Azure checks", () => {
       "${{ matrix.cloud == 'azure' && secrets.AZURE_SUBSCRIPTION_ID || '' }}",
     );
   });
+});
+
+describe("e2e.yml's Azure sweep", () => {
+  const e2e = read('e2e.yml');
+  const sweep = e2e.jobs['test-org']!.steps!.find(
+    (s) => s.name === 'Sweep Azure for anything left',
+  )!;
+
+  // Without the control plane's ID: the anycloud groups az lists now,
+  // against those listed before the install.
+  const run = (before: string, now: string) => {
+    const dir = mkdtempSync(join(tmpdir(), 'sweep-'));
+    writeFileSync(join(dir, 'groups-before'), before);
+    return runStep(sweep.run!, {
+      env: { RUNNER_TEMP: dir, CLUSTER_ID: '' },
+      commands: { az: `printf '%s' '${now}'` },
+    });
+  };
+
+  it('passes when nothing new exists, empty lists included', () => {
+    for (const [before, now] of [
+      ['', ''],
+      ['', '\n'],
+      ['anycloud-old\n', 'anycloud-old\n'],
+    ] as const) {
+      const out = run(before, now);
+      expect(out.status, JSON.stringify([before, now])).toBe(0);
+      expect(out.stdout).not.toContain('::error');
+    }
+  });
+
+  it('fails naming a resource group made during the run, and nothing empty', () => {
+    const out = run('anycloud-old\n', 'anycloud-old\nanycloud-new\n');
+    expect(out.status).toBe(1);
+    expect(out.stdout.match(/^::error.*$/gm)).toEqual([
+      '::error title=Left in Azure::resource-group:anycloud-new',
+    ]);
+  });
+});
+
+// Nobody can read a running job's annotations or log through GitHub's API,
+// so each device code is also a comment on an open issue that GitHub
+// notifies the owner of: only the leg, the code, its expiry and the run.
+describe("e2e.yml's sign-in codes", () => {
+  const e2e = read('e2e.yml');
+  const job = e2e.jobs['test-org']!;
+  const ISSUE = 'e2e sign-in codes';
+
+  it('may write issues from the test-org job only', () => {
+    expect(job.permissions!.issues).toBe('write');
+    for (const [name, other] of Object.entries(e2e.jobs)) {
+      if (name !== 'test-org')
+        expect(other.permissions?.issues, name).toBeUndefined();
+    }
+  });
+
+  const findIssue = (open: string) => {
+    const step = job.steps!.find((s) => s.name === 'The sign-in codes issue')!;
+    const dir = mkdtempSync(join(tmpdir(), 'issue-'));
+    const env = join(dir, 'env');
+    const calls = join(dir, 'calls');
+    writeFileSync(env, '');
+    expect(step.env!.GH_TOKEN).toBe('${{ github.token }}');
+    const out = runStep(step.run!, {
+      env: { GITHUB_ENV: env, GITHUB_REPOSITORY: 'backmesh/backmesh' },
+      commands: {
+        gh: `echo "$*" >>${calls}
+case "$2" in
+  list) echo '${open}' ;;
+  create) echo https://github.com/backmesh/backmesh/issues/42 ;;
+esac`,
+      },
+    });
+    expect(out.status, out.stderr).toBe(0);
+    return {
+      issue: /^SIGN_IN_ISSUE=(.*)$/m.exec(readFileSync(env, 'utf8'))?.[1],
+      calls: readFileSync(calls, 'utf8'),
+    };
+  };
+
+  it('finds the open issue by its exact title, else creates it', () => {
+    const found = findIssue(
+      JSON.stringify([
+        { number: 3, title: `${ISSUE} (old)` },
+        { number: 7, title: ISSUE },
+      ]),
+    );
+    expect(found.issue).toBe('7');
+    expect(found.calls).not.toMatch(/issue create/);
+    const made = findIssue(JSON.stringify([{ number: 3, title: 'other' }]));
+    expect(made.issue).toBe('42');
+    expect(made.calls).toMatch(
+      new RegExp(`issue create --repo backmesh/backmesh --title ${ISSUE} `),
+    );
+  });
+
+  it('comes before the install, and both sign-ins can post to it', () => {
+    const steps = job.steps!;
+    const at = (name: string) => steps.findIndex((s) => s.name === name);
+    expect(at('The sign-in codes issue')).toBeLessThan(at('backmesh install'));
+    for (const name of ['backmesh install', 'backmesh uninstall']) {
+      const step = steps.find((s) => s.name === name)!;
+      expect(step.env?.ISSUE_TOKEN, name).toBe('${{ github.token }}');
+      expect(step.env?.GH_TOKEN, name).toBeUndefined();
+    }
+  });
+
+  it('posts each code with its leg, expiry and run, and nothing else from the log', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'sign-in-'));
+    const calls = join(dir, 'calls');
+    const bin = join(dir, 'bin');
+    mkdirSync(bin);
+    writeFileSync(
+      join(bin, 'gh'),
+      `#!/bin/bash\necho "token=$GH_TOKEN $*" >>${calls}\ncat >>${calls}\necho >>${calls}\n`,
+    );
+    chmodSync(join(bin, 'gh'), 0o755);
+    const command = [
+      'echo "secret-ish detail"',
+      'echo "child sees ${ISSUE_TOKEN:-no token}"',
+      'echo "Sign in with GitHub to install: open https://github.com/login/device and enter ABCD-1234."',
+      'echo "Sign in with GitHub to approve the control plane: open https://github.com/login/device and enter WXYZ-9876."',
+    ].join('; ');
+    const out = spawnSync('test/e2e/with-sign-in.sh', ['bash', '-c', command], {
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH}`,
+        ORG: 'backmesh-dryrun',
+        CLOUD: 'azure',
+        ISSUE_TOKEN: 't0k',
+        SIGN_IN_ISSUE: '7',
+        GITHUB_REPOSITORY: 'backmesh/backmesh',
+        GITHUB_SERVER_URL: 'https://github.com',
+        GITHUB_RUN_ID: '99',
+        GITHUB_STEP_SUMMARY: join(dir, 'summary'),
+      },
+      encoding: 'utf8',
+    });
+    expect(out.status, out.stderr).toBe(0);
+    expect(out.stdout).toContain('child sees no token');
+    const posted = readFileSync(calls, 'utf8');
+    const comments = posted.split(/^token=/m).filter(Boolean);
+    expect(comments).toHaveLength(2);
+    const expiry = String.raw`before \d{2}:\d{2} UTC`;
+    expect(comments[0]).toMatch(
+      new RegExp(
+        String.raw`^t0k issue comment 7 --repo backmesh/backmesh --body-file -\n` +
+          String.raw`\*\*azure\*\* leg, \`bash -c\`: enter \`ABCD-1234\` at https://github\.com/login/device ${expiry}\. ` +
+          String.raw`Run: https://github\.com/backmesh/backmesh/actions/runs/99\n\n$`,
+      ),
+    );
+    expect(comments[1]).toContain('`WXYZ-9876`');
+    expect(posted).not.toMatch(/secret-ish|child sees|Sign in with|approve/);
+  }, 20_000);
 });
 
 // The test org's runners take jobs only from its own repositories: e2e.yml
