@@ -113,6 +113,14 @@ function runStep(
   });
 }
 
+// A release binary's stub that fails if the job's token, which writes
+// issues, reached it.
+const noToken = (name: string, body: string) =>
+  `[[ -z \${ISSUE_TOKEN:-}\${TOKEN:-}\${GH_TOKEN:-} ]] || { echo "${name} got the job's token" >&2; exit 9; }\n${body}`;
+// with-sign-in.sh runs its command without the token (spec below).
+const signedIn = (run: string) =>
+  run.replace('test/e2e/with-sign-in.sh ', 'env -u ISSUE_TOKEN ');
+
 const unwrap = (value: string) => value.match(/^\$\{\{(.*)\}\}$/s)?.[1];
 
 // No secret but GITHUB_TOKEN anywhere a job can read one.
@@ -389,8 +397,11 @@ describe("e2e.yml's Worker and Azure checks", () => {
       include: [{ label: 'backmesh-4', cloud: 'aws', regions: ['us-east-2'] }],
     };
     const args = join(dir, 'args');
-    const out = runStep(step.run!.replace('test/e2e/with-sign-in.sh ', ''), {
+    const out = runStep(signedIn(step.run!), {
       env: {
+        // As in Actions, where only the step's env names a token.
+        GH_TOKEN: '',
+        ISSUE_TOKEN: 't0k',
         CLOUD: cloud,
         PLACEMENT: leg.placement!,
         LABEL: leg.label ?? '',
@@ -399,7 +410,10 @@ describe("e2e.yml's Worker and Azure checks", () => {
         GITHUB_ENV: env,
       },
       commands: {
-        backmesh: `echo "$*" >>${args}\necho '${JSON.stringify(plan)}'`,
+        backmesh: noToken(
+          'backmesh',
+          `echo "$*" >>${args}\necho '${JSON.stringify(plan)}'`,
+        ),
       },
     });
     expect(out.status, out.stderr).toBe(0);
@@ -522,15 +536,11 @@ describe("e2e.yml's sign-in codes", () => {
   const job = e2e.jobs['test-org']!;
   const ISSUE = 'e2e sign-in codes';
 
-  it('may write issues from the test-org job only', () => {
-    expect(job.permissions!.issues).toBe('write');
-    for (const [name, other] of Object.entries(e2e.jobs)) {
-      if (name !== 'test-org')
-        expect(other.permissions?.issues, name).toBeUndefined();
-    }
-  });
-
-  const findIssue = (open: string) => {
+  // gh answers `open` to the list, else fails it, and opens issue 42.
+  const findIssue = (
+    open?: string,
+    create = 'echo https://github.com/backmesh/backmesh/issues/42',
+  ) => {
     const step = job.steps!.find((s) => s.name === 'The sign-in codes issue')!;
     const dir = mkdtempSync(join(tmpdir(), 'issue-'));
     const env = join(dir, 'env');
@@ -546,8 +556,8 @@ describe("e2e.yml's sign-in codes", () => {
       commands: {
         gh: `echo "$*" >>${calls}
 case "$2" in
-  list) echo '${open}' ;;
-  create) echo https://github.com/backmesh/backmesh/issues/42 ;;
+  list) ${open === undefined ? 'exit 1' : `echo '${open}'`} ;;
+  create) ${create} ;;
 esac`,
       },
     });
@@ -555,10 +565,11 @@ esac`,
     return {
       issue: /^SIGN_IN_ISSUE=(.*)$/m.exec(readFileSync(env, 'utf8'))?.[1],
       calls: readFileSync(calls, 'utf8'),
+      stdout: out.stdout,
     };
   };
 
-  it('finds the open issue by its exact title, else creates it', () => {
+  it('finds the open issue a run opened by its exact title, else opens it', () => {
     const found = findIssue(
       JSON.stringify([
         { number: 3, title: `${ISSUE} (old)` },
@@ -566,6 +577,7 @@ esac`,
       ]),
     );
     expect(found.issue).toBe('7');
+    expect(found.calls).toMatch(/issue list .*--author app\/github-actions /);
     expect(found.calls).not.toMatch(/issue create/);
     const made = findIssue(JSON.stringify([{ number: 3, title: 'other' }]));
     expect(made.issue).toBe('42');
@@ -574,15 +586,53 @@ esac`,
     );
   });
 
-  it('comes before the install, and both sign-ins can post to it', () => {
-    const steps = job.steps!;
-    const at = (name: string) => steps.findIndex((s) => s.name === name);
-    expect(at('The sign-in codes issue')).toBeLessThan(at('backmesh install'));
-    for (const name of ['backmesh install', 'backmesh uninstall']) {
-      const step = steps.find((s) => s.name === name)!;
-      expect(step.env?.ISSUE_TOKEN, name).toBe('${{ github.token }}');
-      expect(step.env?.GH_TOKEN, name).toBeUndefined();
+  it("warns, and leaves the codes to the annotations, when it can't find or open the issue", () => {
+    for (const failed of [findIssue(), findIssue('[]', 'exit 1')]) {
+      expect(failed.issue).toBeUndefined();
+      expect(failed.stdout).toContain(
+        `::warning::Couldn't find or open the "${ISSUE}" issue`,
+      );
     }
+  });
+
+  it("keeps the job's token from the release's binaries", () => {
+    const step = (name: string) => job.steps!.find((s) => s.name === name)!;
+    const home = mkdtempSync(join(tmpdir(), 'home-'));
+    mkdirSync(join(home, '.anycloud'));
+    writeFileSync(join(home, '.anycloud', 'api-url'), '');
+    const env = join(home, 'env');
+    writeFileSync(env, '');
+    const commands = {
+      backmesh: noToken('backmesh', ''),
+      anycloud: noToken(
+        'anycloud',
+        `echo '{"url":"https://abc123.anycloud.sh"}'`,
+      ),
+      curl: '',
+      // The org's ID, read with the job's token.
+      gh: '[[ $GH_TOKEN == t0k ]] && echo 12345',
+    };
+    const base = {
+      HOME: home,
+      GITHUB_ENV: env,
+      ORG: 'backmesh-dryrun',
+      GH_TOKEN: '',
+    };
+    expect(step('The control plane').env!.TOKEN).toBe('${{ github.token }}');
+    const plane = runStep(step('The control plane').run!, {
+      env: { ...base, TOKEN: 't0k' },
+      commands,
+    });
+    expect(plane.status, plane.stderr).toBe(0);
+    expect(readFileSync(env, 'utf8')).toBe('ORG_ID=12345\nCLUSTER_ID=abc123\n');
+    for (const name of ['backmesh install', 'backmesh uninstall']) {
+      expect(step(name).env!.ISSUE_TOKEN, name).toBe('${{ github.token }}');
+    }
+    const uninstall = runStep(signedIn(step('backmesh uninstall').run!), {
+      env: { ...base, ISSUE_TOKEN: 't0k' },
+      commands,
+    });
+    expect(uninstall.status, uninstall.stderr).toBe(0);
   });
 
   it('posts each code with its leg, expiry and run, and nothing else from the log', () => {
