@@ -26,6 +26,7 @@ const TRIGGERS = [
 
 type Permissions = Record<string, string>;
 type Step = {
+  id?: string;
   name?: string;
   if?: string;
   run?: string;
@@ -35,6 +36,7 @@ type Job = {
   if?: string;
   needs?: string | string[];
   env?: Record<string, string>;
+  outputs?: Record<string, string>;
   strategy?: { 'max-parallel'?: number; matrix?: { include?: unknown[] } };
   steps?: Step[];
   'runs-on'?: string;
@@ -257,9 +259,22 @@ describe("release.yml's Worker deploy", () => {
     );
   });
 
-  it('deploys on a release, never on an rc', () => {
+  // The step's own script, with node stubbed to print the setup it runs.
+  const setupOf = (context: Context) => {
+    const step = deploy.steps!.find((s) => s.run?.includes(SETUP))!;
+    const out = runStep(step.run!, {
+      env: { RC: context['needs.check.outputs.rc']! },
+      commands: { node: 'echo "$@"' },
+    });
+    expect(step.env!.RC).toBe('${{ needs.check.outputs.rc }}');
+    return out.stdout.trim();
+  };
+
+  it('deploys production on a release, and staging only on an rc', () => {
     expect(runs(name, final)).toBe(true);
-    expect(runs(name, rc)).toBe(false);
+    expect(runs(name, rc)).toBe(true);
+    expect(setupOf(final)).toBe('worker/scripts/setup.ts --apply');
+    expect(setupOf(rc)).toBe('worker/scripts/setup.ts --apply --staging');
   });
 
   it('deploys after the checks and builds, and before anything publishes', () => {
@@ -267,38 +282,75 @@ describe("release.yml's Worker deploy", () => {
     for (const job of ['release', 'public', 'cache-action', 'homebrew']) {
       expect(needs(job), job).toContain(name);
     }
-    // An rc publishes without it; a release whose deploy failed doesn't.
+    // Neither an rc nor a release publishes after a failed deploy.
     const after = (result: string, context: Context) =>
       runs('release', {
         ...context,
         'needs.matrix.result': 'success',
         [`needs.${name}.result`]: result,
       });
-    expect(after('skipped', rc)).toBe(true);
+    expect(after('success', rc)).toBe(true);
     expect(after('success', final)).toBe(true);
+    expect(after('failure', rc)).toBe(false);
     expect(after('failure', final)).toBe(false);
   });
 });
 
-describe("e2e.yml's production and Azure checks", () => {
+describe("e2e.yml's Worker and Azure checks", () => {
   const e2e = read('e2e.yml');
 
-  it("fails unless api.backmesh.com runs the Worker built from the tag's commit", () => {
-    const steps = Object.values(e2e.jobs).flatMap((job) => job.steps ?? []);
-    const check = steps.find((s) =>
-      s.run?.includes('https://api.backmesh.com/v1/version'),
+  // The plan's step that reads the release, run for `version`.
+  const target = (version: string) => {
+    const step = e2e.jobs.plan!.steps!.find((s) => s.id === 'pinned')!;
+    const dir = mkdtempSync(join(tmpdir(), 'plan-'));
+    const out = join(dir, 'output');
+    writeFileSync(out, '');
+    expect(
+      runStep(step.run!, { env: { VERSION: version, GITHUB_OUTPUT: out } })
+        .status,
+    ).toBe(0);
+    return /^api-url=(.*)$/m.exec(readFileSync(out, 'utf8'))?.[1];
+  };
+
+  it('targets the staging Worker for an rc and production for a release', () => {
+    expect(target('v1.2.3-rc.1')).toBe('https://api-staging.backmesh.com');
+    expect(target('v1.2.3')).toBe('https://api.backmesh.com');
+    expect(e2e.jobs.plan!.outputs!['api-url']).toBe(
+      '${{ steps.pinned.outputs.api-url }}',
+    );
+    // The version check, and every CLI call of the fresh install.
+    for (const job of ['worker', 'test-org']) {
+      expect(e2e.jobs[job]!.env?.BACKMESH_API_URL, job).toBe(
+        '${{ needs.plan.outputs.api-url }}',
+      );
+    }
+  });
+
+  it("fails unless the target Worker runs the one built from the tag's commit", () => {
+    const check = e2e.jobs.worker!.steps!.find((s) =>
+      s.run?.includes('/v1/version'),
     )!;
     const want = 'a'.repeat(40);
     const run = (answer: string) =>
       runStep(check.run!, {
-        env: { VERSION: 'v1.2.3', GITHUB_REPOSITORY: 'backmesh/backmesh' },
-        // gh answers the tag's commit, curl what the Worker says.
-        commands: { gh: `echo ${want}`, curl: answer },
+        env: {
+          VERSION: 'v1.2.3-rc.1',
+          GITHUB_REPOSITORY: 'backmesh/backmesh',
+          BACKMESH_API_URL: 'https://api-staging.backmesh.com',
+        },
+        // gh answers the tag's commit, curl what the Worker says, if asked
+        // the target's /v1/version.
+        commands: {
+          gh: `echo ${want}`,
+          curl: `[[ " $* " == *" https://api-staging.backmesh.com/v1/version "* ]] || exit 7\n${answer}`,
+        },
       });
     expect(run(`echo '{"commit":"${want}"}'`).status).toBe(0);
     const other = run(`echo '{"commit":"${'b'.repeat(40)}"}'`);
     expect(other.status).toBe(1);
-    expect(other.stdout).toContain(`not v1.2.3's ${want}`);
+    expect(other.stdout).toContain(
+      `api-staging.backmesh.com runs the Worker built from ${'b'.repeat(40)}, not v1.2.3-rc.1's ${want}`,
+    );
     // A Worker without /v1/version, as v0.4.3's: curl -f fails.
     expect(run('exit 22').status).toBe(1);
   });

@@ -1,4 +1,4 @@
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -16,9 +16,10 @@ const ENV: Record<string, string> = {
 
 // Cloudflare and wrangler, in memory, recording every write.
 // `deployed`: the triggers a deploy leaves, as wrangler.jsonc sets them
-// unless a test says otherwise.
-function world(deployed = ['17 3 * * *']) {
+// unless a test says otherwise; `worker`, the Worker Cloudflare has them for.
+function world(deployed = ['17 3 * * *'], worker = 'backmesh-billing') {
   const writes: string[] = [];
+  const calls: string[][] = [];
   const deploys: string[][] = [];
   const secrets: Record<string, string> = {};
   const cf = {
@@ -38,7 +39,7 @@ function world(deployed = ['17 3 * * *']) {
       if (
         auth !== 'Bearer cf' ||
         url.pathname !==
-          '/client/v4/accounts/acct/workers/scripts/backmesh-billing/schedules'
+          `/client/v4/accounts/acct/workers/scripts/${worker}/schedules`
       ) {
         return new Response('', { status: 404 });
       }
@@ -62,6 +63,7 @@ function world(deployed = ['17 3 * * *']) {
       return JSON.stringify(Object.keys(cf.secrets).map((name) => ({ name })));
     }
     writes.push(`wrangler ${command}`);
+    calls.push(args);
     // As wrangler deploy does: the config's triggers replace the Worker's.
     if (command === 'deploy') {
       deploys.push(args);
@@ -76,15 +78,20 @@ function world(deployed = ['17 3 * * *']) {
     return '';
   };
   const log: string[] = [];
-  const run = (apply: boolean, env: Record<string, string> = ENV) =>
+  const run = (
+    apply: boolean,
+    env: Record<string, string> = ENV,
+    staging = false,
+  ) =>
     setup({
       env,
       apply,
+      staging,
       fetch: fetch as typeof globalThis.fetch,
       wrangler,
       log: (l) => log.push(l),
     });
-  return { cf, writes, deploys, log, run };
+  return { cf, writes, calls, deploys, log, run };
 }
 
 afterEach(() => rmSync('worker/wrangler.setup.jsonc', { force: true }));
@@ -125,6 +132,31 @@ describe('Worker setup', () => {
 
     const { GITHUB_SHA: _, ...noCommit } = ENV;
     await expect(world().run(true, noCommit)).rejects.toThrow('GITHUB_SHA');
+  });
+
+  it('sets up staging apart from production: its own Worker, database and hostname', async () => {
+    const w = world(undefined, 'backmesh-staging');
+    await w.run(true, ENV, true);
+    expect(w.cf.databases.map((d) => d.name)).toEqual(['backmesh-staging']);
+    expect(w.log).toContain(
+      "apply backmesh-staging's migrations and deploy the Worker on https://api-staging.backmesh.com",
+    );
+    expect(w.log).toContain("The Worker's cron triggers: 17 3 * * *.");
+    // Every write but the database's creation is wrangler.jsonc's staging
+    // environment, whose database ID the setup fills in.
+    for (const args of w.calls.filter((a) => a[1] !== 'create')) {
+      expect(args.join(' ')).toContain('--env staging');
+    }
+    expect(w.calls).toContainEqual(
+      expect.arrayContaining(['migrations', 'apply', 'backmesh-staging']),
+    );
+    const config = readFileSync('worker/wrangler.setup.jsonc', 'utf8');
+    expect(config).toMatch(
+      /"database_name": "backmesh-staging",[^}]*"database_id": "db-uuid"/,
+    );
+    expect(config).toMatch(
+      /"database_name": "backmesh-billing",[^}]*"database_id": "0{8}-/,
+    );
   });
 
   it('names missing secrets', async () => {
