@@ -43,6 +43,10 @@ tag: the 5 characters that start its runners' names.
 
 For your orgs, we store their numeric GitHub IDs and names.
 
+When you sign in for `backmesh cue`, we keep your GitHub user ID and login,
+the orgs whose backmesh App your sign-in reached, and a SHA-256 hash of the
+cue credential your machine keeps, for its 30 days.
+
 ### backmesh's GitHub App
 
 Your install gets its GitHub access from backmesh's GitHub App, installed on

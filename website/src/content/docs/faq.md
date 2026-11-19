@@ -116,12 +116,19 @@ api.backmesh.com can't read them, and never the commit. The agent pushes even
 if `cue` fails: when backmesh.com is down, the cue is dropped and CI runs cold,
 as it would without one.
 
-**Can a coding agent in a sandbox cue backmesh?** Yes, with a copied sign-in. A sandbox that starts fresh each time can't
-keep a sign-in. A human can copy one from a machine where backmesh is signed
-in, `~/.backmesh/anycloud/.token`, into the sandbox's secrets as
-`BACKMESH_CUE_TOKEN`, which `backmesh cue` uses first. It lasts 8 hours from
-that sign-in, and it is that human's full backmesh sign-in, not a cue-only
-key, so keep it secret; a later sign-in on that machine can revoke it.
+**Can a coding agent in a sandbox cue backmesh?** Yes, with a copied cue
+credential. A sandbox that starts fresh each time can't keep a sign-in. On a
+machine, run `backmesh cue --sign-in`, then copy
+`~/.backmesh/anycloud/backmesh-cue-credential` into the sandbox's secrets as
+`BACKMESH_CUE_TOKEN`, which `backmesh cue` uses first. It works only for cues,
+for the orgs whose backmesh App your sign-in reached, for 30 days; keep it
+secret, and copy a new one when it expires. Running `backmesh cue --sign-in`
+again revokes it and any other copy (a cue's own sign-in doesn't), and
+`rotate-key` and `uninstall` end it for their org. Its orgs are those your
+sign-in reached when it was made, for its 30 days even if you leave one; your
+listener still acts only on a cue from someone who can push to the
+repository. After you or an org is renamed on GitHub, run `backmesh cue --sign-in`
+again.
 
 ## Is it safe?
 

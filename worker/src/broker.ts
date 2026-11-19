@@ -13,6 +13,7 @@ import {
 } from './app.js';
 import type { Env } from './index.js';
 import {
+  forgetCueCredentials,
   keyInstall,
   notRunnersAdmin,
   runnersAdmin,
@@ -54,12 +55,15 @@ export const audit = (env: Env, request: Request, row: AuditRow) =>
     .run();
 
 // Daily (the cron): audit and run action rows are kept 90 days.
-// Expired cleanups go too.
+// Expired cleanups and cue credentials go too.
 export const trimAudit = (env: Env, now = Date.now()) =>
   env.DB.batch([
     env.DB.prepare('DELETE FROM audit WHERE at < ?').bind(now - 90 * DAY),
     env.DB.prepare('DELETE FROM cleanups WHERE expires_at < ?').bind(now),
     env.DB.prepare('DELETE FROM run_actions WHERE at < ?').bind(now - 90 * DAY),
+    env.DB.prepare('DELETE FROM cue_credentials WHERE expires_at < ?').bind(
+      now,
+    ),
   ]);
 
 export const notInstalled = (env: Env, org: number) =>
@@ -252,6 +256,7 @@ export async function cleanup(request: Request, env: Env) {
         .bind(install)
         .run();
     }
+    await forgetCueCredentials(env, admin.id);
     await record('app_not_installed', admin.id, install ? { install } : {});
     return Response.json({
       token: null,
@@ -349,6 +354,8 @@ export async function cleanupFinish(request: Request, env: Env) {
       .bind(org)
       .run();
   }
+  // Cues end with the install, the App kept or not.
+  await forgetCueCredentials(env, org);
   await env.DB.prepare('UPDATE cleanups SET finished = 1 WHERE id = ?')
     .bind(await sha256(cleanup.id))
     .run();
