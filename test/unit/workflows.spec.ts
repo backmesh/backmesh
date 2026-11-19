@@ -345,12 +345,62 @@ describe("e2e.yml's Worker and Azure checks", () => {
     expect(job.strategy!['max-parallel']).toBe(1);
     expect(job.strategy!.matrix!.include).toEqual(
       expect.arrayContaining([
-        { cloud: 'azure', placement: '--runners azure' },
+        expect.objectContaining({
+          cloud: 'azure',
+          placement: '--runners azure',
+        }),
       ]),
     );
-    // Our Azure CI subscription, as ci-install.yml signs in to.
-    expect(job.env).toMatchObject({
-      AZURE_SUBSCRIPTION_ID: '${{ secrets.AZURE_SUBSCRIPTION_ID }}',
-    });
+  });
+
+  // Our Azure CI app trusts only ci-install's federated subject, so the
+  // Azure leg signs in from that environment, reading only its Azure IDs.
+  it("signs in to Azure from ci-install's environment and to AWS from e2e's", () => {
+    const job = e2e.jobs['test-org']!;
+    expect(job.environment).toBe('${{ matrix.environment }}');
+    const legs = job.strategy!.matrix!.include as {
+      cloud: string;
+      environment: string;
+    }[];
+    expect(legs.map(({ cloud, environment }) => [cloud, environment])).toEqual(
+      [
+        ['aws', 'e2e'],
+        ['azure', 'ci-install'],
+      ],
+    );
+
+    const secrets = (text: string) =>
+      [...text.matchAll(/secrets\.([A-Z0-9_]+)/g)].map((m) => m[1]);
+    expect(new Set(secrets(JSON.stringify(job)))).toEqual(
+      new Set([
+        'AZURE_CLIENT_ID',
+        'AZURE_TENANT_ID',
+        'AZURE_SUBSCRIPTION_ID',
+        'AWS_ROLE_ARN',
+        'E2E_TEST_ORG_DISPATCH_TOKEN',
+      ]),
+    );
+    // Each cloud's secrets only in its own leg.
+    const only = (cloud: string, names: RegExp) => {
+      for (const [key, value] of Object.entries(job.env!)) {
+        if (names.test(value)) {
+          expect(value, key).toMatch(
+            new RegExp(`^\\$\\{\\{ matrix\\.cloud == '${cloud}' && `),
+          );
+        }
+      }
+      for (const step of job.steps!) {
+        if (names.test(JSON.stringify({ ...step, if: undefined }))) {
+          expect(step.if, step.name ?? step.id).toBe(
+            `matrix.cloud == '${cloud}'`,
+          );
+        }
+      }
+    };
+    only('azure', /secrets\.AZURE_/);
+    only('aws', /secrets\.AWS_/);
+    expect(job.env!.AZURE_SUBSCRIPTION_ID).toBe(
+      "${{ matrix.cloud == 'azure' && secrets.AZURE_SUBSCRIPTION_ID || '' }}",
+    );
   });
 });
