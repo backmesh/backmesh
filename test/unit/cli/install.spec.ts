@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { StepFailed } from '../../../src/anycloud/binary.js';
 import type { FeatureTable } from '../../../src/anycloud/features.js';
-import { signInScopes } from '../../../src/app/github.js';
+import { signInLogin } from '../../../src/app/github.js';
 import {
   install,
   parseControlPlane,
@@ -66,25 +66,17 @@ const BM = {
 // backmesh's anycloud state, one per machine.
 const stateDir = () => mkdtempSync(join(tmpdir(), 'backmesh-install-'));
 const RUNNING = { state: 'running', managementApiUrl: HOSTED, lastError: null };
-// GitHub's GET /user for each sign-in: its `x-oauth-scopes`, or a 401 for
-// one it doesn't know.
-const SIGN_INS: Record<string, string> = {
-  gho_x: 'read:org, read:packages',
-  gho_saved: 'read:packages, read:org',
-  gho_wide: 'read:org, read:packages, repo',
-  gho_narrow: 'read:org',
-  [SIGNED_IN]: 'read:org, read:packages',
-};
+// The sign-ins GitHub knows; GET /user answers 401 for any other.
+const SIGN_INS = new Set(['ghu_x', 'ghu_saved', 'gho_oauth', SIGNED_IN]);
 // A sign-in GitHub can't check: it answers 503.
-const DOWN = 'gho_down';
+const DOWN = 'ghu_down';
 const github = fakeGitHub({
   'GET https://api.github.com/user': ({ headers }) => {
     const token = headers.get('authorization')!.split(' ')[1]!;
     if (token === DOWN) return json(503, { message: 'Unavailable' })();
-    const scopes = SIGN_INS[token];
-    return scopes === undefined
-      ? json(401, { message: 'Bad credentials' })()
-      : json(200, { login: 'octo', id: 1 }, { 'x-oauth-scopes': scopes })();
+    return SIGN_INS.has(token)
+      ? json(200, { login: 'octo', id: 1 })()
+      : json(401, { message: 'Bad credentials' })();
   },
 });
 
@@ -275,8 +267,8 @@ function setUp(
       }
       return '';
     },
-    signInScopes: (token) =>
-      signInScopes(token, { request: { fetch: github.fetch } }),
+    signInLogin: (token) =>
+      signInLogin(token, { request: { fetch: github.fetch } }),
     release: async () => images,
     ui: {
       print: (line) => lines.push(line),
@@ -1144,7 +1136,7 @@ describe('install', () => {
     it('asks nothing on a re-run for an org already on it, whatever its case', async () => {
       const { deps, calls, worker } = setUp(
         {
-          env: { ...OVERRIDE, GITHUB_TOKEN: 'gho_x' },
+          env: { ...OVERRIDE, GITHUB_TOKEN: 'ghu_x' },
           vms: [beta, acmeVm],
           hosted: true,
         },
@@ -1690,7 +1682,7 @@ describe('install', () => {
   it("keeps a deployed listener's install key, with no new sign-in", async () => {
     const { deps, worker } = setUp(
       {
-        env: { ...OVERRIDE, GITHUB_TOKEN: 'gho_x' },
+        env: { ...OVERRIDE, GITHUB_TOKEN: 'ghu_x' },
         vms: [acmeVm],
         hosted: true,
       },
@@ -1764,35 +1756,20 @@ describe('install', () => {
     ]);
     expect(fresh.calls.some((c) => c.startsWith('login'))).toBe(false);
 
-    // A sign-in GitHub granted more scopes than asked (every scope the user
-    // ever gave the OAuth App) stops before anything billed.
-    const union = setUp({ env: OVERRIDE });
-    union.deps.signInScopes = async () => [
-      'read:enterprise',
-      'read:org',
-      'read:packages',
-    ];
-    await expect(install(options, union.deps)).rejects.toThrow(
-      'has the scopes read:enterprise, read:org, read:packages',
-    );
-    expect(union.calls.some((c) => c.startsWith('cluster'))).toBe(false);
-    const unionDir = union.deps.env.BACKMESH_ANYCLOUD_DIR!;
-    expect(existsSync(join(unionDir, '.token'))).toBe(false);
-
     // A usable GITHUB_TOKEN, as in CI, is kept: nothing is saved over it.
-    const ci = setUp({ env: { ...OVERRIDE, GITHUB_TOKEN: 'gho_x' } });
+    const ci = setUp({ env: { ...OVERRIDE, GITHUB_TOKEN: 'ghu_x' } });
     await install(options, ci.deps);
     const ciDir = ci.deps.env.BACKMESH_ANYCLOUD_DIR!;
     expect(existsSync(join(ciDir, '.token'))).toBe(false);
 
-    // The hosted API refuses a PAT, an Actions token, or an OAuth sign-in
-    // with other scopes, so install does before anything is billed.
+    // The hosted API takes only a GitHub App's sign-in: it refuses a PAT, an
+    // Actions token, or an OAuth sign-in such as backmesh's before v0.4.4,
+    // so install does before anything is billed.
     for (const [token, message] of [
-      ['github_pat_x', "The GitHub sign-in isn't an OAuth token"],
-      ['ghs_x', "The GitHub sign-in isn't an OAuth token"],
-      ['gho_wide', 'has the scopes read:org, read:packages, repo'],
-      ['gho_narrow', 'has the scopes read:org, but'],
-      ['gho_revoked', 'GitHub rejected the sign-in: in CI, set GITHUB_TOKEN'],
+      ['github_pat_x', "The GitHub sign-in isn't backmesh's"],
+      ['ghs_x', "The GitHub sign-in isn't backmesh's"],
+      ['gho_oauth', "The GitHub sign-in isn't backmesh's"],
+      ['ghu_revoked', 'GitHub rejected the sign-in: in CI, set GITHUB_TOKEN'],
       [DOWN, "Couldn't check the GitHub sign-in with GitHub. Retry"],
     ]) {
       const refused = setUp({ env: { ...OVERRIDE, GITHUB_TOKEN: token } });
@@ -1803,7 +1780,7 @@ describe('install', () => {
     // anycloud reads the saved sign-in over GITHUB_TOKEN, and so does the check.
     const saved = setUp({ env: { ...OVERRIDE, GITHUB_TOKEN: 'ghs_x' } });
     const savedDir = saved.deps.env.BACKMESH_ANYCLOUD_DIR!;
-    writeFileSync(join(savedDir, '.token'), 'gho_saved');
+    writeFileSync(join(savedDir, '.token'), 'ghu_saved');
     await install(options, saved.deps);
     // One GitHub can't check stays.
     writeFileSync(join(savedDir, '.token'), DOWN);
@@ -1819,7 +1796,7 @@ describe('install', () => {
 
     // A saved one the control plane would refuse is replaced by a new
     // backmesh sign-in, never by anycloud's.
-    for (const token of ['github_pat_saved', 'gho_wide', 'gho_revoked']) {
+    for (const token of ['github_pat_saved', 'gho_oauth', 'ghu_revoked']) {
       const stale = setUp({ env: OVERRIDE });
       const staleDir = stale.deps.env.BACKMESH_ANYCLOUD_DIR!;
       writeFileSync(join(staleDir, '.token'), token, { mode: 0o644 });
@@ -1829,7 +1806,7 @@ describe('install', () => {
         stale.lines.includes(
           `GitHub revoked the saved sign-in. Install signs in again.`,
         ),
-      ).toBe(token === 'gho_revoked');
+      ).toBe(token === 'ghu_revoked');
       expect(readFileSync(join(staleDir, '.token'), 'utf8').trim()).toBe(
         SIGNED_IN,
       );
@@ -1837,9 +1814,9 @@ describe('install', () => {
       expect(statSync(join(staleDir, '.token')).mode & 0o777).toBe(0o600);
     }
     // With a usable GITHUB_TOKEN, a revoked saved one goes for it.
-    const ciRevoked = setUp({ env: { ...OVERRIDE, GITHUB_TOKEN: 'gho_x' } });
+    const ciRevoked = setUp({ env: { ...OVERRIDE, GITHUB_TOKEN: 'ghu_x' } });
     const ciSaved = ciRevoked.deps.env.BACKMESH_ANYCLOUD_DIR!;
-    writeFileSync(join(ciSaved, '.token'), 'gho_revoked');
+    writeFileSync(join(ciSaved, '.token'), 'ghu_revoked');
     await install(options, ciRevoked.deps);
     expect(ciRevoked.lines).toContain(
       `GitHub revoked the saved sign-in. Install uses GITHUB_TOKEN.`,

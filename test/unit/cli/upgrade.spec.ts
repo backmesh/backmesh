@@ -395,7 +395,7 @@ function setUp({
   const deps: UpgradeDeps = {
     // No saved anycloud files, whatever this machine holds.
     env: { BACKMESH_ANYCLOUD_DIR: mkdtempSync(join(tmpdir(), 'backmesh-')) },
-    signInScopes: async () => ['read:org', 'read:packages'],
+    signInLogin: async () => 'octocat',
     run,
     runLong: run,
     release: async () => RELEASE,
@@ -470,18 +470,18 @@ describe('upgrade', () => {
     };
     // anycloud's login relays a device code until backmesh has signed in.
     const dir = deps.env.BACKMESH_ANYCLOUD_DIR!;
-    writeFileSync(join(dir, '.token'), 'gho_revoked\n');
-    deps.signInScopes = async (token) => {
-      if (token === 'gho_revoked')
+    writeFileSync(join(dir, '.token'), 'ghu_revoked\n');
+    deps.signInLogin = async (token) => {
+      if (token === 'ghu_revoked')
         throw new GitHubError(401, 'Bad credentials');
-      return ['read:org', 'read:packages'];
+      return 'octocat';
     };
     const run = deps.run;
     const logins: string[] = [];
     deps.run = async (args) => {
       if (args[0] !== 'login') return run(args);
       logins.push(args.join(' '));
-      if (readFileSync(join(dir, '.token'), 'utf8').startsWith('gho_revoked')) {
+      if (readFileSync(join(dir, '.token'), 'utf8').startsWith('ghu_revoked')) {
         throw Object.assign(new Error('Command failed: anycloud login'), {
           stdout: `${JSON.stringify({ actionRequired: { code: 'GITHUB_SIGN_IN_REQUIRED' } })}\n`,
         });
@@ -1242,7 +1242,11 @@ describe('upgrade', () => {
     await upgrade(deps);
 
     expect(worker.calls).toEqual([
-      'POST /v1/installs/device',
+      // The first code expires before anyone enters it.
+      'POST github.com/login/device/code',
+      'POST github.com/login/oauth/access_token',
+      'POST github.com/login/device/code',
+      'POST github.com/login/oauth/access_token',
       'POST /v1/installs',
       'GET /v1/status',
       'POST /v1/token',
@@ -1303,12 +1307,12 @@ describe('upgrade', () => {
   it("keeps the control plane's sign-in when one is saved or GITHUB_TOKEN is set", async () => {
     const saved = refusedKey();
     const token = join(saved.deps.env.BACKMESH_ANYCLOUD_DIR!, '.token');
-    writeFileSync(token, 'gho_owner\n');
+    writeFileSync(token, 'ghu_owner\n');
     await upgrade(saved.deps);
-    expect(readFileSync(token, 'utf8')).toBe('gho_owner\n');
+    expect(readFileSync(token, 'utf8')).toBe('ghu_owner\n');
 
     const ci = refusedKey();
-    ci.deps.env.GITHUB_TOKEN = 'gho_ci';
+    ci.deps.env.GITHUB_TOKEN = 'ghu_ci';
     await upgrade(ci.deps);
     const ciToken = join(ci.deps.env.BACKMESH_ANYCLOUD_DIR!, '.token');
     expect(existsSync(ciToken)).toBe(false);

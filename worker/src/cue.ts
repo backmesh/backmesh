@@ -1,13 +1,15 @@
 // The cue relay's routes. `backmesh cue` signs in
-// with the GitHub token of its device sign-in (read:org), which must be an
-// active member of the org; the listener connects with its install key. Each
+// with the backmesh App's user token from its device sign-in, which must
+// reach the org's App installation, as an org member's does; the listener
+// connects with its install key. Each
 // is forwarded to the org's Relay Durable Object (relay.ts) with only what
 // the Worker vouches for.
 //   GET  /v1/cue/keys?org=<login>   the org's listener keys
 //   POST /v1/cue { org, tag, hash, sealed: [{ kid, enc, ct }] }
 //   GET  /v1/cue/connect            the listener's WebSocket
 import type { Env } from './index.js';
-import { keyInstall, orgMembership, sha256 } from './installs.js';
+import { GitHubError } from './app.js';
+import { asUser, keyInstall, sha256 } from './installs.js';
 
 declare const caches: {
   default: {
@@ -24,29 +26,48 @@ interface Member {
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 
-// The signed-in user's active membership of the org, cached five minutes
-// (per colo) by the token's hash, under the Worker's own origin (the Cache
-// API keeps only its zone's URLs). A miss asks GitHub only when `admit`
-// does, else answers 'limited'. 'expired' when GitHub refuses the token;
-// any other failure throws (GitHubError, a 502) and isn't cached.
+// The signed-in user and the org's ID, when the user's App token reaches
+// the org's installation of the App: GitHub lists an installation to a user
+// token only for an org the user belongs to. `/user/memberships` would need
+// the App's Members permission, which it doesn't ask for.
+async function orgMember(token: string, org: string) {
+  const [user, installs] = await Promise.all([
+    asUser(token, '/user'),
+    asUser(token, '/user/installations?per_page=100'),
+  ]);
+  if (user.status === 401 || installs.status === 401) return 'expired';
+  if (!user.ok || !installs.ok) {
+    throw new GitHubError(
+      `GitHub /user, /user/installations: ${user.status}, ${installs.status}`,
+    );
+  }
+  const { id, login } = (await user.json()) as { id: number; login: string };
+  const { installations } = (await installs.json()) as {
+    installations: { account: { id: number; login: string } | null }[];
+  };
+  const account = installations.find(
+    (i) => i.account?.login.toLowerCase() === org.toLowerCase(),
+  )?.account;
+  return account ? { id, login, org_id: account.id } : null;
+}
+
+// The signed-in member of the org, cached five minutes (per colo) by the
+// token's hash, under the Worker's own origin (the Cache API keeps only its
+// zone's URLs). A miss asks GitHub only when `admit` does, else answers
+// 'limited'. 'expired' when GitHub refuses the token; any other failure
+// throws (GitHubError, a 502) and isn't cached.
 export async function cueMember(
   origin: string,
   token: string,
   org: string,
   admit: () => Promise<boolean>,
-): Promise<Member | null | 'expired' | 'sso' | 'limited'> {
+): Promise<Member | null | 'expired' | 'limited'> {
   const key = `${origin}/v1/cue/membership/${await sha256(token)}/${encodeURIComponent(org.toLowerCase())}`;
   const cached = await caches.default.match(key);
-  if (cached) return (await cached.json()) as Member | null | 'sso';
+  if (cached) return (await cached.json()) as Member | null;
   if (!(await admit())) return 'limited';
-  const m = await orgMembership(token, org, 'cue');
-  if (m === 'expired') return m;
-  const member =
-    m === 'sso'
-      ? m
-      : m?.state === 'active'
-        ? { id: m.user.id, login: m.user.login, org_id: m.organization.id }
-        : null;
+  const member = await orgMember(token, org);
+  if (member === 'expired') return member;
   await caches.default.put(
     key,
     Response.json(member, { headers: { 'Cache-Control': 'max-age=300' } }),
@@ -73,10 +94,6 @@ async function signIn(request: Request, env: Env, org: unknown) {
   }
   if (member === 'expired') {
     return json({ error: 'GitHub sign-in expired; sign in again.' }, 401);
-  }
-  if (member === 'sso') {
-    const error = `Authorize the backmesh sign-in for ${org}'s SAML SSO on GitHub, then sign in again.`;
-    return json({ error }, 403);
   }
   return member ?? json({ error: `Not a member of ${org}.` }, 403);
 }

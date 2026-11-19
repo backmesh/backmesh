@@ -91,18 +91,21 @@ the CLI a key of its own and read cues sent while it does, so treat a cue's
 repository and branch names as no more secret from backmesh than its GitHub
 App's reach already makes them.
 
-The CLI calls it too. During `backmesh install`, an org admin signs in with
-GitHub once with GitHub's device flow, asking for `read:org` and
-`read:packages`: the CLI prints a code, and the admin enters it at
-`https://github.com/login/device` on any device. That GitHub page is the only
-check that the code is yours: it names backmesh and the scopes, so enter a code
-only if your own terminal printed it. backmesh checks the admin role with that
-GitHub token, mints the install key, and returns both to the CLI over HTTPS,
-keeping neither: the token stays on your machine as the control plane's
-sign-in. If backmesh's App isn't on the org, the CLI then prints GitHub's own
-install link for it. Every later sign-in (an install re-run, `upgrade`,
-`rotate-key`, `cue --sign-in`, and `status`, `logs` or `uninstall` replacing an
-expired one) uses the same device code. `backmesh upgrade` checks backmesh still accepts the install's key. `backmesh uninstall` asks an org admin to sign in the
+The CLI calls it too. During `backmesh install`, an org owner signs in to
+backmesh's GitHub App once with GitHub's device flow: the CLI prints a code and
+when it expires, and the owner enters it at `https://github.com/login/device`
+on any device. That GitHub page is the only check that the code is yours: it
+names backmesh, so enter a code only if your own terminal printed it. A code
+that expires is replaced by a new one. The sign-in is a GitHub App user token,
+which can do only what both [the App](#the-github-app) and you can: it reaches
+no code, secrets or org members. The CLI sends it to backmesh once, which
+checks with it that you can manage the org's self-hosted runners, mints the
+install key, and returns the key over HTTPS, keeping neither: the token stays
+on your machine as the control plane's sign-in. If backmesh's App isn't on the
+org, the CLI first prints GitHub's own install link for it and waits. Every
+later sign-in (an install re-run, `upgrade`, `rotate-key`, `cue --sign-in`,
+and `status`, `logs` or `uninstall` replacing an expired one) is the same
+device flow. `backmesh upgrade` checks backmesh still accepts the install's key. `backmesh uninstall` asks an org owner to sign in the
 same way, then gets an hour-long token that can manage only your org's
 self-hosted runners, which it keeps in memory to delete backmesh's runners,
 scale sets and runner group, and finally removes the App from your org.

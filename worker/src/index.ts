@@ -1,7 +1,7 @@
 // The backmesh Worker on api.backmesh.com: install keys and telemetry,
-// the backmesh App's token broker, the CLI's
-// device-flow sign-ins and the cue relay.
-import { GitHubError } from './app.js';
+// the backmesh App's token broker, the check of the CLI's sign-ins and the
+// cue relay.
+import { GitHubError, GitHubTimeout } from './app.js';
 import {
   cleanup,
   cleanupFinish,
@@ -12,12 +12,10 @@ import {
 import { cue } from './cue.js';
 import type { RelayNamespace } from './relay.js';
 import {
-  AppRestricted,
   createInstall,
-  deviceCode,
   keyInstall,
-  relaySignIn,
   revokeInstall,
+  SignInRefused,
 } from './installs.js';
 import { intake, retain } from './telemetry.js';
 
@@ -53,7 +51,6 @@ export interface Env {
   TOKEN_LIMIT: RateLimit;
   // One Relay Durable Object per org, for cues (cue.ts).
   RELAY: RelayNamespace;
-  GITHUB_CLIENT_ID: string;
   // The backmesh App: its ID, URL slug and PKCS#8 private key, and
   // the next key during a rotation, which signs once set. Unset until the
   // App exists, when the broker routes answer 503.
@@ -86,31 +83,12 @@ async function route(request: Request, env: Env): Promise<Response> {
     return cue(request, env, refused);
   }
   const broker = pathname === '/v1/token' || Object.hasOwn(cleanups, pathname);
-  if (
-    pathname === '/v1/installs' ||
-    pathname === '/v1/installs/device' ||
-    pathname === '/v1/sign-in' ||
-    Object.hasOwn(cleanups, pathname)
-  ) {
+  if (pathname === '/v1/installs' || Object.hasOwn(cleanups, pathname)) {
     const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
     if (!(await env.SIGNIN_LIMIT.limit({ key: ip })).success) return tooMany();
   }
-  if (pathname === '/v1/installs/device' && request.method === 'POST') {
-    // `{ control_plane: true }`: a sign-in whose token the CLI keeps as
-    // anycloud's, with the scopes its hosted API exchanges. Any other,
-    // such as uninstall's cleanup sign-in, asks only for read:org.
-    const { control_plane } = ((await request.json().catch(() => null)) ??
-      {}) as { control_plane?: unknown };
-    return deviceCode(
-      env,
-      control_plane === true ? 'read:org read:packages' : undefined,
-    );
-  }
   if (pathname === '/v1/installs' && request.method === 'POST') {
     return createInstall(request, env);
-  }
-  if (pathname === '/v1/sign-in' && request.method === 'POST') {
-    return relaySignIn(request, env);
   }
   if (broker && request.method !== 'POST') {
     return Response.json({ error: 'Use POST.' }, { status: 405 });
@@ -119,7 +97,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     const error = 'backmesh App not configured yet.';
     return Response.json({ error }, { status: 503 });
   }
-  // An org admin's sign-in, and the install key when there is one.
+  // An org owner's sign-in, and the install key when there is one.
   if (Object.hasOwn(cleanups, pathname))
     return cleanups[pathname]!(request, env);
   if (
@@ -166,8 +144,14 @@ export default {
       if (error instanceof GitHubError) {
         return Response.json({ error: error.message }, { status: 502 });
       }
-      if (error instanceof AppRestricted) {
-        return Response.json({ error: error.message }, { status: 403 });
+      if (error instanceof GitHubTimeout) {
+        return Response.json({ error: error.message }, { status: 504 });
+      }
+      if (error instanceof SignInRefused) {
+        return Response.json(
+          { error: error.message },
+          { status: error.status },
+        );
       }
       throw error;
     });

@@ -82,10 +82,10 @@ CLI encrypts them on your machine to your listener's key, and only the listener
 can read them. The listener holds one WebSocket open to receive cues and pings
 it every 20 seconds.
 
-To check you're a member of the org, the CLI signs in with GitHub once, asking
-for `read:org`, and keeps the token on your machine. backmesh.com asks GitHub
-about your membership with it and remembers the answer for five minutes,
-keeping no token. It keeps, for at most 10 minutes, your GitHub user ID per
+To check you're a member of the org, the CLI signs in to backmesh's GitHub App
+once and keeps the token on your machine. backmesh.com asks GitHub with it
+whether you reach the App's installation on the org, as its members do, and
+remembers the answer for five minutes, keeping no token. It keeps, for at most 10 minutes, your GitHub user ID per
 cue for its rate limits, a random tag your CLI makes for each push (each repo
 and branch, new every 10 minutes) so a push's cues count once, a hash per cue
 that only its repeats match, and the encrypted cue for 60 seconds until your
@@ -121,8 +121,8 @@ receives, such as sign-in details.
 
 ## Installs
 
-An org admin signs in with GitHub once, during `backmesh install`. The
-sign-in asks for `read:org`, so backmesh can check you're an admin of the
-org, and `read:packages`, for your control plane. backmesh.com uses that GitHub
-token once and keeps none; it's returned to your machine. It ties the install
+An org owner signs in to backmesh's GitHub App once, during `backmesh
+install`. backmesh.com uses that GitHub token once, to check you can manage
+the org's self-hosted runners, and keeps none; it stays on your machine for
+your control plane. It ties the install
 to your org: no one else can send events or get GitHub tokens for it.

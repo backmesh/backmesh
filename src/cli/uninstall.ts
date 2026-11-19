@@ -485,7 +485,8 @@ async function readControlPlane(
 // with the cleanup's ID after a long drain rather than a second sign-in.
 async function cleanupTokenNow(cleanup: Cleanup, deps: UninstallDeps) {
   const left = Date.parse(cleanup.expires_at ?? '') - Date.now();
-  if (!cleanup.token || left > 30 * 60_000) return cleanup.token;
+  if (!cleanup.token || !cleanup.cleanup_id || left > 30 * 60_000)
+    return cleanup.token;
   return (
     await refreshCleanupToken(
       cleanup.cleanup_id,
@@ -556,19 +557,22 @@ async function removeOrg(
       `The backmesh GitHub App isn't installed on ${login}, so backmesh can't reach its runners there. Check the org's Actions settings for runner groups ${groups}.`,
     );
   }
-  const app = await finishCleanup(cleanup.cleanup_id, worker).catch(
-    (cause: unknown) => {
+  // No cleanup to finish when the App isn't on the org.
+  const app =
+    cleanup.cleanup_id &&
+    (await finishCleanup(cleanup.cleanup_id, worker).catch((cause: unknown) => {
       throw new Error(
         `backmesh couldn't remove its GitHub App from ${login}: ${cause instanceof Error ? cause.message : String(cause)}. Run \`backmesh uninstall --org ${login}\` again.`,
         { cause },
       );
-    },
-  );
-  ui.print(
-    app.removed
-      ? `Removed the backmesh GitHub App from ${login}.`
-      : `The backmesh GitHub App stays on ${login}, which its installs ${app.still_used_by.join(', ')} still use.`,
-  );
+    }));
+  if (app) {
+    ui.print(
+      app.removed
+        ? `Removed the backmesh GitHub App from ${login}.`
+        : `The backmesh GitHub App stays on ${login}, which its installs ${app.still_used_by.join(', ')} still use.`,
+    );
+  }
   // Last: the Secret marks an org whose removal a rerun must finish.
   // Secrets are write-only and outlive a deleted VM.
   if (plane) {
@@ -577,7 +581,7 @@ async function removeOrg(
       await deps.run(['secrets', 'delete', name]);
     }
   }
-  return { org: login, appRemoved: app.removed };
+  return { org: login, appRemoved: app ? app.removed : true };
 }
 
 // Step 1 for one org: its listener's VM and service, then a wait until the

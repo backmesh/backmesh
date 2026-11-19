@@ -235,7 +235,7 @@ function fixture({
     run,
     runLong: run,
     print: (line) => lines.push(line),
-    signInScopes: async () => ['read:org', 'read:packages'],
+    signInLogin: async () => 'octocat',
     api: () => api,
     exec: () => exec,
     fetch: async (url, init) => {
@@ -270,18 +270,36 @@ const rolled = (calls: string[]) => calls.includes(`roll ${VM}`);
 // No raw install IDs (32 hex characters) in any user-visible line.
 const noInstallIds = (lines: string[]) =>
   lines.every((l) => !/[0-9a-f]{32}/.test(l));
-// Each sign-in's purpose, from the Worker routes it polled: an install
-// mints a key; a plain sign-in doesn't.
-const purposes = (calls: string[]) =>
-  calls.flatMap((c) =>
-    c === 'POST /v1/installs'
-      ? ['install']
-      : c === 'POST /v1/sign-in'
-        ? ['sign-in']
-        : [],
-  );
-const mints = (calls: string[]) =>
-  purposes(calls).filter((p) => p === 'install').length;
+// Each sign-in's purpose: one followed by `POST /v1/installs` mints a key;
+// a plain sign-in doesn't.
+const purposes = ({
+  calls,
+  signedIn,
+}: Pick<ReturnType<typeof fakeWorker>, 'calls' | 'signedIn'>) => {
+  const out: string[] = [];
+  let pending = false;
+  calls.forEach((call, i) => {
+    if (signedIn.includes(i)) {
+      if (pending) out.push('sign-in');
+      pending = true;
+    }
+    if (call === 'POST /v1/installs' && pending) {
+      out.push('install');
+      pending = false;
+    }
+  });
+  if (pending) out.push('sign-in');
+  return out;
+};
+// The fixture's sign-in: the first code expires, and a fresh one follows.
+const SIGN_IN_LINES = [
+  expect.stringMatching(
+    /^Sign in with GitHub as an admin of acme, to replace its install key: open https:\/\/github\.com\/login\/device and enter ABCD-1234 \(it expires at \d\d:\d\d UTC\)\.$/,
+  ),
+  expect.stringContaining('enter WXYZ-5678 (it expires at '),
+];
+const mints = (worker: Parameters<typeof purposes>[0]) =>
+  purposes(worker).filter((p) => p === 'install').length;
 
 describe('reason', () => {
   it('lowercases an ordinary sentence-initial capital and drops one trailing period', () => {
@@ -349,17 +367,8 @@ describe('rotateKey', () => {
 
     expect(result).toEqual({ org: 'acme' });
     expect(worker.signIns()).toHaveLength(2);
-    expect(lines.filter((l) => l.startsWith('Sign in'))).toEqual([
-      expect.stringMatching(
-        /^Sign in with GitHub as an admin of acme, to replace its install key: open https:\/\/github\.com\/login\/device and enter ABCD-1234 \(it expires at \d\d:\d\d UTC\)\.$/,
-      ),
-      expect.stringContaining('enter WXYZ-5678 (it expires at '),
-    ]);
-    expect(worker.bodies[0]).toEqual({
-      org: 'acme',
-      github_token: SIGNED_IN,
-      install: expect.any(String),
-    });
+    expect(lines.filter((l) => l.startsWith('Sign in'))).toEqual(SIGN_IN_LINES);
+    expect(worker.bodies[0]).toEqual({ org: 'acme', github_token: SIGNED_IN });
   });
 
   it('signs in, mints, rolls, confirms, revokes the old install and clears the marker with a real roll, in that order, with no install IDs in any line', async () => {
@@ -378,7 +387,7 @@ describe('rotateKey', () => {
 
     expect(result).toEqual({ org: 'acme' });
     expect(rolled(calls)).toBe(true);
-    expect(purposes(worker.calls)).toEqual(['install']);
+    expect(purposes(worker)).toEqual(['install']);
     expect(worker.revoked).toEqual([
       { key: NEW_KEY, install: OLD_INSTALL, token: SIGNED_IN },
     ]);
@@ -408,7 +417,7 @@ describe('rotateKey', () => {
     expect(noInstallIds(lines)).toBe(true);
     expect(lines).toEqual([
       `Signing in as an admin of acme to mint a new install key.`,
-      `Sign in with GitHub as an admin of acme, to replace its install key: open https://github.com/login/device and enter ABCD-1234.`,
+      ...SIGN_IN_LINES,
       `Rolling acme's listener onto the new key.`,
       `acme's listener runs on the new key; revoking the old install.`,
     ]);
@@ -433,7 +442,7 @@ describe('rotateKey', () => {
     // lines as the happy path, nothing more.
     expect(lines).toEqual([
       `Signing in as an admin of acme to mint a new install key.`,
-      `Sign in with GitHub as an admin of acme, to replace its install key: open https://github.com/login/device and enter ABCD-1234.`,
+      ...SIGN_IN_LINES,
       `Rolling acme's listener onto the new key.`,
       `acme's listener runs on the new key; revoking the old install.`,
     ]);
@@ -536,7 +545,7 @@ describe('rotateKey', () => {
 
       expect(result).toEqual({ org: 'acme' });
       // A plain sign-in, never an install sign-in (which would mint).
-      expect(purposes(worker.calls)).toEqual(['sign-in']);
+      expect(purposes(worker)).toEqual(['sign-in']);
       expect(worker.revoked).toEqual([
         { key: NEW_KEY, install: OLD_INSTALL, token: SIGNED_IN },
       ]);
@@ -559,7 +568,7 @@ describe('rotateKey', () => {
         /old key wasn't revoked/,
       );
       // The failed run minted exactly one key.
-      expect(mints(first.worker.calls)).toBe(1);
+      expect(mints(first.worker)).toBe(1);
       expect(first.secretRotatingFrom()).toBe(OLD_INSTALL);
 
       // The same process state (Secret and Pod), rerun: a fresh `rotateKey`
@@ -570,7 +579,7 @@ describe('rotateKey', () => {
 
       expect(result).toEqual({ org: 'acme' });
       // No second mint: only ever one 'install' sign-in, across both runs.
-      expect(mints(first.worker.calls)).toBe(1);
+      expect(mints(first.worker)).toBe(1);
       // Revokes the ORIGINAL old install, not some intermediate one.
       expect(first.worker.revoked).toEqual([
         { key: NEW_KEY, install: OLD_INSTALL, token: SIGNED_IN },
@@ -586,14 +595,14 @@ describe('rotateKey', () => {
       await expect(rotateKey(first.deps, { org: 'acme' })).rejects.toThrow(
         /didn't come up on the new key/,
       );
-      expect(mints(first.worker.calls)).toBe(1);
+      expect(mints(first.worker)).toBe(1);
       expect(first.worker.revoked).toEqual([]);
 
       const result = await rotateKey(first.deps, { org: 'acme' });
 
       expect(result).toEqual({ org: 'acme' });
       // The rerun resumed: no second mint.
-      expect(mints(first.worker.calls)).toBe(1);
+      expect(mints(first.worker)).toBe(1);
       expect(first.worker.revoked).toEqual([
         { key: NEW_KEY, install: OLD_INSTALL, token: SIGNED_IN },
       ]);
@@ -628,7 +637,7 @@ describe('rotateKey', () => {
       const result = await rotateKey(deps, { org: 'acme' });
 
       expect(result).toEqual({ org: 'acme' });
-      expect(purposes(worker.calls)).toEqual(['sign-in', 'install']);
+      expect(purposes(worker)).toEqual(['sign-in', 'install']);
       expect(worker.revoked).toEqual([
         { key: NEW_KEY, install: OLD_INSTALL, token: SIGNED_IN },
         { key: NEWER_KEY, install: NEW_INSTALL, token: SIGNED_IN },
@@ -659,7 +668,7 @@ describe('rotateKey', () => {
 
       const first = await rotateKey(f.deps, { org: 'acme' });
       expect(first).toEqual({ org: 'acme' });
-      expect(mints(f.worker.calls)).toBe(1);
+      expect(mints(f.worker)).toBe(1);
       // The clearing roll (fix A) leaves the listener's own environment
       // clean, not just the Secret.
       expect(f.podRotatingFrom()).toBeUndefined();
@@ -712,8 +721,8 @@ describe('rotateKey', () => {
       expect(second).toEqual({ org: 'acme' });
       // One more mint for the second rotation: no stale-marker resume, no
       // double sign-in.
-      expect(mints(f.worker.calls)).toBe(2);
-      expect(purposes(f.worker.calls)).not.toContain('sign-in');
+      expect(mints(f.worker)).toBe(2);
+      expect(purposes(f.worker)).not.toContain('sign-in');
     });
   });
 

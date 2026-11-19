@@ -119,14 +119,14 @@ describe('POST /v1/token', () => {
     expect(upstream.calls).toEqual([]);
   });
 
-  it('finds the App through the login the device sign-in stored', async () => {
+  it('finds the App through the login the sign-in stored', async () => {
     upstream.memberships.set('alice', [
       { id: 11, login: 'acme', role: 'admin' },
     ]);
     upstream.installations.set(11, { id: 7, login: 'acme', permissions: ALL });
     const signedIn = await call('/v1/installs', null, {
       org: 'acme',
-      device_code: 'alice',
+      github_token: 'token-alice',
     });
     const { key } = (await signedIn.json()) as { key: string };
 
@@ -280,12 +280,10 @@ describe("uninstall's cleanup", () => {
       { id: 11, login: 'acme', role: 'member' },
     ]);
   });
-  // The sign-in, with the install key when the CLI could read it.
-  const cleanup = (
-    device_code: string,
-    org = 'acme',
-    key: string | null = null,
-  ) => call('/v1/installs/cleanup', key, { device_code, org });
+  // The sign-in: a user's App token, with the install key when the CLI
+  // could read it.
+  const cleanup = (user: string, org = 'acme', key: string | null = null) =>
+    call('/v1/installs/cleanup', key, { github_token: `token-${user}`, org });
   const signedIn = async (key: string | null = null) =>
     (await (await cleanup('alice', 'acme', key)).json()) as {
       token: string | null;
@@ -303,10 +301,7 @@ describe("uninstall's cleanup", () => {
     return minted;
   };
 
-  it("polls the sign-in, then mints a runners-only token for the admin's org", async () => {
-    upstream.devicePending = 1;
-
-    expect((await cleanup('alice')).status).toBe(202);
+  it("mints a runners-only token for the owner's org", async () => {
     const res = await cleanup('alice');
 
     expect(await res.json()).toEqual({
@@ -329,51 +324,6 @@ describe("uninstall's cleanup", () => {
     expect(asBob.status).toBe(403);
     expect(otherOrg.status).toBe(403);
     expect(upstream.mints).toEqual([]);
-  });
-
-  it("answers 502 with GitHub's reason when it can't say whether the user is an admin", async () => {
-    upstream.membershipStatus = 403;
-
-    const res = await cleanup('alice');
-    const signIn = await call('/v1/installs', null, {
-      org: 'acme',
-      device_code: 'alice',
-    });
-
-    expect(res.status).toBe(502);
-    // GitHub's reason reaches the caller.
-    expect(await res.json()).toEqual({
-      error: expect.stringContaining('SAML enforcement'),
-    });
-    expect(signIn.status).toBe(502);
-    expect(upstream.mints).toEqual([]);
-    expect(await auditRows()).toEqual([
-      expect.objectContaining({ action: 'cleanup', outcome: 'github_failed' }),
-    ]);
-  });
-
-  it("names an org's OAuth app restriction to the device sign-in and to uninstall", async () => {
-    upstream.restricted.add('acme');
-    const signIn = await call('/v1/installs', null, {
-      org: 'acme',
-      device_code: 'alice',
-    });
-    const res = await cleanup('alice');
-
-    expect(signIn.status).toBe(403);
-    expect(await signIn.json()).toEqual({
-      error:
-        'acme restricts third-party apps: an org owner approves backmesh at https://github.com/organizations/acme/settings/oauth_application_policy, then run install again.',
-    });
-    expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({
-      error:
-        'acme restricts third-party apps: an org owner approves backmesh at https://github.com/organizations/acme/settings/oauth_application_policy, then run uninstall again.',
-    });
-    expect(upstream.mints).toEqual([]);
-    expect(await auditRows()).toContainEqual(
-      expect.objectContaining({ action: 'cleanup', outcome: 'app_restricted' }),
-    );
   });
 
   it("mints only for the installation whose account.id is the admin's org", async () => {
@@ -518,12 +468,10 @@ describe("uninstall's cleanup", () => {
   });
 
   it('writes an audit row for every completed or refused call, without a token', async () => {
-    upstream.devicePending = 1;
-    upstream.consumed.add('used');
-    await cleanup('alice');
+    upstream.revoked.add('dave');
     const { cleanup_id } = await signedIn();
     await cleanup('bob');
-    await cleanup('used');
+    await cleanup('dave');
     await call('/v1/installs/cleanup', null, { org: 'acme' });
     await finish(cleanup_id);
 
@@ -542,7 +490,7 @@ describe("uninstall's cleanup", () => {
         ip: '203.0.113.7',
         ray: 'ray-1',
       }),
-      expect.objectContaining({ outcome: 'not_admin', org: null }),
+      expect.objectContaining({ outcome: 'not_admin', org: 11 }),
       expect.objectContaining({ outcome: 'signin_failed' }),
       expect.objectContaining({ outcome: 'bad_request' }),
       expect.objectContaining({

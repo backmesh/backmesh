@@ -477,7 +477,8 @@ describe('uninstall', () => {
         'POST /v1/installs/cleanup/finish',
       ]);
       // No install key to send.
-      expect(bearers).toEqual([null, null, null]);
+      // GitHub's device flow, then the cleanup and its finish, no key.
+      expect(bearers).toEqual([null, null, null, null]);
       expect(lines).toContain(
         `Removed backmesh's scale sets, runners and runner groups ${groups} from acme.`,
       );
@@ -879,8 +880,8 @@ describe('uninstall', () => {
         ['POST /v1/installs/cleanup'],
       ],
       [
-        fakeWorker({ device: new TypeError('fetch failed') }),
-        "Couldn't reach backmesh.com for the GitHub sign-in",
+        fakeWorker({ polls: [Response.json({ error: 'access_denied' })] }),
+        'The GitHub sign-in was denied.',
         [],
       ],
     ] as const) {
@@ -913,7 +914,8 @@ describe('uninstall', () => {
     const { deps, github } = setUp({ worker });
     await uninstall(scripted, deps);
     expect(worker.calls).toEqual([
-      'POST /v1/installs/device',
+      'POST github.com/login/device/code',
+      'POST github.com/login/oauth/access_token',
       'POST /v1/installs/cleanup',
       'POST /v1/installs/cleanup/token',
       'POST /v1/installs/cleanup/finish',
@@ -934,13 +936,16 @@ describe('uninstall', () => {
           token: null,
           expires_at: null,
           org: { id: 7, login: 'acme' },
-          cleanup_id: CLEANUP_ID,
+          // Nothing for the Worker to finish.
+          cleanup_id: null,
         }),
       ],
     });
     const { deps, calls, lines } = setUp({ worker });
-    await uninstall(scripted, deps);
+    const result = await uninstall(scripted, deps);
     expect(changes(calls).filter((c) => c.startsWith('github'))).toEqual([]);
+    expect(worker.calls).not.toContain('POST /v1/installs/cleanup/finish');
+    expect(result.orgs).toEqual([{ org: 'acme', appRemoved: true }]);
     expect(calls).toContain(DELETE_HOSTED);
     expect(lines).toContain(
       "The backmesh GitHub App isn't installed on acme, so backmesh can't reach its runners there. Check the org's Actions settings for runner groups backmesh-l8u5e-*.",

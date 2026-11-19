@@ -40,21 +40,18 @@ async function call<T>(request: () => Promise<T>): Promise<T> {
   }
 }
 
-// The scopes GitHub granted a sign-in: GET /user's `x-oauth-scopes`, read as
-// anycloud's hosted API reads them (`gateways/github.ts:185-196` at v0.1.72).
-export async function signInScopes(
+// The login of a sign-in's user: GET /user, which fails with GitHub's 401
+// for a token it refuses.
+export async function signInLogin(
   token: string,
   options: ConstructorParameters<typeof Octokit>[0] = {},
-): Promise<string[]> {
-  const { headers } = await call(() =>
+): Promise<string> {
+  const { data } = await call(() =>
     new Octokit({
       log: quietLog,
       ...options,
       auth: token,
     }).rest.users.getAuthenticated(),
   );
-  return (headers['x-oauth-scopes'] ?? '')
-    .split(',')
-    .map((scope) => scope.trim())
-    .filter(Boolean);
+  return data.login;
 }

@@ -25,8 +25,7 @@ Or with Homebrew: `brew install backmesh/tap/backmesh`.
 You need:
 
 - A GitHub org owner, who signs in and installs backmesh's GitHub App during
-  install. An org that restricts OAuth apps
-  [approves backmesh first](/faq/#installing).
+  install.
 - A signed-in cloud CLI on your `PATH` for each cloud: `aws`, `gcloud` with
   a project, or `az` with a subscription, with
   [the rights install needs](/security/#what-install-needs). What install
@@ -66,7 +65,8 @@ Install then:
    regions, `backmesh-4` spot and on-demand prices, the [quotas](#quotas) read
    through your cloud CLI, and the control plane's monthly cost, and asks once.
 2. **Prints a code.** The org owner opens `https://github.com/login/device` on
-   any device and enters the code. If backmesh's GitHub App isn't on the org
+   any device and enters the code; one that expires is replaced by a new one,
+   printed with when it expires. If backmesh's GitHub App isn't on the org
    yet, install then prints GitHub's install link for it
    ([its permissions](/security/#the-github-app)) and waits until it's there.
    That sign-in also owns the control plane and is saved in `~/.backmesh`.

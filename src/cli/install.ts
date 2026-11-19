@@ -224,8 +224,8 @@ export interface InstallDeps {
   // minutes.
   runLong: RunAnycloud;
   command: RunCommand;
-  // The scopes GitHub granted a sign-in (`signInScopes`).
-  signInScopes: (token: string) => Promise<string[]>;
+  // The login of a sign-in's user (`signInLogin`).
+  signInLogin: (token: string) => Promise<string>;
   release: () => Promise<Pick<Compatibility, 'runnerImage' | 'listenerImage'>>;
   ui: InstallUi;
   api?: typeof anycloudApi;
@@ -317,7 +317,7 @@ async function checkPrerequisites(
 ): Promise<{ identities: Map<Cloud, string>; signedIn: boolean }> {
   checkPinned(ANYCLOUD_VERSION, deps.features);
   const { signedIn, problems } = signIn
-    ? await checkSignIn(deps.env, deps.signInScopes, deps.ui.print)
+    ? await checkSignIn(deps.env, deps.signInLogin, deps.ui.print)
     : { signedIn: false, problems: [] };
   const identities = await checkClouds(targets, deps, problems);
   return { identities, signedIn };
@@ -1218,12 +1218,12 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   const name = listenerName(options.org);
   let installKey = current?.installKey;
   if (installKey) {
-    if (!signedIn) await signInAgain(worker, deps.signInScopes)();
+    if (!signedIn) await signInAgain(worker, deps.signInLogin)();
   } else {
     const signed = await signInForKey(options.org, worker);
     installKey = signed.key;
     if (!signedIn) {
-      await saveSignIn(deps.env, signed.token, deps.signInScopes);
+      await saveSignIn(deps.env, signed.token, deps.signInLogin);
     }
   }
   // Step 4, before anything is billed: backmesh's App on the org.

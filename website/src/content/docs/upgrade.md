@@ -101,7 +101,11 @@ GitHub during install.
 An installation made before the GitHub sign-in asks for it once. The App is
 already on your org, so `upgrade` prints a code to enter at
 `https://github.com/login/device` on any device. So does one whose sign-in backmesh
-no longer accepts.
+no longer accepts. A code that expires is replaced by a new one.
+
+A backmesh CLI from v0.4.3 or earlier can't sign in any more: it signs in
+through an OAuth app backmesh retired. Install the current CLI first
+(`curl -fsSL https://backmesh.com/install.sh | sh`), then upgrade.
 
 If `api.backmesh.com` can't be reached during that sign-in, `upgrade` stops
 without changing your listener: the new listener needs the sign-in to start. Retry when it's reachable. `upgrade` also stops when any org's listener doesn't answer,

@@ -60,7 +60,8 @@ const after =
   (ms: number, answer = token) =>
   (signal?: AbortSignal) =>
     new Promise<Response>((resolve, reject) => {
-      const timer = ms < Infinity && setTimeout(() => resolve(answer), ms);
+      const timer =
+        ms < Infinity && setTimeout(() => resolve(answer.clone()), ms);
       signal?.addEventListener('abort', () => {
         if (timer) clearTimeout(timer);
         reject(signal.reason);
@@ -158,7 +159,7 @@ describe('signInForKey', () => {
         codes: [json(DEVICE), json(next)],
         polls: [
           ...first,
-          async () => (worker.signIns().length > 1 ? token : pending),
+          async () => (worker.signIns().length > 1 ? token : pending).clone(),
         ],
       });
       const { key, lines } = signIn(worker);
@@ -171,6 +172,26 @@ describe('signInForKey', () => {
       expect(worker.tokenPolls().at(-1)!.form.device_code).toBe('dev-2');
     },
   );
+
+  it('stops when GitHub refuses the device code', async () => {
+    const worker = fakeWorker({
+      codes: [
+        json(
+          {
+            error: 'device_flow_disabled',
+            error_description:
+              'Device Flow must be explicitly enabled for this App',
+          },
+          400,
+        ),
+      ],
+    });
+
+    await expect(signIn(worker).key).rejects.toThrow(
+      'GitHub refused the sign-in: Device Flow must be explicitly enabled for this App',
+    );
+    expect(worker.signIns()).toHaveLength(1);
+  });
 
   it('ends the sign-in when the person denies it', async () => {
     const worker = fakeWorker({ polls: [json({ error: 'access_denied' })] });

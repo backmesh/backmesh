@@ -1,12 +1,17 @@
-// Install keys (owner, 2026-11-06). `backmesh install` signs an org admin in
-// with GitHub's device flow, proxied here. The sign-in asks for read:org, for
-// the admin check, and read:packages: with exactly those, the same token is
-// the one anycloud's hosted API exchanges, so it goes back to the user who
-// signed in, for the control plane. The Worker never stores or logs
-// it. It mints a key bound to the org and install.
+// Install keys (owner, 2026-11-06). Every backmesh sign-in is GitHub's
+// device flow with the backmesh App, which the CLI runs against github.com
+// (owner, 2026-11-19); the Worker gets the App's user token once, checks
+// its holder can manage the org's self-hosted runners, and mints a key
+// bound to the org and install. The token is never stored or logged.
 // The CLI stores the key in the listener's Secret; nobody copies it. Only
 // its SHA-256 is stored here.
-import { GITHUB_TIMEOUT_MS, GitHubError, randomHex } from './app.js';
+import {
+  gitHub,
+  GitHubError,
+  installationOf,
+  installUrl,
+  randomHex,
+} from './app.js';
 import type { D1Database, Env } from './index.js';
 
 export const sha256 = async (text: string) =>
@@ -70,117 +75,102 @@ export async function keyInstall(env: Env, request: Request) {
     : null;
 }
 
-const github = async (path: string, form: Record<string, string>) =>
-  (await (
-    await fetch(`https://github.com${path}`, {
-      method: 'POST',
-      headers: { Accept: 'application/json' },
-      body: new URLSearchParams(form),
-    })
-  ).json()) as Record<string, unknown>;
-
-// POST /v1/installs/device: GitHub's device code for the CLI to show.
-export async function deviceCode(env: Env, scope = 'read:org') {
-  const answer = await github('/login/device/code', {
-    client_id: env.GITHUB_CLIENT_ID,
-    scope,
-  });
-  if (typeof answer.device_code !== 'string') {
-    const error = `GitHub refused the sign-in: ${String(answer.error_description ?? answer.error)}`;
-    return Response.json({ error }, { status: 502 });
-  }
-  return Response.json(answer);
-}
-
-// The user's token once they finish the device sign-in, or the answer to
-// send: 202 while it's pending, 400 when GitHub refuses it (denied, expired,
-// or a code already used). The caller uses the token once and drops it.
-export async function deviceToken(env: Env, device_code: string) {
-  const answer = await github('/login/oauth/access_token', {
-    client_id: env.GITHUB_CLIENT_ID,
-    device_code,
-    grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-  });
-  if (
-    answer.error === 'authorization_pending' ||
-    answer.error === 'slow_down'
-  ) {
-    return Response.json(
-      { pending: true, slow_down: answer.error === 'slow_down' },
-      { status: 202 },
-    );
-  }
-  if (typeof answer.access_token !== 'string') {
-    const error = `GitHub sign-in failed: ${String(answer.error_description ?? answer.error)}`;
-    return Response.json({ error }, { status: 400 });
-  }
-  return answer.access_token;
-}
-
-// An org whose OAuth app access restrictions, the default for a new org,
-// haven't approved backmesh's sign-in: GitHub answers 403. `command`
-// is what the user runs again.
-export class AppRestricted extends Error {
-  constructor(org: string, command: string) {
-    super(
-      `${org} restricts third-party apps: an org owner approves backmesh at https://github.com/organizations/${org}/settings/oauth_application_policy, then run ${command} again.`,
-    );
-  }
-}
-
-// The user's membership of the org, from a device sign-in's token (read:org):
-// null when GitHub shows none (it answers 404 to a non-member), 'expired'
-// when it refuses the token, 'sso' when the org's SAML SSO hasn't authorized
-// it. An org that restricts OAuth apps throws AppRestricted. The token is
-// used here and not stored.
-export async function orgMembership(
-  token: string,
-  org: string,
-  command = 'install',
-) {
-  const res = await fetch(
-    `https://api.github.com/user/memberships/orgs/${encodeURIComponent(org)}`,
-    {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${token}`,
-        'User-Agent': 'backmesh',
-      },
-      signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
+// GitHub's answer to the App user token `token` for `path`.
+export const asUser = (token: string, path: string) =>
+  gitHub(path, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${token}`,
+      'User-Agent': 'backmesh',
+      'X-GitHub-Api-Version': '2022-11-28',
     },
-  );
-  if (res.status === 401) return 'expired';
-  if (res.status === 404) return null;
-  if (res.status === 403 && res.headers.has('X-GitHub-SSO')) return 'sso';
-  // A 403 says why: an SSO-unauthorized token, the org's OAuth app access
-  // restrictions, or a spent rate limit.
-  if (!res.ok) {
-    const body = await res.text();
-    if (res.status === 403 && /OAuth App access restrictions/.test(body)) {
-      throw new AppRestricted(org, command);
-    }
-    throw new GitHubError(
-      `GitHub /user/memberships/orgs: ${res.status} ${body}`,
-    );
+  });
+
+// A sign-in the Worker can't use: GitHub refused the token (401), or the
+// org's SAML SSO hasn't authorized it (403).
+export class SignInRefused extends Error {
+  constructor(
+    message: string,
+    readonly status: 401 | 403,
+  ) {
+    super(message);
   }
-  return (await res.json()) as {
-    role: string;
-    state: string;
-    organization: { id: number; login: string };
-    user: { id: number; login: string };
-  };
 }
 
-// The org's ID and current login, and the user's login, when the device
-// sign-in's user is an active admin of the org, else null.
-export async function orgAdmin(token: string, org: string, command?: string) {
-  const membership = await orgMembership(token, org, command);
-  if (membership === 'expired' || membership === 'sso') {
-    throw new GitHubError(`GitHub /user/memberships/orgs: ${membership}`);
+// The old sign-in form, which v0.4.3 and earlier CLIs send.
+export const oldSignIn = () =>
+  Response.json(
+    {
+      error:
+        'This backmesh CLI signs in the way backmesh.com no longer takes. Update backmesh (https://backmesh.com/upgrade/) and run the command again.',
+    },
+    { status: 400 },
+  );
+
+// Who `token` (an App user token) belongs to, the org's ID and current
+// login, and whether they can manage the org's self-hosted runners: GitHub
+// lists the org's runner groups to a user token only when both the App
+// (its Self-hosted runners permission) and the person can, which a plain
+// member can't. Where the App isn't installed GitHub lists them to nobody,
+// so that's told apart. null: no such org. Remembers the org's login, which
+// finds its installation. The token is used here and not stored.
+export async function runnersAdmin(env: Env, token: string, org: string) {
+  const [user, found] = await Promise.all([
+    asUser(token, '/user'),
+    asUser(token, `/orgs/${encodeURIComponent(org)}`),
+  ]);
+  if (user.status === 401 || found.status === 401) {
+    throw new SignInRefused('GitHub refused the sign-in; sign in again.', 401);
   }
-  return membership?.role === 'admin' && membership.state === 'active'
-    ? { ...membership.organization, user: membership.user.login }
-    : null;
+  if (found.status === 404) return null;
+  if (!user.ok || !found.ok) {
+    throw new GitHubError(
+      `GitHub /user, /orgs/${org}: ${user.status}, ${found.status}`,
+    );
+  }
+  const { login: who } = (await user.json()) as { login: string };
+  const { id, login } = (await found.json()) as { id: number; login: string };
+  await rememberLogin(env, id, login);
+  const groups = await asUser(
+    token,
+    `/orgs/${encodeURIComponent(login)}/actions/runner-groups?per_page=1`,
+  );
+  if (groups.status === 401) {
+    throw new SignInRefused('GitHub refused the sign-in; sign in again.', 401);
+  }
+  if (groups.status === 403 && groups.headers.has('X-GitHub-SSO')) {
+    throw new SignInRefused(
+      `Authorize the backmesh sign-in for ${login}'s SAML SSO on GitHub, then sign in again.`,
+      403,
+    );
+  }
+  let can: 'manage' | 'refused' | 'app_not_installed' = 'manage';
+  if (groups.status === 403 || groups.status === 404) {
+    can = (await installationOf(env, id)) ? 'refused' : 'app_not_installed';
+  } else if (!groups.ok) {
+    throw new GitHubError(
+      `GitHub /orgs/${login}/actions/runner-groups: ${groups.status}`,
+    );
+  }
+  return { id, login, user: who, can };
+}
+
+// What a refused `runnersAdmin` answers: the App's install link while it
+// isn't on the org, else 403 with `doing` (what needed the right).
+export function notRunnersAdmin(
+  env: Env,
+  org: string,
+  admin: Awaited<ReturnType<typeof runnersAdmin>>,
+  doing: string,
+) {
+  if (admin?.can === 'app_not_installed') {
+    return Response.json(
+      { error: 'app_not_installed', install_url: installUrl(env, admin.id) },
+      { status: 409 },
+    );
+  }
+  const error = `${doing} needs the right to manage its self-hosted runners: sign in as an owner of ${admin?.login ?? org}.`;
+  return Response.json({ error }, { status: 403 });
 }
 
 // The login finds the org's App installation (app.ts).
@@ -191,56 +181,47 @@ export const rememberLogin = (env: Env, id: number, login: string) =>
     .bind(id, login)
     .run();
 
-// POST /v1/sign-in { device_code }: the GitHub token alone, for a CLI whose
-// installation already has its key and needs only the control plane's
-// sign-in. Nothing is checked or minted.
-export async function relaySignIn(request: Request, env: Env) {
-  const { device_code } = (await request.json().catch(() => ({}))) as {
-    device_code?: unknown;
-  };
-  if (typeof device_code !== 'string') {
-    return Response.json({ error: 'device_code is required' }, { status: 400 });
+// The JSON body of a sign-in call, or a Response refusing it: the old
+// device_code form, or a missing field.
+export async function signInBody(request: Request, fields: string[]) {
+  const body = ((await request.json().catch(() => null)) ?? {}) as Record<
+    string,
+    unknown
+  >;
+  if ('device_code' in body) return oldSignIn();
+  const missing = fields.filter((f) => typeof body[f] !== 'string' || !body[f]);
+  if (missing.length) {
+    const error = `${missing.join(' and ')} ${missing.length > 1 ? 'are' : 'is'} required`;
+    return Response.json({ error }, { status: 400 });
   }
-  const token = await deviceToken(env, device_code);
-  return token instanceof Response
-    ? token
-    : Response.json({ github_token: token });
+  return body as Record<string, string | undefined>;
 }
 
-// POST /v1/installs { org, device_code, install? }: 202 while the user
-// hasn't finished, then the key and the token once they have, if they're an
-// admin of the org. `install`, the install's ID when signing in again, gets
-// a new key.
+// POST /v1/installs { org, github_token, install? }: a key, when the
+// token's holder can manage the org's runners. `install`, the install's ID
+// when signing in again, gets a new key.
 export async function createInstall(request: Request, env: Env) {
-  const { org, device_code, install } = (await request
-    .json()
-    .catch(() => ({}))) as {
-    org?: unknown;
-    device_code?: unknown;
+  const body = await signInBody(request, ['org', 'github_token']);
+  if (body instanceof Response) return body;
+  const { org, github_token, install } = body as {
+    org: string;
+    github_token: string;
     install?: unknown;
   };
-  if (typeof org !== 'string' || typeof device_code !== 'string') {
-    return Response.json(
-      { error: 'org and device_code are required' },
-      { status: 400 },
+  const admin = await runnersAdmin(env, github_token, org);
+  if (admin?.can !== 'manage') {
+    return notRunnersAdmin(
+      env,
+      org,
+      admin,
+      `Creating a backmesh install for ${admin?.login ?? org}`,
     );
   }
-  const token = await deviceToken(env, device_code);
-  if (token instanceof Response) return token;
-  // Checked here, returned to the signer, and never stored.
-  const admin = await orgAdmin(token, org);
-  if (!admin) {
-    const error = `Creating a backmesh install for ${org} needs its admin role.`;
-    return Response.json({ error }, { status: 403 });
-  }
-  const { id, login } = admin;
-  await rememberLogin(env, id, login);
   const previous = typeof install === 'string' ? install : undefined;
   return Response.json({
-    org_id: id,
-    org: login,
-    ...(await mintKey(env.DB, id, previous)),
-    github_token: token,
+    org_id: admin.id,
+    org: admin.login,
+    ...(await mintKey(env.DB, admin.id, previous)),
   });
 }
 
@@ -295,12 +276,10 @@ export async function revokeInstall(
       { status: 403 },
     );
   }
-  const admin = await orgAdmin(github_token, org.login, 'rotate-key');
-  if (!admin || admin.id !== bearer.org) {
-    return Response.json(
-      { error: `Revoking an install needs ${org.login}'s admin role.` },
-      { status: 403 },
-    );
+  const admin = await runnersAdmin(env, github_token, org.login);
+  if (admin?.can !== 'manage' || admin.id !== bearer.org) {
+    const error = `Revoking an install needs the right to manage ${org.login}'s self-hosted runners.`;
+    return Response.json({ error }, { status: 403 });
   }
   const row = await env.DB.prepare(
     'SELECT org, revoked FROM installs WHERE id = ?',

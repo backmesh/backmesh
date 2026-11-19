@@ -28,11 +28,12 @@ from the job's run.
 
 ### GitHub sign-in
 
-You sign in with GitHub with `backmesh install` and `backmesh upgrade`, which
-ask for `read:org`, to check
-you're an admin of the org, and `read:packages`, for your control plane.
-Each sign-in is a GitHub device code. `api.backmesh.com` passes that GitHub
-token to your machine and keeps none. Uninstall's admin check asks only for `read:org`. We store the
+You sign in with GitHub to backmesh's GitHub App with `backmesh install` and
+`backmesh upgrade`, with a GitHub device code. The sign-in is a GitHub App user
+token, which can do only what both the App and you can: it reaches no code,
+secrets or org members. Your machine keeps it for your control plane, and
+sends it to `api.backmesh.com` once to check you can manage the org's
+self-hosted runners; we keep no token. Uninstall's check is the same. We store the
 org's numeric GitHub ID, an install ID, when the install was created, and a
 SHA-256 hash of the install's key, never the key itself.
 
@@ -78,7 +79,7 @@ We use these processors to run backmesh:
 | Processor  | What for                                                                  |
 | ---------- | ------------------------------------------------------------------------- |
 | Cloudflare | Hosting backmesh.com and `api.backmesh.com`, and the database behind them |
-| GitHub     | Sign-in and org membership checks                                         |
+| GitHub     | Sign-in, runner-management and org checks                                 |
 
 Otherwise we share your information only when the law requires it, and we
 disclose only the minimum needed. If backmesh is acquired or merges with

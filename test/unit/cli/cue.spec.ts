@@ -44,7 +44,7 @@ class Relay {
       );
     }
     const auth = new Headers(init.headers).get('Authorization');
-    if (auth !== 'Bearer gho_alice') {
+    if (auth !== 'Bearer ghu_alice') {
       return Response.json(
         { error: 'GitHub sign-in expired' },
         { status: 401 },
@@ -89,7 +89,7 @@ let signIns: number;
 
 beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'bm-cue-'));
-  writeFileSync(join(dir, '.token'), 'gho_alice\n');
+  writeFileSync(join(dir, '.token'), 'ghu_alice\n');
   relay = new Relay();
   relay.listeners.push(await generateKey());
   signIns = 0;
@@ -103,7 +103,7 @@ beforeEach(async () => {
       })[args.join(' ')] ?? '',
     signIn: async () => {
       signIns++;
-      writeFileSync(join(dir, '.token'), 'gho_alice\n');
+      writeFileSync(join(dir, '.token'), 'ghu_alice\n');
     },
   };
 });
@@ -464,7 +464,7 @@ describe('backmesh cue', () => {
       message: 'Signed in. Nothing was sent.',
     });
     expect(signIns).toBe(1);
-    expect(readFileSync(join(dir, '.token'), 'utf8')).toBe('gho_alice\n');
+    expect(readFileSync(join(dir, '.token'), 'utf8')).toBe('ghu_alice\n');
     expect(relay.calls).toEqual([]);
     // `--sign-in --in N` keeps sending the cue, as before.
     expect((await cue({ signIn: true, inS: 120 }, deps)).outcome).toBe('sent');
@@ -503,14 +503,14 @@ describe('backmesh cue', () => {
       'Too many cues.',
     );
     // GitHub's 401 for the saved sign-in, through the Worker or GitHub.
-    writeFileSync(join(dir, '.token'), 'gho_revoked\n');
+    writeFileSync(join(dir, '.token'), 'ghu_revoked\n');
     const revoked = {
       outcome: 'not signed in',
       message: `GitHub revoked the saved sign-in. Run \`backmesh cue --sign-in\` to sign in again. Nothing was sent.`,
     };
     expect(await cue({ inS: 120, signIn: false }, deps)).toEqual(revoked);
     // The file stays for --sign-in to replace, and the push isn't blocked.
-    expect(readFileSync(join(dir, '.token'), 'utf8')).toBe('gho_revoked\n');
+    expect(readFileSync(join(dir, '.token'), 'utf8')).toBe('ghu_revoked\n');
     const out: string[] = [];
     const code = await runCli(['cue', '--in', '120'], {
       stdout: (t) => void out.push(t),
@@ -534,30 +534,30 @@ describe('backmesh cue', () => {
       (
         await cue(
           { inS: 120, signIn: false, branch: 'sandbox-1' },
-          given('gho_alice'),
+          given('ghu_alice'),
         )
       ).outcome,
     ).toBe('sent');
     // It wins over a saved sign-in GitHub has revoked.
-    writeFileSync(join(dir, '.token'), 'gho_revoked\n');
+    writeFileSync(join(dir, '.token'), 'ghu_revoked\n');
     expect(
       (
         await cue(
           { inS: 120, signIn: false, branch: 'sandbox-2' },
-          given('gho_alice'),
+          given('ghu_alice'),
         )
       ).outcome,
     ).toBe('sent');
     // A refused given token names the variable, not a sign-in it can't do.
     const refused = await cue(
       { inS: 120, signIn: false, branch: 'sandbox-3' },
-      given('gho_revoked'),
+      given('ghu_revoked'),
     );
     expect(refused.outcome).toBe('not signed in');
     expect(refused.message).toContain('BACKMESH_CUE_TOKEN');
     expect(refused.message).not.toContain('--sign-in');
     // A blank variable falls back to the saved sign-in.
-    writeFileSync(join(dir, '.token'), 'gho_alice\n');
+    writeFileSync(join(dir, '.token'), 'ghu_alice\n');
     expect(
       (
         await cue(
@@ -571,7 +571,7 @@ describe('backmesh cue', () => {
       (
         await cue(
           { inS: 120, signIn: true, branch: 'sandbox-5' },
-          given('gho_alice'),
+          given('ghu_alice'),
         )
       ).outcome,
     ).toBe('refused');
@@ -646,7 +646,7 @@ describe('backmesh cue', () => {
       });
       expect(text.join('')).toContain('--in takes whole seconds');
     }
-    writeFileSync(join(dir, '.token'), 'gho_alice\n');
+    writeFileSync(join(dir, '.token'), 'ghu_alice\n');
     const out: string[] = [];
     const code = await runCli(['cue', '--in', '29'], {
       stdout: (t) => void out.push(t),

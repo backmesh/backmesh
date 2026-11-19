@@ -49,7 +49,7 @@ import {
   startListener,
 } from './listener-vm.js';
 import type { Cloud } from '../runners/classes.js';
-import { keyFrom, type SignInScopes } from './github-sign-in.js';
+import { keyFrom, type SignInLogin } from './github-sign-in.js';
 import {
   clusterIdOf,
   CONTROL_POOL,
@@ -93,8 +93,8 @@ export interface UpgradeDeps {
   features?: FeatureTable;
   // The sign-in's polling wait, and a listener's start.
   wait?: (ms: number) => Promise<void>;
-  // The scopes GitHub granted a sign-in (`signInScopes`).
-  signInScopes?: SignInScopes;
+  // The login of a sign-in's user (`signInLogin`).
+  signInLogin?: SignInLogin;
   // Undefined without a TTY: upgrade never asks there.
   confirm?: (question: string) => Promise<boolean>;
   // The release before the pinned anycloud, the oldest a move starts from.
@@ -449,7 +449,7 @@ export async function upgrade(
       );
       installKey = (
         await keyFrom(org, worker, deps.env, {
-          scopesOf: deps.signInScopes,
+          loginOf: deps.signInLogin,
         })
       ).key;
     }
@@ -462,7 +462,7 @@ export async function upgrade(
       installKey = (
         await keyFrom(org, worker, deps.env, {
           install: installKey.slice(4, 36),
-          scopesOf: deps.signInScopes,
+          loginOf: deps.signInLogin,
         })
       ).key;
       if (!(await keyAccepted(installKey, worker))) {

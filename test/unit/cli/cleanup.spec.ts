@@ -72,7 +72,7 @@ describe("uninstall's cleanup", () => {
       cleanup.token!,
       github,
     );
-    const app = await finishCleanup(cleanup.cleanup_id, client);
+    const app = await finishCleanup(cleanup.cleanup_id!, client);
 
     expect(calls).toEqual([
       '/v1/installs/device',
@@ -145,7 +145,7 @@ describe("uninstall's cleanup", () => {
     const { client } = setUp();
     const cleanup = await signInForCleanup('acme', undefined, client);
 
-    expect(await refreshCleanupToken(cleanup.cleanup_id, client)).toEqual({
+    expect(await refreshCleanupToken(cleanup.cleanup_id!, client)).toEqual({
       token: 'ghs_7',
       expires_at: '2026-11-06T13:00:00Z',
       org: { id: 11, login: 'acme' },

@@ -34,6 +34,7 @@ beforeEach(() => {
   env = testEnv();
   relays = env.RELAY as FakeRelays;
   upstream = new Upstream();
+  upstream.installations.set(ORG, { id: 7, login: 'acme', permissions: {} });
   for (const login of ['alice', 'bob', 'carol']) {
     upstream.memberships.set(login, [
       { id: ORG, login: 'acme', role: 'member' },
@@ -199,26 +200,32 @@ describe('admit', () => {
 describe('cueMember', () => {
   const member = (token: string, org: string) =>
     cueMember(ORIGIN, token, org, async () => true);
-  const stub = (status: number, body: unknown, headers = {}) => {
-    const fetch = vi.fn(async () => Response.json(body, { status, headers }));
+  const stub = (status: number, body: unknown) => {
+    const fetch = vi.fn(async (url: string) =>
+      url.endsWith('/user')
+        ? Response.json({ id: 5, login: 'alice' })
+        : Response.json(body, { status }),
+    );
     vi.stubGlobal('fetch', fetch);
     return fetch;
   };
-  const membership = (state: string) => ({
-    state,
-    role: 'member',
-    organization: { id: ORG, login: 'acme' },
-    user: { id: 5, login: 'alice' },
+  const installations = (...logins: string[]) => ({
+    total_count: logins.length,
+    installations: logins.map((login, i) => ({
+      id: i + 1,
+      account: { id: login === 'acme' ? ORG : 100 + i, login },
+    })),
   });
 
   it('asks GitHub once per token and org for five minutes', async () => {
-    const fetch = stub(200, membership('active'));
+    const fetch = stub(200, installations('globex', 'acme'));
     const alice = { id: 5, login: 'alice', org_id: ORG };
     expect(await member('t', 'acme')).toEqual(alice);
     expect(await member('t', 'ACME')).toEqual(alice);
-    expect(fetch).toHaveBeenCalledTimes(1);
+    // The user, and the App's installations the user's token reaches.
+    expect(fetch).toHaveBeenCalledTimes(2);
     expect(fetch).toHaveBeenCalledWith(
-      'https://api.github.com/user/memberships/orgs/acme',
+      'https://api.github.com/user/installations?per_page=100',
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer t' }),
       }),
@@ -226,42 +233,26 @@ describe('cueMember', () => {
     const [response] = [...cache.values()];
     expect(response!.headers.get('Cache-Control')).toBe('max-age=300');
     await member('other', 'acme');
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(4);
   });
 
-  it('refuses a pending invitation and a non-member', async () => {
-    stub(200, membership('pending'));
-    expect(await member('t', 'acme')).toBeNull();
-    cache.clear();
-    stub(404, { message: 'Not Found' });
+  it('refuses a user whose token reaches no installation on the org', async () => {
+    stub(200, installations('globex'));
     expect(await member('t', 'acme')).toBeNull();
   });
 
   it('reports an expired token, and caches neither that nor a failure', async () => {
     stub(401, { message: 'Bad credentials' });
     expect(await member('t', 'acme')).toBe('expired');
-    const fetch = stub(403, { message: 'SAML enforcement' });
+    const fetch = stub(403, { message: 'rate limited' });
     await expect(member('t', 'acme')).rejects.toThrow('403');
     await expect(member('t', 'acme')).rejects.toThrow('403');
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(4);
     expect(cache.size).toBe(0);
   });
 
-  it('names a token SAML SSO hasn’t authorized, and caches that', async () => {
-    const fetch = stub(
-      403,
-      { message: 'SAML enforcement' },
-      {
-        'X-GitHub-SSO': 'required; url=https://github.com/orgs/acme/sso',
-      },
-    );
-    expect(await member('t', 'acme')).toBe('sso');
-    expect(await member('t', 'acme')).toBe('sso');
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
-
   it('asks GitHub only when the limit admits it', async () => {
-    const fetch = stub(200, membership('active'));
+    const fetch = stub(200, installations('acme'));
     expect(await cueMember(ORIGIN, 't', 'acme', async () => false)).toBe(
       'limited',
     );
@@ -277,11 +268,12 @@ describe('sign-ins', () => {
     expect((await post(['a'.repeat(16)], { login: 'mallory' })).status).toBe(
       403,
     );
-    upstream.membershipStatus = 401;
+    upstream.revoked.add('alice');
     const expired = await request(path, { headers: as('alice') });
     expect(expired.status).toBe(401);
-    upstream.membershipStatus = 502;
-    expect((await request(path, { headers: as('alice') })).status).toBe(502);
+    upstream.revoked.delete('alice');
+    upstream.failing.set('/user/installations', 502);
+    expect((await request(path, { headers: as('bob') })).status).toBe(502);
   });
 
   it('counts GitHub checks and refused install keys against the client IP', async () => {
@@ -299,34 +291,6 @@ describe('sign-ins', () => {
     const calls = upstream.calls.length;
     expect((await request(path, { headers: as('bob') })).status).toBe(429);
     expect(upstream.calls).toHaveLength(calls);
-  });
-
-  it('tells a member to authorize the sign-in for SAML SSO', async () => {
-    vi.stubGlobal('fetch', async () =>
-      Response.json(
-        { message: 'SAML enforcement' },
-        { status: 403, headers: { 'X-GitHub-SSO': 'required' } },
-      ),
-    );
-    const res = await request('/v1/cue/keys?org=acme', {
-      headers: as('alice'),
-    });
-    expect(res.status).toBe(403);
-    expect(await res.json()).toMatchObject({
-      error: expect.stringContaining('SSO'),
-    });
-  });
-
-  it("names the org's OAuth app restriction to cue", async () => {
-    upstream.restricted.add('acme');
-    const res = await request('/v1/cue/keys?org=acme', {
-      headers: as('alice'),
-    });
-    expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({
-      error:
-        'acme restricts third-party apps: an org owner approves backmesh at https://github.com/organizations/acme/settings/oauth_application_policy, then run cue again.',
-    });
   });
 
   it('connects only a listener with a live install key, by WebSocket', async () => {

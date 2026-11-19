@@ -164,7 +164,8 @@ describe('POST /v1/installs', () => {
     async (path) => {
       upstream.installations.delete(11);
       upstream.silent.add(path);
-      vi.useFakeTimers();
+      // Fake timeouts and clock; the App JWT's signing runs in real time.
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
       vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) => {
         const controller = new AbortController();
         setTimeout(
@@ -181,7 +182,8 @@ describe('POST /v1/installs', () => {
       void install('token-alice').then((r) => (answered = r));
 
       while (!answered && Date.now() - start < 120_000) {
-        await vi.advanceTimersByTimeAsync(1000);
+        await new Promise((resolve) => setImmediate(resolve));
+        await vi.advanceTimersToNextTimerAsync();
       }
 
       expect(answered?.status).toBe(504);

@@ -26,7 +26,7 @@ function fakeFetch(
       });
     }
     if (url.endsWith('/v1/sign-in')) {
-      return Response.json({ github_token: 'gho_new' });
+      return Response.json({ github_token: 'ghu_new' });
     }
     if (url.startsWith('https://api.github.com/user/memberships/orgs')) {
       const token = new Headers(init?.headers)
@@ -34,7 +34,7 @@ function fakeFetch(
         .replace('Bearer ', '');
       const roles = memberships[token];
       if (!roles) return new Response(null, { status: 401 });
-      if (token === 'gho_noscope') return new Response(null, { status: 403 });
+      if (token === 'ghu_noscope') return new Response(null, { status: 403 });
       return Response.json(
         Object.entries(roles).map(([login, role]) => ({
           role,
@@ -88,7 +88,7 @@ async function pick({
         },
       }),
     },
-    signInScopes: async () => ['read:org', 'read:packages'],
+    signInLogin: async () => 'octocat',
     git: async (args) => {
       expect(args).toEqual(['remote', '-v']);
       if (!remotes) throw new Error('not a git repository');
@@ -117,8 +117,8 @@ const ORIGIN = [
 describe('pickOrg', () => {
   it("installs for this repo's org when the user accepts it", async () => {
     const out = await pick({
-      saved: 'gho_saved',
-      memberships: { gho_saved: ADMIN },
+      saved: 'ghu_saved',
+      memberships: { ghu_saved: ADMIN },
       remotes: ORIGIN,
     });
     expect(out.result).toBe('acme');
@@ -131,8 +131,8 @@ describe('pickOrg', () => {
 
   it("takes the first GitHub remote when origin isn't GitHub's", async () => {
     const out = await pick({
-      saved: 'gho_saved',
-      memberships: { gho_saved: { other: 'admin' } },
+      saved: 'ghu_saved',
+      memberships: { ghu_saved: { other: 'admin' } },
       remotes: [
         'origin\tgit@gitlab.com:acme/app.git (fetch)',
         'mirror\tssh://git@github.com/other/app (fetch)',
@@ -143,8 +143,8 @@ describe('pickOrg', () => {
 
   it("offers the other orgs when the user declines the repo's", async () => {
     const out = await pick({
-      saved: 'gho_saved',
-      memberships: { gho_saved: ADMIN },
+      saved: 'ghu_saved',
+      memberships: { ghu_saved: ADMIN },
       remotes: ORIGIN,
       answers: ['n', 'x', '3', '2'],
     });
@@ -161,8 +161,8 @@ describe('pickOrg', () => {
       'Which org? [1-2]',
     ]);
     const other = await pick({
-      saved: 'gho_saved',
-      memberships: { gho_saved: { acme: 'admin', beta: 'admin' } },
+      saved: 'ghu_saved',
+      memberships: { ghu_saved: { acme: 'admin', beta: 'admin' } },
       remotes: ORIGIN,
       answers: ['n'],
     });
@@ -171,8 +171,8 @@ describe('pickOrg', () => {
       "Installing for beta, the only other org you're an admin of.",
     ]);
     const declined = await pick({
-      saved: 'gho_saved',
-      memberships: { gho_saved: { acme: 'admin' } },
+      saved: 'ghu_saved',
+      memberships: { ghu_saved: { acme: 'admin' } },
       remotes: ORIGIN,
       answers: ['no'],
     });
@@ -185,7 +185,7 @@ describe('pickOrg', () => {
   it('signs in first without a saved sign-in, then picks the only admin org', async () => {
     // The repo is a personal account's, so it isn't offered.
     const out = await pick({
-      memberships: { gho_new: { beta: 'admin', club: 'member' } },
+      memberships: { ghu_new: { beta: 'admin', club: 'member' } },
       remotes: 'origin\tgit@github.com:alice/dotfiles.git (fetch)',
     });
     expect(out.result).toBe('beta');
@@ -195,24 +195,24 @@ describe('pickOrg', () => {
       "Installing for beta, the only org you're an admin of.",
     ]);
     // The sign-in is the control plane's, which install then reuses.
-    expect(out.token).toBe('gho_new');
+    expect(out.token).toBe('ghu_new');
   });
 
   it('signs in again when GitHub refuses the saved sign-in', async () => {
-    for (const saved of ['gho_revoked', 'gho_noscope']) {
+    for (const saved of ['ghu_revoked', 'ghu_noscope']) {
       const out = await pick({
         saved,
-        memberships: { gho_noscope: {}, gho_new: { beta: 'admin' } },
+        memberships: { ghu_noscope: {}, ghu_new: { beta: 'admin' } },
       });
       expect(out.result).toBe('beta');
-      expect(out.token).toBe('gho_new');
+      expect(out.token).toBe('ghu_new');
     }
   });
 
   it('says backmesh runs on orgs when the user admins none', async () => {
     const out = await pick({
-      saved: 'gho_saved',
-      memberships: { gho_saved: { club: 'member' } },
+      saved: 'ghu_saved',
+      memberships: { ghu_saved: { club: 'member' } },
     });
     expect(out.result).toBeInstanceOf(UsageError);
     expect((out.result as Error).message).toBe(
@@ -248,8 +248,8 @@ describe('pickOrg', () => {
     const saved = await pick({
       argv: ['install', '--plan'],
       plan: true,
-      saved: 'gho_saved',
-      memberships: { gho_saved: { beta: 'admin' } },
+      saved: 'ghu_saved',
+      memberships: { ghu_saved: { beta: 'admin' } },
     });
     expect(saved.result).toBe('beta');
   });
@@ -258,8 +258,8 @@ describe('pickOrg', () => {
     const listed = await pick({
       argv: ['--json', 'install', '--runners', 'aws', '--cache-cap', '25'],
       terminal: false,
-      saved: 'gho_saved',
-      memberships: { gho_saved: ADMIN },
+      saved: 'ghu_saved',
+      memberships: { ghu_saved: ADMIN },
     });
     expect(listed.result).toBeInstanceOf(UsageError);
     expect((listed.result as Error).message).toBe(
@@ -269,8 +269,8 @@ describe('pickOrg', () => {
     const repo = await pick({
       argv: ['install', '--plan'],
       terminal: false,
-      saved: 'gho_saved',
-      memberships: { gho_saved: ADMIN },
+      saved: 'ghu_saved',
+      memberships: { ghu_saved: ADMIN },
       remotes: ORIGIN,
     });
     expect((repo.result as Error).message).toBe(
@@ -300,8 +300,8 @@ describe('pickOrg', () => {
     expect(yes.calls.some((c) => c.includes('/v1/'))).toBe(false);
     const none = await pick({
       terminal: false,
-      saved: 'gho_saved',
-      memberships: { gho_saved: {} },
+      saved: 'ghu_saved',
+      memberships: { ghu_saved: {} },
     });
     expect((none.result as Error).message).toBe(
       "Pass --org: install asks which org only at a terminal, without --yes. You're an admin of no GitHub org; backmesh runs on an org's repositories: create one at https://github.com/account/organizations/new. Then run: backmesh install --org <org> --plan",

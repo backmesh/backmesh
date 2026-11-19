@@ -34,7 +34,7 @@ async function run(...argv: string[]) {
     run: never,
     runLong: never,
     command: never,
-    signInScopes: never,
+    signInLogin: never,
     release: never,
     ui: { print: () => undefined },
   }));

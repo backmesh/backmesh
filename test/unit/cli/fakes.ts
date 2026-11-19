@@ -318,6 +318,9 @@ export function fakeWorker({
     form: Record<string, string>;
     at: number;
   }[] = [];
+  // Where in `calls` each sign-in finished: the token poll GitHub answered
+  // with a token.
+  const signedIn: number[] = [];
   // Each `POST /v1/installs/revoke`'s bearer key and install ID.
   const revoked: {
     key: string | undefined;
@@ -341,7 +344,13 @@ export function fakeWorker({
       const form = Object.fromEntries(new URLSearchParams(String(init.body)));
       github.push({ path, form, at: Date.now() });
       const answers = path === '/login/device/code' ? codes : polls;
-      return (await next(answers, init.signal))!;
+      const answer = (await next(answers, init.signal))!;
+      const json = (await answer
+        .clone()
+        .json()
+        .catch(() => ({}))) as { access_token?: string };
+      if (json.access_token) signedIn.push(calls.length - 1);
+      return answer;
     }
     const body = init.body && JSON.parse(String(init.body));
     if (path === '/v1/installs' || path.startsWith('/v1/installs/cleanup')) {
@@ -378,7 +387,16 @@ export function fakeWorker({
   const signIns = () => github.filter((g) => g.path === '/login/device/code');
   const tokenPolls = () =>
     github.filter((g) => g.path === '/login/oauth/access_token');
-  return { fetch, calls, bodies, github, signIns, tokenPolls, revoked };
+  return {
+    fetch,
+    calls,
+    bodies,
+    github,
+    signIns,
+    tokenPolls,
+    signedIn,
+    revoked,
+  };
 }
 
 // An org's GitHub as uninstall's cleanup token sees it: the group of acme's

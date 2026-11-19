@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-import { GitHubError, signInScopes } from '../../../src/app/github.js';
+import { GitHubError, signInLogin } from '../../../src/app/github.js';
 import { saveSignIn, signInAgain } from '../../../src/cli/github-sign-in.js';
 
 // Spies on all four console methods @octokit/rest's default logger can
@@ -31,10 +31,11 @@ describe('saveSignIn', () => {
     // A directory where the token goes: the rename fails.
     mkdirSync(join(dir, '.token'));
     await expect(
-      saveSignIn({ BACKMESH_ANYCLOUD_DIR: dir }, 'gho_x', async () => [
-        'read:org',
-        'read:packages',
-      ]),
+      saveSignIn(
+        { BACKMESH_ANYCLOUD_DIR: dir },
+        'ghu_x',
+        async () => 'octocat',
+      ),
     ).rejects.toThrow();
     expect(readdirSync(dir)).toEqual(['.token']);
   });
@@ -63,12 +64,11 @@ describe('signInAgain', () => {
       );
     }) as typeof globalThis.fetch;
   };
-  // GitHub answers 401 for a revoked token, and can't check `gho_down`.
+  // GitHub answers 401 for a revoked token, and can't check `ghu_down`.
   const scopes = async (token: string) => {
-    if (token === 'gho_revoked') throw new GitHubError(401, 'Bad credentials');
-    if (token === 'gho_down') throw new GitHubError(403, 'rate limited');
-    if (token === 'gho_wide') return ['read:org', 'read:packages', 'repo'];
-    return ['read:org', 'read:packages'];
+    if (token === 'ghu_revoked') throw new GitHubError(401, 'Bad credentials');
+    if (token === 'ghu_down') throw new GitHubError(403, 'rate limited');
+    return 'octocat';
   };
   const again = async (saved: string | undefined) => {
     const dir = mkdtempSync(join(tmpdir(), 'backmesh-sign-in-'));
@@ -90,17 +90,17 @@ describe('signInAgain', () => {
   };
 
   it('says GitHub revoked the saved sign-in only when GitHub answers 401', async () => {
-    const { said } = await again('gho_revoked');
+    const { said } = await again('ghu_revoked');
     expect(said).toEqual([
       `GitHub revoked the saved sign-in. backmesh signs in again.`,
     ]);
     // A working one (as for \`cue --sign-in\`), one GitHub couldn't check,
-    // one with other scopes, one that isn't an OAuth sign-in, or none is
-    // replaced without a word.
+    // one that isn't the App's sign-in, such as an older OAuth one, or none
+    // is replaced without a word.
     for (const saved of [
-      'gho_ok',
-      'gho_down',
-      'gho_wide',
+      'ghu_ok',
+      'ghu_down',
+      'gho_oauth',
       'ghs_x',
       undefined,
     ]) {
@@ -109,7 +109,7 @@ describe('signInAgain', () => {
   });
 });
 
-describe('signInScopes (the real GitHub client)', () => {
+describe('signInLogin (the real GitHub client)', () => {
   it("doesn't print @octokit/rest's own request-log line, on success or a 401", async () => {
     const { calls, restore } = spyOnConsole();
     try {
@@ -119,7 +119,7 @@ describe('signInScopes (the real GitHub client)', () => {
           { headers: { 'x-oauth-scopes': 'read:org, read:packages' } },
         )) as typeof globalThis.fetch;
       await expect(
-        signInScopes('gho_ok', { request: { fetch: ok } }),
+        signInLogin('ghu_ok', { request: { fetch: ok } }),
       ).resolves.toEqual(['read:org', 'read:packages']);
       const revoked = (async () =>
         Response.json(
@@ -127,7 +127,7 @@ describe('signInScopes (the real GitHub client)', () => {
           { status: 401, headers: { 'x-github-request-id': 'DA94:1234' } },
         )) as typeof globalThis.fetch;
       await expect(
-        signInScopes('gho_revoked', { request: { fetch: revoked } }),
+        signInLogin('ghu_revoked', { request: { fetch: revoked } }),
       ).rejects.toMatchObject({ status: 401 });
     } finally {
       restore();
@@ -154,7 +154,7 @@ describe('signInScopes (the real GitHub client)', () => {
       )) as typeof globalThis.fetch;
     try {
       await expect(
-        signInScopes('gho_ok', { request: { fetch: deprecated } }),
+        signInLogin('ghu_ok', { request: { fetch: deprecated } }),
       ).resolves.toEqual(['read:org', 'read:packages']);
     } finally {
       restore();
@@ -174,8 +174,8 @@ describe('signInScopes (the real GitHub client)', () => {
       )) as typeof globalThis.fetch;
     let error: unknown;
     try {
-      await saveSignIn({ BACKMESH_ANYCLOUD_DIR: dir }, 'gho_down', (token) =>
-        signInScopes(token, { request: { fetch: outage } }),
+      await saveSignIn({ BACKMESH_ANYCLOUD_DIR: dir }, 'ghu_down', (token) =>
+        signInLogin(token, { request: { fetch: outage } }),
       ).catch((e: unknown) => {
         error = e;
       });
@@ -192,7 +192,7 @@ describe('signInScopes (the real GitHub client)', () => {
 describe('signInAgain, with the real GitHub client', () => {
   it('prints only the friendly line on a 401: no raw request log on stdout or stderr', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'backmesh-sign-in-'));
-    writeFileSync(join(dir, '.token'), 'gho_revoked\n');
+    writeFileSync(join(dir, '.token'), 'ghu_revoked\n');
     const { calls, restore } = spyOnConsole();
     const lines: string[] = [];
     // The backmesh Worker's device flow, answering at once.
@@ -206,12 +206,12 @@ describe('signInAgain, with the real GitHub client', () => {
             expires_in: 900,
           })
         : Response.json({
-            github_token: 'gho_new',
+            github_token: 'ghu_new',
           })) as typeof globalThis.fetch;
     // GitHub: 401 for the revoked token being checked, fine for the fresh
     // one `saveSignIn` checks right after.
     const githubFetch = (async (_url: string | URL, init?: RequestInit) =>
-      new Headers(init?.headers).get('Authorization') === 'token gho_revoked'
+      new Headers(init?.headers).get('Authorization') === 'token ghu_revoked'
         ? Response.json(
             { message: 'Bad credentials' },
             { status: 401, headers: { 'x-github-request-id': 'DA94:1234' } },
@@ -228,7 +228,7 @@ describe('signInAgain, with the real GitHub client', () => {
           print: (l) => lines.push(l),
           wait: async () => {},
         },
-        (token) => signInScopes(token, { request: { fetch: githubFetch } }),
+        (token) => signInLogin(token, { request: { fetch: githubFetch } }),
       )();
     } finally {
       restore();
@@ -238,7 +238,7 @@ describe('signInAgain, with the real GitHub client', () => {
     expect(lines.filter((l) => l.includes('revoked'))).toEqual([
       'GitHub revoked the saved sign-in. backmesh signs in again.',
     ]);
-    expect(readFileSync(join(dir, '.token'), 'utf8')).toBe('gho_new\n');
+    expect(readFileSync(join(dir, '.token'), 'utf8')).toBe('ghu_new\n');
     expect(calls).toEqual({ debug: 0, info: 0, warn: 0, error: 0 });
   });
 });

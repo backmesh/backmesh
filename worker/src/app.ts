@@ -74,8 +74,10 @@ export async function appJwt(
   return `${data}.${base64url(new Uint8Array(signature))}`;
 }
 
-// A GitHub call gives up after this long.
-export const GITHUB_TIMEOUT_MS = 30_000;
+// A GitHub call gives up after this long, so a sign-in's three calls in a
+// row answer within the CLI's 30 s (GitHub's API answers in well under a
+// second; its token endpoint once took 8 s, backmesh#31).
+export const GITHUB_TIMEOUT_MS = 10_000;
 
 export const randomHex = () =>
   Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) =>
@@ -84,10 +86,26 @@ export const randomHex = () =>
 
 // GitHub failing a call the Worker needs; answered as 502.
 export class GitHubError extends Error {}
+// GitHub not answering within GITHUB_TIMEOUT_MS; answered as 504.
+export class GitHubTimeout extends Error {}
+
+// Every call to GitHub's API, cut at GITHUB_TIMEOUT_MS.
+export async function gitHub(path: string, init: RequestInit = {}) {
+  try {
+    return await fetch(`https://api.github.com${path}`, {
+      ...init,
+      signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (!(error instanceof Error && error.name === 'TimeoutError')) throw error;
+    throw new GitHubTimeout(
+      `GitHub didn't answer ${path.split('?')[0]} in ${GITHUB_TIMEOUT_MS / 1000} s; retry in a minute.`,
+    );
+  }
+}
 
 export async function app(env: Env, path: string, init: RequestInit = {}) {
-  return fetch(`https://api.github.com${path}`, {
-    signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
+  return gitHub(path, {
     ...init,
     headers: {
       Accept: 'application/vnd.github+json',
