@@ -17,6 +17,7 @@ import { OVERRIDE } from '../app/override.js';
 import { runnerGroupName } from '../github/runner-group.js';
 import type { Compatibility } from '../release/compatibility.js';
 import {
+  API_URL_ENV,
   GITHUB_APP_ID,
   GITHUB_APPS_FLAG,
   keyAccepted,
@@ -71,6 +72,7 @@ import {
 import { readApiVersion, readListener, type StatusReport } from './status.js';
 import {
   classesOf,
+  noGpuLine,
   noKvmLine,
   planRegions,
   runnerClouds,
@@ -316,11 +318,16 @@ export async function upgrade(
         `This release's classes can't run for ${org}:\n- ${plan.problems.join('\n- ')}`,
       );
     }
-    plan.noKvm.forEach((target) =>
-      print(
-        noKvmLine(target, [...(plan.catalog.get(target.cloud)?.keys() ?? [])]),
-      ),
-    );
+    for (const [targets, line] of [
+      [plan.noKvm, noKvmLine],
+      [plan.noGpu, noGpuLine],
+    ] as const) {
+      for (const target of targets) {
+        print(
+          line(target, [...(plan.catalog.get(target.cloud)?.keys() ?? [])]),
+        );
+      }
+    }
     const before = running.runners ? parseRoutes(running.runners) : [];
     // Classes the release dropped retire: their scale sets drain first.
     const live = new Set(running.status.scaleSets.map((set) => set.label));
@@ -537,6 +544,7 @@ export async function upgrade(
       // sets or clears it.
       rotatingFrom: running.rotatingFrom,
       cacheCapGb: running.cacheCapGb,
+      workerUrl: deps.env[API_URL_ENV],
     };
     const override = running.override ? OVERRIDE : undefined;
     if (listener.deployment) {

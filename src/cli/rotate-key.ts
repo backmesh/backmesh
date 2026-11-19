@@ -35,6 +35,7 @@ import type { RunAnycloud } from '../anycloud/binary.js';
 import type { anycloudApi, anycloudExec } from '../anycloud/client.js';
 import { anycloudControl } from '../app/anycloud.js';
 import {
+  API_URL_ENV,
   workerDeps,
   revokeKey,
   signIn,
@@ -177,6 +178,7 @@ export async function rotateKey(
     runnerImage,
     runners,
     cacheCapGb: running.cacheCapGb,
+    workerUrl: deps.env[API_URL_ENV],
   };
 
   const rotationFailed = (cause: unknown) =>

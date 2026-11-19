@@ -19,6 +19,7 @@
     "worker/scripts/**/*.ts",
     "scripts/**/*.ts",
     "benchmarks/**/*.ts",
+    "experiments/**/*.ts",
     "test/**/*",
     "*.config.mts"
   ]

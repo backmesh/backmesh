@@ -2,7 +2,7 @@ import { randomInt } from 'node:crypto';
 
 import { z } from 'zod';
 
-import { CLOUDS, type RunnerClass } from '../runners/classes.js';
+import { CLOUDS, GPU, type RunnerClass } from '../runners/classes.js';
 
 // Fixed routing: each label is one scale set whose runners are
 // VM Jobs of its class. Install and upgrade write the classes into the
@@ -28,6 +28,7 @@ const RunnerClasses = z.array(
     // deleting a busy scale set and fails its job minutes later.
     retiring: z.boolean().optional(),
     public: z.boolean().optional(),
+    gpu: z.literal(GPU.model).optional(),
   }),
 );
 
@@ -61,6 +62,7 @@ export function parseRoutes(json: string): Route[] {
           !c.retiring &&
           c.cloud === route.cloud &&
           c.kvm === route.kvm &&
+          c.gpu === route.gpu &&
           c.vcpus === route.vcpus,
       );
     return { ...route, ...(od && { onDemand: { label: od.label } }) };

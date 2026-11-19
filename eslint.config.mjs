@@ -8,6 +8,8 @@ export default tseslint.config(
     ignores: [
       '**/node_modules/**',
       '.context/**',
+      // Fetched render assets (internal/launch-video/README.md).
+      'internal/launch-video/*/assets/**',
       '**/dist/**',
       '**/.astro/**',
     ],

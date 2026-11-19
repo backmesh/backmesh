@@ -238,6 +238,16 @@ export async function signInBody(request: Request, fields: string[]) {
   return body as Record<string, string | undefined>;
 }
 
+// The staging Worker holds the production App's key and runs rc code, so it
+// serves only the test orgs its STAGING_ORGS names (wrangler.jsonc);
+// production, without it, serves every org. A refusal, else null.
+export function notServed(env: Env, org: string) {
+  const orgs = env.STAGING_ORGS?.toLowerCase().split(',');
+  if (!orgs || orgs.includes(org.toLowerCase())) return null;
+  const error = `This backmesh Worker serves only its test orgs, not ${org}.`;
+  return Response.json({ error }, { status: 403 });
+}
+
 // POST /v1/installs { org, github_token, install? }: a key, when the
 // token's holder can manage the org's runners. `install`, the install's ID
 // when signing in again, gets a new key.
@@ -249,6 +259,8 @@ export async function createInstall(request: Request, env: Env) {
     github_token: string;
     install?: unknown;
   };
+  const refused = notServed(env, org);
+  if (refused) return refused;
   const admin = await runnersAdmin(env, github_token, org);
   if (admin?.can !== 'manage') {
     return notRunnersAdmin(

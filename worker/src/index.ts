@@ -14,6 +14,7 @@ import type { RelayNamespace } from './relay.js';
 import {
   createInstall,
   keyInstall,
+  notServed,
   oldSignIn,
   revokeInstall,
   SignInRefused,
@@ -60,6 +61,11 @@ export interface Env {
   GITHUB_APP_SLUG: string;
   GITHUB_APP_PRIVATE_KEY?: string;
   GITHUB_APP_PRIVATE_KEY_NEXT?: string;
+  // The staging Worker's test orgs, comma-separated logins (notServed).
+  STAGING_ORGS?: string;
+  // The commit the Worker was built from, which the deploy sets
+  // (worker/scripts/setup.ts); e2e.yml checks it is the release's.
+  COMMIT?: string;
 }
 
 async function route(request: Request, env: Env): Promise<Response> {
@@ -81,6 +87,9 @@ async function route(request: Request, env: Env): Promise<Response> {
       ? response
       : tooMany();
   };
+  if (pathname === '/v1/version' && request.method === 'GET') {
+    return Response.json({ commit: env.COMMIT ?? null });
+  }
   if (pathname === '/v1/cue' || pathname.startsWith('/v1/cue/')) {
     return cue(request, env, refused);
   }
@@ -124,6 +133,13 @@ async function route(request: Request, env: Env): Promise<Response> {
       const error =
         'Missing or refused install sign-in; run backmesh upgrade to sign in with GitHub again.';
       return refused(Response.json({ error }, { status: 401 }));
+    }
+    if (env.STAGING_ORGS) {
+      const org = await env.DB.prepare('SELECT login FROM orgs WHERE id = ?')
+        .bind(install.org)
+        .first<{ login: string }>();
+      const other = notServed(env, org?.login ?? String(install.org));
+      if (other) return other;
     }
     if (pathname === '/v1/token') {
       if (!(await env.TOKEN_LIMIT.limit({ key: install.id })).success) {

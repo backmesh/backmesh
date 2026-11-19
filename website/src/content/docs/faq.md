@@ -1,6 +1,9 @@
 ---
 title: FAQ
 description: What backmesh is, and its platforms, installing, start times, isolation, capacity and cost.
+head:
+  - tag: title
+    content: 'backmesh FAQ: open source, platforms, start times, security and cost'
 ---
 
 ## What is backmesh?
@@ -9,9 +12,24 @@ description: What backmesh is, and its platforms, installing, start times, isola
 your own AWS, GCP and Azure accounts. One `backmesh install` sets it up for a
 GitHub org. Each job then gets its own VM, which is deleted when the job ends.
 
-**How does backmesh compare with GitHub-hosted runners?** A workflow changes only its
-`runs-on`. Its jobs run on spot VMs in your accounts, so compute costs up to 10×
-less and your cloud credits apply. Each job waits for its VM to boot, and only
+**Is backmesh open source?** Yes. backmesh is free and open source under the
+Apache License 2.0, and its cache action is under the MIT License. The source
+is at [backmesh/backmesh](https://github.com/backmesh/backmesh). backmesh
+charges no license or per-minute fee; your clouds bill you for the VMs.
+
+**Did backmesh have paid plans?** Early releases did: v0.2.0 announced paid
+plans, and v0.3.0 charged for them after a trial. v0.3.2 removed them, and v0.4.0 made backmesh open
+source. The [changelog](/changelog/) has each release.
+
+**Was backmesh an LLM API proxy?** Earlier, yes. Before it ran GitHub Actions
+runners, the backmesh name was used for a backend that protected LLM API keys
+in apps, now archived at
+[backmesh/llm-proxy](https://github.com/backmesh/llm-proxy). backmesh now runs
+GitHub Actions runners.
+
+**How does backmesh compare with GitHub-hosted runners?** A workflow changes
+only its `runs-on`. Its jobs run on spot VMs in your accounts. In our [build
+benchmarks](/benchmarks/), builds ran up to 2× faster and 5× cheaper, and your cloud credits apply. Each job waits for its VM to boot, and only
 Linux x86-64 jobs in private repositories can use the runners.
 
 **Which clouds does backmesh run on?** AWS, Google Cloud (GCP) and Azure. One installation can use
@@ -20,9 +38,17 @@ the control plane's, `backmesh-gcp-4` in GCP.
 
 ## Will it work?
 
-**Which platforms does backmesh support?** Linux x86-64 only. There are no macOS, Windows, Arm or GPU
+**Which platforms does backmesh support?** Linux x86-64 only. There are no macOS, Windows or Arm
 runners. Jobs that need `/dev/kvm` use the
-[KVM labels](/labels/#kvm).
+[KVM labels](/labels/#kvm), and jobs that need an NVIDIA GPU the
+[GPU labels](/labels/#gpu) on AWS and Azure.
+
+**How do backmesh's GPU runners compare with GitHub's?** Same shape: one Tesla
+T4 and 4 vCPUs, with 16 GiB of memory on AWS to GitHub's 28 GB. At list prices
+(arithmetic, not measured; read 2026-11-18), GitHub's Linux GPU runner costs
+$0.052 a minute. `backmesh-gpu-t4` costs about $0.0046 a minute on AWS spot
+and $0.0029 on Azure spot, and `backmesh-gpu-od-t4` $0.0088 on demand: 6 to 18
+times less, before disks and boots. See [Cost](/cost/#gpu).
 
 **Can public repositories use backmesh?** Not yet. Only private repositories can use the runners. In a public repository, anyone can open a pull request whose workflow runs on a runner, and a runner's VM can reach your other instances in its cloud network. Support waits for runners with a network of their own.
 
@@ -138,8 +164,8 @@ every repository share.
 
 ## What does it cost?
 
-**backmesh's price:** the core features are free, with no credit card required
-and no cap on jobs.
+**backmesh's price:** backmesh is free and open source, with no credit card
+required and no cap on jobs.
 Premium adds Slack monitoring, logs and runtime history; see
 [pricing](/#pricing).
 

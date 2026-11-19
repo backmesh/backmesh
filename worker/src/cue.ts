@@ -9,7 +9,7 @@
 //   GET  /v1/cue/connect            the listener's WebSocket
 import type { Env } from './index.js';
 import { GitHubError, randomHex } from './app.js';
-import { asUser, keyInstall, sha256 } from './installs.js';
+import { asUser, keyInstall, notServed, sha256 } from './installs.js';
 
 declare const caches: {
   default: {
@@ -206,6 +206,8 @@ async function signIn(
   if (typeof org !== 'string' || !/^[A-Za-z0-9-]{1,39}$/.test(org)) {
     return json({ error: 'Name the org.' }, 400);
   }
+  const other = notServed(env, org);
+  if (other) return other;
   // A cue credential asks GitHub nothing; an App sign-in still works.
   if (token.startsWith('bmc_')) {
     // A refused credential counts against the client IP, as a refused

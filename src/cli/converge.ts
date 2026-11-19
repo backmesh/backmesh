@@ -22,7 +22,11 @@ import {
   type CloudTarget,
   type RunnerClass,
 } from '../runners/classes.js';
-import { INSTALL_KEY_ENV, ROTATING_FROM_ENV } from './worker.js';
+import {
+  API_URL_ENV as WORKER_URL_ENV,
+  INSTALL_KEY_ENV,
+  ROTATING_FROM_ENV,
+} from './worker.js';
 import { rollListenerVm } from './listener-vm.js';
 import { execListener } from './status.js';
 import { CACHE_CAP_ENV } from '../listener/sweep.js';
@@ -237,6 +241,9 @@ export interface Roll {
   rotatingFrom?: string;
   // A new service token (`upgrade`), also never rolled back.
   apiToken?: string;
+  // The Worker the install key is from, when not production's (the CLI's
+  // BACKMESH_API_URL, as an rc's e2e sets for staging).
+  workerUrl?: string;
 }
 
 /** The Secret's full value set, so every writer (a roll, its restore, and
@@ -252,12 +259,14 @@ export function secretValues({
   runners,
   rotatingFrom,
   cacheCapGb,
+  workerUrl,
 }: {
   org: string;
   orgId: number;
   identity: ListenerIdentity;
   image: string;
   installKey: string;
+  workerUrl?: string;
   // A listener from before this Secret uses its built-in image.
   runnerImage?: string;
   runners?: string;
@@ -278,6 +287,7 @@ export function secretValues({
     ...(runners && { [RUNNERS_ENV]: runners }),
     ...(rotatingFrom && { [ROTATING_FROM_ENV]: rotatingFrom }),
     ...(cacheCapGb && { [CACHE_CAP_ENV]: String(cacheCapGb) }),
+    ...(workerUrl && { [WORKER_URL_ENV]: workerUrl }),
   };
 }
 
@@ -321,6 +331,7 @@ export async function rollListener(
       runners,
       rotatingFrom: next.rotatingFrom,
       cacheCapGb: next.cacheCapGb,
+      workerUrl: next.workerUrl,
     });
     await deps.control.saveSecret(name, values);
     await rollListenerVm(deps.exec, vm, values);

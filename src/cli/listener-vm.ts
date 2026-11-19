@@ -25,7 +25,11 @@ import { RUNNERS_ENV } from '../listener/routes.js';
 import { TERMINAL } from '../listener/runner-jobs.js';
 import { CACHE_CAP_ENV } from '../listener/sweep.js';
 import { listenerName, orgOfListener } from './installation.js';
-import { INSTALL_KEY_ENV, ROTATING_FROM_ENV } from './worker.js';
+import {
+  API_URL_ENV as WORKER_URL_ENV,
+  INSTALL_KEY_ENV,
+  ROTATING_FROM_ENV,
+} from './worker.js';
 
 // By digest, from `mirror.gcr.io` as the listener's own base image is: the
 // Docker CLI, `/bin/sh`, `sleep`, `base64` and `sed` on linux/amd64.
@@ -61,6 +65,7 @@ const SECRET_NAMES = [
   ROTATING_FROM_ENV,
   CACHE_CAP_ENV,
   OVERRIDE_ENV,
+  WORKER_URL_ENV,
 ];
 
 const CONTAINER = 'backmesh-listener';

@@ -69,7 +69,9 @@ async function signIn(
         client_id: CLIENT_ID,
         device_code: code.device_code,
         grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-      }).catch((error: unknown) => ({ error: String(error) }));
+      }).catch((error: unknown): Record<string, unknown> => ({
+        error: String(error),
+      }));
       if (typeof answer.access_token === 'string') return answer.access_token;
       if (answer.error === 'slow_down') interval += 5000;
       else if (answer.error === 'expired_token') break;

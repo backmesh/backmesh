@@ -952,6 +952,51 @@ describe('uninstall', () => {
     );
   });
 
+  it('with --keep-app, deletes everything else and asks the Worker to keep the App', async () => {
+    const { deps, calls, lines, worker } = setUp({
+      worker: fakeWorker({
+        finishes: [Response.json({ removed: false, still_used_by: [] })],
+      }),
+    });
+
+    const result = await uninstall({ ...scripted, keepApp: true }, deps);
+
+    expect(changes(calls)).toEqual([
+      'POST /v1/installs/cleanup',
+      'exec backmesh-acme POST /drain',
+      'terminate bml-l8u5e-acme00',
+      'api access remove --service backmesh-acme',
+      ...GITHUB_DELETES,
+      'POST /v1/installs/cleanup/finish',
+      'secrets delete backmesh-acme',
+      'node-pool delete np-1',
+      'node-pool delete np-2',
+      DELETE_HOSTED,
+    ]);
+    expect(worker.bodies.at(-1)).toEqual({
+      cleanup_id: CLEANUP_ID,
+      keep_app: true,
+    });
+    expect(result).toMatchObject({
+      orgs: [{ org: 'acme', appRemoved: false }],
+      cloud: 'deleted',
+    });
+    expect(lines).toContain(
+      'The backmesh GitHub App stays on acme, as --keep-app asked.',
+    );
+  });
+
+  it('with --keep-app, fails after deleting everything else when an older Worker removed the App', async () => {
+    const { deps, calls } = setUp();
+
+    await expect(
+      uninstall({ ...scripted, keepApp: true }, deps),
+    ).rejects.toThrow(
+      /removed its GitHub App from acme although --keep-app asked to keep it\. Everything else was uninstalled/,
+    );
+    expect(calls).toContain(DELETE_HOSTED);
+  });
+
   it('reports an App another install keeps, and a failed removal', async () => {
     const kept = setUp({
       worker: fakeWorker({

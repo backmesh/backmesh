@@ -1,0 +1,28 @@
+name: bench
+on:
+  push:
+    branches: [bench]
+permissions:
+  contents: read
+jobs:
+  typescript:
+    runs-on: ${{ vars.BENCH_RUNNER }}
+    steps:
+      - uses: actions/checkout@v5
+        with: { repository: microsoft/TypeScript, ref: v5.6.3 }
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - run: npm ci --no-audit --no-fund
+      - run: npx hereby local
+  rust:
+    runs-on: ${{ vars.BENCH_RUNNER }}
+    steps:
+      - uses: actions/checkout@v5
+        with: { repository: BurntSushi/ripgrep, ref: 14.1.1 }
+      - run: cargo build --release --locked
+  docker:
+    runs-on: ${{ vars.BENCH_RUNNER }}
+    steps:
+      - uses: actions/checkout@v5
+        with: { repository: grafana/k6, ref: v0.54.0 }
+      - run: docker build -t bench .

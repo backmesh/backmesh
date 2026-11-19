@@ -288,6 +288,22 @@ function setUp(
           })),
         );
       }
+      // The new management VM at anycloud 0.1.78's 8,000 IOPS; bm-control's
+      // Node is created at the baseline.
+      if (args[0] === 'aws' && args[1] === 'ec2') {
+        return {
+          'describe-instances': JSON.stringify(['vol-api']),
+          'describe-volumes': JSON.stringify([
+            {
+              VolumeId: 'vol-api',
+              VolumeType: 'gp3',
+              Iops: 8000,
+              Throughput: 125,
+            },
+          ]),
+          'modify-volume': '{}',
+        }[args[2]!]!;
+      }
       if (args[0] === 'aws') return JSON.stringify({ Account: account.aws });
       if (args.join(' ') === 'az account show --output json') {
         return JSON.stringify({ id: account.azure });
@@ -353,6 +369,52 @@ const tokenFor = (login: string) =>
   });
 
 describe('install', () => {
+  it("finishes when the AWS CLI can't read the management VM's disk, and says so", async () => {
+    const { deps, commands, lines } = setUp();
+    const command = deps.command;
+    deps.command = async (args) => {
+      if (args[2] === 'describe-instances')
+        throw new Error('UnauthorizedOperation');
+      return command(args);
+    };
+    const result = await install(asked, deps);
+
+    expect(result).toMatchObject({ apiUrl: HOSTED });
+    expect(commands.some((c) => c.includes('modify-volume'))).toBe(false);
+    expect(lines).toContain(
+      "Couldn't read the management VM's disk with the AWS CLI, so it keeps its speed; lower its root volume to 3000 IOPS and 125 MiB/s in the EC2 console.",
+    );
+  });
+
+  it('names the account to sign in to when it finds no management VM', async () => {
+    const { deps, commands, lines } = setUp();
+    const command = deps.command;
+    deps.command = async (args) =>
+      args[2] === 'describe-instances' ? '[]' : command(args);
+    const result = await install(asked, deps);
+
+    expect(result).toMatchObject({ apiUrl: HOSTED });
+    expect(commands.some((c) => c.includes('describe-volumes'))).toBe(false);
+    expect(lines).toContain(
+      'Found no management VM for c1 in this AWS account and us-east-2, so its disk keeps its speed; sign in to AWS account 123456789012 and lower its root volume to 3000 IOPS and 125 MiB/s in the EC2 console.',
+    );
+  });
+
+  it("finishes when EC2 refuses to lower the management VM's disk, and says so", async () => {
+    const { deps, lines } = setUp();
+    const command = deps.command;
+    deps.command = async (args) => {
+      if (args[2] === 'modify-volume') throw new Error('UnauthorizedOperation');
+      return command(args);
+    };
+    const result = await install(asked, deps);
+
+    expect(result).toMatchObject({ apiUrl: HOSTED });
+    expect(lines).toContain(
+      "Couldn't lower vol-api from 8000 IOPS and 125 MiB/s; lower it to 3000 IOPS and 125 MiB/s in the EC2 console.",
+    );
+  });
+
   it("hands the listener --cache-cap in its Secret, each repository's cache in GB", async () => {
     const { deps, requests } = setUp();
     await install({ ...asked, cacheCapGb: 25 }, deps);
@@ -364,9 +426,33 @@ describe('install', () => {
     });
   });
 
+  it('points the listener at the Worker install signed in through', async () => {
+    const values = async (env: NodeJS.ProcessEnv) => {
+      const { deps, requests } = setUp({ env });
+      await install(asked, deps);
+      const secret = requests.find((r) =>
+        r.startsWith('PUT /v1/secrets/backmesh-acme '),
+      )!;
+      return JSON.parse(secret.split(' ')[2]!).values as Record<string, string>;
+    };
+    // The staging Worker's install key is unknown to production's.
+    expect(
+      await values({ BACKMESH_API_URL: 'https://api-staging.backmesh.com' }),
+    ).toMatchObject({ BACKMESH_API_URL: 'https://api-staging.backmesh.com' });
+    expect(await values({})).not.toHaveProperty('BACKMESH_API_URL');
+  });
+
   it("runs install's steps in order, making each cloud's role through its CLI", async () => {
-    const { deps, calls, execs, requests, lines, tokens, refreshable } =
-      setUp();
+    const {
+      deps,
+      calls,
+      commands,
+      execs,
+      requests,
+      lines,
+      tokens,
+      refreshable,
+    } = setUp();
     // The VM's create, its Secret saved before it, and each exec, in order.
     const steps: string[] = [];
     const saved = () =>
@@ -465,6 +551,17 @@ describe('install', () => {
         "Always on: the control plane's VM (t3.large) on aws us-east-2, about $69 a month with its disk and address.",
         "Always on: acme's listener VM (t3.small) on aws us-east-2, about $17 a month with its disk and address.",
       ]),
+    );
+    // ...which the new control plane's disks then are.
+    expect(commands.filter((c) => c.startsWith('aws ec2'))).toEqual([
+      'aws ec2 describe-instances --filters Name=tag:Name,Values=anycloud-cluster-c1 Name=instance-state-name,Values=pending,running,stopping,stopped --query Reservations[].Instances[].BlockDeviceMappings[?DeviceName==`/dev/sda1`].Ebs.VolumeId[] --region us-east-2 --output json',
+      expect.stringMatching(
+        /^aws ec2 describe-volumes --volume-ids vol-api --query /,
+      ),
+      'aws ec2 modify-volume --volume-id vol-api --iops 3000 --throughput 125 --region us-east-2 --output json',
+    ]);
+    expect(lines).toContain(
+      'Lowered vol-api from 8000 IOPS and 125 MiB/s to 3000 IOPS and 125 MiB/s.',
     );
     expect(lines).toContain(
       'Done. Use `runs-on: backmesh-4` (a 4-vCPU spot VM) in a workflow; other sizes: https://backmesh.com/labels/',
@@ -661,7 +758,7 @@ describe('install', () => {
     const routes = parseRoutes(
       JSON.parse(secret.split(' ')[2]!).values.BACKMESH_RUNNERS,
     );
-    expect(routes).toHaveLength(16);
+    expect(routes).toHaveLength(18);
     expect(routes.find((r) => r.label === 'backmesh-kvm-od-4')).toEqual({
       label: 'backmesh-kvm-od-4',
       code: 'l4',
@@ -1182,7 +1279,7 @@ describe('install', () => {
 
   it('changes nothing on a re-run of the plan the listener already runs', async () => {
     const asked: string[] = [];
-    const { deps, calls, requests, lines } = setUp(
+    const { deps, calls, commands, requests, lines } = setUp(
       {
         env: OVERRIDE,
         vms: [acmeVm],
@@ -1224,6 +1321,8 @@ describe('install', () => {
     expect(lines).toContain(
       "No changes: acme's listener already runs this plan.",
     );
+    // Its disks are left as they are.
+    expect(commands.filter((c) => c.startsWith('aws ec2'))).toEqual([]);
   });
 
   it("rolls a re-run that only reorders a label's VM types, with no consent asked", async () => {
@@ -1881,6 +1980,8 @@ describe('install', () => {
     expect(gcp.calls).toContain(
       `credentials new ${BM.gcp} --provider gcp --gcloud-account ci@p1.iam.gserviceaccount.com --project-id p1 --generate`,
     );
+    // Only AWS's disks have provisioned speed to lower.
+    expect(gcp.commands.filter((c) => c.startsWith('aws ec2'))).toEqual([]);
   });
 
   // anycloud 0.1.73's refusals: its own for AWS and Azure, and the IAM

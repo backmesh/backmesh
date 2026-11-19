@@ -3,9 +3,12 @@
 Self-hosted GitHub Actions runners in your own AWS, GCP or Azure account. Each
 job runs on its own spot VM, which is deleted when the job ends.
 
-- **Lower cost.** Spot VMs cost up to 10× less than GitHub-hosted runners for
-  the same compute. Your cloud bills you, so your cloud credits apply.
-- **Faster jobs.** backmesh learns each workflow's shape and starts runners
+- **Up to 2× faster, 5× cheaper builds.** In our
+  [build benchmarks](https://backmesh.com/benchmarks/), a `backmesh-4` spot VM ran Docker,
+  Rust and TypeScript builds 1.4 to 2.1× faster than GitHub's `ubuntu-latest`,
+  at 2.8 to 5.5× less per build. Your cloud bills you, so your cloud credits
+  apply.
+- **Shorter waits.** backmesh learns each workflow's shape and starts runners
   ahead of its predicted jobs. Your coding agent can cue backmesh as its checks
   start, so runners boot before the push. The cache keeps your dependencies
   in a bucket next to the runners.
@@ -40,6 +43,8 @@ You need:
   during install.
 - An AWS, GCP or Azure account, with its CLI (`aws`, `gcloud` or `az`) signed
   in on your `PATH`.
+- If the org restricts OAuth apps, an owner grants backmesh access at sign-in
+  ([how](https://backmesh.com/faq/#installing)).
 
 Then use a label in a workflow:
 

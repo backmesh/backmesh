@@ -406,7 +406,9 @@ function setUp({
       clientVersion ? fakeApi(routes, refusal, clientVersion).api : api,
     exec: () => exec,
     fetch: async (url, init) =>
-      /^https:\/\/(api\.backmesh\.com|github\.com)\//.test(String(url))
+      /^https:\/\/(api(-staging)?\.backmesh\.com|github\.com)\//.test(
+        String(url),
+      )
         ? worker.fetch(url, init)
         : String(url).startsWith('https://api.github.com/')
           ? githubOrg(new URL(String(url)).pathname)
@@ -496,6 +498,18 @@ describe('upgrade', () => {
       `The saved GitHub sign-in expired or was revoked. backmesh signs in again.`,
     );
     expect(readFileSync(join(dir, '.token'), 'utf8')).toBe(`${SIGNED_IN}\n`);
+  });
+
+  it('keeps the listener on the Worker the CLI signs in through', async () => {
+    const { deps, requests } = setUp();
+    deps.env.BACKMESH_API_URL = 'https://api-staging.backmesh.com';
+    await upgrade(deps);
+    const secret = requests.find((r) =>
+      r.startsWith('PUT /v1/secrets/backmesh-acme '),
+    )!;
+    expect(JSON.parse(secret.split(' ')[2]!).values).toMatchObject({
+      BACKMESH_API_URL: 'https://api-staging.backmesh.com',
+    });
   });
 
   it("upgrades the API, then rolls the listener with this release's classes", async () => {

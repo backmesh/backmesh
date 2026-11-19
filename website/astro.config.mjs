@@ -1,5 +1,6 @@
 // @ts-check
 import starlight from '@astrojs/starlight';
+import starlightBlog from 'starlight-blog';
 import { defineConfig } from 'astro/config';
 import { sidebar } from './src/sidebar.mjs';
 
@@ -43,6 +44,22 @@ export default defineConfig({
       ],
       customCss: ['./src/styles/fonts.css', './src/styles/starlight.css'],
       sidebar,
+      // The blog at /blog/: post previews, dates and tags, in the docs'
+      // theme. No header link or RSS icon, so docs pages look as before.
+      plugins: [
+        starlightBlog({
+          title: 'Blog',
+          prefix: 'blog',
+          navigation: 'none',
+          rss: false,
+          postCount: 10,
+          recentPostCount: 10,
+          metrics: { readingTime: true },
+          authors: {
+            backmesh: { name: 'backmesh', url: 'https://backmesh.com/' },
+          },
+        }),
+      ],
       pagination: false,
       credits: false,
     }),

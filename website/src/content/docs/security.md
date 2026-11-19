@@ -7,12 +7,12 @@ description: What runs where, what reaches backmesh, the GitHub App's permission
 
 Everything backmesh runs is in your own accounts:
 
-- **backmesh's control plane**, a small always-on VM in the first cloud you
-  install, with a checkpoint bucket for its backups.
+- **backmesh's control plane**, an always-on VM (t3.large on AWS) in the first
+  cloud you install, with a checkpoint bucket for its backups.
 - **The listener**, which scales runners, alone on a small always-on VM of its
-  own for each org. It long-polls GitHub, so nothing needs an inbound port or a
-  webhook. It's never on the control plane's VM, which keeps the control
-  plane's keys away from the code that reads GitHub's messages.
+  own (t3.small on AWS) for each org. It long-polls GitHub, so nothing needs an
+  inbound port or a webhook. It's never on the control plane's VM, which keeps
+  the control plane's keys away from the code that reads GitHub's messages.
 - **The runners**: each job gets its own spot or on-demand VM, which is deleted
   when the job ends.
 
@@ -46,7 +46,11 @@ SHA-256 digest, so it needs network access to GitHub's release downloads.
 Install creates the control plane and each cloud's role through your signed-in
 cloud CLI, as you, so that identity needs the rights to create them:
 
-- **AWS:** a CloudFormation stack with an IAM role and OIDC provider.
+- **AWS:** a CloudFormation stack with an IAM role and OIDC provider, plus
+  `ec2:DescribeInstances`, `ec2:DescribeVolumes` and `ec2:ModifyVolume`, which
+  lower the management VM's disk to gp3's baseline speed. The role's rights
+  are anycloud v0.1.78's
+  [AWS access policy](https://github.com/anycloud-sh/anycloud/blob/46d43a2973452151bd8ac4d964babc1955fdeb88/src/shared/cloud-policies/aws-anycloud-access.json).
 - **GCP:** a custom role, a service account, and a workload identity pool and
   provider with their IAM bindings, plus turning on the Compute, IAM, IAM
   Credentials and Security Token Service APIs.

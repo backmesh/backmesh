@@ -65,6 +65,9 @@ export interface UninstallOptions {
   // the cloud side through the user's cloud CLI when the control plane
   // doesn't answer.
   controlPlane?: string;
+  // Leaves the GitHub App on each org, for an org whose next install comes
+  // with nobody to click Install, such as our e2e's test org.
+  keepApp?: boolean;
 }
 
 export interface UninstallDeps {
@@ -505,6 +508,7 @@ async function removeOrg(
   plane: ControlPlane | undefined,
   clusterId: string | undefined,
   deps: UninstallDeps,
+  keepApp = false,
 ) {
   const { ui } = deps;
   const worker = workerDeps(deps, ui.print);
@@ -560,17 +564,21 @@ async function removeOrg(
   // No cleanup to finish when the App isn't on the org.
   const app =
     cleanup.cleanup_id &&
-    (await finishCleanup(cleanup.cleanup_id, worker).catch((cause: unknown) => {
-      throw new Error(
-        `backmesh couldn't remove its GitHub App from ${login}: ${cause instanceof Error ? cause.message : String(cause)}. Run \`backmesh uninstall --org ${login}\` again.`,
-        { cause },
-      );
-    }));
+    (await finishCleanup(cleanup.cleanup_id, worker, keepApp).catch(
+      (cause: unknown) => {
+        throw new Error(
+          `backmesh couldn't remove its GitHub App from ${login}: ${cause instanceof Error ? cause.message : String(cause)}. Run \`backmesh uninstall --org ${login}\` again.`,
+          { cause },
+        );
+      },
+    ));
   if (app) {
     ui.print(
       app.removed
         ? `Removed the backmesh GitHub App from ${login}.`
-        : `The backmesh GitHub App stays on ${login}, which its installs ${app.still_used_by.join(', ')} still use.`,
+        : app.still_used_by.length
+          ? `The backmesh GitHub App stays on ${login}, which its installs ${app.still_used_by.join(', ')} still use.`
+          : `The backmesh GitHub App stays on ${login}, as --keep-app asked.`,
     );
   }
   // Last: the Secret marks an org whose removal a rerun must finish.
@@ -770,13 +778,24 @@ export async function uninstall(
         : `Uninstalling backmesh from ${names}; the control plane stays. ${fail}`,
   );
 
-  const removed = [];
+  const removed: UninstallResult['orgs'] = [];
   const clusterId = plane?.clusterId ?? gone?.clusterId;
   for (const org of orgs) {
-    removed.push(await removeOrg(org, plane, clusterId, deps));
+    removed.push(await removeOrg(org, plane, clusterId, deps, options.keepApp));
   }
 
+  // An older Worker ignores --keep-app and removes the App anyway; said once
+  // the rest is deleted, so the run still fails.
+  const keptApp = () => {
+    const gone = removed.filter(({ appRemoved }) => appRemoved);
+    if (options.keepApp && gone.length) {
+      throw new Error(
+        `backmesh.com removed its GitHub App from ${gone.map(({ org }) => org).join(', ')} although --keep-app asked to keep it. Everything else was uninstalled; an org owner installs the App again.`,
+      );
+    }
+  };
   if (plane && !plane.whole) {
+    keptApp();
     return {
       orgs: removed,
       apiUrl: plane.url,
@@ -840,6 +859,7 @@ export async function uninstall(
       );
     }
   }
+  keptApp();
   return {
     orgs: removed,
     ...(plane

@@ -11,8 +11,9 @@ export const GITHUB_4_CORE_PER_MIN = 0.012;
  * 2026-11-13 VM type reorder), the lowest zone in each region, for
  * `backmesh-4`'s VM types (src/runners/classes.ts, same figures). Each job gets
  * its own 4-vCPU, 16 GiB VM, which bills from its boot until the job ends.
- * Disks are left out: each runner's 100 GB disk adds about $0.01 an hour on
- * AWS. `bootS` is the VM boot each job pays, as measured (coordinator,
+ * Disks are left out: each runner's 100 GB gp3 disk, at 4,000 IOPS and
+ * 500 MiB/s (src/listener/runner-jobs.ts), adds about $0.038 an hour on AWS.
+ * `bootS` is the VM boot each job pays, as measured (coordinator,
  * 2026-11-07): about 30 s on AWS, 60–70 s on GCP and Azure. `controlPlane` is
  * the fixed monthly cost while runners have no VM: the management VM and one
  * org's listener VM with their disks and public addresses, as install prints

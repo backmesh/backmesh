@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>backmesh launch</title>
+    <script src="assets/vendor/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      /* The site's light ground (website/src/styles/tokens.css); the end card
+         carries the page's one dark band. */
+      html, body { width: 100%; height: 100%; overflow: hidden; background: #ffffff; }
+      #root { position: relative; width: 100%; height: 100%; overflow: hidden; background: #ffffff; }
+      .scene { z-index: 1; position: absolute; inset: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="20" data-width="1920" data-height="1080">
+      <div id="el-s1-hero" class="scene" data-composition-id="s1-hero" data-composition-src="compositions/frames/s1-hero.html" data-start="0" data-duration="4.9" data-track-index="0" data-width="1920" data-height="1080"></div>
+      <div id="el-s2-bench" class="scene" data-composition-id="s2-bench" data-composition-src="compositions/frames/s2-bench.html" data-start="4.5" data-duration="4.4" data-track-index="1" data-width="1920" data-height="1080"></div>
+      <div id="el-s3-cost" class="scene" data-composition-id="s3-cost" data-composition-src="compositions/frames/s3-cost.html" data-start="8.5" data-duration="4.4" data-track-index="0" data-width="1920" data-height="1080"></div>
+      <div id="el-s4-cue" class="scene" data-composition-id="s4-cue" data-composition-src="compositions/frames/s4-cue.html" data-start="12.5" data-duration="3.9" data-track-index="1" data-width="1920" data-height="1080"></div>
+      <div id="el-s5-end" class="scene" data-composition-id="s5-end" data-composition-src="compositions/frames/s5-end.html" data-start="16" data-duration="4" data-track-index="0" data-width="1920" data-height="1080"></div>
+
+      <!-- No music bed (README.md, "Music"). Kenney CC0 sound effects, quiet, one per scene. -->
+      <audio id="sfx-0" src="assets/sfx/interface/drop_001.ogg" data-start="2" data-duration="0.11" data-track-index="20" data-volume="0.35"></audio>
+      <audio id="sfx-1" src="assets/sfx/interface/drop_002.ogg" data-start="5.88" data-duration="0.19" data-track-index="21" data-volume="0.4"></audio>
+      <audio id="sfx-2" src="assets/sfx/interface/drop_003.ogg" data-start="10.15" data-duration="0.19" data-track-index="22" data-volume="0.4"></audio>
+      <audio id="sfx-3" src="assets/sfx/interface/switch_001.ogg" data-start="14.2" data-duration="0.62" data-track-index="23" data-volume="0.3"></audio>
+      <audio id="sfx-4" src="assets/sfx/impact/impactSoft_medium_004.ogg" data-start="16" data-duration="0.15" data-track-index="24" data-volume="0.4"></audio>
+    </div>
+
+    <script>
+      (function () {
+        var tl = gsap.timeline({ paused: true });
+        // Scenes overlap by 0.4 s: the outgoing one fades while the next
+        // begins its own entrance. The end card's band covers the last cut.
+        var FADES = [
+          { el: "#el-s1-hero", end: 4.9 },
+          { el: "#el-s2-bench", end: 8.9 },
+          { el: "#el-s3-cost", end: 12.9 },
+        ];
+        FADES.forEach(function (f) {
+          tl.fromTo(f.el, { opacity: 1, y: 0 }, { opacity: 0, y: -14, duration: 0.4, ease: "power1.in", immediateRender: false }, f.end - 0.4);
+        });
+        window.__timelines["main"] = tl;
+      })();
+    </script>
+  </body>
+</html>

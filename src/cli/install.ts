@@ -14,6 +14,7 @@ import { ANYCLOUD_VERSION } from '../anycloud/contract.generated.js';
 import { missingFeatures, type FeatureTable } from '../anycloud/features.js';
 import { anycloudControl } from '../app/anycloud.js';
 import {
+  API_URL_ENV,
   GITHUB_APP_ID,
   GITHUB_APPS_FLAG,
   signInForKey,
@@ -37,6 +38,7 @@ import {
 } from '../runners/anycloud.js';
 import {
   CLOUDS,
+  GPU_TYPES,
   planClasses,
   PUBLIC_VCPU_CAP,
   PUBLIC_VCPUS,
@@ -45,6 +47,7 @@ import {
   type CloudTarget,
 } from '../runners/classes.js';
 import {
+  formatGpuQuota,
   formatQuota,
   quotaCheck,
   readQuota,
@@ -112,6 +115,7 @@ import {
   controlPlaneOf,
   type Listener,
 } from './installation.js';
+import { lowerManagementDisk } from './control-disks.js';
 
 export const CLUSTER = 'backmesh';
 
@@ -186,6 +190,14 @@ export const takesRegions = (version: string, features?: FeatureTable) =>
 
 export const noKvmLine = ({ cloud }: CloudTarget, regions: readonly string[]) =>
   `${where(cloud, regions)} ${regions.length > 1 ? 'offer' : 'offers'} no KVM type with nested virtualization, so ${cloud} gets no KVM labels.`;
+
+export const noGpuLine = (
+  { cloud }: CloudTarget,
+  regions: readonly string[],
+) =>
+  cloud === 'gcp'
+    ? "gcp gets no GPU labels: anycloud can't launch a T4 VM on GCP yet."
+    : `${where(cloud, regions)} ${regions.length > 1 ? 'offer' : 'offers'} no ${GPU_TYPES[cloud].join(' or ')}, so ${cloud} gets no GPU labels.`;
 
 // The management VM: AWS's is backmesh's sizing; GCP's the nearest size
 // _(inference)_. Azure's is the size anycloud qualifies the management VM
@@ -1118,24 +1130,27 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       return formatQuota(check, spot);
     });
     quotas.push(`${where(cloud, regions)} quota: ${checks.join(', ')}`);
-    const dead = startsNoRunners(
-      cloud,
-      limits,
-      classPlan.classes
-        .filter((c) => c.cloud === cloud)
-        .map((c) => ({ ...c, regions: c.regions ?? [c.region] })),
-    );
-    quotas.push(...dead);
-    noRunners.push(...dead);
-    quotas.push(
-      ...skippedRegions(
+    const mine = classPlan.classes.filter((c) => c.cloud === cloud);
+    if (cloud !== 'gcp' && mine.some((c) => c.gpu)) {
+      quotas.push(
+        `${where(cloud, regions)} ${formatGpuQuota(
+          cloud,
+          limits,
+          mine.filter((c) => c.gpu),
+        )}`,
+      );
+    }
+    // A GPU label's quota is usually 0 on a new account: shown, not asked
+    // about.
+    quotas.push(...startsNoRunners(cloud, limits, mine));
+    noRunners.push(
+      ...startsNoRunners(
         cloud,
         limits,
-        classPlan.classes
-          .filter((c) => c.cloud === cloud)
-          .map((c) => ({ ...c, regions: c.regions ?? [c.region] })),
+        mine.filter((c) => !c.gpu),
       ),
     );
+    quotas.push(...skippedRegions(cloud, limits, mine));
   }
   if (problems.length) {
     throw new Error(`Can't run the runners:\n- ${problems.join('\n- ')}`);
@@ -1224,7 +1239,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       regions: regionsOf(target.cloud),
     })),
     classes: classPlan.classes.map(
-      ({ label, cloud, region, vcpus, spot, kvm, vmTypes, regions }) => ({
+      ({ label, cloud, region, vcpus, spot, kvm, vmTypes, regions, gpu }) => ({
         label,
         cloud,
         region,
@@ -1233,9 +1248,10 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         kvm,
         vmTypes,
         regions,
+        ...(gpu && { gpu }),
       }),
     ),
-    rates: runners.map(({ cloud, region }) =>
+    rates: runners.flatMap(({ cloud, region }) =>
       formatRate(
         classPlan.classes.filter((c) => c.cloud === cloud),
         classPlan.catalog.get(cloud)?.get(region) ?? [],
@@ -1243,6 +1259,9 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     ),
     noKvm: classPlan.noKvm.map((target) =>
       noKvmLine(target, regionsOf(target.cloud)),
+    ),
+    noGpu: classPlan.noGpu.map((target) =>
+      noGpuLine(target, regionsOf(target.cloud)),
     ),
     sameOwner: sharedWith.length
       ? sameOwnerLine(options.org, sharedWith)
@@ -1254,8 +1273,8 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     quotas,
   };
   const id = planId(plan);
-  [...notes, ...plan.rates, ...quotas, ...plan.noKvm].forEach((line) =>
-    ui.print(line),
+  [...notes, ...plan.rates, ...quotas, ...plan.noKvm, ...plan.noGpu].forEach(
+    (line) => ui.print(line),
   );
   if (!plan.controlPlane.exists) {
     ui.print(
@@ -1403,6 +1422,18 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     url = created.url;
     // The listener goes with a new control plane.
     if (!plan.controlPlane.exists) place = { ...place, region: created.region };
+    // The management VM's disk at gp3's baseline until anycloud's template
+    // makes it so (control-disks.ts). A resumed `cluster create` lowers it
+    // too.
+    if (controlPlane.cloud === 'aws') {
+      await lowerManagementDisk(
+        clusterIdOf(url),
+        created.region,
+        now.find((target) => target.cloud === 'aws')?.account,
+        deps.command,
+        ui.print,
+      );
+    }
   }
   await deps.run(['api', 'use', url]);
   // `cluster create` may have resumed a control plane on another release,
@@ -1513,6 +1544,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
           installKey,
           rotatingFrom: current.rotatingFrom,
           cacheCapGb: plan.cacheCapGb,
+          workerUrl: deps.env[API_URL_ENV],
         },
         { control, exec, again: 'install', wait: deps.wait },
       );
@@ -1536,6 +1568,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       installKey,
       runners: finalRunners,
       cacheCapGb: plan.cacheCapGb,
+      workerUrl: deps.env[API_URL_ENV],
     });
     await control.saveSecret(name, values);
     // Step 7: its VM.
