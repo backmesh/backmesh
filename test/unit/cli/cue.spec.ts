@@ -608,7 +608,8 @@ describe('backmesh cue', () => {
     });
     expect(signIns).toBe(1);
     expect(readFileSync(join(dir, '.token'), 'utf8')).toBe('ghu_alice\n');
-    expect(relay.calls).toEqual([]);
+    // The new sign-in is traded for a cue credential at once; no cue.
+    expect(relay.calls).toEqual(['POST api.backmesh.test/v1/cue/sign-in']);
     // `--sign-in --in N` keeps sending the cue, as before.
     expect((await cue({ signIn: true, inS: 120 }, deps)).outcome).toBe('sent');
     expect(signIns).toBe(2);
@@ -651,7 +652,7 @@ describe('backmesh cue', () => {
     writeFileSync(join(dir, '.token'), 'ghu_revoked\n');
     const revoked = {
       outcome: 'not signed in',
-      message: `The saved GitHub sign-in expired or was revoked. Run \`backmesh cue --sign-in\` to sign in again. Nothing was sent.`,
+      message: `The saved cue credential expired or was revoked. Run \`backmesh cue --sign-in\` to sign in again. Nothing was sent.`,
     };
     expect(await cue({ inS: 120, signIn: false }, deps)).toEqual(revoked);
     // The file stays for --sign-in to replace, and the push isn't blocked.
@@ -879,6 +880,7 @@ describe('backmesh cue', () => {
     expect(code).toBe(0);
     expect(out.join('')).toBe('Signed in. Nothing was sent.\n');
     expect(signIns).toBe(1);
-    expect(relay.calls).toEqual([]);
+    // The new sign-in is traded for a cue credential at once; no cue.
+    expect(relay.calls).toEqual(['POST api.backmesh.test/v1/cue/sign-in']);
   });
 });

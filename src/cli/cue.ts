@@ -25,7 +25,6 @@ import {
   type PublicKey,
 } from '../cue/seal.js';
 import { API_URL_ENV } from './worker.js';
-import { refusedSignIn } from './github-sign-in.js';
 
 export const CUE_TIMEOUT_MS = 3_000;
 
@@ -204,8 +203,9 @@ const credentialSchema = z.object({
   credential: z.string().regex(/^bmc_[0-9a-f]{64}$/),
 });
 
-// The credential for `token`, a fresh App sign-in, or undefined when the
-// relay refuses that sign-in.
+// The credential for `token`, a fresh App sign-in; undefined when the relay
+// refuses that sign-in, 'no org' when it reaches none of the App's
+// installations.
 async function trade(
   deps: CueDeps,
   base: string,
@@ -217,10 +217,13 @@ async function trade(
     headers: { Authorization: `Bearer ${token}` },
     signal,
   });
-  if (res.status === 401 || res.status === 403) return undefined;
+  if (res.status === 401) return undefined;
+  if (res.status === 403) return 'no org';
   if (!res.ok) throw new Error(`backmesh.com answered ${res.status}`);
   return credentialSchema.parse(await res.json()).credential;
 }
+const NO_ORG =
+  "Your GitHub sign-in reaches none of the orgs backmesh's GitHub App is on, so there's no org to cue. Nothing was sent.";
 
 export async function cue(
   opts: CueOptions,
@@ -232,10 +235,22 @@ export async function cue(
   const given = deps.env.BACKMESH_CUE_TOKEN?.trim() || undefined;
   const base = deps.env[API_URL_ENV] ?? 'https://api.backmesh.com';
   const credentialPath = anycloudPath(deps.env, CREDENTIAL);
-  // A new sign-in is traded for a new credential at the next cue.
+  // The saved sign-in traded for a credential, saved; the relay's answer
+  // otherwise.
+  const tradeSaved = async (signal: AbortSignal) => {
+    const signedIn = await readSaved(anycloudPath(deps.env, '.token'));
+    const traded = signedIn
+      ? await trade(deps, base, signedIn, signal)
+      : undefined;
+    if (traded && traded !== 'no org') await save(credentialPath, traded);
+    return traded;
+  };
+  // A new sign-in is traded for a new credential at once, which revokes the
+  // earlier ones; one that can't be traded now is at the next cue.
   const signIn = async () => {
     await deps.signIn();
     await rm(credentialPath, { force: true });
+    await tradeSaved(AbortSignal.timeout(30_000)).catch(() => undefined);
   };
   if (opts.signIn && given) {
     return done(
@@ -280,27 +295,15 @@ export async function cue(
   const { signal } = timeout;
   try {
     // A sandbox's agent can't finish a sign-in, so a human gives it a cue
-    // credential (or a sign-in) in BACKMESH_CUE_TOKEN; nothing is saved
-    // from it. Otherwise the saved credential, else the saved sign-in
-    // traded for one.
-    const tradeSaved = async () => {
-      const signedIn = await readSaved(anycloudPath(deps.env, '.token'));
-      const traded = signedIn && (await trade(deps, base, signedIn, signal));
-      if (traded) await save(credentialPath, traded);
-      return traded || undefined;
-    };
+    // credential (or a sign-in) in BACKMESH_CUE_TOKEN, sent as it is.
+    // Otherwise the saved credential, else the saved sign-in traded for one.
     const fromFile = !given && (await readSaved(credentialPath));
-    const token = given?.startsWith('bmc_')
-      ? given
-      : given
-        ? await trade(deps, base, given, signal)
-        : fromFile || (await tradeSaved());
+    const token = given ?? (fromFile || (await tradeSaved(signal)));
+    if (token === 'no org') return done('refused', NO_ORG);
     if (!token) {
       return done(
         'not signed in',
-        given
-          ? 'backmesh.com refused BACKMESH_CUE_TOKEN; replace it with a current backmesh cue credential. Nothing was sent.'
-          : 'Not signed in; run `backmesh cue --sign-in` once, or set BACKMESH_CUE_TOKEN where no one can sign in. Nothing was sent.',
+        'Not signed in; run `backmesh cue --sign-in` once, or set BACKMESH_CUE_TOKEN where no one can sign in. Nothing was sent.',
       );
     }
     const { repo, branch } = await target(opts, deps.git, signal);
@@ -346,13 +349,17 @@ export async function cue(
         signal,
         opts,
       });
-    const result = await sent(token);
-    // A saved credential the relay refuses (expired) is traded again from
-    // the saved sign-in, once.
-    if (result.outcome !== 'not signed in' || !fromFile) return result;
+    const { status, ...result } = await sent(token);
+    // A saved credential the relay refuses (expired or revoked), or that
+    // doesn't reach the org (traded before the org's App was on it), is
+    // traded again from the saved sign-in, once.
+    if (!fromFile || (status !== 401 && status !== 403)) return result;
     await rm(credentialPath, { force: true });
-    const fresh = await tradeSaved();
-    return fresh ? await sent(fresh) : result;
+    const fresh = await tradeSaved(signal);
+    if (fresh === 'no org') return done('refused', NO_ORG);
+    if (!fresh) return result;
+    const { status: _, ...again } = await sent(fresh);
+    return again;
   } catch (error) {
     const why = signal.aborted
       ? `no answer in ${CUE_TIMEOUT_MS / 1000} s`
@@ -378,7 +385,7 @@ async function send(c: {
   given: boolean;
   signal: AbortSignal;
   opts: CueOptions;
-}) {
+}): Promise<{ outcome: CueOutcome; message: string; status?: number }> {
   const { deps, base, org, repo, branch, signal } = c;
   const auth = { Authorization: `Bearer ${c.token}` };
   const tokenHash = createHash('sha256').update(c.token).digest('hex');
@@ -392,15 +399,15 @@ async function send(c: {
       return {
         outcome: 'not signed in' as const,
         message: c.given
-          ? 'GitHub refused BACKMESH_CUE_TOKEN; replace it with a current backmesh sign-in. Nothing was sent.'
-          : refusedSignIn(
-              'Run `backmesh cue --sign-in` to sign in again. Nothing was sent.',
-            ),
+          ? 'backmesh.com refused BACKMESH_CUE_TOKEN; replace it with a current backmesh cue credential. Nothing was sent.'
+          : 'The saved cue credential expired or was revoked. Run `backmesh cue --sign-in` to sign in again. Nothing was sent.',
+        status,
       };
     }
     return {
       outcome: 'refused' as const,
       message: `backmesh.com refused the cue (${error ?? status}).`,
+      status,
     };
   };
 

@@ -118,11 +118,12 @@ as it would without one.
 
 **Can a coding agent in a sandbox cue backmesh?** Yes, with a copied cue
 credential. A sandbox that starts fresh each time can't keep a sign-in. On a
-machine where backmesh is signed in, run `backmesh cue --sign-in` and then a
-cue once; then copy `~/.backmesh/anycloud/backmesh-cue-credential` into the
-sandbox's secrets as `BACKMESH_CUE_TOKEN`, which `backmesh cue` uses first. It
-works only for cues, for the orgs whose backmesh App your sign-in reached,
-for 30 days; keep it secret, and copy a new one when it expires.
+machine, run `backmesh cue --sign-in`, then copy
+`~/.backmesh/anycloud/backmesh-cue-credential` into the sandbox's secrets as
+`BACKMESH_CUE_TOKEN`, which `backmesh cue` uses first. It works only for cues,
+for the orgs whose backmesh App your sign-in reached, for 30 days; keep it
+secret, and copy a new one when it expires. Running `backmesh cue --sign-in`
+again revokes it, and so do `rotate-key` and `uninstall` for their org.
 
 ## Is it safe?
 

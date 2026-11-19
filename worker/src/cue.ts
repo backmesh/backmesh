@@ -109,6 +109,10 @@ async function credential(request: Request, env: Env) {
   }
   const issued = `bmc_${randomHex()}${randomHex()}`;
   const expires = Date.now() + CREDENTIAL_TTL;
+  // A new trade revokes the user's earlier credentials, copies included.
+  await env.DB.prepare('DELETE FROM cue_credentials WHERE user_id = ?')
+    .bind(who.id)
+    .run();
   await env.DB.prepare(
     'INSERT INTO cue_credentials (hash, user_id, login, orgs, expires_at) VALUES (?, ?, ?, ?, ?)',
   )
@@ -127,8 +131,10 @@ async function credential(request: Request, env: Env) {
   });
 }
 
-// The cue credential's user in the org, asking GitHub nothing.
+// The cue credential's user in the org, asking GitHub nothing. 'expired'
+// for a malformed, unknown or expired one.
 async function credentialMember(env: Env, issued: string, org: string) {
+  if (!/^bmc_[0-9a-f]{64}$/.test(issued)) return 'expired';
   const row = await env.DB.prepare(
     'SELECT user_id, login, orgs, expires_at FROM cue_credentials WHERE hash = ?',
   )
@@ -170,7 +176,12 @@ export async function cueMember(
 
 // Each GitHub check counts against the client IP's sign-in limit, so a
 // flood of made-up tokens can't pass through to GitHub.
-async function signIn(request: Request, env: Env, org: unknown) {
+async function signIn(
+  request: Request,
+  env: Env,
+  org: unknown,
+  refused: (response: Response) => Promise<Response>,
+) {
   const { origin } = new URL(request.url);
   const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
   const admit = async () => (await env.SIGNIN_LIMIT.limit({ key: ip })).success;
@@ -183,8 +194,10 @@ async function signIn(request: Request, env: Env, org: unknown) {
   }
   // A cue credential asks GitHub nothing; an App sign-in still works.
   if (token.startsWith('bmc_')) {
+    // A refused credential counts against the client IP, as a refused
+    // install key does.
     const member = await credentialMember(env, token, org);
-    if (member === 'expired') return credentialExpired();
+    if (member === 'expired') return refused(credentialExpired());
     const error = `None of ${org}'s repositories that backmesh's GitHub App is on is open to you.`;
     return member ?? json({ error }, 403);
   }
@@ -246,7 +259,7 @@ export async function cue(
     return credential(request, env);
   }
   if (pathname === '/v1/cue/keys' && request.method === 'GET') {
-    const member = await signIn(request, env, searchParams.get('org'));
+    const member = await signIn(request, env, searchParams.get('org'), refused);
     if (member instanceof Response) return member;
     const res = await relay(env, member.org_id, '/keys', {});
     const { keys } = (await res.json()) as { keys: unknown };
@@ -261,7 +274,7 @@ export async function cue(
     } catch {
       return json({ error: 'Malformed cue.' }, 400);
     }
-    const member = await signIn(request, env, body?.org);
+    const member = await signIn(request, env, body?.org, refused);
     if (member instanceof Response) return member;
     const user = JSON.stringify({ id: member.id, login: member.login });
     return relay(env, member.org_id, '/cue', { 'x-user': user }, text);

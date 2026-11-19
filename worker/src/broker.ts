@@ -13,6 +13,7 @@ import {
 } from './app.js';
 import type { Env } from './index.js';
 import {
+  forgetCueCredentials,
   keyInstall,
   notRunnersAdmin,
   runnersAdmin,
@@ -247,6 +248,7 @@ export async function cleanup(request: Request, env: Env) {
         .bind(install)
         .run();
     }
+    await forgetCueCredentials(env, admin.id);
     await record('app_not_installed', admin.id, install ? { install } : {});
     return Response.json({
       token: null,
@@ -344,6 +346,8 @@ export async function cleanupFinish(request: Request, env: Env) {
       .bind(org)
       .run();
   }
+  // Cues end with the install, the App kept or not.
+  await forgetCueCredentials(env, org);
   await env.DB.prepare('UPDATE cleanups SET finished = 1 WHERE id = ?')
     .bind(await sha256(cleanup.id))
     .run();

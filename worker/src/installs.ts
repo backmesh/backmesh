@@ -200,6 +200,16 @@ export function notRunnersAdmin(
   return Response.json({ error }, { status: 403 });
 }
 
+// Revokes every cue credential (`cue.ts`) bound to the org: rotate-key and
+// uninstall end them with the install.
+export const forgetCueCredentials = (env: Env, org: number) =>
+  env.DB.prepare(
+    `DELETE FROM cue_credentials WHERE hash IN (SELECT c.hash FROM
+     cue_credentials c, json_each(c.orgs) o WHERE json_extract(o.value, '$.id') = ?)`,
+  )
+    .bind(org)
+    .run();
+
 // The login finds the org's App installation (app.ts).
 export const rememberLogin = (env: Env, id: number, login: string) =>
   env.DB.prepare(
@@ -327,5 +337,6 @@ export async function revokeInstall(
   await env.DB.prepare('UPDATE installs SET revoked = 1 WHERE id = ?')
     .bind(install)
     .run();
+  await forgetCueCredentials(env, bearer.org);
   return Response.json({ revoked: true });
 }
