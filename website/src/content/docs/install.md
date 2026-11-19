@@ -117,6 +117,21 @@ such as sponsorships, can't. If it can't, the plan names each refused size and
 puts them in the first of backmesh's [Azure regions](/azure/#regions) that
 offers every one. [More](/azure/#the-control-planes-region).
 
+### A control plane that already exists
+
+The control plane is named `backmesh`, and the plan looks for one by that name
+before any sign-in: in the AWS account's region, or anywhere in the Azure
+subscription or GCP project. One this machine doesn't use may be another
+installation's, so the plan stops and names its ID. If it isn't yours, pass
+`--control-plane aws:<another region>` to create a separate one on AWS, or use
+another subscription or project on Azure or GCP. If it's yours, such as one you
+installed from another machine or an install that stopped partway, pass
+`--control-plane-id <id>` to resume it:
+
+```sh
+backmesh install --org acme --control-plane aws:us-east-1 --control-plane-id backmesh-1763553600000-x7k2p9
+```
+
 ## Regions
 
 Each runner cloud's regions are fixed, not something you choose: every US

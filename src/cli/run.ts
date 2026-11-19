@@ -281,6 +281,10 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       "where backmesh's always-on VMs run, such as aws:us-east-1; without it, the signed-in cloud CLI's cloud in US East",
     )
     .option(
+      '--control-plane-id <id>',
+      "resume your control plane named backmesh that this machine doesn't use, such as one another machine made",
+    )
+    .option(
       '--runners <cloud>',
       "a cloud the runners use (repeatable), such as aws; a cloud only, since backmesh's runner regions are fixed. Without it, the control plane's cloud",
       (value: string, previous: string[]) => [...previous, value],
@@ -315,6 +319,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
         cacheCap?: number;
         publicRepos?: boolean;
         controlPlane?: string;
+        controlPlaneId?: string;
         runners: string[];
         plan?: boolean;
         planId?: string;
@@ -330,6 +335,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
           {
             org,
             controlPlane: opts.controlPlane,
+            controlPlaneId: opts.controlPlaneId,
             runners: opts.runners,
             yes: opts.yes ?? false,
             plan: opts.plan,
@@ -346,6 +352,9 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
           const again = [
             `--org ${org}`,
             `--control-plane ${controlPlane.cloud}:${controlPlane.region}`,
+            ...(opts.controlPlaneId
+              ? [`--control-plane-id ${opts.controlPlaneId}`]
+              : []),
             ...runners.map((r) => `--runners ${r.cloud}`),
             ...(opts.publicRepos === undefined
               ? []

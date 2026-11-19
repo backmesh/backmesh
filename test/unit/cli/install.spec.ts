@@ -127,11 +127,18 @@ function setUp(
     cacheBuckets,
     restricted = {},
     groups = [],
+    stacks = [],
+    serviceAccounts = [],
   }: {
     // The Azure sizes this subscription may not create, by region (`skus`).
     restricted?: Record<string, string[]>;
     // The resource groups of Azure control planes named `backmesh`.
     groups?: { id: string; location: string }[];
+    // The tags of the account's `anycloud-` CloudFormation stacks in the
+    // region asked.
+    stacks?: { Key: string; Value: string }[][];
+    // The project's `anycloud-` service accounts' descriptions.
+    serviceAccounts?: { description?: string }[];
     // bm-aws's cache buckets, when a previous install made them: the
     // connection an installation before 0.4.1 named, which `RUNNERS` records.
     cacheBuckets?: string[];
@@ -276,6 +283,12 @@ function setUp(
       }
       if (args.slice(0, 3).join(' ') === 'az group list') {
         return JSON.stringify(groups);
+      }
+      if (args.slice(0, 3).join(' ') === 'aws cloudformation describe-stacks') {
+        return JSON.stringify(stacks);
+      }
+      if (args.slice(0, 3).join(' ') === 'gcloud iam service-accounts') {
+        return JSON.stringify(serviceAccounts);
       }
       if (args[0] === 'az' && args[2] === 'list-skus') {
         return skus(restricted, args[args.indexOf('--location') + 1]!);
@@ -744,7 +757,7 @@ describe('install', () => {
       );
     };
     await expect(install(asked, deps)).rejects.toThrow(
-      'cluster create failed: arn:aws:iam::123456789012:user/ops lacks ec2:RunInstances (CLOUD_RIGHTS_MISSING)',
+      /^cluster create failed: arn:aws:iam::123456789012:user\/ops lacks ec2:RunInstances \(CLOUD_RIGHTS_MISSING\)$/,
     );
     expect(calls.at(-1)).toMatch(/^cluster create backmesh /);
   });
@@ -2814,7 +2827,7 @@ describe("install's always-on VM sizes on Azure", () => {
     ]);
   });
 
-  it('resumes a control plane named backmesh where it exists', async () => {
+  it('resumes a control plane named backmesh that --control-plane-id names, where it exists', async () => {
     const { deps, calls, commands, lines } = azure(
       {},
       {
@@ -2823,7 +2836,10 @@ describe("install's always-on VM sizes on Azure", () => {
         ],
       },
     );
-    const { plan, run } = await planned(eastus, deps);
+    const { plan, run } = await planned(
+      { ...eastus, controlPlaneId: 'backmesh-1763553600000-x7k2p9' },
+      deps,
+    );
     expect(commands).toContain(
       'az group list --tag anycloud_cluster_name=backmesh --query [].{id:tags.anycloud_cluster,location:location} --output json',
     );
@@ -2833,7 +2849,7 @@ describe("install's always-on VM sizes on Azure", () => {
       alwaysOnRegions: ['northcentralus'],
     });
     expect(lines).toContain(
-      'A control plane named backmesh exists in azure northcentralus; install resumes it there.',
+      'Install resumes the control plane backmesh-1763553600000-x7k2p9 in azure northcentralus.',
     );
     await run();
     expect(steps(calls)[0]).toBe(
@@ -2852,7 +2868,7 @@ describe("install's always-on VM sizes on Azure", () => {
       },
     );
     await expect(install({ ...eastus, plan: true }, two.deps)).rejects.toThrow(
-      'This subscription has 2 control planes named backmesh: backmesh-1763553600000-x7k2p9 in northcentralus, backmesh-1763640000000-q4w5e6 in westus.',
+      'This Azure subscription has 2 control planes named backmesh: backmesh-1763553600000-x7k2p9 in northcentralus, backmesh-1763640000000-q4w5e6 in westus.',
     );
     const unread = azure();
     const { command } = unread.deps;
@@ -2865,7 +2881,7 @@ describe("install's always-on VM sizes on Azure", () => {
     await expect(
       install({ ...eastus, plan: true }, unread.deps),
     ).rejects.toThrow(
-      "az couldn't list this subscription's resource groups, so install can't tell whether a control plane named backmesh exists.",
+      "azure couldn't list this Azure subscription's control planes, so install can't tell whether one named backmesh exists.",
     );
     expect([...two.worker.calls, ...unread.worker.calls]).toEqual([]);
   });
@@ -2877,9 +2893,14 @@ describe("install's always-on VM sizes on Azure", () => {
         groups: [{ id: 'backmesh-1763553600000-x7k2p9', location: 'eastus' }],
       },
     );
-    const error = (await install({ ...eastus, plan: true }, deps).catch(
-      (e: unknown) => e,
-    )) as Error;
+    const error = (await install(
+      {
+        ...eastus,
+        controlPlaneId: 'backmesh-1763553600000-x7k2p9',
+        plan: true,
+      },
+      deps,
+    ).catch((e: unknown) => e)) as Error;
     expect(error.message).toMatch(
       /No Azure region install tries \(eastus\) .* Delete the control plane named backmesh in eastus, or use another subscription\.$/,
     );
@@ -2967,5 +2988,129 @@ describe("install's always-on VM sizes on Azure", () => {
     expect(steps(calls)).toEqual([
       'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --sign-in-apps 5622376 --json',
     ]);
+  });
+});
+
+describe("a control plane named backmesh that this machine doesn't use", () => {
+  const ID = 'backmesh-1763553600000-x7k2p9';
+  const stack = (id: string, name = 'backmesh') => [
+    { Key: 'anycloud_cluster', Value: id },
+    { Key: 'anycloud_cluster_name', Value: name },
+  ];
+  const refused = async (
+    opts: InstallOptions,
+    more: Parameters<typeof setUp>[0],
+    binary: Record<string, string> = {},
+  ) => {
+    const { deps, worker, calls } = setUp({ tty: false, ...more }, binary);
+    const error = (await install({ ...opts, plan: true }, deps).catch(
+      (e: unknown) => e,
+    )) as Error;
+    // Before any sign-in, and before anything is created.
+    expect(worker.calls).toEqual([]);
+    expect(calls.some((c) => c.startsWith('cluster create'))).toBe(false);
+    expect(error).toBeInstanceOf(UsageError);
+    return error.message;
+  };
+
+  it("refuses AWS's in the region, naming it and both ways forward", async () => {
+    const { deps, commands } = setUp({ tty: false });
+    await install({ ...options, plan: true }, deps);
+    expect(commands).toContain(
+      "aws cloudformation describe-stacks --region us-east-2 --query Stacks[?starts_with(StackName,'anycloud-')].Tags --output json",
+    );
+    expect(
+      await refused(options, {
+        stacks: [stack('other-1', 'prod'), stack(ID)],
+      }),
+    ).toBe(
+      `A control plane named backmesh already exists in this AWS account's us-east-2: ${ID}. This machine doesn't use it, so it may be another installation's. If it isn't yours, pass --control-plane aws:<another region> to create a separate one. If it's yours, such as from another machine or an install that stopped, pass --control-plane-id ${ID} to resume it.`,
+    );
+  });
+
+  it("refuses Azure's in the subscription and GCP's in the project, naming another subscription or project", async () => {
+    const azure = await refused(
+      { ...options, controlPlane: 'azure:eastus' },
+      { groups: [{ id: ID, location: 'westus' }] },
+      { 'vm-types azure eastus': JSON.stringify(CATALOG.azure) },
+    );
+    expect(azure).toContain(
+      `already exists in this Azure subscription: ${ID} in westus.`,
+    );
+    expect(azure).toContain(
+      "If it isn't yours, use another subscription to create a separate one, as backmesh names one control plane per subscription.",
+    );
+    const gcp = await refused(
+      { ...options, controlPlane: 'gcp:us-east4' },
+      {
+        serviceAccounts: [
+          { description: 'anycloud_cluster=c9 anycloud_cluster_name=prod' },
+          {
+            description: `anycloud_cluster=${ID} anycloud_cluster_name=backmesh anycloud_bucket=${ID}`,
+          },
+        ],
+      },
+      { 'vm-types gcp us-east4': JSON.stringify(CATALOG.gcp) },
+    );
+    expect(gcp).toContain(`already exists in this GCP project: ${ID}.`);
+    expect(gcp).toContain(`pass --control-plane-id ${ID} to resume it.`);
+  });
+
+  it("resumes the one --control-plane-id names, and refuses an ID it didn't find", async () => {
+    const { deps, calls, lines } = setUp({
+      env: OVERRIDE,
+      stacks: [stack(ID)],
+    });
+    await install({ ...options, controlPlaneId: ID }, deps);
+    expect(lines).toContain(`Install resumes the control plane ${ID}.`);
+    expect(calls).toContainEqual(
+      expect.stringMatching(
+        /^cluster create backmesh --cloud aws --region us-east-2 /,
+      ),
+    );
+    expect(
+      await refused(
+        { ...options, controlPlaneId: 'backmesh-2' },
+        {
+          stacks: [stack(ID)],
+        },
+      ),
+    ).toBe(
+      `--control-plane-id backmesh-2: this AWS account's us-east-2 has ${ID} named backmesh, not that one.`,
+    );
+    expect(
+      await refused({ ...options, controlPlaneId: 'backmesh-2' }, {}),
+    ).toBe(
+      "--control-plane-id backmesh-2: this AWS account's us-east-2 has no control plane named backmesh, not that one.",
+    );
+  });
+
+  it('resumes the one this machine targets with no flag', async () => {
+    const { deps, calls } = setUp({
+      env: OVERRIDE,
+      hosted: true,
+      stacks: [stack('c1')],
+    });
+    await install(options, deps);
+    expect(calls).toContainEqual(
+      expect.stringMatching(/^cluster create backmesh /),
+    );
+  });
+
+  it('names --control-plane-id in a failed cluster create that started one', async () => {
+    const { deps } = setUp({ env: OVERRIDE });
+    const { runLong } = deps;
+    deps.runLong = async (args, env) => {
+      if (args[1] !== 'create') return runLong(args, env);
+      throw new StepFailed(
+        args,
+        '{"error":{"code":"API_NOT_READY","message":"The API did not answer within 25 minutes"}}\n',
+        `   [12:00:01 PM] Creating cluster backmesh (ID: ${ID})\n`,
+        { cause: new Error('exit 1') },
+      );
+    };
+    await expect(install(options, deps)).rejects.toThrow(
+      `(API_NOT_READY)\nTo resume it, run install again with --control-plane-id ${ID}.`,
+    );
   });
 });
