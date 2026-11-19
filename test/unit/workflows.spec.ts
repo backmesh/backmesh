@@ -375,7 +375,7 @@ describe("e2e.yml's Worker and Azure checks", () => {
         'AZURE_TENANT_ID',
         'AZURE_SUBSCRIPTION_ID',
         'AWS_ROLE_ARN',
-        'E2E_TEST_ORG_DISPATCH_TOKEN',
+        'E2E_TEST_ORG_DEPLOY_KEY',
       ]),
     );
     // Each cloud's secrets only in its own leg.
@@ -399,6 +399,90 @@ describe("e2e.yml's Worker and Azure checks", () => {
     only('aws', /secrets\.AWS_/);
     expect(job.env!.AZURE_SUBSCRIPTION_ID).toBe(
       "${{ matrix.cloud == 'azure' && secrets.AZURE_SUBSCRIPTION_ID || '' }}",
+    );
+  });
+});
+
+// The test org's runners take jobs only from its own repositories: e2e.yml
+// pushes run.json to a run/<nonce> branch of its e2e repository with a
+// write deploy key, whose push starts labels.yml there (a copy of it is
+// test/e2e/test-org/labels.yml), and reads back the result.json that
+// labels.yml pushes to the same branch.
+describe("the test org's label run", () => {
+  const e2e = read('e2e.yml');
+  const labels = () =>
+    load(readFileSync('test/e2e/test-org/labels.yml', 'utf8')) as Workflow;
+
+  it('is started by a deploy-key push, with no dispatch token', () => {
+    expect(readFileSync(`${DIR}/e2e.yml`, 'utf8')).not.toContain(
+      'DISPATCH_TOKEN',
+    );
+    const step = e2e.jobs['test-org']!.steps!.find(
+      (s) => s.name === "The label member on the test org's runners",
+    )!;
+    expect(step.env!.DEPLOY_KEY).toBe('${{ secrets.E2E_TEST_ORG_DEPLOY_KEY }}');
+    expect(step.run).toMatch(
+      /GIT_SSH_COMMAND="ssh -i \$key -o IdentitiesOnly=yes" node test\/e2e\/run-test-org-labels\.ts/,
+    );
+  });
+
+  it("runs on a push to run/** only, and calls e2e-labels.yml with run.json's matrix and ref", () => {
+    expect(labels().on).toEqual({ push: { branches: ['run/**'] } });
+    expect(labels().permissions).toEqual({});
+    const dir = mkdtempSync(join(tmpdir(), 'run-'));
+    const matrix = { include: [{ label: 'backmesh-4', cloud: 'azure' }] };
+    writeFileSync(
+      join(dir, 'run.json'),
+      JSON.stringify({ matrix, ref: 'a'.repeat(40), nonce: 'n1' }, null, 2),
+    );
+    const out = join(dir, 'output');
+    writeFileSync(out, '');
+    const step = labels().jobs.read!.steps!.find((s) => s.id === 'run')!;
+    expect(
+      runStep(`cd ${dir}\n${step.run!}`, { env: { GITHUB_OUTPUT: out } })
+        .status,
+    ).toBe(0);
+    expect(readFileSync(out, 'utf8')).toBe(
+      `matrix=${JSON.stringify(matrix)}\nref=${'a'.repeat(40)}\n`,
+    );
+    expect(labels().jobs.read!.outputs).toEqual({
+      matrix: '${{ steps.run.outputs.matrix }}',
+      ref: '${{ steps.run.outputs.ref }}',
+    });
+    expect(labels().jobs.labels).toMatchObject({
+      needs: 'read',
+      uses: 'backmesh/backmesh/.github/workflows/e2e-labels.yml@main',
+      with: {
+        matrix: '${{ needs.read.outputs.matrix }}',
+        ref: '${{ needs.read.outputs.ref }}',
+      },
+    });
+  });
+
+  it('pushes result.json to the same branch whatever the label jobs did', () => {
+    const job = labels().jobs.result!;
+    expect(job.if).toBe('${{ always() }}');
+    expect(job.needs).toEqual(['read', 'labels']);
+    expect(job.permissions).toEqual({ contents: 'write' });
+    const step = job.steps!.find((s) => s.run?.includes('result.json'))!;
+    expect(step.env).toMatchObject({
+      CONCLUSION: '${{ needs.labels.result }}',
+    });
+    const dir = mkdtempSync(join(tmpdir(), 'result-'));
+    const out = runStep(`cd ${dir}\n${step.run!}`, {
+      env: {
+        CONCLUSION: 'failure',
+        URL: 'https://github.com/backmesh-dryrun/e2e/actions/runs/7',
+      },
+      commands: { git: `echo "$*" >>${dir}/git.log` },
+    });
+    expect(out.status).toBe(0);
+    expect(JSON.parse(readFileSync(join(dir, 'result.json'), 'utf8'))).toEqual({
+      conclusion: 'failure',
+      url: 'https://github.com/backmesh-dryrun/e2e/actions/runs/7',
+    });
+    expect(readFileSync(join(dir, 'git.log'), 'utf8')).toMatch(
+      /add result\.json\n(.*\n)*commit .*\n(.*\n)*push\n?$/,
     );
   });
 });
