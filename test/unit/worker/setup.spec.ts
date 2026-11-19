@@ -138,11 +138,11 @@ describe('Worker setup', () => {
   });
 
   it("deploys a new Worker again when wrangler's first deploy can't read it back", async () => {
-    const w = world(undefined, 'backmesh-staging');
+    const w = world([], 'backmesh-staging');
     w.cf.failedDeploys = 1;
     await w.run(true, ENV, true);
     expect(w.deploys).toHaveLength(2);
-    expect(w.log).toContain("The Worker's cron triggers: 17 3 * * *.");
+    expect(w.log).toContain("The Worker's cron triggers: none.");
 
     // A second failure is real, and stops the setup.
     const again = world();
@@ -152,13 +152,20 @@ describe('Worker setup', () => {
   });
 
   it('sets up staging apart from production: its own Worker, database and hostname', async () => {
-    const w = world(undefined, 'backmesh-staging');
+    // Staging has no cron: it holds only test orgs' data, and the free
+    // plan's crons are used up.
+    const w = world([], 'backmesh-staging');
+    w.cf.crons = ['17 3 * * *'];
+    await w.run(false, ENV, true);
+    expect(w.log.join('\n')).toContain(
+      'They should be exactly none, as worker/wrangler.jsonc sets them.',
+    );
     await w.run(true, ENV, true);
     expect(w.cf.databases.map((d) => d.name)).toEqual(['backmesh-staging']);
     expect(w.log).toContain(
       "apply backmesh-staging's migrations and deploy the Worker on https://api-staging.backmesh.com",
     );
-    expect(w.log).toContain("The Worker's cron triggers: 17 3 * * *.");
+    expect(w.log).toContain("The Worker's cron triggers: none.");
     // Every write but the database's creation is wrangler.jsonc's staging
     // environment, whose database ID the setup fills in.
     for (const args of w.calls.filter((a) => a[1] !== 'create')) {
