@@ -395,7 +395,7 @@ function setUp({
   const deps: UpgradeDeps = {
     // No saved anycloud files, whatever this machine holds.
     env: { BACKMESH_ANYCLOUD_DIR: mkdtempSync(join(tmpdir(), 'backmesh-')) },
-    signInLogin: async () => 'octocat',
+    signInCheck: async () => ({ login: 'octocat', appIds: [] }),
     run,
     runLong: run,
     release: async () => RELEASE,
@@ -471,10 +471,10 @@ describe('upgrade', () => {
     // anycloud's login relays a device code until backmesh has signed in.
     const dir = deps.env.BACKMESH_ANYCLOUD_DIR!;
     writeFileSync(join(dir, '.token'), 'ghu_revoked\n');
-    deps.signInLogin = async (token) => {
+    deps.signInCheck = async (token) => {
       if (token === 'ghu_revoked')
         throw new GitHubError(401, 'Bad credentials');
-      return 'octocat';
+      return { login: 'octocat', appIds: [] };
     };
     const run = deps.run;
     const logins: string[] = [];
@@ -503,7 +503,7 @@ describe('upgrade', () => {
     const result = await upgrade(deps);
 
     expect(mutations(calls)).toEqual([
-      'api upgrade --github-apps 5622376',
+      'api upgrade --sign-in-apps 5622376',
       'api status --watch --json',
       ROLL,
     ]);
@@ -585,7 +585,7 @@ describe('upgrade', () => {
       'Upgrade cancelled after the control plane updated, with no listener changed; raise the quotas named above, then run `backmesh upgrade` again.',
     );
     expect(mutations(moved.calls)).toContain(
-      'api upgrade --github-apps 5622376',
+      'api upgrade --sign-in-apps 5622376',
     );
     expect(rolledAny(moved.calls)).toBe(false);
   });
@@ -596,7 +596,7 @@ describe('upgrade', () => {
 
     const order = calls.filter((c) => /^(status|api upgrade|roll)/.test(c));
     // An older API reads nothing for this release's client until it moves.
-    expect(order[0]).toBe('api upgrade --github-apps 5622376');
+    expect(order[0]).toBe('api upgrade --sign-in-apps 5622376');
     // Every org is read once before any roll; each roll is then read again.
     expect(order.slice(1)).toEqual([
       `status ${VM.acme}`,
@@ -844,7 +844,7 @@ describe('upgrade', () => {
     it('asks nothing when only the release moves', async () => {
       const { deps, calls } = setUp();
       await upgrade(deps);
-      expect(mutations(calls)).toContain('api upgrade --github-apps 5622376');
+      expect(mutations(calls)).toContain('api upgrade --sign-in-apps 5622376');
     });
   });
 
@@ -1346,7 +1346,7 @@ describe('upgrade', () => {
       const { deps, calls } = setUp();
       await upgrade(deps);
       expect(
-        calls.findIndex((c) => c === 'api upgrade --github-apps 5622376'),
+        calls.findIndex((c) => c === 'api upgrade --sign-in-apps 5622376'),
       ).toBeLessThan(calls.findIndex((c) => c.startsWith('status')));
       expect(mutations(calls)).toContain(ROLL);
     });
@@ -1400,7 +1400,7 @@ describe('upgrade', () => {
         'Upgrade cancelled after the control plane updated, with no listener changed',
       );
       expect(mutations(calls)).toEqual([
-        'api upgrade --github-apps 5622376',
+        'api upgrade --sign-in-apps 5622376',
         'api status --watch --json',
       ]);
 
@@ -1418,7 +1418,7 @@ describe('upgrade', () => {
       };
       again.deps.confirm = async () => true;
       const result = await upgrade(again.deps);
-      expect(again.calls).not.toContain('api upgrade --github-apps 5622376');
+      expect(again.calls).not.toContain('api upgrade --sign-in-apps 5622376');
       expect(result).toMatchObject({ controlPlane: { upgraded: false } });
       expect(mutations(again.calls)).toContain(ROLL);
     });
@@ -1429,7 +1429,7 @@ describe('upgrade', () => {
         `acme's listener didn't start on ${VM.acme}.`,
       );
       expect(mutations(calls)).toEqual([
-        'api upgrade --github-apps 5622376',
+        'api upgrade --sign-in-apps 5622376',
         'api status --watch --json',
         `start ${VM.acme}`,
       ]);
@@ -1443,7 +1443,7 @@ describe('upgrade', () => {
       });
       await expect(upgrade(deps)).rejects.toThrow(NeedsPlan);
       expect(mutations(calls)).toEqual([
-        'api upgrade --github-apps 5622376',
+        'api upgrade --sign-in-apps 5622376',
         'api status --watch --json',
       ]);
     });

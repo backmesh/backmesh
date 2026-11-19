@@ -235,7 +235,7 @@ function fixture({
     run,
     runLong: run,
     print: (line) => lines.push(line),
-    signInLogin: async () => 'octocat',
+    signInCheck: async () => ({ login: 'octocat', appIds: [] }),
     api: () => api,
     exec: () => exec,
     fetch: async (url, init) => {

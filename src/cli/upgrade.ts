@@ -55,7 +55,7 @@ import {
   startListener,
 } from './listener-vm.js';
 import type { Cloud } from '../runners/classes.js';
-import { keyFrom, type SignInLogin } from './github-sign-in.js';
+import { keyFrom, type SignInCheck } from './github-sign-in.js';
 import {
   clusterIdOf,
   CONTROL_POOL,
@@ -99,8 +99,8 @@ export interface UpgradeDeps {
   features?: FeatureTable;
   // The sign-in's polling wait, and a listener's start.
   wait?: (ms: number) => Promise<void>;
-  // The login of a sign-in's user (`signInLogin`).
-  signInLogin?: SignInLogin;
+  // The login of a sign-in's user (`signInCheck`).
+  signInCheck?: SignInCheck;
   // Undefined without a TTY: upgrade never asks there.
   confirm?: (question: string) => Promise<boolean>;
   // The release before the pinned anycloud, the oldest a move starts from.
@@ -455,7 +455,7 @@ export async function upgrade(
       );
       installKey = (
         await keyFrom(org, worker, deps.env, {
-          loginOf: deps.signInLogin,
+          checkOf: deps.signInCheck,
         })
       ).key;
     }
@@ -468,7 +468,7 @@ export async function upgrade(
       installKey = (
         await keyFrom(org, worker, deps.env, {
           install: installKey.slice(4, 36),
-          loginOf: deps.signInLogin,
+          checkOf: deps.signInCheck,
         })
       ).key;
       if (!(await keyAccepted(installKey, worker))) {

@@ -20,7 +20,7 @@ import type { Cloud, CloudTarget } from '../runners/classes.js';
 import type { RunCommand } from '../runners/regions.js';
 import { workerDeps, type WorkerDeps } from './worker.js';
 import { UsageError } from './errors.js';
-import { signInAgain, type SignInLogin } from './github-sign-in.js';
+import { signInAgain, type SignInCheck } from './github-sign-in.js';
 
 /** What both commands need of the pinned anycloud. */
 const PINNED: Feature[] = [
@@ -165,7 +165,7 @@ export async function hostedApi(
     fetch?: typeof globalThis.fetch;
     api?: typeof anycloudApi;
     exec?: typeof anycloudExec;
-    signInLogin?: SignInLogin;
+    signInCheck?: SignInCheck;
   },
   print: (line: string) => void,
 ): Promise<{
@@ -178,7 +178,7 @@ export async function hostedApi(
   const { url, token, refresh } = await apiTarget(
     deps.env,
     deps.run,
-    signInAgain(workerDeps(deps, print), deps.signInLogin),
+    signInAgain(workerDeps(deps, print), deps.signInCheck),
   );
   const client = deps.api ?? anycloudApi;
   return {

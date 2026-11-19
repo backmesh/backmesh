@@ -8,35 +8,41 @@ import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import { anycloudPath, readSaved } from '../anycloud/client.js';
-import { GitHubError, signInLogin } from '../app/github.js';
-import { signIn, signInForKey, type WorkerDeps } from './worker.js';
+import { GitHubError, signInCheck } from '../app/github.js';
+import {
+  GITHUB_APP_ID,
+  signIn,
+  signInForKey,
+  type WorkerDeps,
+} from './worker.js';
 
-/** The login of a sign-in's user (`signInLogin`). */
-export type SignInLogin = (token: string) => Promise<string>;
+/** A sign-in's user, and the Apps it reaches (`signInCheck`). */
+export type SignInCheck = (
+  token: string,
+) => Promise<{ login: string; appIds: number[] }>;
 
 const REJECTED = 'GitHub rejected the sign-in';
 
 // Why the hosted API would refuse `token`, or undefined. It exchanges only
-// a GitHub App's user token (`ghu_`), such as backmesh's sign-in, so any
-// other would fail after `cluster create` has started billing. Which App a
-// `ghu_` token is from isn't checked: GitHub can't say for a user whose orgs
-// don't have the App yet. Another App's token passes here and is refused by
-// the hosted API's allowed-App list (`--github-apps`) at its first request,
-// after `cluster create`.
-async function signInProblem(token: string, loginOf: SignInLogin) {
+// the backmesh App's user token (`ghu_`, its `--sign-in-apps` list), so any
+// other would fail after `cluster create` has started billing. Another
+// App's sign-in reaches only that App's installations; one that reaches
+// none yet can't be told apart, and the hosted API refuses it at its first
+// request.
+async function signInProblem(token: string, checkOf: SignInCheck) {
   if (!token.startsWith('ghu_')) {
     return "The GitHub sign-in isn't backmesh's (a GitHub App sign-in), which the control plane needs";
   }
-  const refused = await loginOf(token).then(
-    () => false,
-    (error: unknown) => {
-      if (error instanceof GitHubError && error.status === 401) return true;
-      throw new Error("Couldn't check the GitHub sign-in with GitHub. Retry.", {
-        cause: error,
-      });
-    },
-  );
-  if (refused) return REJECTED;
+  const who = await checkOf(token).catch((error: unknown) => {
+    if (error instanceof GitHubError && error.status === 401) return REJECTED;
+    throw new Error("Couldn't check the GitHub sign-in with GitHub. Retry.", {
+      cause: error,
+    });
+  });
+  if (typeof who === 'string') return who;
+  if (who.appIds.some((id) => String(id) !== GITHUB_APP_ID)) {
+    return "The GitHub sign-in is another GitHub App's, which the control plane refuses";
+  }
 }
 
 // GitHub answered 401 for the saved sign-in: it expired (the backmesh App's
@@ -51,14 +57,14 @@ export const refusedSignIn = (again: string) =>
 // saved one goes, so backmesh signs in again, and `print` says why.
 export async function checkSignIn(
   env: NodeJS.ProcessEnv,
-  loginOf: SignInLogin,
+  checkOf: SignInCheck,
   print: (line: string) => void = () => undefined,
 ): Promise<{ signedIn: boolean; problems: string[] }> {
   const path = anycloudPath(env, '.token');
   const saved = await readSaved(path);
   const token = saved || env.GITHUB_TOKEN?.trim();
   if (!token) return { signedIn: false, problems: [] };
-  const problem = await signInProblem(token, loginOf);
+  const problem = await signInProblem(token, checkOf);
   if (!problem) return { signedIn: true, problems: [] };
   if (saved) {
     if (problem === REJECTED) {
@@ -71,7 +77,7 @@ export async function checkSignIn(
       );
     }
     await rm(path, { force: true });
-    return checkSignIn(env, loginOf, print);
+    return checkSignIn(env, checkOf, print);
   }
   return {
     signedIn: false,
@@ -87,9 +93,9 @@ export async function checkSignIn(
 export async function saveSignIn(
   env: NodeJS.ProcessEnv,
   token: string,
-  loginOf: SignInLogin = signInLogin,
+  checkOf: SignInCheck = signInCheck,
 ) {
-  const problem = await signInProblem(token, loginOf);
+  const problem = await signInProblem(token, checkOf);
   if (problem) {
     throw new Error(
       `${problem}. Nothing was created; report this to backmesh support.`,
@@ -114,15 +120,15 @@ export async function saveSignIn(
 // `cue --sign-in`. It says so when GitHub answers 401 for the saved one; a
 // working one, or one GitHub couldn't check, is replaced without a word.
 export const signInAgain =
-  (deps: WorkerDeps, loginOf: SignInLogin = signInLogin) =>
+  (deps: WorkerDeps, checkOf: SignInCheck = signInCheck) =>
   async () => {
     const saved = await readSaved(anycloudPath(deps.env, '.token'));
     const problem =
-      saved && (await signInProblem(saved, loginOf).catch(() => undefined));
+      saved && (await signInProblem(saved, checkOf).catch(() => undefined));
     if (problem === REJECTED) {
       deps.print(refusedSignIn('backmesh signs in again.'));
     }
-    await saveSignIn(deps.env, await signIn(deps), loginOf);
+    await saveSignIn(deps.env, await signIn(deps), checkOf);
   };
 
 /**
@@ -140,7 +146,7 @@ export async function keyFrom(
   {
     install,
     why,
-    loginOf,
+    checkOf,
     // `rotate-key`'s own call sets this: caching this machine's own
     // anycloud sign-in is a local convenience, not part of what the key
     // just minted needs to be valid, and that caller has nothing left to
@@ -150,14 +156,14 @@ export async function keyFrom(
   }: {
     install?: string;
     why?: string;
-    loginOf?: SignInLogin;
+    checkOf?: SignInCheck;
     ignoreSaveSignInError?: boolean;
   } = {},
 ): Promise<{ key: string; token: string }> {
   const signed = await signInForKey(org, deps, install, why);
   const saved = await readSaved(anycloudPath(env, '.token'));
   if (!saved && !env.GITHUB_TOKEN?.trim()) {
-    const save = saveSignIn(env, signed.token, loginOf);
+    const save = saveSignIn(env, signed.token, checkOf);
     await (ignoreSaveSignInError ? save.catch(() => undefined) : save);
   }
   return signed;

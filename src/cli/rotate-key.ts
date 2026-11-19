@@ -43,7 +43,7 @@ import {
 } from './worker.js';
 import { rollListener } from './converge.js';
 import { UsageError } from './errors.js';
-import { keyFrom, type SignInLogin } from './github-sign-in.js';
+import { keyFrom, type SignInCheck } from './github-sign-in.js';
 import { z } from 'zod';
 
 import {
@@ -65,7 +65,7 @@ export interface RotateKeyDeps {
   print: (line: string) => void;
   fetch?: typeof globalThis.fetch;
   wait?: (ms: number) => Promise<void>;
-  signInLogin?: SignInLogin;
+  signInCheck?: SignInCheck;
   api?: typeof anycloudApi;
   exec?: typeof anycloudExec;
 }
@@ -209,7 +209,7 @@ export async function rotateKey(
     // keeps working until it's explicitly revoked below.
     const signed = await keyFrom(org, worker, deps.env, {
       why: `as an owner of ${org}, to replace its install key`,
-      loginOf: deps.signInLogin,
+      checkOf: deps.signInCheck,
       ignoreSaveSignInError: true,
     });
     print(`Rolling ${org}'s listener onto the new key.`);
