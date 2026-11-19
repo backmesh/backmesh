@@ -1,0 +1,127 @@
+name: e2e Azure trust
+
+# One-off, for e2e's Azure leg (backmesh/backmesh#33): e2e signs in to our
+# Azure CI subscription (131eed90-…) as ci-install.yml's app does, so
+# - `subject` reads the exact OIDC subject GitHub issues to this repository's
+#   e2e environment;
+# - `trust` adds exactly that one federated credential to ci-install's Azure
+#   app, beside what's there; nothing is copied or removed. Without `apply`
+#   it only prints the credentials and the change. Idempotent;
+# - `seal` seals ci-install's AZURE_CLIENT_ID, AZURE_TENANT_ID and
+#   AZURE_SUBSCRIPTION_ID with the e2e environment's public key (libsodium
+#   sealed box, as GitHub's secrets API expects) and uploads only the
+#   ciphertext, which a maintainer then PUTs as the e2e environment's secrets.
+# Deleted after use.
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: add the federated credential; otherwise only print it
+        type: boolean
+        default: false
+      e2e_key:
+        description: the e2e environment's public key (gh api repos/backmesh/backmesh/environments/e2e/secrets/public-key --jq .key)
+        required: true
+
+permissions: {}
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  subject:
+    runs-on: ubuntu-24.04
+    environment: e2e
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+    outputs:
+      sub: ${{ steps.sub.outputs.sub }}
+    steps:
+      - name: The e2e environment's OIDC subject
+        id: sub
+        run: |
+          token=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)
+          payload=$(cut -d. -f2 <<<"$token" | tr '_-' '/+')
+          while ((${#payload} % 4)); do payload+='='; done
+          sub=$(base64 -d <<<"$payload" | jq -r .sub)
+          [[ $sub =~ ^repo:backmesh(@[0-9]+)?/backmesh(@[0-9]+)?:environment:e2e$ ]] \
+            || { echo "::error::Unexpected subject $sub"; exit 1; }
+          echo "Subject: $sub"
+          echo "sub=$sub" >>"$GITHUB_OUTPUT"
+
+  trust:
+    needs: subject
+    runs-on: ubuntu-24.04
+    environment: ci-install
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+    env:
+      SUB: ${{ needs.subject.outputs.sub }}
+      ISSUER: https://token.actions.githubusercontent.com
+      APPLY: ${{ inputs.apply }}
+    steps:
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: The app's federated credentials
+        env:
+          APP: ${{ secrets.AZURE_CLIENT_ID }}
+        run: |
+          # Our Azure CI subscription and tenant (prefixes: a secret's whole
+          # value is masked in the log).
+          read -r sub tenant < <(az account show --query '[id, tenantId]' -o tsv | paste -sd' ')
+          echo "Subscription ${sub:0:8}…, tenant ${tenant:0:8}…"
+          [[ $sub == 131eed90-* && $tenant == b99251a3-* ]] \
+            || { echo "::error::ci-install's app isn't in our Azure CI subscription 131eed90…, tenant b99251a3…"; exit 1; }
+          az ad app federated-credential list --id "$APP" -o json >creds.json \
+            || { echo "::error::The app can't read its own federated credentials: it needs Microsoft Graph Application.ReadWrite.OwnedBy (and to own the app) or Application.Read.All"; exit 1; }
+          echo "Before:" && jq 'map({name, issuer, subject, audiences})' creds.json
+          if jq -e --arg s "$SUB" --arg i "$ISSUER" 'any(.[]; .subject == $s and .issuer == $i)' creds.json >/dev/null; then
+            echo "The app already trusts $SUB"
+            exit 0
+          fi
+          cred=$(jq -nc --arg s "$SUB" --arg i "$ISSUER" '{name: "backmesh-backmesh-e2e", issuer: $i, subject: $s,
+            audiences: ["api://AzureADTokenExchange"], description: "backmesh/backmesh e2e environment"}')
+          echo "Adds: $cred"
+          [[ $APPLY == true ]] || { echo "Not applied: dispatch with apply"; exit 0; }
+          az ad app federated-credential create --id "$APP" --parameters "$cred" -o none \
+            || { echo "::error::The app can't add a federated credential to itself: it needs Microsoft Graph Application.ReadWrite.OwnedBy (and to own the app) or Application.ReadWrite.All"; exit 1; }
+          echo "Applied; now:"
+          az ad app federated-credential list --id "$APP" -o json | jq 'map({name, issuer, subject, audiences})'
+
+  seal:
+    runs-on: ubuntu-24.04
+    environment: ci-install
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - run: pip install --quiet pynacl==1.5.0
+      - name: Seal
+        env:
+          KEY: ${{ inputs.e2e_key }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          python3 - <<'PY'
+          import base64, json, os
+          from nacl import encoding, public
+          box = public.SealedBox(public.PublicKey(os.environ['KEY'].encode(), encoding.Base64Encoder()))
+          names = ['AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID']
+          missing = [n for n in names if not os.environ.get(n)]
+          if missing:
+              raise SystemExit(f"ci-install lacks {' '.join(missing)}")
+          sealed = {n: base64.b64encode(box.encrypt(os.environ[n].encode())).decode() for n in names}
+          json.dump(sealed, open('sealed-e2e.json', 'w'))
+          print('sealed:', ' '.join(sealed))
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sealed-e2e
+          path: sealed-e2e.json
+          retention-days: 1
