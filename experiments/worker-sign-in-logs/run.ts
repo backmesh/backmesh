@@ -16,8 +16,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SCRIPT = 'backmesh-billing';
-const FROM = Date.parse('2026-11-19T02:05:00Z');
-const TO = Date.parse('2026-11-19T02:15:00Z');
+const FROM = Date.parse('2026-11-19T19:00:00Z');
+const TO = Date.parse('2026-11-19T20:15:00Z');
 const API = 'https://api.cloudflare.com/client/v4';
 const OUT = process.env.SPIKE_OUTPUT_DIR ?? 'spike-evidence';
 const ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID ?? '';
