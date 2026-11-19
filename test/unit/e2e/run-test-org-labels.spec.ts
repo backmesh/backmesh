@@ -1,7 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
 import {
   chmodSync,
-  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -26,19 +25,23 @@ const git = (cwd: string, ...args: string[]) => {
 };
 
 // A bare stand-in for the test org's e2e repository, its default branch
-// holding labels.yml. Its post-receive hook plays labels.yml: it records the
-// tree of each run/* push and, when `answer`, adds result.json on top.
-function testOrgRepo(answer: boolean) {
+// holding `labels` as labels.yml. Its post-receive hook plays labels.yml: it
+// records the tree of each run/* push and, when `answer`, adds result.json on
+// top. With `slowPush`, a run/* push marks `pushing` and takes 2 s.
+function testOrgRepo(
+  answer: boolean,
+  {
+    labels = readFileSync('test/e2e/test-org/labels.yml', 'utf8'),
+    slowPush = false,
+  } = {},
+) {
   const dir = mkdtempSync(join(tmpdir(), 'test-org-repo-'));
   const bare = join(dir, 'e2e.git');
   const seed = join(dir, 'seed');
   git(dir, 'init', '-q', '--bare', '-b', 'main', bare);
   git(dir, 'init', '-q', '-b', 'main', seed);
   mkdirSync(join(seed, '.github/workflows'), { recursive: true });
-  copyFileSync(
-    'test/e2e/test-org/labels.yml',
-    join(seed, '.github/workflows/labels.yml'),
-  );
+  writeFileSync(join(seed, '.github/workflows/labels.yml'), labels);
   git(seed, 'add', '.');
   git(seed, 'commit', '-qm', 'seed');
   git(seed, 'push', '-q', bare, 'main');
@@ -59,13 +62,28 @@ done
 `,
   );
   chmodSync(hook, 0o755);
+  if (slowPush) {
+    const pre = join(bare, 'hooks/pre-receive');
+    writeFileSync(
+      pre,
+      `#!/bin/bash
+while read -r old new ref; do
+  [[ $ref == refs/heads/run/* && $new != 0000000000000000000000000000000000000000 ]] || continue
+  touch ${dir}/pushing
+  sleep 2
+done
+`,
+    );
+    chmodSync(pre, 0o755);
+  }
+  const pushing = () => existsSync(join(dir, 'pushing'));
   const branches = () =>
     git(bare, 'for-each-ref', '--format=%(refname)', 'refs/heads/run/');
   const tree = () =>
     existsSync(join(dir, 'tree'))
       ? readFileSync(join(dir, 'tree'), 'utf8')
       : '';
-  return { bare, branches, tree };
+  return { bare, branches, tree, pushing };
 }
 
 // The script, its remote rewritten to the bare repository.
@@ -113,6 +131,31 @@ describe('run-test-org-labels.ts', () => {
     child.kill('SIGINT');
     const { code } = await done;
     expect(code).not.toBe(0);
+    expect(repo.branches()).toBe('');
+  }, 30_000);
+
+  it('deletes the branch when cancelled during its push, once the push is done', async () => {
+    const repo = testOrgRepo(false, { slowPush: true });
+    const child = start(repo.bare);
+    const done = exit(child);
+    while (!repo.pushing()) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    child.kill('SIGINT');
+    expect((await done).code).not.toBe(0);
+    // Past any push still running on its own.
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    expect(repo.branches()).toBe('');
+  }, 30_000);
+
+  it("fails, pushing nothing, while the test org's labels.yml isn't this repository's copy", async () => {
+    const repo = testOrgRepo(true, { labels: 'name: labels\n' });
+    const { code, out } = await exit(start(repo.bare));
+    expect(code).not.toBe(0);
+    expect(out).toContain(
+      "backmesh-dryrun/e2e's .github/workflows/labels.yml isn't test/e2e/test-org/labels.yml",
+    );
+    expect(repo.tree()).toBe('');
     expect(repo.branches()).toBe('');
   }, 30_000);
 });
