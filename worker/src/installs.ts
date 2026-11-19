@@ -200,6 +200,22 @@ export function notRunnersAdmin(
   return Response.json({ error }, { status: 403 });
 }
 
+// Takes the org off every cue credential (`cue.ts`), and revokes one bound
+// to no other org: rotate-key and uninstall end the org's cues with the
+// install.
+export const forgetCueCredentials = (env: Env, org: number) =>
+  env.DB.batch([
+    env.DB.prepare(
+      `UPDATE cue_credentials SET orgs = (SELECT json_group_array(json(o.value))
+       FROM json_each(cue_credentials.orgs) o WHERE json_extract(o.value, '$.id') != ?1)
+       WHERE EXISTS (SELECT 1 FROM json_each(cue_credentials.orgs) o
+       WHERE json_extract(o.value, '$.id') = ?1)`,
+    ).bind(org),
+    env.DB.prepare(
+      'DELETE FROM cue_credentials WHERE json_array_length(orgs) = 0',
+    ),
+  ]);
+
 // The login finds the org's App installation (app.ts).
 export const rememberLogin = (env: Env, id: number, login: string) =>
   env.DB.prepare(
@@ -327,5 +343,6 @@ export async function revokeInstall(
   await env.DB.prepare('UPDATE installs SET revoked = 1 WHERE id = ?')
     .bind(install)
     .run();
+  await forgetCueCredentials(env, bearer.org);
   return Response.json({ revoked: true });
 }

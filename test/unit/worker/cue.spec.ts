@@ -260,6 +260,157 @@ describe('cueMember', () => {
   });
 });
 
+describe('the cue credential', () => {
+  // A fresh App sign-in, traded once: cue sends no GitHub token after
+  // (owner, 2026-11-19; App user tokens last 8 hours).
+  // `revoke`: an explicit `cue --sign-in`, which revokes the user's other
+  // credentials; a CLI's automatic trade adds one.
+  const trade = (login: string, revoke = false) =>
+    request('/v1/cue/sign-in', {
+      method: 'POST',
+      headers: as(login),
+      body: JSON.stringify({ revoke }),
+    });
+  const withCredential = (credential: string, path = '/v1/cue/keys?org=acme') =>
+    request(path, { headers: { Authorization: `Bearer ${credential}` } });
+
+  it('trades a sign-in for a 30-day credential bound to the orgs it reaches, keeping only its hash', async () => {
+    const res = await trade('alice');
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      credential: string;
+      login: string;
+      expires_at: string;
+    };
+    expect(body).toEqual({
+      credential: expect.stringMatching(/^bmc_[0-9a-f]{64}$/),
+      login: 'alice',
+      expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+    });
+    const stored = JSON.stringify(
+      (await env.DB.prepare('SELECT * FROM cue_credentials').all()).results,
+    );
+    expect(stored).not.toContain(body.credential);
+    expect(stored).not.toContain('token-alice');
+  });
+
+  it('answers the cue routes for its orgs with no GitHub call, until it expires', async () => {
+    const { credential } = (await (await trade('alice')).json()) as {
+      credential: string;
+    };
+    const calls = upstream.calls.length;
+
+    const listed = await withCredential(credential);
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toMatchObject({ org_id: ORG, login: 'alice' });
+    expect(upstream.calls).toHaveLength(calls);
+    // Not an org it didn't reach.
+    expect(
+      (await withCredential(credential, '/v1/cue/keys?org=globex')).status,
+    ).toBe(403);
+    advance(30 * 86_400_000);
+    const expired = await withCredential(credential);
+    expect(expired.status).toBe(401);
+    expect(await expired.json()).toEqual({
+      error: 'Cue sign-in expired; run `backmesh cue --sign-in`.',
+    });
+  });
+
+  it('refuses a sign-in GitHub refuses, and one that reaches no installation', async () => {
+    upstream.revoked.add('mallory');
+    upstream.reaches.set('nora', []);
+
+    expect((await trade('mallory')).status).toBe(401);
+    expect((await trade('nora')).status).toBe(403);
+    expect((await withCredential(`bmc_${'0'.repeat(64)}`)).status).toBe(401);
+  });
+
+  it("revokes the user's other credentials only at an explicit sign-in", async () => {
+    const first = (await (await trade('alice')).json()) as {
+      credential: string;
+    };
+    // Another machine's automatic trade: the first one keeps working.
+    await trade('alice');
+    expect((await withCredential(first.credential)).status).toBe(200);
+    // `backmesh cue --sign-in` revokes it.
+    await trade('alice', true);
+    expect((await withCredential(first.credential)).status).toBe(401);
+  });
+
+  it('revokes at an explicit sign-in even when the trade is refused, and says so', async () => {
+    const first = (await (await trade('alice')).json()) as {
+      credential: string;
+    };
+    upstream.reaches.set('alice', []);
+
+    const refused = await trade('alice', true);
+
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({
+      code: 'no_org',
+      revoked: true,
+    });
+    expect((await withCredential(first.credential)).status).toBe(401);
+  });
+
+  it("keeps a user's newest 10 credentials", async () => {
+    const issued: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      advance(1000);
+      issued.push(
+        ((await (await trade('alice')).json()) as { credential: string })
+          .credential,
+      );
+    }
+
+    expect((await withCredential(issued[0]!)).status).toBe(401);
+    expect((await withCredential(issued[1]!)).status).toBe(401);
+    expect((await withCredential(issued[2]!)).status).toBe(200);
+    expect((await withCredential(issued[11]!)).status).toBe(200);
+  });
+
+  it('tells a sign-in that reaches no org from one SAML SSO holds back', async () => {
+    upstream.reaches.set('nora', []);
+    const none = await trade('nora');
+    expect(none.status).toBe(403);
+    expect(await none.json()).toMatchObject({ code: 'no_org' });
+    upstream.answers.set('/user/installations', () =>
+      Response.json(
+        { message: 'Resource protected by organization SAML enforcement.' },
+        { status: 403, headers: { 'X-GitHub-SSO': 'required; url=x' } },
+      ),
+    );
+    const sso = await trade('alice');
+    expect(sso.status).toBe(403);
+    expect(await sso.json()).toMatchObject({ code: 'sso' });
+  });
+
+  it('checks the format before any lookup, and counts a refused one against the client IP', async () => {
+    env.SIGNIN_LIMIT = limiter(2);
+    const bogus = () => withCredential(`bmc_${'0'.repeat(64)}`);
+
+    expect((await withCredential('bmc_short')).status).toBe(401);
+    expect((await bogus()).status).toBe(401);
+    expect((await bogus()).status).toBe(429);
+  });
+
+  it('lets the daily cron delete expired credentials', async () => {
+    await trade('alice');
+    advance(30 * 86_400_000 + 1);
+
+    await worker.scheduled({ cron: '17 3 * * *' }, env);
+
+    expect(
+      (await env.DB.prepare('SELECT * FROM cue_credentials').all()).results,
+    ).toEqual([]);
+  });
+
+  it('names the signed-in login with the keys', async () => {
+    expect(await keys()).toMatchObject({ org_id: ORG, login: 'alice' });
+  });
+});
+
 describe('sign-ins', () => {
   it("names the org's SAML SSO when GitHub asks for it", async () => {
     upstream.answers.set('/user/installations', () =>
@@ -366,7 +517,7 @@ describe('the relay', () => {
   it('delivers a cue to the listener holding its key, with the signed-in user', async () => {
     const key = await newKey();
     const ws = await listen(key);
-    expect(await keys()).toEqual({ org_id: ORG, keys: [key] });
+    expect(await keys()).toEqual({ org_id: ORG, login: 'alice', keys: [key] });
     // A client can't name another user: the Worker sets x-user itself.
     const forged = JSON.stringify({ id: 1, login: 'root' });
     const res = await post([key.kid], { headers: { 'x-user': forged } });

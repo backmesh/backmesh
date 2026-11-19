@@ -16,10 +16,17 @@ import {
   Upstream,
 } from './fakes.js';
 
+// What the App holds (owner, 2026-11-19): Actions write is the Worker's
+// own, for /v1/rerun.
 const ALL = {
   organization_self_hosted_runners: 'write',
   actions: 'write',
-  checks: 'write',
+  metadata: 'read',
+};
+// What an install key's token gets: no more than a runner manager's role.
+const KEY_TOKEN = {
+  organization_self_hosted_runners: 'write',
+  actions: 'read',
   metadata: 'read',
 };
 
@@ -160,12 +167,43 @@ describe('POST /v1/token', () => {
     expect(await res.json()).toEqual({
       token: 'ghs_7',
       expires_at: '2026-11-06T13:00:00Z',
-      permissions: ALL,
+      permissions: KEY_TOKEN,
+      installation_permissions: ALL,
       org: { id: 11, login: 'acme-old' },
     });
   });
 
-  it('asks only for the four permissions, narrowed to what the installation grants', async () => {
+  it("mints a key's token with Self-hosted runners write, Actions read and Metadata only", async () => {
+    await installed(11, { id: 7, login: 'acme', permissions: ALL });
+
+    const res = await mint(11);
+
+    expect(upstream.mints).toEqual([KEY_TOKEN]);
+    // And what the installation grants the App, so the listener can say
+    // when an owner hasn't accepted Actions write for backmesh.com.
+    expect(await res.json()).toMatchObject({
+      permissions: KEY_TOKEN,
+      installation_permissions: ALL,
+    });
+  });
+
+  it("reads the installation again when its cached grant isn't Actions write, so an owner's acceptance shows", async () => {
+    await installed(11, {
+      id: 7,
+      login: 'acme',
+      permissions: { ...ALL, actions: 'read' },
+    });
+    expect(await (await mint(11)).json()).toMatchObject({
+      installation_permissions: { actions: 'read' },
+    });
+    upstream.installations.get(11)!.permissions.actions = 'write';
+
+    expect(await (await mint(11)).json()).toMatchObject({
+      installation_permissions: { actions: 'write' },
+    });
+  });
+
+  it('asks only for those, narrowed to what the installation grants', async () => {
     await installed(11, {
       id: 7,
       login: 'acme',
@@ -221,7 +259,7 @@ describe('POST /v1/token', () => {
     const res = await mint(11);
 
     expect(await res.json()).toMatchObject({
-      permissions: ALL,
+      permissions: KEY_TOKEN,
       org: { id: 11, login: 'acme-renamed' },
     });
     expect(upstream.calls).toContain('GET api.github.com/app/installations/7');
@@ -238,7 +276,7 @@ describe('POST /v1/token', () => {
         outcome: 'ok',
         org: 11,
         installation: 7,
-        permissions: JSON.stringify(ALL),
+        permissions: JSON.stringify(KEY_TOKEN),
         expires_at: '2026-11-06T13:00:00Z',
         ip: '203.0.113.7',
         ray: 'ray-1',
@@ -268,6 +306,25 @@ describe('POST /v1/token', () => {
     expect(await auditRows()).toHaveLength(1);
   });
 });
+
+// A cue credential bound to the orgs, as `/v1/cue/sign-in` keeps one.
+const cueCredential = (hash: string, ...orgs: [number, string][]) =>
+  env.DB.prepare(
+    'INSERT INTO cue_credentials (hash, user_id, login, orgs, expires_at) VALUES (?, 1, ?, ?, ?)',
+  )
+    .bind(
+      hash,
+      'alice',
+      JSON.stringify(orgs.map(([id, login]) => ({ id, login }))),
+      Date.now() + 86_400_000,
+    )
+    .run();
+const cueCredentials = async () =>
+  (
+    await env.DB.prepare(
+      'SELECT hash, orgs FROM cue_credentials ORDER BY hash',
+    ).all<{ hash: string; orgs: string }>()
+  ).results.map((r) => ({ hash: r.hash, orgs: JSON.parse(r.orgs) }));
 
 describe("uninstall's cleanup", () => {
   beforeEach(async () => {
@@ -428,6 +485,27 @@ describe("uninstall's cleanup", () => {
     // Once only.
     expect((await finish(cleanup_id)).status).toBe(401);
     expect((await refresh(cleanup_id)).status).toBe(401);
+  });
+
+  it("revokes the org's cue credentials at the finish, the App kept or not", async () => {
+    await cueCredential('acme', [11, 'acme']);
+    await cueCredential('labs', [12, 'acme-labs']);
+    const { cleanup_id } = await signedIn();
+    await live();
+
+    await finish(cleanup_id);
+
+    expect(await cueCredentials()).toEqual([
+      { hash: 'labs', orgs: [{ id: 12, login: 'acme-labs' }] },
+    ]);
+  });
+
+  it("revokes the org's cue credentials when the App isn't on it", async () => {
+    upstream.installations.delete(11);
+    await cueCredential('acme', [11, 'acme']);
+
+    expect((await cleanup('alice')).status).toBe(200);
+    expect(await cueCredentials()).toEqual([]);
   });
 
   it('keeps the installation while another install has gone live since', async () => {

@@ -69,8 +69,8 @@ the run finishes, at most twice, unless a job sets `backmesh-noretry`. Each labe
 counts the runs rerun, `--json` adds where their retries started, and a
 `Retry:` line shows the runs waiting to be rerun.
 
-Either way, backmesh posts one neutral check run per workflow run, named
-`reclaims in run <id>`, on the run's commit. It lists every reclaimed job with
+Either way, the listener logs one note per workflow run (`backmesh logs`),
+named `reclaims in run <id>`. It lists every reclaimed job with
 its VM type and capacity. Titled "Spot reclaim", it says backmesh will rerun
 them; titled "Rerun needed", it says why backmesh won't and to rerun the failed
 jobs from the Actions tab once the run finishes.

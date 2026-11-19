@@ -21,7 +21,7 @@ const reclaim = (runner: string, job = 'test'): Reclaim => ({
 });
 
 // GitHub's view of run 7: its state, and each attempt's jobs.
-function fakeRuns(canRerun = true) {
+function fakeRuns() {
   const clock = { now: 0 };
   const state: RunState = {
     status: 'in_progress',
@@ -39,7 +39,8 @@ function fakeRuns(canRerun = true) {
   ];
   const calls: string[] = [];
   let failRerun:
-    { status: number; headers: Record<string, string> } | undefined;
+    | { status: number; headers: Record<string, string>; code?: string }
+    | undefined;
   const logs: ({ msg: string } & Record<string, unknown>)[] = [];
   const retrier = new Retrier({
     runs: {
@@ -55,6 +56,7 @@ function fakeRuns(canRerun = true) {
         if (failRerun) {
           throw Object.assign(new Error('refused'), {
             status: failRerun.status,
+            code: failRerun.code,
             response: { headers: failRerun.headers },
           });
         }
@@ -63,7 +65,6 @@ function fakeRuns(canRerun = true) {
         state.status = 'queued';
       },
     },
-    canRerun: () => canRerun,
     ours: (runner) => runner.startsWith('bm'),
     log: (entry) => void logs.push(entry),
     now: () => clock.now,
@@ -80,16 +81,19 @@ function fakeRuns(canRerun = true) {
     logs,
     finish,
     setJobs: (next: AttemptJob[]) => (jobs = next),
-    failRerun: (status?: number, headers: Record<string, string> = {}) =>
-      (failRerun = status ? { status, headers } : undefined),
+    failRerun: (
+      status?: number,
+      headers: Record<string, string> = {},
+      code?: string,
+    ) => (failRerun = status ? { status, headers, code } : undefined),
   };
 }
 
 describe('Retrier', () => {
-  it("decides at detection from the token, the run's attempt and the opt-out", async () => {
-    expect(await fakeRuns(false).retrier.decide(RUN, [reclaim('r1')])).toBe(
-      'unavailable',
-    );
+  // The rerun goes through the Worker (`/v1/rerun`), so the listener's own
+  // token needs no Actions write.
+  it("decides at detection from the run's attempt and the opt-out", async () => {
+    expect(await fakeRuns().retrier.decide(RUN, [reclaim('r1')])).toBe('retry');
 
     const capped = fakeRuns();
     capped.state.attempt = 3;
@@ -237,6 +241,39 @@ describe('Retrier', () => {
     await env.retrier.poll(4 * MIN);
     expect(env.retrier.status(0).waiting).toBe(0);
     expect(env.logs.at(-1)).toMatchObject({ msg: 'rerun refused; dropped' });
+  });
+
+  it('keeps a run waiting while the installation lacks Actions write, as an owner accepts it', async () => {
+    const env = fakeRuns();
+    await env.retrier.decide(RUN, [reclaim('r1')]);
+    env.finish();
+    env.failRerun(409, {}, 'actions_write_needed');
+    await env.retrier.poll(2 * MIN);
+    expect(env.retrier.status(0).waiting).toBe(1);
+    env.failRerun();
+    // Backed off: 4 minutes after the refusal, not 2.
+    await env.retrier.poll(4 * MIN);
+    expect(env.calls).not.toContain('rerun');
+    await env.retrier.poll(6 * MIN);
+    expect(env.calls).toContain('rerun');
+  });
+
+  it('backs off, doubling up to 30 minutes, while the Worker answers 409 or 429', async () => {
+    const env = fakeRuns();
+    await env.retrier.decide(RUN, [reclaim('r1')]);
+    env.finish();
+    env.failRerun(429);
+    let reruns = 0;
+    const tried: number[] = [];
+    for (let t = 2; t <= 120; t++) {
+      const before = env.logs.length;
+      await env.retrier.poll(t * MIN);
+      if (env.logs.length > before) tried.push(t);
+    }
+    reruns = tried.length;
+    // 2, then 4, 8, 16, 30, 30... minutes apart.
+    expect(tried.slice(0, 5)).toEqual([2, 6, 14, 30, 60]);
+    expect(reruns).toBeLessThan(10);
   });
 
   it.each<Record<string, string>>([

@@ -307,14 +307,12 @@ export async function readStatus({
           `The backmesh App's installation on ${listener.org} is gone since ${minute(lost.since)}, so the listener can't reach GitHub or start runners. An org owner installs the App again at ${lost.installUrl}; the listener picks it up without a restart.`,
         );
       }
+      // The installation's Actions permission: backmesh.com reruns and
+      // cancels for the listener with its write.
       const actions = listener.status.actionsPermission;
-      // `install --public-repos`.
-      const forks = listener.status.scaleSets.some(
-        (set) => set.label.startsWith('backmesh-public-') && !set.retiring,
-      );
       if (actions && actions !== 'write') {
         warnings.push(
-          `The backmesh App has Actions: ${actions}; it needs Actions: write to rerun reclaimed jobs${forks ? ' and to cancel fork runs that ask for a label other than backmesh-public-*' : ''}. An org owner accepts the App's new permissions at https://github.com/organizations/${listener.org}/settings/installations.`,
+          `The backmesh App has Actions: ${actions} on ${listener.org}; backmesh.com needs Actions: write there to rerun reclaimed jobs and cancel fork runs. An org owner accepts the App's new permissions at https://github.com/organizations/${listener.org}/settings/installations.`,
         );
       }
       for (const set of listener.status.scaleSets) {

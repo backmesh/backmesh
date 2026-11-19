@@ -13,7 +13,7 @@ const RUNS = 'https://api.github.com/repos/acme/app/actions/runs/7';
 const RUN = { owner: 'acme', repo: 'app', runId: 7 };
 
 describe('workflowRuns', () => {
-  it("reads a run's state, an attempt's jobs, and reruns the failed jobs", async () => {
+  it("reads a run's state and an attempt's jobs", async () => {
     const { fetch, calls } = fakeGitHub({
       [`GET ${RUNS}`]: json(200, {
         id: 7,
@@ -49,11 +49,8 @@ describe('workflowRuns', () => {
         labels: ['backmesh-4', 'backmesh-noretry'],
       },
     ]);
-    await runs.rerunFailedJobs(RUN);
-    expect(calls.at(-1)).toMatchObject({ method: 'POST' });
-    expect(calls.at(-1)!.url.pathname).toBe(
-      '/repos/acme/app/actions/runs/7/rerun-failed-jobs',
-    );
+    // Reads only: the rerun is the Worker's (`/v1/rerun`).
+    expect(calls.every((c) => (c.method ?? 'GET') === 'GET')).toBe(true);
   });
 });
 
