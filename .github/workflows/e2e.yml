@@ -210,6 +210,8 @@ jobs:
             environment: e2e
           - cloud: azure
             placement: --runners azure
+            # Our Azure CI subscription has 3 spot vCPUs per region: back to backmesh-4 once its quota is raised.
+            label: backmesh-2
             environment: ci-install
     runs-on: ubuntu-24.04
     # Holds the leg's secrets, and is the subject its cloud's OIDC trust
@@ -324,6 +326,7 @@ jobs:
         env:
           BACKMESH_UNSUPPORTED_CI_OVERRIDE: anycloud-ci
           PLACEMENT: ${{ matrix.placement }}
+          LABEL: ${{ matrix.label }}
           MATRIX: ${{ needs.plan.outputs.matrix }}
         run: |
           read -ra placement <<<"$PLACEMENT"
@@ -333,7 +336,7 @@ jobs:
           id=$(jq -er .planId <<<"$plan") || { echo "$plan"; exit 1; }
           echo "CONTROL_PLANE=$(jq -er '.controlPlane | "\(.cloud):\(.region)"' <<<"$plan")" >>"$GITHUB_ENV"
           if [[ $CLOUD == azure ]]; then
-            MATRIX=$(jq -c --argjson plan "$plan" '{include: [.include[0] + {label: "backmesh-4", cloud: "azure",
+            MATRIX=$(jq -c --argjson plan "$plan" --arg label "$LABEL" '{include: [.include[0] + {label: $label, cloud: "azure",
               regions: [$plan.runners[] | select(.cloud == "azure") | .regions[]], kvm: false, gpu: false}]}' <<<"$MATRIX")
           fi
           echo "LABEL_MATRIX=$MATRIX" >>"$GITHUB_ENV"
@@ -354,7 +357,7 @@ jobs:
           echo "CLUSTER_ID=$id" >>"$GITHUB_ENV"
 
       # The label member, through the test org's own repository, whose
-      # runners these are: `labels` on AWS, one backmesh-4 job on Azure. Its
+      # runners these are: `labels` on AWS, one job on the leg's label on Azure. Its
       # write deploy key pushes the run's branch, which starts its labels.yml.
       - name: The label member on the test org's runners
         env:
