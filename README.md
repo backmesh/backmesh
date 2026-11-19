@@ -63,11 +63,13 @@ Only Linux x86-64 jobs in private repositories can use the runners. See
 
 ## How it works
 
-Install creates backmesh's control plane in your account: two small always-on
-VMs, about $74–$111 a month for one org. On one of them, a listener long-polls GitHub for
-queued jobs, so nothing needs an inbound port or a webhook. For each job, it
-starts a VM in the cheapest region with capacity, and the VM is deleted when the
-job ends. Runners can be in other clouds than the control plane. Every job gets
+Install creates backmesh's control plane in your account: an always-on VM
+(t3.large on AWS), and for each org a listener on a small always-on VM of its
+own (t3.small on AWS), together about $74–$111 a month for one org. The listener
+long-polls GitHub for queued jobs, so nothing needs an inbound port or a
+webhook. For each job, it starts a VM in the cheapest region with capacity, and
+the VM is deleted when the job ends. Runners can be in other clouds than the
+control plane. Every job gets
 automatic caches for `setup-*` tools and npm, Yarn and pnpm downloads; replace
 `actions/cache` with [`backmesh/cache`](https://backmesh.com/cache/) to keep
 your own caches in a bucket in the runner's region too. The
