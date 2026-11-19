@@ -77,7 +77,9 @@ describe('POST /v1/rerun', () => {
     // The reads used a read-only token.
     expect(upstream.mints[0]).toEqual({ actions: 'read', metadata: 'read' });
     const rows = (
-      await env.DB.prepare('SELECT * FROM reruns').all<{
+      await env.DB.prepare(
+        "SELECT * FROM run_actions WHERE action = 'rerun'",
+      ).all<{
         outcome: string;
         run: string;
       }>()
@@ -120,13 +122,36 @@ describe('POST /v1/rerun', () => {
     expect(upstream.reruns).toEqual([]);
   });
 
+  // The listener's rule: every job that failed or timed out ran on this
+  // install's runners; a cancelled one, such as a matrix sibling fail-fast
+  // cancelled, can be anywhere.
+  it('reruns a fail-fast matrix whose cancelled siblings ran elsewhere', async () => {
+    upstream.runs.get('acme/app/42')!.jobs = [
+      { conclusion: 'failure', runner_name: OURS },
+      { conclusion: 'cancelled', runner_name: 'GitHub Actions 2' },
+      { conclusion: 'cancelled', runner_name: null },
+    ];
+
+    expect((await rerun()).status).toBe(200);
+    expect(upstream.reruns).toHaveLength(1);
+  });
+
+  it('refuses a run whose only failures were cancellations', async () => {
+    upstream.runs.get('acme/app/42')!.jobs = [
+      { conclusion: 'cancelled', runner_name: OURS },
+    ];
+
+    expect((await rerun()).status).toBe(409);
+  });
+
   it.each([
-    ['a GitHub-hosted runner', 'GitHub Actions 2'],
-    ["another install's runner", 'bmzzzzz-a4-k3j9x0qz'],
-    ['no runner', null],
-  ])('refuses when a failed job ran on %s', async (_, runner) => {
+    ['a GitHub-hosted runner', 'failure', 'GitHub Actions 2'],
+    ["another install's runner", 'failure', 'bmzzzzz-a4-k3j9x0qz'],
+    ['no runner', 'failure', null],
+    ['a GitHub-hosted runner, timed out', 'timed_out', 'GitHub Actions 2'],
+  ])('refuses when a failed job ran on %s', async (_, conclusion, runner) => {
     upstream.runs.get('acme/app/42')!.jobs.push({
-      conclusion: 'failure',
+      conclusion,
       runner_name: runner,
     });
 
@@ -148,6 +173,46 @@ describe('POST /v1/rerun', () => {
 
     expect(other.status).toBe(403);
     expect(upstream.reruns).toHaveLength(1);
+  });
+
+  it('binds one tag when two first calls race', async () => {
+    const [a, b] = await Promise.all([
+      rerun({ ...RUN, install: TAG }),
+      rerun({ ...RUN, install: 'zzzzz' }),
+    ]);
+
+    expect([a.status, b.status].sort()).toEqual([200, 403]);
+  });
+
+  it("answers GitHub's own 4xx for the rerun, which the listener then drops", async () => {
+    upstream.answers.set(
+      '/repos/acme/app/actions/runs/42/rerun-failed-jobs',
+      () =>
+        Response.json(
+          { message: 'This workflow run cannot be rerun' },
+          { status: 403 },
+        ),
+    );
+
+    const res = await rerun();
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      error: expect.stringContaining('cannot be rerun'),
+    });
+  });
+
+  it("reports GitHub's rate limit as GitHub's, not as another org's repository", async () => {
+    upstream.answers.set('/repos/acme/app', () =>
+      Response.json(
+        { message: 'API rate limit exceeded' },
+        { status: 403, headers: { 'x-ratelimit-remaining': '0' } },
+      ),
+    );
+
+    const res = await rerun();
+
+    expect(res.status).toBe(502);
   });
 
   it('allows 20 reruns an hour per install', async () => {
