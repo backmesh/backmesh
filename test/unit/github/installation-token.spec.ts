@@ -71,6 +71,8 @@ describe('InstallationTokens', () => {
     // What the installation grants the App: backmesh.com's run actions need
     // Actions write there.
     expect(tokens.installationPermissions?.actions).toBe('write');
+    // What the listener's status reports.
+    expect(tokens.actionsPermission()).toBe('write');
   });
 
   it('refreshes in the background from 30 minutes before expiry', async () => {

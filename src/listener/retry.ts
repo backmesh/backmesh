@@ -182,11 +182,14 @@ export class Retrier implements Routing {
       } catch (error) {
         // GitHub refusing the call won't change by asking again; a rate
         // limit, a 429 or a 403 that says so, will.
-        const status = (error as { status?: unknown }).status;
+        // The Worker's 409 while the installation lacks Actions write waits
+        // for an owner to accept it.
+        const { status, code } = error as { status?: unknown; code?: unknown };
         const refused =
           typeof status === 'number' &&
           status < 500 &&
           status !== 429 &&
+          code !== 'actions_write_needed' &&
           !(status === 403 && rateLimited(error));
         if (refused) this.waiting.delete(key);
         else entry.nextAt = now + entry.delayMs;

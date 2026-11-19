@@ -296,10 +296,7 @@ const listening = control.listen(async (signal) => {
   control.ready({
     scaler,
     telemetry: () => telemetry.status(),
-    // The installation's: backmesh.com reruns and cancels with its write.
-    actionsPermission: () =>
-      tokens.installationPermissions &&
-      (tokens.installationPermissions.actions ?? 'none'),
+    actionsPermission: () => tokens.actionsPermission(),
     drain: (progress) => drain({ scaler, log }, progress),
   });
   await runListener(

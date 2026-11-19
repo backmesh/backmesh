@@ -7,12 +7,21 @@
 // one call and is dropped. `install` is the install's runner tag, bound to
 // the key on its first action: `bm<install>-…` runners are its own. Every
 // call is a run_actions row, which also counts toward the hourly limit.
-import { gitHub, GitHubError, installationOf, mintToken } from './app.js';
+import {
+  forget,
+  gitHub,
+  GitHubError,
+  installationOf,
+  mintToken,
+} from './app.js';
 import { notInstalled } from './broker.js';
 import type { Env } from './index.js';
 
 const HOUR = 3_600_000;
+// Actions made or under way an hour, per install and action; and every call,
+// refused ones too.
 const PER_HOUR = 20;
+const CALLS_PER_HOUR = 200;
 // The retry's rule (`src/listener/retry.ts`): a run whose failed or timed
 // out jobs all ran on this install's runners, at most 3 attempts. A
 // cancelled job, such as a matrix sibling fail-fast cancelled, can be
@@ -117,193 +126,177 @@ async function runAction(
       .bind(outcome, row!.id)
       .run();
   // `code` tells the listener which refusal it is.
-  const refuse = async (
-    outcome: string,
-    status: number,
-    error: string,
-    more: object = {},
-  ) => {
+  const refuse = async (outcome: string, status: number, error: string) => {
     await record(outcome);
-    return json({ error, code: outcome, ...more }, status);
+    return json({ error, code: outcome }, status);
   };
   // A call GitHub fails isn't left pending.
   try {
-    return await act(
-      { env, install, action, owner, repo, runId, tag, record, refuse },
-      decide,
-    );
+    const calls = await env.DB.prepare(
+      'SELECT count(*) AS n FROM run_actions WHERE install = ? AND at > ?',
+    )
+      .bind(install.id, Date.now() - HOUR)
+      .first<{ n: number }>();
+    if (calls!.n > CALLS_PER_HOUR) {
+      return refuse('rate_limited', 429, 'Too many calls; retry later.');
+    }
+    // Actions made and under way count toward PER_HOUR; refusals don't.
+    const recent = await env.DB.prepare(
+      `SELECT count(*) AS n FROM run_actions WHERE install = ? AND action = ?
+     AND at > ? AND outcome IN ('ok', 'pending')`,
+    )
+      .bind(install.id, action, Date.now() - HOUR)
+      .first<{ n: number }>();
+    if (recent!.n > PER_HOUR) {
+      return refuse('rate_limited', 429, `Too many ${action}s; retry later.`);
+    }
+    const bound = async () =>
+      (
+        await env.DB.prepare('SELECT tag FROM installs WHERE id = ?')
+          .bind(install.id)
+          .first<{ tag: string | null }>()
+      )?.tag;
+    const already = await bound();
+    if (already && already !== tag) {
+      return refuse('bad_tag', 403, "That isn't this install's runner tag.");
+    }
+
+    const reader = await mintToken(env, install.org, {
+      actions: 'read',
+      metadata: 'read',
+    });
+    if (!reader) {
+      await record('app_not_installed');
+      return notInstalled(env, install.org);
+    }
+    const as = (token: string, path: string, init: RequestInit = {}) =>
+      gitHub(path, {
+        ...init,
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${token}`,
+          'User-Agent': 'backmesh',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      });
+    // null: GitHub doesn't show it to the installation. A rate limit or any
+    // other failure is GitHub's (502).
+    const read = async <T>(path: string) => {
+      const res = await as(reader.answer.token, path);
+      if (res.ok) return (await res.json()) as T;
+      const { message } = (await res.json().catch(() => ({}))) as {
+        message?: string;
+      };
+      if (
+        res.status === 404 ||
+        (res.status === 403 && message === NOT_ACCESSIBLE)
+      )
+        return null;
+      throw new GitHubError(
+        `GitHub ${path.split('?')[0]}: ${res.status} ${message ?? ''}`,
+      );
+    };
+    const repoPath = `/repos/${owner}/${repo}`;
+    const repository = await read<Target['repository']>(repoPath);
+    if (repository?.owner.id !== install.org) {
+      return refuse(
+        'not_org_repo',
+        403,
+        "That repository isn't one of this install's org's that backmesh's App is on.",
+      );
+    }
+    const path = `${repoPath}/actions/runs/${runId}`;
+    const state = await read<Run>(path);
+    if (!state) return refuse('no_run', 404, 'No such run.');
+    const jobs = async (attempt?: number) => {
+      const listed: Job[] = [];
+      const base = attempt
+        ? `${path}/attempts/${attempt}/jobs`
+        : `${path}/jobs`;
+      for (let page = 1; ; page++) {
+        const answer = await read<{ total_count: number; jobs: Job[] }>(
+          `${base}?per_page=100&page=${page}`,
+        );
+        if (!answer) return null;
+        listed.push(...answer.jobs);
+        if (!answer.jobs.length || listed.length >= answer.total_count) break;
+      }
+      return listed;
+    };
+    const decided = await decide({
+      owner,
+      repo,
+      runId,
+      tag,
+      path,
+      ours: new RegExp(`^bm${tag}-[0-9a-z]{2}-[0-9a-z]{8}$`),
+      run: state,
+      repository,
+      jobs,
+      refuse,
+    });
+    if (decided instanceof Response) return decided;
+
+    // Bound now, and read back: of two first calls with different tags, one
+    // binds and the other is refused.
+    await env.DB.prepare(
+      'UPDATE installs SET tag = ? WHERE id = ? AND tag IS NULL',
+    )
+      .bind(tag, install.id)
+      .run();
+    if ((await bound()) !== tag) {
+      return refuse('bad_tag', 403, "That isn't this install's runner tag.");
+    }
+    // The App's Actions write is an owner's to accept on each installation;
+    // a cached grant without it is read again, so an acceptance shows at once.
+    let installation = await installationOf(env, install.org);
+    if (installation && installation.permissions.actions !== 'write') {
+      await forget(env, install.org);
+      installation = await installationOf(env, install.org);
+    }
+    if (installation?.permissions.actions !== 'write') {
+      const login = installation?.login ?? owner;
+      return refuse(
+        'actions_write_needed',
+        409,
+        `An owner of ${login} accepts the backmesh App's Actions write at https://github.com/organizations/${login}/settings/installations/${installation?.id}, so backmesh.com can rerun and cancel runs.`,
+      );
+    }
+    const writer = await mintToken(env, install.org, {
+      actions: 'write',
+      metadata: 'read',
+    });
+    if (!writer) {
+      await record('app_not_installed');
+      return notInstalled(env, install.org);
+    }
+    const res = await as(writer.answer.token, decided.path, { method: 'POST' });
+    if (res.ok) {
+      await record('ok');
+      return json(decided.done);
+    }
+    const { message } = (await res.json().catch(() => ({}))) as {
+      message?: string;
+    };
+    const limited =
+      res.status === 429 ||
+      res.headers.get('x-ratelimit-remaining') === '0' ||
+      res.headers.has('retry-after') ||
+      /rate limit/i.test(message ?? '');
+    // GitHub's own refusal won't change by asking again: its 4xx goes back.
+    // A rate limit or a failure is GitHub's (502), tried again later.
+    if (res.status < 500 && !limited) {
+      return refuse(
+        'github_refused',
+        res.status,
+        `GitHub refused the ${action}: ${message ?? res.status}`,
+      );
+    }
+    throw new GitHubError(`GitHub failed the ${action}: ${res.status}`);
   } catch (error) {
     await record('github_failed');
     throw error;
   }
-}
-
-async function act(
-  c: {
-    env: Env;
-    install: { id: string; org: number };
-    action: 'rerun' | 'cancel';
-    owner: string;
-    repo: string;
-    runId: number;
-    tag: string;
-    record: (outcome: string) => Promise<unknown>;
-    refuse: (
-      outcome: string,
-      status: number,
-      error: string,
-      more?: object,
-    ) => Promise<Response>;
-  },
-  decide: (
-    target: Target,
-  ) => Promise<Response | { path: string; done: object }>,
-) {
-  const { env, install, action, owner, repo, runId, tag, record, refuse } = c;
-  // Actions made and under way count; refusals don't.
-  const recent = await env.DB.prepare(
-    `SELECT count(*) AS n FROM run_actions WHERE install = ? AND action = ?
-     AND at > ? AND outcome IN ('ok', 'pending')`,
-  )
-    .bind(install.id, action, Date.now() - HOUR)
-    .first<{ n: number }>();
-  if (recent!.n > PER_HOUR) {
-    return refuse('rate_limited', 429, `Too many ${action}s; retry later.`);
-  }
-  const bound = async () =>
-    (
-      await env.DB.prepare('SELECT tag FROM installs WHERE id = ?')
-        .bind(install.id)
-        .first<{ tag: string | null }>()
-    )?.tag;
-  const already = await bound();
-  if (already && already !== tag) {
-    return refuse('bad_tag', 403, "That isn't this install's runner tag.");
-  }
-
-  const reader = await mintToken(env, install.org, {
-    actions: 'read',
-    metadata: 'read',
-  });
-  if (!reader) {
-    await record('app_not_installed');
-    return notInstalled(env, install.org);
-  }
-  const as = (token: string, path: string, init: RequestInit = {}) =>
-    gitHub(path, {
-      ...init,
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${token}`,
-        'User-Agent': 'backmesh',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-    });
-  // null: GitHub doesn't show it to the installation. A rate limit or any
-  // other failure is GitHub's (502).
-  const read = async <T>(path: string) => {
-    const res = await as(reader.answer.token, path);
-    if (res.ok) return (await res.json()) as T;
-    const { message } = (await res.json().catch(() => ({}))) as {
-      message?: string;
-    };
-    if (
-      res.status === 404 ||
-      (res.status === 403 && message === NOT_ACCESSIBLE)
-    )
-      return null;
-    throw new GitHubError(
-      `GitHub ${path.split('?')[0]}: ${res.status} ${message ?? ''}`,
-    );
-  };
-  const repoPath = `/repos/${owner}/${repo}`;
-  const repository = await read<Target['repository']>(repoPath);
-  if (repository?.owner.id !== install.org) {
-    return refuse(
-      'not_org_repo',
-      403,
-      "That repository isn't one of this install's org's that backmesh's App is on.",
-    );
-  }
-  const path = `${repoPath}/actions/runs/${runId}`;
-  const state = await read<Run>(path);
-  if (!state) return refuse('no_run', 404, 'No such run.');
-  const jobs = async (attempt?: number) => {
-    const listed: Job[] = [];
-    const base = attempt ? `${path}/attempts/${attempt}/jobs` : `${path}/jobs`;
-    for (let page = 1; ; page++) {
-      const answer = await read<{ total_count: number; jobs: Job[] }>(
-        `${base}?per_page=100&page=${page}`,
-      );
-      if (!answer) return null;
-      listed.push(...answer.jobs);
-      if (!answer.jobs.length || listed.length >= answer.total_count) break;
-    }
-    return listed;
-  };
-  const decided = await decide({
-    owner,
-    repo,
-    runId,
-    tag,
-    path,
-    ours: new RegExp(`^bm${tag}-[0-9a-z]{2}-[0-9a-z]{8}$`),
-    run: state,
-    repository,
-    jobs,
-    refuse,
-  });
-  if (decided instanceof Response) return decided;
-
-  // Bound now, and read back: of two first calls with different tags, one
-  // binds and the other is refused.
-  await env.DB.prepare(
-    'UPDATE installs SET tag = ? WHERE id = ? AND tag IS NULL',
-  )
-    .bind(tag, install.id)
-    .run();
-  if ((await bound()) !== tag) {
-    return refuse('bad_tag', 403, "That isn't this install's runner tag.");
-  }
-  // The App's Actions write is an owner's to accept on each installation.
-  const installation = await installationOf(env, install.org);
-  if (installation?.permissions.actions !== 'write') {
-    const accept = `https://github.com/organizations/${installation?.login ?? owner}/settings/installations/${installation?.id ?? ''}`;
-    return refuse('actions_write_needed', 409, 'actions_write_needed', {
-      accept_url: accept,
-    });
-  }
-  const writer = await mintToken(env, install.org, {
-    actions: 'write',
-    metadata: 'read',
-  });
-  if (!writer) {
-    await record('app_not_installed');
-    return notInstalled(env, install.org);
-  }
-  const res = await as(writer.answer.token, decided.path, { method: 'POST' });
-  if (res.ok) {
-    await record('ok');
-    return json(decided.done);
-  }
-  const { message } = (await res.json().catch(() => ({}))) as {
-    message?: string;
-  };
-  const limited =
-    res.status === 429 ||
-    res.headers.get('x-ratelimit-remaining') === '0' ||
-    res.headers.has('retry-after') ||
-    /rate limit/i.test(message ?? '');
-  // GitHub's own refusal won't change by asking again: its 4xx goes back.
-  // A rate limit or a failure is GitHub's (502), tried again later.
-  if (res.status < 500 && !limited) {
-    return refuse(
-      'github_refused',
-      res.status,
-      `GitHub refused the ${action}: ${message ?? res.status}`,
-    );
-  }
-  throw new GitHubError(`GitHub failed the ${action}: ${res.status}`);
 }
 
 // The spot-reclaim retry: a finished run below attempt 3 whose failed or

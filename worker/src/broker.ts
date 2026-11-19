@@ -100,6 +100,12 @@ export async function token(
   env: Env,
   install: { id: string; org: number },
 ) {
+  // A cached grant without Actions write is read again, so an owner's
+  // acceptance shows in the answer at once.
+  const cached = await installationOf(env, install.org);
+  if (cached && cached.permissions.actions !== 'write') {
+    await forget(env, install.org);
+  }
   const minted = await mintToken(env, install.org);
   if (!minted) {
     console.log(`token refused: ${install.id} app_not_installed`);

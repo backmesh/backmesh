@@ -187,6 +187,22 @@ describe('POST /v1/token', () => {
     });
   });
 
+  it("reads the installation again when its cached grant isn't Actions write, so an owner's acceptance shows", async () => {
+    await installed(11, {
+      id: 7,
+      login: 'acme',
+      permissions: { ...ALL, actions: 'read' },
+    });
+    expect(await (await mint(11)).json()).toMatchObject({
+      installation_permissions: { actions: 'read' },
+    });
+    upstream.installations.get(11)!.permissions.actions = 'write';
+
+    expect(await (await mint(11)).json()).toMatchObject({
+      installation_permissions: { actions: 'write' },
+    });
+  });
+
   it('asks only for those, narrowed to what the installation grants', async () => {
     await installed(11, {
       id: 7,
