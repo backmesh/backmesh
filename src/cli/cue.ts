@@ -74,6 +74,7 @@ function formatFor({ formats = [1] }: PublicKey): CueFormat | undefined {
 }
 const keysSchema = z.object({
   org_id: z.number(),
+  login: z.string(),
   keys: z.array(keySchema),
 });
 // A push's tag and salt (`coalesceHash`), random per repo and branch and
@@ -195,6 +196,32 @@ async function pushesSince(
     .reverse();
 }
 
+// The relay's own cue credential (owner, 2026-11-19): App sign-ins last 8
+// hours, so cue trades one for it (`/v1/cue/sign-in`, 30 days) and sends
+// GitHub nothing after. Saved beside the sign-in it was traded for.
+const CREDENTIAL = 'backmesh-cue-credential';
+const credentialSchema = z.object({
+  credential: z.string().regex(/^bmc_[0-9a-f]{64}$/),
+});
+
+// The credential for `token`, a fresh App sign-in, or undefined when the
+// relay refuses that sign-in.
+async function trade(
+  deps: CueDeps,
+  base: string,
+  token: string,
+  signal: AbortSignal,
+) {
+  const res = await deps.fetch(`${base}/v1/cue/sign-in`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    signal,
+  });
+  if (res.status === 401 || res.status === 403) return undefined;
+  if (!res.ok) throw new Error(`backmesh.com answered ${res.status}`);
+  return credentialSchema.parse(await res.json()).credential;
+}
+
 export async function cue(
   opts: CueOptions,
   deps: CueDeps,
@@ -203,6 +230,13 @@ export async function cue(
   const { inS } = opts;
   const range = `${MIN_LEAD_S} to ${MAX_LEAD_S}`;
   const given = deps.env.BACKMESH_CUE_TOKEN?.trim() || undefined;
+  const base = deps.env[API_URL_ENV] ?? 'https://api.backmesh.com';
+  const credentialPath = anycloudPath(deps.env, CREDENTIAL);
+  // A new sign-in is traded for a new credential at the next cue.
+  const signIn = async () => {
+    await deps.signIn();
+    await rm(credentialPath, { force: true });
+  };
   if (opts.signIn && given) {
     return done(
       'refused',
@@ -214,7 +248,7 @@ export async function cue(
     // --sign-in` once (below) tells a signed-out user to run. Neither --in
     // nor --cancel is implied, so nothing is sent.
     if (opts.signIn) {
-      await deps.signIn();
+      await signIn();
       return done('signed in', 'Signed in. Nothing was sent.');
     }
     return done(
@@ -231,7 +265,7 @@ export async function cue(
   ) {
     return done('refused', `--in takes whole seconds, up to ${MAX_LEAD_S}.`);
   }
-  if (opts.signIn) await deps.signIn();
+  if (opts.signIn) await signIn();
   // A quick follow-up push (owner, 2026-11-09): nothing to start early,
   // and not a mistake, so nothing is sent, counted or cached.
   if (inS !== undefined && inS < MIN_LEAD_S) {
@@ -245,13 +279,28 @@ export async function cue(
   const timer = setTimeout(() => timeout.abort(), CUE_TIMEOUT_MS);
   const { signal } = timeout;
   try {
-    // A sandbox's agent can't finish a sign-in, so a human gives it one in
-    // BACKMESH_CUE_TOKEN; it never mints a token of its own.
-    const token = given ?? (await readSaved(anycloudPath(deps.env, '.token')));
+    // A sandbox's agent can't finish a sign-in, so a human gives it a cue
+    // credential (or a sign-in) in BACKMESH_CUE_TOKEN; nothing is saved
+    // from it. Otherwise the saved credential, else the saved sign-in
+    // traded for one.
+    const tradeSaved = async () => {
+      const signedIn = await readSaved(anycloudPath(deps.env, '.token'));
+      const traded = signedIn && (await trade(deps, base, signedIn, signal));
+      if (traded) await save(credentialPath, traded);
+      return traded || undefined;
+    };
+    const fromFile = !given && (await readSaved(credentialPath));
+    const token = given?.startsWith('bmc_')
+      ? given
+      : given
+        ? await trade(deps, base, given, signal)
+        : fromFile || (await tradeSaved());
     if (!token) {
       return done(
         'not signed in',
-        'Not signed in; run `backmesh cue --sign-in` once, or set BACKMESH_CUE_TOKEN where no one can sign in. Nothing was sent.',
+        given
+          ? 'backmesh.com refused BACKMESH_CUE_TOKEN; replace it with a current backmesh cue credential. Nothing was sent.'
+          : 'Not signed in; run `backmesh cue --sign-in` once, or set BACKMESH_CUE_TOKEN where no one can sign in. Nothing was sent.',
       );
     }
     const { repo, branch } = await target(opts, deps.git, signal);
@@ -276,7 +325,6 @@ export async function cue(
       );
     }
     const org = repo.split('/')[0]!;
-    const base = deps.env[API_URL_ENV] ?? 'https://api.backmesh.com';
     // Only this checkout's origin can say; a cancel needs no flag. Asked
     // alongside the keys and the skip check, and dropped on a skip.
     const prCheck = new AbortController();
@@ -284,19 +332,27 @@ export async function cue(
       opts.repo || opts.cancel
         ? Promise.resolve('?')
         : prFlag(branch, deps.git, AbortSignal.any([signal, prCheck.signal]));
-    return await send({
-      pr,
-      prCheck,
-      deps,
-      base,
-      org,
-      repo,
-      branch,
-      token,
-      given: given !== undefined,
-      signal,
-      opts,
-    });
+    const sent = (credential: string) =>
+      send({
+        pr,
+        prCheck,
+        deps,
+        base,
+        org,
+        repo,
+        branch,
+        token: credential,
+        given: given !== undefined,
+        signal,
+        opts,
+      });
+    const result = await sent(token);
+    // A saved credential the relay refuses (expired) is traded again from
+    // the saved sign-in, once.
+    if (result.outcome !== 'not signed in' || !fromFile) return result;
+    await rm(credentialPath, { force: true });
+    const fresh = await tradeSaved();
+    return fresh ? await sent(fresh) : result;
   } catch (error) {
     const why = signal.aborted
       ? `no answer in ${CUE_TIMEOUT_MS / 1000} s`
@@ -361,27 +417,16 @@ async function send(c: {
     cache.org.toLowerCase() !== org.toLowerCase() ||
     cache.token !== tokenHash
   ) {
-    const [keys, user] = await Promise.all([
-      deps.fetch(`${base}/v1/cue/keys?org=${encodeURIComponent(org)}`, {
-        headers: auth,
-        signal,
-      }),
-      deps.fetch('https://api.github.com/user', {
-        headers: { ...auth, Accept: 'application/vnd.github+json' },
-        signal,
-      }),
-    ]);
+    const keys = await deps.fetch(
+      `${base}/v1/cue/keys?org=${encodeURIComponent(org)}`,
+      { headers: auth, signal },
+    );
     const body: unknown = await keys.json().catch(() => undefined);
     if (!keys.ok) return refused(keys.status, body);
-    if (!user.ok) return refused(user.status === 401 ? 401 : 502, undefined);
-    const login = z
-      .object({ login: z.string() })
-      .parse(await user.json()).login;
     cache = {
       base,
       org,
       token: tokenHash,
-      login,
       ...keysSchema.parse(body),
       pushes: cache?.pushes ?? {},
       live: cache?.live ?? {},
@@ -544,10 +589,12 @@ async function send(c: {
 }
 
 // Readable only by this user, written whole.
-async function save(path: string, cache: Cache) {
+async function save(path: string, content: Cache | string) {
   await mkdir(dirname(path), { recursive: true });
   const temporary = `${path}.${process.pid}.tmp`;
-  await writeFile(temporary, JSON.stringify(cache), { mode: 0o600 });
+  const text =
+    typeof content === 'string' ? `${content}\n` : JSON.stringify(content);
+  await writeFile(temporary, text, { mode: 0o600 });
   await rename(temporary, path).catch(async (error: unknown) => {
     await rm(temporary, { force: true });
     throw error;

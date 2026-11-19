@@ -1,14 +1,14 @@
-// The cue relay's routes. `backmesh cue` signs in
-// with the backmesh App's user token from its device sign-in, which must
-// reach the org's App installation; the listener connects with its install
-// key. Each
+// The cue relay's routes. `backmesh cue` trades its App sign-in, which must
+// reach the org's App installation, for a cue credential once; the listener
+// connects with its install key. Each
 // is forwarded to the org's Relay Durable Object (relay.ts) with only what
 // the Worker vouches for.
-//   GET  /v1/cue/keys?org=<login>   the org's listener keys
+//   POST /v1/cue/sign-in            a 30-day cue credential for a sign-in
+//   GET  /v1/cue/keys?org=<login>   the org's listener keys, and the login
 //   POST /v1/cue { org, tag, hash, sealed: [{ kid, enc, ct }] }
 //   GET  /v1/cue/connect            the listener's WebSocket
 import type { Env } from './index.js';
-import { GitHubError } from './app.js';
+import { GitHubError, randomHex } from './app.js';
 import { asUser, keyInstall, sha256 } from './installs.js';
 
 declare const caches: {
@@ -26,14 +26,14 @@ interface Member {
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 
-// The signed-in user and the org's ID, when the user's App token reaches
-// the org's installation of the App: GitHub lists an installation to a user
-// token when the user can access one of its repositories, an outside
-// collaborator included and a member with no repository not. That's a gate
-// against abuse, not the authority: the listener acts on a cue only for a
-// user GitHub says can push to its repository. `/user/memberships` would
-// need the App's Members permission, which it doesn't ask for.
-async function orgMember(token: string, org: string) {
+// The signed-in user and the orgs whose installation of the App the user's
+// App token reaches: GitHub lists an installation to a user token when the
+// user can access one of its repositories, an outside collaborator included
+// and a member with no repository not. That's a gate against abuse, not the
+// authority: the listener acts on a cue only for a user GitHub says can
+// push to its repository. `/user/memberships` would need the App's Members
+// permission, which it doesn't ask for.
+async function reached(token: string) {
   const [user, installs] = await Promise.all([
     asUser(token, '/user'),
     asUser(token, '/user/installations?per_page=100'),
@@ -48,10 +48,88 @@ async function orgMember(token: string, org: string) {
   const { installations } = (await installs.json()) as {
     installations: { account: { id: number; login: string } | null }[];
   };
-  const account = installations.find(
-    (i) => i.account?.login.toLowerCase() === org.toLowerCase(),
-  )?.account;
-  return account ? { id, login, org_id: account.id } : null;
+  const orgs = installations.flatMap(({ account }) =>
+    account ? [{ id: account.id, login: account.login }] : [],
+  );
+  return { id, login, orgs };
+}
+
+const memberOf = (
+  who: { id: number; login: string; orgs: { id: number; login: string }[] },
+  org: string,
+): Member | null => {
+  const found = who.orgs.find(
+    (o) => o.login.toLowerCase() === org.toLowerCase(),
+  );
+  return found ? { id: who.id, login: who.login, org_id: found.id } : null;
+};
+
+async function orgMember(token: string, org: string) {
+  const who = await reached(token);
+  return who === 'expired' ? who : memberOf(who, org);
+}
+
+const CREDENTIAL_TTL = 30 * 86_400_000;
+const credentialExpired = () =>
+  json({ error: 'Cue sign-in expired; run `backmesh cue --sign-in`.' }, 401);
+
+// POST /v1/cue/sign-in, with a fresh App sign-in as the bearer: a cue
+// credential (`bmc_` and 64 hex digits) for 30 days, bound to the user and
+// the orgs the sign-in reached, so cue sends GitHub nothing after. Only its
+// hash is kept.
+async function credential(request: Request, env: Env) {
+  const token = request.headers
+    .get('Authorization')
+    ?.match(/^Bearer (\S{1,512})$/)?.[1];
+  if (!token) return json({ error: 'Sign in with GitHub.' }, 401);
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+  if (!(await env.SIGNIN_LIMIT.limit({ key: ip })).success) {
+    return json({ error: 'Too many requests; retry later.' }, 429);
+  }
+  const who = await reached(token);
+  if (who === 'expired') {
+    return json({ error: 'GitHub sign-in expired; sign in again.' }, 401);
+  }
+  if (!who.orgs.length) {
+    const error =
+      "None of your orgs' repositories that backmesh's GitHub App is on is open to you.";
+    return json({ error }, 403);
+  }
+  const issued = `bmc_${randomHex()}${randomHex()}`;
+  const expires = Date.now() + CREDENTIAL_TTL;
+  await env.DB.prepare(
+    'INSERT INTO cue_credentials (hash, user_id, login, orgs, expires_at) VALUES (?, ?, ?, ?, ?)',
+  )
+    .bind(
+      await sha256(issued),
+      who.id,
+      who.login,
+      JSON.stringify(who.orgs),
+      expires,
+    )
+    .run();
+  return json({
+    credential: issued,
+    login: who.login,
+    expires_at: new Date(expires).toISOString(),
+  });
+}
+
+// The cue credential's user in the org, asking GitHub nothing.
+async function credentialMember(env: Env, issued: string, org: string) {
+  const row = await env.DB.prepare(
+    'SELECT user_id, login, orgs, expires_at FROM cue_credentials WHERE hash = ?',
+  )
+    .bind(await sha256(issued))
+    .first<{
+      user_id: number;
+      login: string;
+      orgs: string;
+      expires_at: number;
+    }>();
+  if (!row || row.expires_at <= Date.now()) return 'expired';
+  const orgs = JSON.parse(row.orgs) as { id: number; login: string }[];
+  return memberOf({ id: row.user_id, login: row.login, orgs }, org);
 }
 
 // The signed-in member of the org, cached five minutes (per colo) by the
@@ -90,6 +168,13 @@ async function signIn(request: Request, env: Env, org: unknown) {
   if (!token) return json({ error: 'Sign in with GitHub.' }, 401);
   if (typeof org !== 'string' || !/^[A-Za-z0-9-]{1,39}$/.test(org)) {
     return json({ error: 'Name the org.' }, 400);
+  }
+  // A cue credential asks GitHub nothing; an App sign-in still works.
+  if (token.startsWith('bmc_')) {
+    const member = await credentialMember(env, token, org);
+    if (member === 'expired') return credentialExpired();
+    const error = `None of ${org}'s repositories that backmesh's GitHub App is on is open to you.`;
+    return member ?? json({ error }, 403);
   }
   const member = await cueMember(origin, token, org, admit);
   if (member === 'limited') {
@@ -141,12 +226,15 @@ export async function cue(
       'x-install': install.id,
     });
   }
+  if (pathname === '/v1/cue/sign-in' && request.method === 'POST') {
+    return credential(request, env);
+  }
   if (pathname === '/v1/cue/keys' && request.method === 'GET') {
     const member = await signIn(request, env, searchParams.get('org'));
     if (member instanceof Response) return member;
     const res = await relay(env, member.org_id, '/keys', {});
     const { keys } = (await res.json()) as { keys: unknown };
-    return json({ org_id: member.org_id, keys });
+    return json({ org_id: member.org_id, login: member.login, keys });
   }
   if (pathname === '/v1/cue' && request.method === 'POST') {
     const text = await request.text();

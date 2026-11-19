@@ -54,12 +54,15 @@ export const audit = (env: Env, request: Request, row: AuditRow) =>
     .run();
 
 // Daily (the cron): audit and rerun rows are kept 90 days.
-// Expired cleanups go too.
+// Expired cleanups and cue credentials go too.
 export const trimAudit = (env: Env, now = Date.now()) =>
   env.DB.batch([
     env.DB.prepare('DELETE FROM audit WHERE at < ?').bind(now - 90 * DAY),
     env.DB.prepare('DELETE FROM cleanups WHERE expires_at < ?').bind(now),
     env.DB.prepare('DELETE FROM reruns WHERE at < ?').bind(now - 90 * DAY),
+    env.DB.prepare('DELETE FROM cue_credentials WHERE expires_at < ?').bind(
+      now,
+    ),
   ]);
 
 export const notInstalled = (env: Env, org: number) =>

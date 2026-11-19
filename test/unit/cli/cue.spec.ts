@@ -524,6 +524,7 @@ describe('backmesh cue', () => {
       'no listener',
     );
     writeFileSync(join(dir, '.token'), '');
+    rmSync(join(dir, 'backmesh-cue-credential'), { force: true });
     expect(await cue({ inS: 120, signIn: false }, deps)).toMatchObject({
       outcome: 'not signed in',
       message: expect.stringContaining('backmesh cue --sign-in'),
@@ -585,7 +586,9 @@ describe('backmesh cue', () => {
     expect((await cue({ inS: 400, signIn: false }, deps)).message).toContain(
       'Too many cues.',
     );
-    // GitHub's 401 for the saved sign-in, through the Worker or GitHub.
+    // The relay refuses the saved credential, and GitHub the saved sign-in
+    // it would be traded again from.
+    writeFileSync(join(dir, 'backmesh-cue-credential'), 'bmc_old\n');
     writeFileSync(join(dir, '.token'), 'ghu_revoked\n');
     const revoked = {
       outcome: 'not signed in',
@@ -595,6 +598,7 @@ describe('backmesh cue', () => {
     // The file stays for --sign-in to replace, and the push isn't blocked.
     expect(readFileSync(join(dir, '.token'), 'utf8')).toBe('ghu_revoked\n');
     const out: string[] = [];
+    writeFileSync(join(dir, 'backmesh-cue-credential'), 'bmc_old\n');
     const code = await runCli(['cue', '--in', '120'], {
       stdout: (t) => void out.push(t),
       stderr: (t) => void out.push(t),

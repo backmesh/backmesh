@@ -412,7 +412,7 @@ describe('the relay', () => {
   it('delivers a cue to the listener holding its key, with the signed-in user', async () => {
     const key = await newKey();
     const ws = await listen(key);
-    expect(await keys()).toEqual({ org_id: ORG, keys: [key] });
+    expect(await keys()).toEqual({ org_id: ORG, login: 'alice', keys: [key] });
     // A client can't name another user: the Worker sets x-user itself.
     const forged = JSON.stringify({ id: 1, login: 'root' });
     const res = await post([key.kid], { headers: { 'x-user': forged } });
