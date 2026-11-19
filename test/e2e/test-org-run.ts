@@ -4,7 +4,8 @@
 // (test/e2e/test-org/labels.yml), and waits for the result.json labels.yml
 // pushes back to that branch. A deploy key can push and fetch but can't read
 // the repository's runs, hence the result on the branch. The branch is
-// deleted afterwards, whatever happened.
+// deleted afterwards, whatever happened; a failed delete only warns, so it
+// never hides the run's own result.
 
 export interface TestOrgGit {
   push(branch: string, files: Record<string, string>): Promise<void>;
@@ -53,6 +54,8 @@ export async function runOnTestOrg(
       await sleep(15_000);
     }
   } finally {
-    await git.remove(branch);
+    await git.remove(branch).catch((err: unknown) => {
+      console.log(`::warning::couldn't delete ${branch}: ${String(err)}`);
+    });
   }
 }

@@ -6,7 +6,9 @@ name: labels
 # its runners take jobs only from this org's repositories. This calls
 # e2e-labels.yml with run.json's matrix and ref, then pushes result.json to
 # the same branch, which e2e.yml reads back with the deploy key and then
-# deletes. GITHUB_TOKEN's push starts no workflow.
+# deletes. GITHUB_TOKEN's push starts no workflow. A run/** push runs this
+# file only if it's in the pushed tree, so e2e.yml builds on this
+# repository's default branch.
 run-name: labels ${{ github.ref_name }}
 
 on:
@@ -14,6 +16,12 @@ on:
     branches: ['run/**']
 
 permissions: {}
+
+# One run at a time: a cancelled leg's queued label jobs never take the
+# next leg's runners.
+concurrency:
+  group: labels
+  cancel-in-progress: true
 
 defaults:
   run:
@@ -35,7 +43,9 @@ jobs:
       - id: run
         run: |
           echo "matrix=$(jq -c .matrix run.json)" >>"$GITHUB_OUTPUT"
-          echo "ref=$(jq -er .ref run.json)" >>"$GITHUB_OUTPUT"
+          # Only a commit: it's checked out on this org's runners.
+          ref=$(jq -er '.ref | select(test("^[0-9a-f]{40}$"))' run.json)
+          echo "ref=$ref" >>"$GITHUB_OUTPUT"
 
   labels:
     needs: read
@@ -62,4 +72,6 @@ jobs:
           jq -n --arg conclusion "$CONCLUSION" --arg url "$URL" '{$conclusion, $url}' >result.json
           git add result.json
           git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -qm result
-          git push
+          # Only onto the commit this run started from: a branch e2e.yml
+          # already deleted, after a timeout or a cancel, stays deleted.
+          git push --force-with-lease="$GITHUB_REF:$GITHUB_SHA" origin HEAD:"$GITHUB_REF"
