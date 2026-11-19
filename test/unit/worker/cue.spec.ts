@@ -261,6 +261,25 @@ describe('cueMember', () => {
 });
 
 describe('sign-ins', () => {
+  it("names the org's SAML SSO when GitHub asks for it", async () => {
+    upstream.answers.set('/user/installations', () =>
+      Response.json(
+        { message: 'Resource protected by organization SAML enforcement.' },
+        { status: 403, headers: { 'X-GitHub-SSO': 'required; url=x' } },
+      ),
+    );
+
+    const res = await request('/v1/cue/keys?org=acme', {
+      headers: as('alice'),
+    });
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      error:
+        "Authorize the backmesh sign-in for acme's SAML SSO on GitHub, then sign in again.",
+    });
+  });
+
   // The listener acts on a cue only for a user GitHub says can push to its
   // repository, so the Worker's check is who reaches the org's App
   // installation through a repository, member or not.

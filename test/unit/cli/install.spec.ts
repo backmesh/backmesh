@@ -67,7 +67,16 @@ const BM = {
 const stateDir = () => mkdtempSync(join(tmpdir(), 'backmesh-install-'));
 const RUNNING = { state: 'running', managementApiUrl: HOSTED, lastError: null };
 // The sign-ins GitHub knows; GET /user answers 401 for any other.
-const SIGN_INS = new Set(['ghu_x', 'ghu_saved', 'gho_oauth', SIGNED_IN]);
+const SIGN_INS = new Set([
+  'ghu_x',
+  'ghu_saved',
+  'gho_oauth',
+  'ghu_other_app',
+  SIGNED_IN,
+]);
+// The App installations each sign-in reaches, by App ID: another App's
+// sign-in reaches its own App's.
+const REACHES: Record<string, number[]> = { ghu_other_app: [999] };
 // A sign-in GitHub can't check: it answers 503.
 const DOWN = 'ghu_down';
 const github = fakeGitHub({
@@ -77,6 +86,15 @@ const github = fakeGitHub({
     return SIGN_INS.has(token)
       ? json(200, { login: 'octo', id: 1 })()
       : json(401, { message: 'Bad credentials' })();
+  },
+  'GET https://api.github.com/user/installations': ({ headers }) => {
+    const token = headers.get('authorization')!.split(' ')[1]!;
+    if (token === DOWN) return json(503, { message: 'Unavailable' })();
+    const apps = REACHES[token] ?? [5622376];
+    return json(200, {
+      total_count: apps.length,
+      installations: apps.map((app_id, id) => ({ id, app_id })),
+    })();
   },
 });
 
@@ -374,7 +392,7 @@ describe('install', () => {
       ),
     ).toEqual([
       // Through the user's cloud CLI, with no local API, after the quotas.
-      'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --github-apps 5622376 --json',
+      'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --sign-in-apps 5622376 --json',
       `api use ${HOSTED}`,
       // The role's trust names the hosted API, so it comes after create.
       `credentials new ${BM.aws} --provider aws --role --apply --json`,
@@ -465,7 +483,7 @@ describe('install', () => {
     expect(
       calls.filter((c) => /^(cluster|credentials new|vm )/.test(c)),
     ).toEqual([
-      'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --github-apps 5622376 --json',
+      'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --sign-in-apps 5622376 --json',
       `credentials new ${BM.aws} --provider aws --profile default --account-id 123456789012 --generate`,
       expect.stringMatching(/^vm .* --secret backmesh-acme --wait$/),
     ]);
@@ -1781,6 +1799,8 @@ describe('install', () => {
       ['github_pat_x', "The GitHub sign-in isn't backmesh's"],
       ['ghs_x', "The GitHub sign-in isn't backmesh's"],
       ['gho_oauth', "The GitHub sign-in isn't backmesh's"],
+      // Another App's user token: its installations name that App.
+      ['ghu_other_app', "The GitHub sign-in is another GitHub App's"],
       // A sign-in lasts 8 hours, so CI needs one made within that time.
       [
         'ghu_revoked',
@@ -2301,7 +2321,7 @@ describe('install', () => {
     // AWS, each in its one fixed anchor region (regions are never asked
     // for, owner, 2026-11-13).
     expect(calls).toContain(
-      'cluster create backmesh --cloud gcp --region us-east1 --vm-type e2-standard-2 --github-apps 5622376 --json',
+      'cluster create backmesh --cloud gcp --region us-east1 --vm-type e2-standard-2 --sign-in-apps 5622376 --json',
     );
     const routes = parseRoutes(
       JSON.parse(
@@ -2648,9 +2668,9 @@ describe("install's always-on VM sizes on Azure", () => {
     await (await planned(eastus, deps)).run();
     const id = 'backmesh-1763553600000-x7k2p9';
     expect(steps(calls)).toEqual([
-      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --github-apps 5622376 --json',
+      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
       `cluster delete ${id} --cloud azure --region centralus --delete-vms --delete-buckets --confirm ${id} --json`,
-      'cluster create backmesh --cloud azure --region northcentralus --vm-type Standard_D2s_v5 --github-apps 5622376 --json',
+      'cluster create backmesh --cloud azure --region northcentralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
       expect.stringContaining(
         '--region northcentralus --vm-type Standard_B2s --secret backmesh-acme --wait',
       ),
@@ -2672,7 +2692,7 @@ describe("install's always-on VM sizes on Azure", () => {
       'SkuNotAvailable',
     );
     expect(steps(calls)).toEqual([
-      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --github-apps 5622376 --json',
+      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
     ]);
   });
 
@@ -2689,7 +2709,7 @@ describe("install's always-on VM sizes on Azure", () => {
       'API_NOT_READY',
     );
     expect(steps(calls)).toEqual([
-      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --github-apps 5622376 --json',
+      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
     ]);
   });
 
@@ -2716,7 +2736,7 @@ describe("install's always-on VM sizes on Azure", () => {
     );
     await run();
     expect(steps(calls)[0]).toBe(
-      'cluster create backmesh --cloud azure --region northcentralus --vm-type Standard_D2s_v5 --github-apps 5622376 --json',
+      'cluster create backmesh --cloud azure --region northcentralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
     );
   });
 
@@ -2844,7 +2864,7 @@ describe("install's always-on VM sizes on Azure", () => {
       'InsufficientInstanceCapacity',
     );
     expect(steps(calls)).toEqual([
-      'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --github-apps 5622376 --json',
+      'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --sign-in-apps 5622376 --json',
     ]);
   });
 });
