@@ -1,13 +1,16 @@
 name: Release
 
 # Cuts backmesh release vX.Y.Z from its tag: checks
-# the tag, publishes and signs both images, and attaches compatibility.json,
+# the tag, pushes and signs both images and checks they're public, deploys
+# the Worker on api.backmesh.com from the tag's commit, and only then
+# publishes the release with compatibility.json,
 # which names their digests and the one anycloud version the release pins,
 # and the CLI binaries that embed it. The binaries are mirrored to
 # backmesh/backmesh-releases, which install.sh and Homebrew's backmesh/tap
 # install from, and the cache action to backmesh/cache. A vX.Y.Z-rc.N tag is a
 # qualification build: a prerelease in this repository only, with no notes
-# file, no mirror and no formula; its images are public as for any release.
+# file, no mirror and no formula, which deploys the staging Worker on
+# api-staging.backmesh.com instead; its images are public as for any release.
 # An rc may be tagged on a pull request's head, so a change is live-checked
 # before it merges (owner, 2026-11-18); a release's own tag must be on main.
 # Tag an rc only on a same-repository branch head a maintainer has reviewed,
@@ -97,6 +100,17 @@ jobs:
         run: |
           node scripts/release-matrix.mjs "$RUNNER_IMAGE" "$LISTENER_IMAGE" >compatibility.json
           echo "compatibility=$(jq -c . compatibility.json)" >>"$GITHUB_OUTPUT"
+      # Customers pull without credentials, so a private package fails the
+      # release, before the Worker deploys. An empty Docker config keeps the
+      # pulls anonymous.
+      - name: Check both images are public
+        run: |
+          export DOCKER_CONFIG=$RUNNER_TEMP/anonymous
+          mkdir -p "$DOCKER_CONFIG"
+          for image in $(jq -r '.runnerImage, .listenerImage' compatibility.json); do
+            docker manifest inspect "$image" >/dev/null \
+              || { echo "::error::$image can't be pulled anonymously"; exit 1; }
+          done
       # Each binary embeds the tag's version, rc suffix included, and
       # compatibility.json; the linux-x64 one must report that version and
       # read its matrix, or the release fails.
@@ -109,8 +123,45 @@ jobs:
           path: binaries/
           if-no-files-found: error
 
-  release:
+  # The Worker the release's CLI signs in through, deployed from the tag's
+  # commit after every check that can fail and before the release, the
+  # mirror, the cache action and the formula, so no published CLI meets an
+  # older Worker; a failed deploy publishes none of them. A release deploys production,
+  # once the rc it was qualified as builds again; an rc deploys only the
+  # staging Worker, which its e2e signs in through. As worker-setup.yml
+  # does, with its secrets: the database's migrations, the Worker, and its
+  # secrets.
+  worker:
     needs: [check, matrix]
+    runs-on: ubuntu-24.04
+    environment: publish
+    timeout-minutes: 20
+    # Production's deploys queue with worker-setup.yml's.
+    concurrency:
+      group: ${{ needs.check.outputs.rc == 'true' && 'worker-staging' || 'worker' }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+      - run: yarn install --frozen-lockfile --ignore-scripts
+      - run: yarn --cwd website install --frozen-lockfile --ignore-scripts
+      - name: Deploy the Worker
+        env:
+          RC: ${{ needs.check.outputs.rc }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          BILLING_GITHUB_CLIENT_ID: ${{ vars.BILLING_GITHUB_CLIENT_ID }}
+          BILLING_GITHUB_APP_ID: ${{ vars.BILLING_GITHUB_APP_ID || secrets.BILLING_GITHUB_APP_ID }}
+          BILLING_GITHUB_APP_PRIVATE_KEY: ${{ secrets.BILLING_GITHUB_APP_PRIVATE_KEY }}
+          BILLING_GITHUB_APP_PRIVATE_KEY_NEXT: ${{ secrets.BILLING_GITHUB_APP_PRIVATE_KEY_NEXT }}
+        run: node worker/scripts/setup.ts --apply $([[ $RC == true ]] && echo --staging)
+
+  release:
+    needs: [check, matrix, worker]
     runs-on: ubuntu-24.04
     permissions:
       contents: write # the GitHub release
@@ -153,16 +204,6 @@ jobs:
             jq -r '"Pins anycloud `\(.anycloud)`; each CLI binary embeds `compatibility.json`, which `backmesh upgrade` reads. `checksums.txt` holds their sha256 digests."' compatibility.json
           } >notes.md
           cat notes.md >>"$GITHUB_STEP_SUMMARY"
-      # Customers pull without credentials, so a private package fails the
-      # release. An empty Docker config keeps the pulls anonymous.
-      - name: Check both images are public
-        run: |
-          export DOCKER_CONFIG=$RUNNER_TEMP/anonymous
-          mkdir -p "$DOCKER_CONFIG"
-          for image in $(jq -r '.runnerImage, .listenerImage' compatibility.json); do
-            docker manifest inspect "$image" >/dev/null \
-              || { echo "::error::$image can't be pulled anonymously"; exit 1; }
-          done
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}

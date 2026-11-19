@@ -16,7 +16,7 @@ import {
   type CloudTarget,
   type RunnerClass,
 } from '../runners/classes.js';
-import { INSTALL_KEY_ENV, ROTATING_FROM_ENV } from './worker.js';
+import { API_URL_ENV, INSTALL_KEY_ENV, ROTATING_FROM_ENV } from './worker.js';
 import { LISTENER_CPUS } from './installation.js';
 import { CACHE_CAP_ENV } from '../listener/sweep.js';
 
@@ -213,6 +213,9 @@ export interface Roll {
   // the runner fields, neither is ever rolled back, so a rerun can still
   // find it.
   rotatingFrom?: string;
+  // The Worker the install key is from, when not production's (the CLI's
+  // BACKMESH_API_URL, as an rc's e2e sets for staging).
+  apiUrl?: string;
 }
 
 /** The Secret's full value set, so every writer (a roll, its restore, and
@@ -226,10 +229,12 @@ export function secretValues({
   runners,
   rotatingFrom,
   cacheCapGb,
+  apiUrl,
 }: {
   org: string;
   orgId: number;
   installKey: string;
+  apiUrl?: string;
   // A listener from before this Secret uses its built-in image.
   runnerImage?: string;
   runners?: string;
@@ -244,6 +249,7 @@ export function secretValues({
     ...(runners && { [RUNNERS_ENV]: runners }),
     ...(rotatingFrom && { [ROTATING_FROM_ENV]: rotatingFrom }),
     ...(cacheCapGb && { [CACHE_CAP_ENV]: String(cacheCapGb) }),
+    ...(apiUrl && { [API_URL_ENV]: apiUrl }),
   };
 }
 
@@ -277,6 +283,7 @@ export async function rollListener(
         runners,
         rotatingFrom: next.rotatingFrom,
         cacheCapGb: next.cacheCapGb,
+        apiUrl: next.apiUrl,
       }),
     );
   await save(next.runnerImage, next.runners);

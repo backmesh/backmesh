@@ -1,8 +1,11 @@
 name: Worker setup
 
-# Sets up the Worker, idempotently (worker/scripts/setup.ts):
+# The Worker's first setup only, idempotently (worker/scripts/setup.ts):
 # - the D1 database backmesh-billing and its migrations;
 # - the Worker on api.backmesh.com, and its secrets.
+# Each release deploys the Worker after that (release.yml's worker job), so
+# api.backmesh.com runs the latest release's commit; apply this only to set
+# up the Cloudflare account and the secrets the first time.
 # A dry run, the default, only reads and prints the plan. Dispatch only;
 # the owner adds the secrets its steps read first.
 on:
@@ -23,10 +26,10 @@ concurrency:
 
 jobs:
   setup:
-    # GitHub-hosted, as the recovery path: this deploys the Worker,
-    # which mints the listener's installation tokens,
-    # so a broken Worker stops backmesh's own runners. The publish
-    # environment is limited to main.
+    # GitHub-hosted: the Worker mints the listener's installation tokens, so
+    # a broken Worker stops backmesh's own runners. The publish environment
+    # is limited to main, so an apply redeploys main's Worker over the
+    # released one: a Worker fix ships as a release (release.yml's deploy).
     runs-on: ubuntu-24.04
     environment: publish
     timeout-minutes: 20

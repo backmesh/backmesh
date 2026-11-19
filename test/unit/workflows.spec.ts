@@ -1,4 +1,13 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import {
+  chmodSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { load } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 
@@ -16,9 +25,19 @@ const TRIGGERS = [
 ];
 
 type Permissions = Record<string, string>;
-type Step = { name?: string; if?: string; run?: string };
+type Step = {
+  id?: string;
+  name?: string;
+  if?: string;
+  run?: string;
+  env?: Record<string, string>;
+};
 type Job = {
   if?: string;
+  needs?: string | string[];
+  env?: Record<string, string>;
+  outputs?: Record<string, string>;
+  strategy?: { 'max-parallel'?: number; matrix?: { include?: unknown[] } };
   steps?: Step[];
   'runs-on'?: string;
   uses?: string;
@@ -28,6 +47,7 @@ type Job = {
 };
 type Workflow = {
   on: Record<string, unknown>;
+  concurrency?: unknown;
   env?: unknown;
   defaults?: unknown;
   permissions?: Permissions;
@@ -66,6 +86,29 @@ function evaluate(expression: string, context: Context): unknown {
   return new Function('startsWith', `'use strict'; return (${expr});`)(
     startsWith,
   );
+}
+
+// Runs a step's script as Actions does (bash -eo pipefail), with `env` and,
+// for each of `commands`, a stub on PATH whose body is that shell.
+function runStep(
+  script: string,
+  {
+    env = {},
+    commands = {},
+  }: {
+    env?: Record<string, string>;
+    commands?: Record<string, string>;
+  },
+) {
+  const bin = mkdtempSync(join(tmpdir(), 'step-'));
+  for (const [name, body] of Object.entries(commands)) {
+    writeFileSync(join(bin, name), `#!/bin/bash\n${body}\n`);
+    chmodSync(join(bin, name), 0o755);
+  }
+  return spawnSync('bash', ['-eo', 'pipefail', '-c', script], {
+    env: { ...process.env, ...env, PATH: `${bin}:${process.env.PATH}` },
+    encoding: 'utf8',
+  });
 }
 
 const unwrap = (value: string) => value.match(/^\$\{\{(.*)\}\}$/s)?.[1];
@@ -176,6 +219,290 @@ describe("e2e.yml's test-org run", () => {
     );
     expect(uninstall.run).toMatch(/backmesh uninstall "\$\{flags\[@\]\}"/);
     expect(sweep.if).toMatch(/^\$\{\{ always\(\) &&/);
-    expect(steps.indexOf(sweep)).toBe(steps.length - 1);
+    expect(steps.indexOf(sweep)).toBeGreaterThan(steps.indexOf(uninstall));
+  });
+});
+
+describe("release.yml's Worker deploy", () => {
+  const release = read('release.yml');
+  const SETUP = 'node worker/scripts/setup.ts --apply';
+  const deploys = Object.entries(release.jobs).filter(([, job]) =>
+    job.steps?.some((s) => s.run?.includes(SETUP)),
+  );
+  const none: Job = {};
+  const [name, deploy] = deploys[0] ?? ['', none];
+  const needs = (job: string): string[] =>
+    [release.jobs[job]!.needs ?? []].flat().flatMap((n) => [n, ...needs(n)]);
+
+  it("deploys backmesh-billing with the publish environment's Cloudflare token, as worker-setup.yml does", () => {
+    expect(deploys.map(([n]) => n)).toHaveLength(1);
+    expect(deploy.environment).toBe('publish');
+    const step = deploy.steps!.find((s) => s.run?.includes(SETUP))!;
+    const { MODE: _, ...setup } = read(
+      'worker-setup.yml',
+    ).jobs.setup!.steps!.find((s) =>
+      s.run?.includes('worker/scripts/setup.ts'),
+    )!.env!;
+    const { RC: _rc, ...env } = step.env!;
+    expect(env).toEqual(setup);
+    expect(step.env!.CLOUDFLARE_API_TOKEN).toBe(
+      '${{ secrets.CLOUDFLARE_API_TOKEN }}',
+    );
+  });
+
+  // The step's own script, with node stubbed to print the setup it runs.
+  const setupOf = (rc: 'true' | 'false') => {
+    const step = deploy.steps!.find((s) => s.run?.includes(SETUP))!;
+    const out = runStep(step.run!, {
+      env: { RC: rc },
+      commands: { node: 'echo "$@"' },
+    });
+    expect(step.env!.RC).toBe('${{ needs.check.outputs.rc }}');
+    return out.stdout.trim();
+  };
+
+  it('deploys production on a release, and staging only on an rc', () => {
+    expect(deploy.if).toBeUndefined();
+    expect(setupOf('false')).toBe('worker/scripts/setup.ts --apply');
+    expect(setupOf('true')).toBe('worker/scripts/setup.ts --apply --staging');
+  });
+
+  it('deploys after the checks and builds, and before anything publishes', () => {
+    expect(needs(name)).toEqual(expect.arrayContaining(['check', 'matrix']));
+    for (const job of ['release', 'public', 'cache-action', 'homebrew']) {
+      expect(needs(job), job).toContain(name);
+    }
+    // Neither an rc nor a release publishes after a failed deploy: with no
+    // `if`, GitHub runs a job only when every job it needs succeeded.
+    expect(release.jobs.release!.needs).toContain(name);
+    expect(release.jobs.release!.if).toBeUndefined();
+  });
+});
+
+describe("e2e.yml's Worker and Azure checks", () => {
+  const e2e = read('e2e.yml');
+
+  // The plan's step that reads the release, run for `version`.
+  const target = (version: string) => {
+    const step = e2e.jobs.plan!.steps!.find((s) => s.id === 'pinned')!;
+    const dir = mkdtempSync(join(tmpdir(), 'plan-'));
+    const out = join(dir, 'output');
+    writeFileSync(out, '');
+    expect(
+      runStep(step.run!, { env: { VERSION: version, GITHUB_OUTPUT: out } })
+        .status,
+    ).toBe(0);
+    return /^api-url=(.*)$/m.exec(readFileSync(out, 'utf8'))?.[1];
+  };
+
+  it('targets the staging Worker for an rc and production for a release', () => {
+    expect(target('v1.2.3-rc.1')).toBe('https://api-staging.backmesh.com');
+    expect(target('v1.2.3')).toBe('https://api.backmesh.com');
+    expect(e2e.jobs.plan!.outputs!['api-url']).toBe(
+      '${{ steps.pinned.outputs.api-url }}',
+    );
+    // The version check, and every CLI call of the fresh install.
+    for (const job of ['worker', 'test-org']) {
+      expect(e2e.jobs[job]!.env?.BACKMESH_API_URL, job).toBe(
+        '${{ needs.plan.outputs.api-url }}',
+      );
+    }
+  });
+
+  it("fails unless the target Worker runs the one built from the tag's commit, before and after the install", () => {
+    const CHECK = 'test/e2e/worker-commit.sh';
+    const check = e2e.jobs.worker!.steps!.find((s) => s.run === CHECK)!;
+    // Two rcs share staging: test-org rechecks once it's done.
+    const last = e2e.jobs['test-org']!.steps!.at(-1)!;
+    expect(last.run).toBe(CHECK);
+    expect(last.if).toBe('${{ always() }}');
+    const want = 'a'.repeat(40);
+    const run = (answer: string) =>
+      runStep(check.run!, {
+        env: {
+          VERSION: 'v1.2.3-rc.1',
+          GITHUB_REPOSITORY: 'backmesh/backmesh',
+          BACKMESH_API_URL: 'https://api-staging.backmesh.com',
+        },
+        // gh answers the tag's commit, curl what the Worker says, if asked
+        // the target's /v1/version.
+        commands: {
+          gh: `echo ${want}`,
+          curl: `[[ " $* " == *" https://api-staging.backmesh.com/v1/version "* ]] || exit 7\n${answer}`,
+        },
+      });
+    expect(run(`echo '{"commit":"${want}"}'`).status).toBe(0);
+    const other = run(`echo '{"commit":"${'b'.repeat(40)}"}'`);
+    expect(other.status).toBe(1);
+    expect(other.stdout).toContain(
+      `api-staging.backmesh.com runs the Worker built from ${'b'.repeat(40)}, not v1.2.3-rc.1's ${want}`,
+    );
+    // A Worker without /v1/version, as v0.4.3's: curl -f fails.
+    expect(run('exit 22').status).toBe(1);
+  });
+
+  it('installs fresh on Azure too, one leg at a time, with no control plane named', () => {
+    const job = e2e.jobs['test-org']!;
+    expect(job.strategy!['max-parallel']).toBe(1);
+    expect(job.strategy!.matrix!.include).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cloud: 'azure',
+          placement: '--runners azure',
+        }),
+      ]),
+    );
+  });
+
+  // Our Azure CI app trusts only ci-install's federated subject, so the
+  // Azure leg signs in from that environment, reading only its Azure IDs.
+  it("signs in to Azure from ci-install's environment and to AWS from e2e's", () => {
+    const job = e2e.jobs['test-org']!;
+    expect(job.environment).toBe('${{ matrix.environment }}');
+    const legs = job.strategy!.matrix!.include as {
+      cloud: string;
+      environment: string;
+    }[];
+    expect(legs.map(({ cloud, environment }) => [cloud, environment])).toEqual([
+      ['aws', 'e2e'],
+      ['azure', 'ci-install'],
+    ]);
+
+    const secrets = (text: string) =>
+      [...text.matchAll(/secrets\.([A-Z0-9_]+)/g)].map((m) => m[1]);
+    expect(new Set(secrets(JSON.stringify(job)))).toEqual(
+      new Set([
+        'AZURE_CLIENT_ID',
+        'AZURE_TENANT_ID',
+        'AZURE_SUBSCRIPTION_ID',
+        'AWS_ROLE_ARN',
+        'E2E_TEST_ORG_DEPLOY_KEY',
+      ]),
+    );
+    // Each cloud's secrets only in its own leg.
+    const only = (cloud: string, names: RegExp) => {
+      for (const [key, value] of Object.entries(job.env!)) {
+        if (names.test(value)) {
+          expect(value, key).toMatch(
+            new RegExp(`^\\$\\{\\{ matrix\\.cloud == '${cloud}' && `),
+          );
+        }
+      }
+      for (const step of job.steps!) {
+        if (names.test(JSON.stringify({ ...step, if: undefined }))) {
+          expect(step.if, step.name ?? step.id).toBe(
+            `matrix.cloud == '${cloud}'`,
+          );
+        }
+      }
+    };
+    only('azure', /secrets\.AZURE_/);
+    only('aws', /secrets\.AWS_/);
+    expect(job.env!.AZURE_SUBSCRIPTION_ID).toBe(
+      "${{ matrix.cloud == 'azure' && secrets.AZURE_SUBSCRIPTION_ID || '' }}",
+    );
+  });
+});
+
+// The test org's runners take jobs only from its own repositories: e2e.yml
+// pushes run.json to a run/<nonce> branch of its e2e repository with a
+// write deploy key, whose push starts labels.yml there (a copy of it is
+// test/e2e/test-org/labels.yml), and reads back the result.json that
+// labels.yml pushes to the same branch.
+describe("the test org's label run", () => {
+  const e2e = read('e2e.yml');
+  const labels = () =>
+    load(readFileSync('test/e2e/test-org/labels.yml', 'utf8')) as Workflow;
+
+  it('is started by a deploy-key push, with no dispatch token', () => {
+    expect(readFileSync(`${DIR}/e2e.yml`, 'utf8')).not.toContain(
+      'DISPATCH_TOKEN',
+    );
+    const step = e2e.jobs['test-org']!.steps!.find(
+      (s) => s.name === "The label member on the test org's runners",
+    )!;
+    expect(step.env!.DEPLOY_KEY).toBe('${{ secrets.E2E_TEST_ORG_DEPLOY_KEY }}');
+    expect(step.run).toContain(`trap 'rm -f "$key"' EXIT`);
+    expect(step.run).toMatch(
+      /GIT_SSH_COMMAND="ssh -i \$key -o IdentitiesOnly=yes" node test\/e2e\/run-test-org-labels\.ts/,
+    );
+  });
+
+  it("runs on a push to run/** only, and calls e2e-labels.yml with run.json's matrix and ref", () => {
+    expect(labels().on).toEqual({ push: { branches: ['run/**'] } });
+    expect(labels().permissions).toEqual({});
+    // One run at a time: a leg's queued label jobs never reach the next's.
+    expect(labels().concurrency).toEqual({
+      group: 'labels',
+      'cancel-in-progress': true,
+    });
+    const dir = mkdtempSync(join(tmpdir(), 'run-'));
+    const matrix = { include: [{ label: 'backmesh-4', cloud: 'azure' }] };
+    writeFileSync(
+      join(dir, 'run.json'),
+      JSON.stringify({ matrix, ref: 'a'.repeat(40), nonce: 'n1' }, null, 2),
+    );
+    const out = join(dir, 'output');
+    writeFileSync(out, '');
+    const step = labels().jobs.read!.steps!.find((s) => s.id === 'run')!;
+    expect(
+      runStep(`cd ${dir}\n${step.run!}`, { env: { GITHUB_OUTPUT: out } })
+        .status,
+    ).toBe(0);
+    expect(readFileSync(out, 'utf8')).toBe(
+      `matrix=${JSON.stringify(matrix)}\nref=${'a'.repeat(40)}\n`,
+    );
+    // Only a commit: run.json's ref is checked out on the test org's runners.
+    writeFileSync(
+      join(dir, 'run.json'),
+      JSON.stringify({ matrix, ref: 'main', nonce: 'n1' }),
+    );
+    expect(
+      runStep(`cd ${dir}\n${step.run!}`, { env: { GITHUB_OUTPUT: out } })
+        .status,
+    ).not.toBe(0);
+    expect(labels().jobs.read!.outputs).toEqual({
+      matrix: '${{ steps.run.outputs.matrix }}',
+      ref: '${{ steps.run.outputs.ref }}',
+    });
+    expect(labels().jobs.labels).toMatchObject({
+      needs: 'read',
+      uses: 'backmesh/backmesh/.github/workflows/e2e-labels.yml@main',
+      with: {
+        matrix: '${{ needs.read.outputs.matrix }}',
+        ref: '${{ needs.read.outputs.ref }}',
+      },
+    });
+  });
+
+  it("pushes result.json to the same branch whatever the label jobs did, but doesn't re-create a deleted one", () => {
+    const job = labels().jobs.result!;
+    expect(job.if).toBe('${{ always() }}');
+    expect(job.needs).toEqual(['read', 'labels']);
+    expect(job.permissions).toEqual({ contents: 'write' });
+    const step = job.steps!.find((s) => s.run?.includes('result.json'))!;
+    expect(step.env).toMatchObject({
+      CONCLUSION: '${{ needs.labels.result }}',
+    });
+    const dir = mkdtempSync(join(tmpdir(), 'result-'));
+    const out = runStep(`cd ${dir}\n${step.run!}`, {
+      env: {
+        CONCLUSION: 'failure',
+        URL: 'https://github.com/backmesh-dryrun/e2e/actions/runs/7',
+        GITHUB_REF: 'refs/heads/run/n1',
+        GITHUB_SHA: 'b'.repeat(40),
+      },
+      commands: { git: `echo "$*" >>${dir}/git.log` },
+    });
+    expect(out.status).toBe(0);
+    expect(JSON.parse(readFileSync(join(dir, 'result.json'), 'utf8'))).toEqual({
+      conclusion: 'failure',
+      url: 'https://github.com/backmesh-dryrun/e2e/actions/runs/7',
+    });
+    expect(readFileSync(join(dir, 'git.log'), 'utf8')).toMatch(
+      new RegExp(
+        `^add result\\.json\n.* commit .*\npush --force-with-lease=refs/heads/run/n1:${'b'.repeat(40)} origin HEAD:refs/heads/run/n1\n$`,
+      ),
+    );
   });
 });

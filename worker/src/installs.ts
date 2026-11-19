@@ -207,6 +207,16 @@ export async function relaySignIn(request: Request, env: Env) {
     : Response.json({ github_token: token });
 }
 
+// The staging Worker holds the production App's key and runs rc code, so it
+// serves only the test orgs its STAGING_ORGS names (wrangler.jsonc);
+// production, without it, serves every org. A refusal, else null.
+export function notServed(env: Env, org: string) {
+  const orgs = env.STAGING_ORGS?.toLowerCase().split(',');
+  if (!orgs || orgs.includes(org.toLowerCase())) return null;
+  const error = `This backmesh Worker serves only its test orgs, not ${org}.`;
+  return Response.json({ error }, { status: 403 });
+}
+
 // POST /v1/installs { org, device_code, install? }: 202 while the user
 // hasn't finished, then the key and the token once they have, if they're an
 // admin of the org. `install`, the install's ID when signing in again, gets
@@ -225,6 +235,8 @@ export async function createInstall(request: Request, env: Env) {
       { status: 400 },
     );
   }
+  const refused = notServed(env, org);
+  if (refused) return refused;
   const token = await deviceToken(env, device_code);
   if (token instanceof Response) return token;
   // Checked here, returned to the signer, and never stored.

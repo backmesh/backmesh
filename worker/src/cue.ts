@@ -7,7 +7,7 @@
 //   POST /v1/cue { org, tag, hash, sealed: [{ kid, enc, ct }] }
 //   GET  /v1/cue/connect            the listener's WebSocket
 import type { Env } from './index.js';
-import { keyInstall, orgMembership, sha256 } from './installs.js';
+import { keyInstall, notServed, orgMembership, sha256 } from './installs.js';
 
 declare const caches: {
   default: {
@@ -67,6 +67,8 @@ async function signIn(request: Request, env: Env, org: unknown) {
   if (typeof org !== 'string' || !/^[A-Za-z0-9-]{1,39}$/.test(org)) {
     return json({ error: 'Name the org.' }, 400);
   }
+  const refused = notServed(env, org);
+  if (refused) return refused;
   const member = await cueMember(origin, token, org, admit);
   if (member === 'limited') {
     return json({ error: 'Too many requests; retry later.' }, 429);

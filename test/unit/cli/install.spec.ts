@@ -392,6 +392,22 @@ describe('install', () => {
     });
   });
 
+  it('points the listener at the Worker install signed in through', async () => {
+    const values = async (env: NodeJS.ProcessEnv) => {
+      const { deps, requests } = setUp({ env });
+      await install(asked, deps);
+      const secret = requests.find((r) =>
+        r.startsWith('PUT /v1/secrets/backmesh-acme '),
+      )!;
+      return JSON.parse(secret.split(' ')[2]!).values as Record<string, string>;
+    };
+    // The staging Worker's install key is unknown to production's.
+    expect(
+      await values({ BACKMESH_API_URL: 'https://api-staging.backmesh.com' }),
+    ).toMatchObject({ BACKMESH_API_URL: 'https://api-staging.backmesh.com' });
+    expect(await values({})).not.toHaveProperty('BACKMESH_API_URL');
+  });
+
   it("runs install's steps in order, making each cloud's role through its CLI", async () => {
     const { deps, calls, commands, requests, lines, tokens, refreshable } =
       setUp();
