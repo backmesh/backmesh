@@ -27,6 +27,9 @@ function world(deployed = ['17 3 * * *'], worker = 'backmesh-billing') {
     // The Worker's cron triggers, as Cloudflare lists them.
     crons: [] as string[],
     deployed: false,
+    // Deploys that upload the Worker and then fail, as wrangler 4.158's
+    // first deploy of a Worker does on Cloudflare (10007).
+    failedDeploys: 0,
   };
   const fetch = async (
     input: string | URL | Request,
@@ -66,8 +69,9 @@ function world(deployed = ['17 3 * * *'], worker = 'backmesh-billing') {
     // As wrangler deploy does: the config's triggers replace the Worker's.
     if (command === 'deploy') {
       deploys.push(args);
-      cf.crons = deployed;
       cf.deployed = true;
+      if (cf.failedDeploys-- > 0) throw new Error('code: 10007');
+      cf.crons = deployed;
     }
     if (command === 'd1 create')
       cf.databases.push({ uuid: 'db-uuid', name: args[2]! });
@@ -131,6 +135,20 @@ describe('Worker setup', () => {
 
     const { GITHUB_SHA: _, ...noCommit } = ENV;
     await expect(world().run(true, noCommit)).rejects.toThrow('GITHUB_SHA');
+  });
+
+  it("deploys a new Worker again when wrangler's first deploy can't read it back", async () => {
+    const w = world(undefined, 'backmesh-staging');
+    w.cf.failedDeploys = 1;
+    await w.run(true, ENV, true);
+    expect(w.deploys).toHaveLength(2);
+    expect(w.log).toContain("The Worker's cron triggers: 17 3 * * *.");
+
+    // A second failure is real, and stops the setup.
+    const again = world();
+    again.cf.failedDeploys = 2;
+    await expect(again.run(true)).rejects.toThrow('10007');
+    expect(again.deploys).toHaveLength(2);
   });
 
   it('sets up staging apart from production: its own Worker, database and hostname', async () => {
