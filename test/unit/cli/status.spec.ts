@@ -136,7 +136,12 @@ const current = (resourceKey: string, currentLimit: number) => ({
 });
 
 const QUOTA: object | Response = {
-  entries: [current('aws:l-34b43a08', 640), current('aws:l-1216c47a', 128)],
+  entries: [
+    current('aws:l-34b43a08', 640),
+    current('aws:l-1216c47a', 128),
+    current('aws:l-3819a6df', 0),
+    current('aws:l-db2e81ba', 8),
+  ],
 };
 
 function setUp({
@@ -252,7 +257,7 @@ describe('status', () => {
           org: 'acme',
           listener: {
             runners: [
-              'aws us-east-2, 16 labels; quota: 640 spot vCPUs (160 backmesh-4 jobs at once), 128 on-demand vCPUs (32 backmesh-4 jobs at once)',
+              'aws us-east-2, 18 labels; quota: 640 spot vCPUs (160 backmesh-4 jobs at once), 128 on-demand vCPUs (32 backmesh-4 jobs at once); GPU quota: 0 spot vCPUs (0 backmesh-gpu-t4 jobs at once), 8 on-demand vCPUs (2 backmesh-gpu-od-t4 jobs at once); raise EC2 "All G and VT Spot Instance Requests" (L-3819A6DF) in us-east-2 to run backmesh-gpu-t4',
             ],
           },
           vm: 'bml-l8u5e-acme00',
@@ -417,7 +422,7 @@ describe('status', () => {
     );
     expect(text).toContain(`Runner image: ${RUNNER_IMAGE}`);
     expect(text).toContain(
-      'Runner VMs: aws us-east-2, 16 labels; quota: 640 spot vCPUs (160 backmesh-4 jobs at once), 128 on-demand vCPUs (32 backmesh-4 jobs at once)',
+      'Runner VMs: aws us-east-2, 18 labels; quota: 640 spot vCPUs (160 backmesh-4 jobs at once), 128 on-demand vCPUs (32 backmesh-4 jobs at once); GPU quota: 0 spot vCPUs (0 backmesh-gpu-t4 jobs at once), 8 on-demand vCPUs (2 backmesh-gpu-od-t4 jobs at once); raise EC2 "All G and VT Spot Instance Requests" (L-3819A6DF) in us-east-2 to run backmesh-gpu-t4',
     );
     expect(text).toContain('No warnings.');
     expect(text).not.toContain('\n\n\n');
@@ -447,7 +452,7 @@ describe('status', () => {
       ),
     });
     expect(formatStatus(await read())).toContain(
-      'Runner VMs: aws us-east-2, 16 labels; quota: unread (Credential "bm-aws" not found)',
+      'Runner VMs: aws us-east-2, 18 labels; quota: unread (Credential "bm-aws" not found)',
     );
     // A read the control plane made and the cloud refused.
     const { read: refused } = setUp({
@@ -518,6 +523,30 @@ describe('status', () => {
     );
   });
 
+  it("says a standby listener that can't reach the control plane, without blaming its token", async () => {
+    const report = await setUp({
+      listener: probed({
+        ...LISTENER.status,
+        anycloud: {
+          since: '2026-11-05T11:00:00.000Z',
+          error: 'TypeError: fetch failed',
+        },
+      }),
+    }).read();
+    expect(report.warnings).toEqual([
+      "acme: the listener hasn't reached the control plane since 2026-11-05 11:00Z: TypeError: fetch failed.",
+    ]);
+  });
+
+  it('says a listener left in standby takes no jobs until `backmesh upgrade`', async () => {
+    const report = await setUp({
+      listener: probed(LISTENER.status, 'acme', { BACKMESH_STANDBY: '1' }),
+    }).read();
+    expect(report.warnings).toEqual([
+      "acme's listener is in standby and takes no jobs: its move off bm-control didn't finish. Run `backmesh upgrade`.",
+    ]);
+  });
+
   it('says a lost listener VM needs `backmesh upgrade`', async () => {
     const report = await setUp({ lost: ['backmesh-acme'] }).read();
     expect(report.warnings).toEqual([
@@ -555,7 +584,11 @@ describe('status', () => {
     expect(formatStatus(report)).toContain('Warnings:');
   });
 
-  it('asks for Actions: write until the installation has it, quiet for an older listener', async () => {
+  // The listener's token asks for Actions read only (owner, 2026-11-19):
+  // the Worker reruns for it.
+  // The installation's Actions permission, which backmesh.com's reruns and
+  // cancels need at write (the listener's own token reads only).
+  it('asks for Actions: write until the installation grants it, quiet for an older listener', async () => {
     for (const [actionsPermission, warned] of [
       ['read', true],
       ['none', true],
@@ -571,28 +604,12 @@ describe('status', () => {
         warned
           ? [
               expect.stringContaining(
-                `has Actions: ${actionsPermission}; it needs Actions: write`,
+                `The backmesh App has Actions: ${actionsPermission} on ${LISTENER.org ?? 'acme'}; backmesh.com needs Actions: write there to rerun reclaimed jobs and cancel fork runs.`,
               ),
             ]
           : [],
       );
     }
-  });
-
-  it('names cancelling fork runs too when the install has public labels', async () => {
-    const [set] = LISTENER.status.scaleSets;
-    const { read } = setUp({
-      listener: probed({
-        ...LISTENER.status,
-        actionsPermission: 'read',
-        scaleSets: [set!, { ...set!, label: 'backmesh-public-4' }],
-      }),
-    });
-    expect((await read()).warnings).toEqual([
-      expect.stringContaining(
-        'it needs Actions: write to rerun reclaimed jobs and to cancel fork runs that ask for a label other than backmesh-public-*.',
-      ),
-    ]);
   });
 
   it.each([

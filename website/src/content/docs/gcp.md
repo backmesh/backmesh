@@ -22,7 +22,8 @@ A job's VM is the first type in its [label's](/labels/) list that has capacity:
 | `backmesh-16` | 16   | 64 GiB | `n2-standard-16`, `n2d-standard-16` |
 
 The [KVM labels](/labels/#kvm) use `n2` only, since `n2d` doesn't support
-nested virtualization. When GCP is the control plane's cloud, its labels are
+nested virtualization. GCP has no [GPU labels](/labels/#gpu) yet: anycloud
+can't launch a T4 VM there. When GCP is the control plane's cloud, its labels are
 plain, as above; otherwise they name it, such as `backmesh-gcp-4`.
 
 ## Regions
@@ -44,9 +45,9 @@ the Compute, IAM, IAM Credentials and Security Token Service APIs, and creates:
   control plane, so no service account keys are stored.
 - **Cache buckets**, through that connection: one per runner region,
   `bm-cache-<id>-<region>`, for the [cache](/cache/).
-- **The control plane**, when GCP is its cloud: an `e2-standard-2` VM and an
-  `e2-small` VM for the listener, with their disks and public addresses, and a
-  checkpoint bucket for its backups.
+- **The control plane**, when GCP is its cloud: an `e2-standard-2` VM, with its
+  disk and public address, and a checkpoint bucket for its backups; and each
+  org's listener on its own `e2-small` VM, with its disk and public address.
 
 [Uninstall](/uninstall/) deletes the VMs and buckets. It asks before deleting
 the checkpoint bucket, and leaves the role connection's setup for you to

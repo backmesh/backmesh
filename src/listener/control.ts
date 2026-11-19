@@ -19,6 +19,8 @@ export interface ControlDeps {
   broker(): ListenerStatus['broker'];
   // The App's installation missing at the broker, even after a token.
   notInstalled(): ListenerStatus['notInstalled'];
+  // The control plane refusing the listener's service token.
+  anycloud(): ListenerStatus['anycloud'];
 }
 
 // What the listener's loopback server answers (`serve`). It's up before the
@@ -57,6 +59,7 @@ export class ListenerControl {
       actionsPermission: this.installed?.actionsPermission() ?? null,
       broker: this.deps.broker(),
       notInstalled: this.deps.notInstalled(),
+      anycloud: this.deps.anycloud(),
       telemetry: this.installed?.telemetry(),
       ...(this.installed?.scaler.status() ?? {
         runners: 0,
@@ -97,7 +100,7 @@ export class ListenerControl {
 
 // The loopback server: `backmesh status` and `upgrade` read `/status`,
 // `uninstall` posts and polls `/drain`, through `anycloud exec`. On port 8080
-// in the Pod.
+// in the listener's container.
 export function serve(control: ListenerControl, port = 8080) {
   return createServer((request, response) => {
     let body: unknown;

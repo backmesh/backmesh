@@ -16,10 +16,17 @@ import {
   Upstream,
 } from './fakes.js';
 
+// What the App holds (owner, 2026-11-19): Actions write is the Worker's
+// own, for /v1/rerun.
 const ALL = {
   organization_self_hosted_runners: 'write',
   actions: 'write',
-  checks: 'write',
+  metadata: 'read',
+};
+// What an install key's token gets: no more than a runner manager's role.
+const KEY_TOKEN = {
+  organization_self_hosted_runners: 'write',
+  actions: 'read',
   metadata: 'read',
 };
 
@@ -119,14 +126,14 @@ describe('POST /v1/token', () => {
     expect(upstream.calls).toEqual([]);
   });
 
-  it('finds the App through the login the device sign-in stored', async () => {
+  it('finds the App through the login the sign-in stored', async () => {
     upstream.memberships.set('alice', [
       { id: 11, login: 'acme', role: 'admin' },
     ]);
     upstream.installations.set(11, { id: 7, login: 'acme', permissions: ALL });
     const signedIn = await call('/v1/installs', null, {
       org: 'acme',
-      device_code: 'alice',
+      github_token: 'token-alice',
     });
     const { key } = (await signedIn.json()) as { key: string };
 
@@ -160,12 +167,43 @@ describe('POST /v1/token', () => {
     expect(await res.json()).toEqual({
       token: 'ghs_7',
       expires_at: '2026-11-06T13:00:00Z',
-      permissions: ALL,
+      permissions: KEY_TOKEN,
+      installation_permissions: ALL,
       org: { id: 11, login: 'acme-old' },
     });
   });
 
-  it('asks only for the four permissions, narrowed to what the installation grants', async () => {
+  it("mints a key's token with Self-hosted runners write, Actions read and Metadata only", async () => {
+    await installed(11, { id: 7, login: 'acme', permissions: ALL });
+
+    const res = await mint(11);
+
+    expect(upstream.mints).toEqual([KEY_TOKEN]);
+    // And what the installation grants the App, so the listener can say
+    // when an owner hasn't accepted Actions write for backmesh.com.
+    expect(await res.json()).toMatchObject({
+      permissions: KEY_TOKEN,
+      installation_permissions: ALL,
+    });
+  });
+
+  it("reads the installation again when its cached grant isn't Actions write, so an owner's acceptance shows", async () => {
+    await installed(11, {
+      id: 7,
+      login: 'acme',
+      permissions: { ...ALL, actions: 'read' },
+    });
+    expect(await (await mint(11)).json()).toMatchObject({
+      installation_permissions: { actions: 'read' },
+    });
+    upstream.installations.get(11)!.permissions.actions = 'write';
+
+    expect(await (await mint(11)).json()).toMatchObject({
+      installation_permissions: { actions: 'write' },
+    });
+  });
+
+  it('asks only for those, narrowed to what the installation grants', async () => {
     await installed(11, {
       id: 7,
       login: 'acme',
@@ -221,7 +259,7 @@ describe('POST /v1/token', () => {
     const res = await mint(11);
 
     expect(await res.json()).toMatchObject({
-      permissions: ALL,
+      permissions: KEY_TOKEN,
       org: { id: 11, login: 'acme-renamed' },
     });
     expect(upstream.calls).toContain('GET api.github.com/app/installations/7');
@@ -238,7 +276,7 @@ describe('POST /v1/token', () => {
         outcome: 'ok',
         org: 11,
         installation: 7,
-        permissions: JSON.stringify(ALL),
+        permissions: JSON.stringify(KEY_TOKEN),
         expires_at: '2026-11-06T13:00:00Z',
         ip: '203.0.113.7',
         ray: 'ray-1',
@@ -269,6 +307,25 @@ describe('POST /v1/token', () => {
   });
 });
 
+// A cue credential bound to the orgs, as `/v1/cue/sign-in` keeps one.
+const cueCredential = (hash: string, ...orgs: [number, string][]) =>
+  env.DB.prepare(
+    'INSERT INTO cue_credentials (hash, user_id, login, orgs, expires_at) VALUES (?, 1, ?, ?, ?)',
+  )
+    .bind(
+      hash,
+      'alice',
+      JSON.stringify(orgs.map(([id, login]) => ({ id, login }))),
+      Date.now() + 86_400_000,
+    )
+    .run();
+const cueCredentials = async () =>
+  (
+    await env.DB.prepare(
+      'SELECT hash, orgs FROM cue_credentials ORDER BY hash',
+    ).all<{ hash: string; orgs: string }>()
+  ).results.map((r) => ({ hash: r.hash, orgs: JSON.parse(r.orgs) }));
+
 describe("uninstall's cleanup", () => {
   beforeEach(async () => {
     await installed(11, { id: 7, login: 'acme', permissions: ALL });
@@ -280,12 +337,10 @@ describe("uninstall's cleanup", () => {
       { id: 11, login: 'acme', role: 'member' },
     ]);
   });
-  // The sign-in, with the install key when the CLI could read it.
-  const cleanup = (
-    device_code: string,
-    org = 'acme',
-    key: string | null = null,
-  ) => call('/v1/installs/cleanup', key, { device_code, org });
+  // The sign-in: a user's App token, with the install key when the CLI
+  // could read it.
+  const cleanup = (user: string, org = 'acme', key: string | null = null) =>
+    call('/v1/installs/cleanup', key, { github_token: `token-${user}`, org });
   const signedIn = async (key: string | null = null) =>
     (await (await cleanup('alice', 'acme', key)).json()) as {
       token: string | null;
@@ -303,10 +358,7 @@ describe("uninstall's cleanup", () => {
     return minted;
   };
 
-  it("polls the sign-in, then mints a runners-only token for the admin's org", async () => {
-    upstream.devicePending = 1;
-
-    expect((await cleanup('alice')).status).toBe(202);
+  it("mints a runners-only token for the owner's org", async () => {
     const res = await cleanup('alice');
 
     expect(await res.json()).toEqual({
@@ -329,51 +381,6 @@ describe("uninstall's cleanup", () => {
     expect(asBob.status).toBe(403);
     expect(otherOrg.status).toBe(403);
     expect(upstream.mints).toEqual([]);
-  });
-
-  it("answers 502 with GitHub's reason when it can't say whether the user is an admin", async () => {
-    upstream.membershipStatus = 403;
-
-    const res = await cleanup('alice');
-    const signIn = await call('/v1/installs', null, {
-      org: 'acme',
-      device_code: 'alice',
-    });
-
-    expect(res.status).toBe(502);
-    // GitHub's reason reaches the caller.
-    expect(await res.json()).toEqual({
-      error: expect.stringContaining('SAML enforcement'),
-    });
-    expect(signIn.status).toBe(502);
-    expect(upstream.mints).toEqual([]);
-    expect(await auditRows()).toEqual([
-      expect.objectContaining({ action: 'cleanup', outcome: 'github_failed' }),
-    ]);
-  });
-
-  it("names an org's OAuth app restriction to the device sign-in and to uninstall", async () => {
-    upstream.restricted.add('acme');
-    const signIn = await call('/v1/installs', null, {
-      org: 'acme',
-      device_code: 'alice',
-    });
-    const res = await cleanup('alice');
-
-    expect(signIn.status).toBe(403);
-    expect(await signIn.json()).toEqual({
-      error:
-        'acme restricts third-party apps: an org owner approves backmesh at https://github.com/organizations/acme/settings/oauth_application_policy, then run install again.',
-    });
-    expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({
-      error:
-        'acme restricts third-party apps: an org owner approves backmesh at https://github.com/organizations/acme/settings/oauth_application_policy, then run uninstall again.',
-    });
-    expect(upstream.mints).toEqual([]);
-    expect(await auditRows()).toContainEqual(
-      expect.objectContaining({ action: 'cleanup', outcome: 'app_restricted' }),
-    );
   });
 
   it("mints only for the installation whose account.id is the admin's org", async () => {
@@ -480,6 +487,47 @@ describe("uninstall's cleanup", () => {
     expect((await refresh(cleanup_id)).status).toBe(401);
   });
 
+  it("revokes the org's cue credentials at the finish, the App kept or not", async () => {
+    await cueCredential('acme', [11, 'acme']);
+    await cueCredential('labs', [12, 'acme-labs']);
+    const { cleanup_id } = await signedIn();
+    await live();
+
+    await finish(cleanup_id);
+
+    expect(await cueCredentials()).toEqual([
+      { hash: 'labs', orgs: [{ id: 12, login: 'acme-labs' }] },
+    ]);
+  });
+
+  it("revokes the org's cue credentials when the App isn't on it", async () => {
+    upstream.installations.delete(11);
+    await cueCredential('acme', [11, 'acme']);
+
+    expect((await cleanup('alice')).status).toBe(200);
+    expect(await cueCredentials()).toEqual([]);
+  });
+
+  it('with keep_app, revokes every key and leaves the installation', async () => {
+    const idle = await mintKey(env.DB, 11);
+    const { cleanup_id } = await signedIn();
+
+    const res = await call('/v1/installs/cleanup/finish', null, {
+      cleanup_id,
+      keep_app: true,
+    });
+
+    expect(await res.json()).toEqual({ removed: false, still_used_by: [] });
+    expect(upstream.installations.has(11)).toBe(true);
+    expect(upstream.calls).not.toContain(
+      'DELETE api.github.com/app/installations/7',
+    );
+    expect((await call('/v1/token', idle.key)).status).toBe(401);
+    // The next install's key mints at once.
+    expect((await mint(11)).status).toBe(200);
+    expect((await finish(cleanup_id)).status).toBe(401);
+  });
+
   it('keeps the installation while another install has gone live since', async () => {
     const { cleanup_id } = await signedIn();
     const other = await live();
@@ -518,12 +566,10 @@ describe("uninstall's cleanup", () => {
   });
 
   it('writes an audit row for every completed or refused call, without a token', async () => {
-    upstream.devicePending = 1;
-    upstream.consumed.add('used');
-    await cleanup('alice');
+    upstream.revoked.add('dave');
     const { cleanup_id } = await signedIn();
     await cleanup('bob');
-    await cleanup('used');
+    await cleanup('dave');
     await call('/v1/installs/cleanup', null, { org: 'acme' });
     await finish(cleanup_id);
 
@@ -542,7 +588,7 @@ describe("uninstall's cleanup", () => {
         ip: '203.0.113.7',
         ray: 'ray-1',
       }),
-      expect.objectContaining({ outcome: 'not_admin', org: null }),
+      expect.objectContaining({ outcome: 'not_admin', org: 11 }),
       expect.objectContaining({ outcome: 'signin_failed' }),
       expect.objectContaining({ outcome: 'bad_request' }),
       expect.objectContaining({

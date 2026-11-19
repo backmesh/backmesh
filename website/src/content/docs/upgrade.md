@@ -17,7 +17,17 @@ every org on the control plane, so it takes no `--org`.
 It checks that the release supports the installation's control plane, upgrades
 the control plane, then restarts each org's listener on the new image, one at
 a time. Running jobs keep going on their VMs through the listener's restart;
-only scaling pauses.
+only scaling pauses. A listener whose VM is gone gets a new VM, from the
+settings the control plane keeps, and one that stopped is started again,
+both before upgrade plans anything, so `--plan` works only after a run
+without it; one whose token the control plane refuses, such as after a
+restore from an older backup, gets a new token. An install from before each
+listener had its own VM moves each org's listener onto one, keeping its
+runner group and labels; the old listener keeps running until the new one
+has checked its settings and token. If a move stops part way, running
+`upgrade` again finishes it. The old shared listener pool is deleted
+once it's empty. Moving one org asks nothing, since its VM costs about what
+the pool did; moving several asks, with their VMs' total.
 
 It plans each org's labels again from the release's catalog, with each
 cloud's [regions](/install/#regions) recomputed the same way install's are —
@@ -91,7 +101,11 @@ GitHub during install.
 An installation made before the GitHub sign-in asks for it once. The App is
 already on your org, so `upgrade` prints a code to enter at
 `https://github.com/login/device` on any device. So does one whose sign-in backmesh
-no longer accepts.
+no longer accepts. A code that expires is replaced by a new one.
+
+A backmesh CLI from v0.4.3 or earlier can't sign in any more: it signs in
+through an OAuth app backmesh retired. Install the current CLI first
+(`curl -fsSL https://backmesh.com/install.sh | sh`), then upgrade.
 
 If `api.backmesh.com` can't be reached during that sign-in, `upgrade` stops
 without changing your listener: the new listener needs the sign-in to start. Retry when it's reachable. `upgrade` also stops when any org's listener doesn't answer,

@@ -12,6 +12,9 @@ export const GET: APIRoute = async ({ site }) => {
     .map((id) => {
       const { data, body = '' } = docs.get(id)!;
       const absolute = body
+        // MDX pages' imports and components aren't Markdown readers can use.
+        .replace(/^import .*$\n?/gm, '')
+        .replace(/^<[A-Z]\w* \/>$\n?/gm, '')
         .replaceAll('](/', `](${site!.origin}/`)
         .replaceAll('](#', `](${site!.origin}/${id}/#`);
       return `# ${data.title}\n\nSource: ${new URL(`/${id}/`, site).href}\n\n${absolute.trim()}`;

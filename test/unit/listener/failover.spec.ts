@@ -430,6 +430,7 @@ describe('quota cap', () => {
       cloud: 'aws',
       regions: ['us-east-2', 'us-west-2'],
       spot: true,
+      kind: 'spot',
       limit: 12,
     });
     expect(formatSlow(status)).toEqual([
@@ -491,9 +492,43 @@ describe('quota cap', () => {
     });
   });
 
+  it("caps a GPU label by its family's quota, not the CPU labels', and names it", async () => {
+    const { q } = quotas({
+      'us-east-2': { spot: 64, onDemand: 64, gpuSpot: 8, gpuOnDemand: 0 },
+    });
+    const GPU: Route = {
+      ...ROUTE,
+      label: 'backmesh-gpu-t4',
+      code: 'd4',
+      vmTypes: ['g4dn.xlarge'],
+      gpu: 'T4',
+    };
+    const env = withQuotas([ROUTE, GPU], q);
+    await flush();
+    env.sets[0]!.statistics = assigned(3);
+    env.sets[1]!.statistics = assigned(3);
+    await env.scaler.reconcile();
+    // 8 GPU spot vCPUs: two T4 runners, while backmesh-4 takes its three.
+    const codes = env.anycloud.submitted.map((s) => s.id.slice(8, 10));
+    expect(codes.filter((c) => c === 'a4')).toHaveLength(3);
+    expect(codes.filter((c) => c === 'd4')).toHaveLength(2);
+    expect(env.anycloud.submitted.find((s) => s.gpu)).toMatchObject({
+      gpu: 'T4',
+      vmTypes: ['g4dn.xlarge'],
+    });
+    const status = env.scaler.status().scaleSets[1]!;
+    expect(status).toMatchObject({
+      gpu: 'T4',
+      quota: { spot: true, kind: 'gpuSpot', limit: 8 },
+    });
+    expect(formatSlow(status)).toEqual([
+      '    capped by aws us-east-2 GPU spot vCPU quota (8); raise EC2 "All G and VT Spot Instance Requests" (L-3819A6DF) in us-east-2',
+    ]);
+  });
+
   it("gives the quota to real jobs before any set's speculative runners", async () => {
     const { q } = quotas({ 'us-east-2': { spot: 12 } });
-    q.limit('aws', 'bm-aws', ['us-east-2'], true, 0);
+    q.limit('aws', 'bm-aws', ['us-east-2'], 'spot', 0);
     const B: Route = { ...ROUTE, label: 'backmesh-8', code: 'a8', vcpus: 8 };
     let wanted = 0;
     const planner = {
@@ -554,7 +589,7 @@ describe('quota cap', () => {
 
   it("shows no cap when only speculative runners were held back, and doesn't count another listener's unplaced runner", async () => {
     const { q } = quotas({ 'us-east-2': { spot: 4 } });
-    q.limit('aws', 'bm-aws', ['us-east-2'], true, 0);
+    q.limit('aws', 'bm-aws', ['us-east-2'], 'spot', 0);
     const planner = {
       observe: () => undefined,
       speculative: () => 2,
@@ -575,13 +610,15 @@ describe('quota cap', () => {
 
   it("doesn't cap GCP, or a region whose read hasn't answered", async () => {
     const { q, logs } = quotas({ 'us-east-2': { spot: 4 } });
-    expect(q.limit('gcp', 'bm-gcp', ['us-central1'], true, 0)).toBeUndefined();
-    q.limit('aws', 'bm-aws', ['us-east-2', 'us-west-1'], true, 0);
+    expect(
+      q.limit('gcp', 'bm-gcp', ['us-central1'], 'spot', 0),
+    ).toBeUndefined();
+    q.limit('aws', 'bm-aws', ['us-east-2', 'us-west-1'], 'spot', 0);
     await flush();
     expect(
-      q.limit('aws', 'bm-aws', ['us-east-2', 'us-west-1'], true, 1),
+      q.limit('aws', 'bm-aws', ['us-east-2', 'us-west-1'], 'spot', 1),
     ).toBeUndefined();
-    expect(q.limit('aws', 'bm-aws', ['us-east-2'], true, 1)).toBe(4);
+    expect(q.limit('aws', 'bm-aws', ['us-east-2'], 'spot', 1)).toBe(4);
     expect(logs).toContainEqual(
       expect.objectContaining({
         msg: 'quota read failed; keeping its last limits, if any',

@@ -7,6 +7,7 @@ import {
   readFile,
   rm,
   symlink,
+  utimes,
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -614,7 +615,12 @@ describe('upload', () => {
 
   it('writes no manifest when a file changed in place after the snapshot', async () => {
     const { workspace, plan } = await planned();
-    await writeFile(join(workspace, 'deps', 'f3.js'), 'torn', { flag: 'r+' });
+    const torn = join(workspace, 'deps', 'f3.js');
+    await writeFile(torn, 'torn', { flag: 'r+' });
+    // Linux stamps mtimes from a coarse clock, so a write just after the
+    // snapshot can read as older than it: date the write past it.
+    const later = new Date(Date.now() + 1000);
+    await utimes(torn, later, later);
     const { store, objects } = memoryStore();
     expect(await upload(plan, async () => store)).toBe('changed');
     expect([...objects.keys()].some((k) => k.endsWith('manifest.json'))).toBe(

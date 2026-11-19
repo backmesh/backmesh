@@ -82,10 +82,16 @@ CLI encrypts them on your machine to your listener's key, and only the listener
 can read them. The listener holds one WebSocket open to receive cues and pings
 it every 20 seconds.
 
-To check you're a member of the org, the CLI signs in with GitHub once, asking
-for `read:org`, and keeps the token on your machine. backmesh.com asks GitHub
-about your membership with it and remembers the answer for five minutes,
-keeping no token. It keeps, for at most 10 minutes, your GitHub user ID per
+To check you may cue the org, the CLI signs in to backmesh's GitHub App once
+and trades that sign-in for a cue credential, which lasts 30 days and is kept
+on your machine. backmesh.com asks GitHub once, at the trade, which orgs' App
+installations you reach (you do when you can access one of their
+repositories: an outside collaborator too, a member with no repository not);
+it keeps your GitHub user ID and login, those orgs and a hash of the
+credential, never a GitHub token. Later cues send only the credential, and
+your listener acts on a cue only if you can push to its repository. The
+credential's orgs are those you reached when it was made, for its 30 days even
+if you leave one; that push check still guards every cue. It keeps, for at most 10 minutes, your GitHub user ID per
 cue for its rate limits, a random tag your CLI makes for each push (each repo
 and branch, new every 10 minutes) so a push's cues count once, a hash per cue
 that only its repeats match, and the encrypted cue for 60 seconds until your
@@ -116,13 +122,16 @@ receives, such as sign-in details.
 - Each token backmesh hands out, and each uninstall sign-in and App removal,
   refused or not, writes one audit row: the install, org and App
   installation, the token's permissions and expiry when there is one, and the
-  caller's IP address and Cloudflare ray ID. Audit rows are deleted after 90
+  caller's IP address and Cloudflare ray ID. Each rerun or cancel the listener
+  asks for writes one row too: the install and org, the repository's owner
+  and name, the run's ID, the outcome, and the caller's IP address and
+  Cloudflare ray ID. Audit rows are deleted after 90
   days.
 
 ## Installs
 
-An org admin signs in with GitHub once, during `backmesh install`. The
-sign-in asks for `read:org`, so backmesh can check you're an admin of the
-org, and `read:packages`, for your control plane. backmesh.com uses that GitHub
-token once and keeps none; it's returned to your machine. It ties the install
+An org owner, or a member who manages the org's self-hosted runners, signs in
+to backmesh's GitHub App once, during `backmesh install`. backmesh.com uses that GitHub token once, to check you can manage
+the org's self-hosted runners, and keeps none; it stays on your machine for
+your control plane. It ties the install
 to your org: no one else can send events or get GitHub tokens for it.

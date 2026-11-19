@@ -238,10 +238,13 @@ describe('the VM commands', () => {
       ORG: 'acme',
       BACKMESH_LISTENER_IMAGE: 'ghcr.io/backmesh/backmesh-listener@sha256:11',
       ANYCLOUD_API_TOKEN: 'acsvc_1',
+      // The Worker's URL, which an rc's e2e sets for staging.
+      BACKMESH_API_URL: 'https://api-staging.backmesh.com',
       HOME: '/root',
     });
     expect(file.split('\n').filter(Boolean).sort()).toEqual([
       'ANYCLOUD_API_TOKEN=acsvc_1',
+      'BACKMESH_API_URL=https://api-staging.backmesh.com',
       'BACKMESH_LISTENER_IMAGE=ghcr.io/backmesh/backmesh-listener@sha256:11',
       'ORG=acme',
     ]);

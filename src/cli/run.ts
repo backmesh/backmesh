@@ -26,7 +26,7 @@ import { workerDeps } from './worker.js';
 import { cue, type CueDeps } from './cue.js';
 import { signInAgain } from './github-sign-in.js';
 import { clusterIdOf, listenerName, readInstallation } from './installation.js';
-import { signInScopes } from '../app/github.js';
+import { signInCheck } from '../app/github.js';
 import { readCompatibility } from '../release/compatibility.js';
 import { install, type InstallDeps } from './install.js';
 import { pickOrg } from './pick-org.js';
@@ -107,7 +107,7 @@ function realInstallDeps(io: CliIo, json: boolean): InstallDeps {
     run: runAnycloud,
     runLong: anycloudBinary(0),
     command: cloudCommand,
-    signInScopes,
+    signInCheck,
     release: async () => readCompatibility(),
     ui: realUi(io, json),
     git: (args) => git(args, AbortSignal.timeout(10_000), io.env),
@@ -130,7 +130,7 @@ function realRotateKeyDeps(io: CliIo, json: boolean): RotateKeyDeps {
     env: io.env,
     run: runAnycloud,
     runLong: anycloudBinary(0),
-    signInScopes,
+    signInCheck,
     print: realUi(io, json).print,
   };
 }
@@ -553,6 +553,10 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       '--control-plane <cloud:region>',
       "when the control plane doesn't answer, its cloud and region, to delete it through your cloud CLI",
     )
+    .option(
+      '--keep-app',
+      'leave the backmesh GitHub App installed on each org, so a later install needs no org owner',
+    )
     .action(
       async (opts: {
         org?: string;
@@ -560,6 +564,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
         deleteCheckpointBucket?: boolean;
         confirm?: string;
         controlPlane?: string;
+        keepApp?: boolean;
       }) => {
         const deps = (io.uninstallDeps ?? realUninstallDeps)(io, json);
         const result = await uninstall(
@@ -569,6 +574,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
             deleteCheckpointBucket: opts.deleteCheckpointBucket ?? false,
             confirm: opts.confirm,
             controlPlane: opts.controlPlane,
+            keepApp: opts.keepApp ?? false,
           },
           deps,
         );

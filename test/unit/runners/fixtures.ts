@@ -40,6 +40,22 @@ function family(
 const aws = (f: string, prices: [number, number], nested = false) =>
   family((n) => `${f}.${AWS_SIZE[n]}`, 'us-east-2', prices, nested);
 
+// A GPU type with one T4, at the catalog's prices of 2026-11-18.
+const t4 = (
+  vmType: string,
+  vCPUs: number,
+  memoryGiB: number,
+  region: string,
+  [spot, onDemand]: [number, number],
+): VmTypeDetails => ({
+  vmType,
+  vCPUs,
+  memoryGiB,
+  accelerators: [{ name: 'T4', count: 1 }],
+  capabilities: { nestedVirtualization: false },
+  regions: [{ region, spotPricePerHour: spot, onDemandPricePerHour: onDemand }],
+});
+
 export const CATALOG = {
   aws: [
     ...aws('m6a', [0.0618, 0.1728]),
@@ -47,6 +63,8 @@ export const CATALOG = {
     ...aws('m6i', [0.0691, 0.192]),
     ...aws('m7i', [0.0481, 0.2016], true),
     ...aws('m8i', [0.0543, 0.2117], true),
+    t4('g4dn.xlarge', 4, 16, 'us-east-2', [0.2732, 0.526]),
+    t4('g4dn.2xlarge', 8, 32, 'us-east-2', [0.3696, 0.752]),
   ],
   // GCP offerings are zones priced at their region.
   gcp: [
@@ -69,6 +87,7 @@ export const CATALOG = {
     ...family((n) => `Standard_D${n}ads_v5`, 'westus2', [0.043, 0.233], false),
     ...family((n) => `standard_d${n}as_v5`, 'westus2', [0.0318, 0.172], true),
     ...family((n) => `Standard_D${n}s_v5`, 'westus2', [0.0355, 0.192], true),
+    t4('Standard_NC4as_T4_v3', 4, 28, 'westus2', [0.1766, 0.526]),
   ],
 };
 

@@ -1,6 +1,9 @@
 ---
 title: FAQ
 description: What backmesh is, and its platforms, installing, start times, isolation, capacity and cost.
+head:
+  - tag: title
+    content: 'backmesh FAQ: open source, platforms, start times, security and cost'
 ---
 
 ## What is backmesh?
@@ -9,9 +12,24 @@ description: What backmesh is, and its platforms, installing, start times, isola
 your own AWS, GCP and Azure accounts. One `backmesh install` sets it up for a
 GitHub org. Each job then gets its own VM, which is deleted when the job ends.
 
-**How does backmesh compare with GitHub-hosted runners?** A workflow changes only its
-`runs-on`. Its jobs run on spot VMs in your accounts, so compute costs up to 10×
-less and your cloud credits apply. Each job waits for its VM to boot, and only
+**Is backmesh open source?** Yes. backmesh is free and open source under the
+Apache License 2.0, and its cache action is under the MIT License. The source
+is at [backmesh/backmesh](https://github.com/backmesh/backmesh). backmesh
+charges no license or per-minute fee; your clouds bill you for the VMs.
+
+**Did backmesh have paid plans?** Early releases did: v0.2.0 announced paid
+plans, and v0.3.0 charged for them after a trial. v0.3.2 removed them, and v0.4.0 made backmesh open
+source. The [changelog](/changelog/) has each release.
+
+**Was backmesh an LLM API proxy?** Earlier, yes. Before it ran GitHub Actions
+runners, the backmesh name was used for a backend that protected LLM API keys
+in apps, now archived at
+[backmesh/llm-proxy](https://github.com/backmesh/llm-proxy). backmesh now runs
+GitHub Actions runners.
+
+**How does backmesh compare with GitHub-hosted runners?** A workflow changes
+only its `runs-on`. Its jobs run on spot VMs in your accounts. In our [build
+benchmarks](/benchmarks/), builds ran up to 2× faster and 5× cheaper, and your cloud credits apply. Each job waits for its VM to boot, and only
 Linux x86-64 jobs in private repositories can use the runners.
 
 **Which clouds does backmesh run on?** AWS, Google Cloud (GCP) and Azure. One installation can use
@@ -20,9 +38,17 @@ the control plane's, `backmesh-gcp-4` in GCP.
 
 ## Will it work?
 
-**Which platforms does backmesh support?** Linux x86-64 only. There are no macOS, Windows, Arm or GPU
+**Which platforms does backmesh support?** Linux x86-64 only. There are no macOS, Windows or Arm
 runners. Jobs that need `/dev/kvm` use the
-[KVM labels](/labels/#kvm).
+[KVM labels](/labels/#kvm), and jobs that need an NVIDIA GPU the
+[GPU labels](/labels/#gpu) on AWS and Azure.
+
+**How do backmesh's GPU runners compare with GitHub's?** Same shape: one Tesla
+T4 and 4 vCPUs, with 16 GiB of memory on AWS to GitHub's 28 GB. At list prices
+(arithmetic, not measured; read 2026-11-18), GitHub's Linux GPU runner costs
+$0.052 a minute. `backmesh-gpu-t4` costs about $0.0046 a minute on AWS spot
+and $0.0029 on Azure spot, and `backmesh-gpu-od-t4` $0.0088 on demand: 6 to 18
+times less, before disks and boots. See [Cost](/cost/#gpu).
 
 **Can public repositories use backmesh?** Not yet. Only private repositories can use the runners. In a public repository, anyone can open a pull request whose workflow runs on a runner, and a runner's VM can reach your other instances in its cloud network. Support waits for runners with a network of their own.
 
@@ -35,12 +61,12 @@ preinstalled toolchains, which setup actions add. See
 [label](/labels/) runs in one cloud. When a VM type has no spot capacity, the
 job's VM is the next VM type in the same cloud.
 
-**What happens when a backmesh job's spot VM is reclaimed?** The job fails, and a check run on
-the commit lists every reclaimed job. When reclaims were the run's only
-failures, backmesh reruns its failed jobs once the run finishes, preferring an
-on-demand runner, at most twice. When it can't rerun them (the job uses
-`backmesh-noretry`, the run is already on its third attempt, or the App lacks
-Actions: write), the check run says to rerun them from the Actions tab. When
+**What happens when a backmesh job's spot VM is reclaimed?** The job fails, and
+the listener's log notes every reclaimed job (`backmesh logs`). When reclaims
+were the run's only failures, backmesh reruns its failed jobs once the run
+finishes, preferring an on-demand runner, at most twice. When it can't rerun
+them (the job uses `backmesh-noretry`, or the run is already on its third
+attempt), the note says to rerun them from the Actions tab. When
 another job failed too, backmesh reruns nothing; rerun the failed jobs as
 usual. See [on demand](/labels/#on-demand).
 
@@ -53,11 +79,9 @@ VM, so no image layers carry over.
 
 ## Installing
 
-**Can I install backmesh when my org restricts OAuth apps?** Yes, once an org
-owner approves backmesh at
-`https://github.com/organizations/<org>/settings/oauth_application_policy`. An
-org with OAuth app access restrictions, the default for a new org, refuses
-install's sign-in until then.
+**Can I install backmesh when my org restricts OAuth apps?** Yes. backmesh
+signs in through its GitHub App, and GitHub Apps aren't subject to an org's
+OAuth app access restrictions.
 
 **Where does backmesh put its control plane?** With several cloud CLIs signed in and no
 `--control-plane`, install picks the first of AWS, GCP and Azure, and the plan
@@ -72,11 +96,13 @@ VM type backmesh's labels use, narrowed to the ones your account allows.
 [More](/install/#regions).
 
 **Can several orgs share one backmesh control plane?** Yes, when they have the same owner:
-run install with the other org and the same `--control-plane`. An admin of that
-org signs in, and install adds only that org's listener. Its plan says the org
+run install with the other org and the same `--control-plane`. An owner of
+that org, or a member who manages its self-hosted runners, signs in, and install adds only that org's listener. Its plan says the org
 joins the others' control plane, and that every org on it must have the same
-owner: their runners use the same cloud connections, and each org's listener
-can read the others' install keys. Agreeing to the plan agrees to that. Run it
+owner: their runners use the same cloud connections, and each org's listener,
+on its own VM, holds a control plane token that can reach the others' install
+keys. Agreeing to the plan agrees to that, and each org adds its own small
+listener VM to the bill. Run it
 from the machine that installed the first org, so the plan can see them. From
 another machine, install finds them only once it reaches the control plane, and
 stops before adding the org, for a new plan; at a terminal, it asks instead.
@@ -116,12 +142,19 @@ api.backmesh.com can't read them, and never the commit. The agent pushes even
 if `cue` fails: when backmesh.com is down, the cue is dropped and CI runs cold,
 as it would without one.
 
-**Can a coding agent in a sandbox cue backmesh?** Yes, with a copied sign-in. A sandbox that starts fresh each time can't
-keep a sign-in. A human can copy one from a machine where backmesh is signed
-in, `~/.backmesh/anycloud/.token`, into the sandbox's secrets as
-`BACKMESH_CUE_TOKEN`, which `backmesh cue` uses first. It is that human's full
-backmesh sign-in, not a cue-only key, so keep it secret; a later sign-in on
-that machine can revoke it.
+**Can a coding agent in a sandbox cue backmesh?** Yes, with a copied cue
+credential. A sandbox that starts fresh each time can't keep a sign-in. On a
+machine, run `backmesh cue --sign-in`, then copy
+`~/.backmesh/anycloud/backmesh-cue-credential` into the sandbox's secrets as
+`BACKMESH_CUE_TOKEN`, which `backmesh cue` uses first. It works only for cues,
+for the orgs whose backmesh App your sign-in reached, for 30 days; keep it
+secret, and copy a new one when it expires. Running `backmesh cue --sign-in`
+again revokes it and any other copy (a cue's own sign-in doesn't), and
+`rotate-key` and `uninstall` end it for their org. Its orgs are those your
+sign-in reached when it was made, for its 30 days even if you leave one; your
+listener still acts only on a cue from someone who can push to the
+repository. After you or an org is renamed on GitHub, run `backmesh cue --sign-in`
+again.
 
 ## Is it safe?
 
@@ -131,8 +164,8 @@ every repository share.
 
 ## What does it cost?
 
-**backmesh's price:** the core features are free, with no credit card required
-and no cap on jobs.
+**backmesh's price:** backmesh is free and open source, with no credit card
+required and no cap on jobs.
 Premium adds Slack monitoring, logs and runtime history; see
 [pricing](/#pricing).
 

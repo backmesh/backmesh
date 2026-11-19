@@ -33,6 +33,22 @@ above — every US region qualifies — narrowed to the ones your account allows
 Each job tries the cheapest region first, then another when Azure refuses for
 capacity or quota. [More](/install/#regions).
 
+## The control plane's region
+
+Before any sign-in, the plan reads `az vm list-skus` for the sizes of the
+always-on VMs install creates: the control plane's `Standard_D2s_v5` when it's
+new, and the org's listener's `Standard_B2s` when it has none yet. When your
+subscription may not create one in the region you chose
+(`NotAvailableForSubscription`, as on some sponsorship and trial offers), the
+plan says so and puts them in the first of the regions above that offers every
+one, such as `centralus`. For a new control plane, it also lists the regions
+after it: if Azure has no capacity for the control plane's VM when install
+creates it, install deletes that cluster's resource group and checkpoint bucket
+and tries the next, without signing in again. The `anycloud-storage` resource
+group and storage account that your subscription's first control plane made
+stay, as other control planes use them. A control plane named `backmesh` that
+already exists in the subscription is resumed in its own region.
+
 ## What install creates
 
 Install works through your `az` CLI, signed in with a subscription, and
@@ -43,9 +59,10 @@ creates:
   trusts only your control plane, so no Azure keys are stored.
 - **Cache buckets**, through that connection: one per runner region,
   `bm-cache-<id>-<region>`, for the [cache](/cache/).
-- **The control plane**, when Azure is its cloud: a `Standard_D2s_v5` VM and a
-  `Standard_B2s` VM for the listener, with their disks and public addresses,
-  and a checkpoint bucket for its backups.
+- **The control plane**, when Azure is its cloud: a `Standard_D2s_v5` VM, with
+  its disk and public address, and a checkpoint bucket for its backups; and
+  each org's listener on its own `Standard_B2s` VM, with its disk and public
+  address.
 
 [Uninstall](/uninstall/) deletes the VMs and buckets. It asks before deleting
 the checkpoint bucket, and leaves the role connection's setup for you to
@@ -58,7 +75,11 @@ quota, and on-demand labels against "Total Regional vCPUs". Install reads both
 through `az vm list-usage` and prints them as how many `backmesh-4` jobs fit at
 once. A region whose quota can't fit one VM of a label gets none of that
 label's runners until you raise it; install and
-[`backmesh status`](/status/) name the quota. [More](/faq/#installing).
+[`backmesh status`](/status/) name the quota. The on-demand
+[GPU label](/labels/#gpu) also counts against "Standard NCASv3_T4 Family
+vCPUs", 0 on most new subscriptions; request at least 4 under
+[Quotas](https://portal.azure.com/#view/Microsoft_Azure_Capacity/QuotaMenuBlade/~/myQuotas)
+in the portal. [More](/faq/#installing).
 
 ## Cost
 

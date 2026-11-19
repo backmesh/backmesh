@@ -26,6 +26,7 @@ const pr = (type: Parameters<typeof message>[0], fields = {}) =>
 // unless a test says otherwise.
 function setup(github: Partial<GateGitHub> = {}, deps: Partial<GateDeps> = {}) {
   const calls: string[] = [];
+  const reasons: string[] = [];
   const notes: Note[] = [];
   const terminated: string[] = [];
   const logs: string[] = [];
@@ -41,8 +42,10 @@ function setup(github: Partial<GateGitHub> = {}, deps: Partial<GateDeps> = {}) {
       private: false,
       fork: true,
     })) as GateGitHub['run'],
-    forceCancel: async ({ runId }: WorkflowRun) => {
+    // Through the Worker's /v1/cancel, with why (owner, 2026-11-19).
+    forceCancel: async ({ runId }: WorkflowRun, reason) => {
       calls.push(`cancel ${runId}`);
+      reasons.push(reason);
     },
     repos: async () => [],
     activeRuns: async () => [],
@@ -69,6 +72,7 @@ function setup(github: Partial<GateGitHub> = {}, deps: Partial<GateDeps> = {}) {
   return {
     gate,
     calls,
+    reasons,
     notes,
     terminated,
     logs,
@@ -321,6 +325,30 @@ describe('Gate', () => {
     expect(calls.filter((c) => c === 'run')).toHaveLength(2);
   });
 
+  // The Worker's own clock may be a little behind; its refusal says it
+  // didn't see the limit, which isn't a refusal for good.
+  it('tries a cancel the Worker found not yet due again after a minute', async () => {
+    let early = true;
+    const { gate, calls, clock, settle } = setup({
+      forceCancel: async () => {
+        calls.push('cancel');
+        if (early) {
+          throw Object.assign(new Error('not yet'), {
+            status: 403,
+            code: 'not_gated',
+          });
+        }
+      },
+    });
+    gate.observe(KVM, pr('JobAssigned'));
+    await settle();
+    early = false;
+    clock.now = 60_000;
+    gate.observe(KVM, pr('JobAssigned', { jobId: 'job-2' }));
+    await settle();
+    expect(calls.filter((c) => c === 'cancel')).toHaveLength(2);
+  });
+
   it('tries a cancel GitHub failed for another reason again after a minute', async () => {
     let fail = true;
     const { gate, calls, clock, settle } = setup({
@@ -452,7 +480,42 @@ describe('Gate', () => {
     expect(planner.speculative(KVM.label, clock)).toBe(2);
   });
 
+  it("tells the Worker why it cancels: a label that isn't public, or the runtime limit", async () => {
+    const { gate, reasons, settle, clock } = setup();
+    gate.observe(KVM, pr('JobAssigned'));
+    await settle();
+    gate.observe(
+      PUBLIC,
+      pr('JobStarted', {
+        workflowRunId: 8,
+        runnerName: 'bmabc12-c4-00000008',
+      }),
+    );
+    await settle();
+    clock.now = LIMIT_MS;
+    await gate.tick();
+    expect(reasons).toEqual(['label', 'limit']);
+  });
+
   describe('the runtime limit', () => {
+    it('ends a later job of a run past the limit as soon as it starts', async () => {
+      const { gate, terminated, settle, clock } = setup();
+      gate.observe(
+        PUBLIC,
+        pr('JobStarted', { runnerName: 'bmabc12-c4-00000007' }),
+      );
+      await settle();
+      clock.now = LIMIT_MS;
+      await gate.tick();
+      clock.now = LIMIT_MS + 60_000;
+      gate.observe(
+        PUBLIC,
+        pr('JobStarted', { jobId: 'job-2', runnerName: 'bmabc12-c4-0000000c' }),
+      );
+      await settle();
+      expect(terminated).toContain('bmabc12-c4-0000000c');
+    });
+
     const started = (runId = 7) =>
       pr('JobStarted', {
         workflowRunId: runId,

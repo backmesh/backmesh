@@ -22,6 +22,10 @@ import {
   fakeWorker,
   githubOrg,
   INSTALL_KEY,
+  DEVICE,
+  GITHUB_TOKEN,
+  NEXT_DEVICE,
+  SIGNED_IN,
   listenerVm,
 } from './fakes.js';
 
@@ -310,7 +314,7 @@ function setUp({
     fetch: async (url, init) => {
       const { host, pathname } = new URL(String(url));
       const method = init?.method ?? 'GET';
-      if (host === 'api.backmesh.com') {
+      if (host === 'api.backmesh.com' || host === 'github.com') {
         // In `calls` too, to order the cleanup against the binary's steps.
         calls.push(`${method} ${pathname}`);
         bearers.push(new Headers(init?.headers).get('authorization'));
@@ -363,8 +367,13 @@ const changes = (calls: string[]) =>
 
 describe('uninstall', () => {
   it('signs in, drains and deletes the listener, cleans up GitHub, deletes the cloud side, then removes the App', async () => {
-    const { deps, calls, lines, refreshable, worker, bearers, github } =
-      setUp();
+    const { deps, calls, lines, refreshable, worker, bearers, github } = setUp({
+      // The first code expires before anyone enters it.
+      worker: fakeWorker({
+        codes: [Response.json(DEVICE), Response.json(NEXT_DEVICE)],
+        polls: [Response.json({ error: 'expired_token' }), GITHUB_TOKEN],
+      }),
+    });
     const result = await uninstall(scripted, deps);
 
     expect(changes(calls)).toEqual([
@@ -392,22 +401,33 @@ describe('uninstall', () => {
     // The hosted API's saved token can go stale, so its client refreshes it.
     expect(refreshable).toEqual([HOSTED]);
     expect(worker.calls).toEqual([
-      'POST /v1/installs/device',
+      'POST github.com/login/device/code',
+      'POST github.com/login/oauth/access_token',
+      'POST github.com/login/device/code',
+      'POST github.com/login/oauth/access_token',
       'POST /v1/installs/cleanup',
       'POST /v1/installs/cleanup/finish',
     ]);
     expect(worker.bodies).toEqual([
-      { device_code: 'dev-3584e1', org: 'acme' },
+      { github_token: SIGNED_IN, org: 'acme' },
       { cleanup_id: CLEANUP_ID },
     ]);
-    // Its admin check keeps no token, so it asks only for read:org.
-    expect(worker.devices).toEqual([{ control_plane: false }]);
-    expect(bearers).toEqual([null, `Bearer ${INSTALL_KEY}`, null]);
+    expect(bearers).toEqual([
+      null,
+      null,
+      null,
+      null,
+      `Bearer ${INSTALL_KEY}`,
+      null,
+    ]);
     // Only backmesh's runners go.
     expect([...github.runners.values()]).toEqual(['build-box', 'bmaster-ci']);
-    expect(lines).toContain(
-      'Sign in with GitHub as an admin of acme, so backmesh removes itself from acme: open https://github.com/login/device and enter ABCD-1234.',
-    );
+    expect(lines.filter((l) => l.startsWith('Sign in'))).toEqual([
+      expect.stringMatching(
+        /^Sign in with GitHub as an owner of acme, so backmesh removes itself from acme: open https:\/\/github\.com\/login\/device and enter ABCD-1234 \(it expires at \d\d:\d\d UTC\)\.$/,
+      ),
+      expect.stringContaining('enter WXYZ-5678'),
+    ]);
     expect(lines).toContain('Removed the backmesh GitHub App from acme.');
     expect(lines.join('\n')).not.toContain('ghs_');
     expect(lines[0]).toMatch(/1 running job will fail/);
@@ -457,7 +477,8 @@ describe('uninstall', () => {
         'POST /v1/installs/cleanup/finish',
       ]);
       // No install key to send.
-      expect(bearers).toEqual([null, null, null]);
+      // GitHub's device flow, then the cleanup and its finish, no key.
+      expect(bearers).toEqual([null, null, null, null]);
       expect(lines).toContain(
         `Removed backmesh's scale sets, runners and runner groups ${groups} from acme.`,
       );
@@ -859,8 +880,8 @@ describe('uninstall', () => {
         ['POST /v1/installs/cleanup'],
       ],
       [
-        fakeWorker({ device: new TypeError('fetch failed') }),
-        "Couldn't reach backmesh.com for the GitHub sign-in",
+        fakeWorker({ polls: [Response.json({ error: 'access_denied' })] }),
+        'The GitHub sign-in was denied.',
         [],
       ],
     ] as const) {
@@ -893,7 +914,8 @@ describe('uninstall', () => {
     const { deps, github } = setUp({ worker });
     await uninstall(scripted, deps);
     expect(worker.calls).toEqual([
-      'POST /v1/installs/device',
+      'POST github.com/login/device/code',
+      'POST github.com/login/oauth/access_token',
       'POST /v1/installs/cleanup',
       'POST /v1/installs/cleanup/token',
       'POST /v1/installs/cleanup/finish',
@@ -914,17 +936,65 @@ describe('uninstall', () => {
           token: null,
           expires_at: null,
           org: { id: 7, login: 'acme' },
-          cleanup_id: CLEANUP_ID,
+          // Nothing for the Worker to finish.
+          cleanup_id: null,
         }),
       ],
     });
     const { deps, calls, lines } = setUp({ worker });
-    await uninstall(scripted, deps);
+    const result = await uninstall(scripted, deps);
     expect(changes(calls).filter((c) => c.startsWith('github'))).toEqual([]);
+    expect(worker.calls).not.toContain('POST /v1/installs/cleanup/finish');
+    expect(result.orgs).toEqual([{ org: 'acme', appRemoved: true }]);
     expect(calls).toContain(DELETE_HOSTED);
     expect(lines).toContain(
       "The backmesh GitHub App isn't installed on acme, so backmesh can't reach its runners there. Check the org's Actions settings for runner groups backmesh-l8u5e-*.",
     );
+  });
+
+  it('with --keep-app, deletes everything else and asks the Worker to keep the App', async () => {
+    const { deps, calls, lines, worker } = setUp({
+      worker: fakeWorker({
+        finishes: [Response.json({ removed: false, still_used_by: [] })],
+      }),
+    });
+
+    const result = await uninstall({ ...scripted, keepApp: true }, deps);
+
+    expect(changes(calls)).toEqual([
+      'POST /v1/installs/cleanup',
+      'exec backmesh-acme POST /drain',
+      'terminate bml-l8u5e-acme00',
+      'api access remove --service backmesh-acme',
+      ...GITHUB_DELETES,
+      'POST /v1/installs/cleanup/finish',
+      'secrets delete backmesh-acme',
+      'node-pool delete np-1',
+      'node-pool delete np-2',
+      DELETE_HOSTED,
+    ]);
+    expect(worker.bodies.at(-1)).toEqual({
+      cleanup_id: CLEANUP_ID,
+      keep_app: true,
+    });
+    expect(result).toMatchObject({
+      orgs: [{ org: 'acme', appRemoved: false }],
+      cloud: 'deleted',
+    });
+    expect(lines).toContain(
+      'The backmesh GitHub App stays on acme, as --keep-app asked.',
+    );
+  });
+
+  it('with --keep-app, fails after deleting everything else when an older Worker removed the App', async () => {
+    const { deps, calls } = setUp();
+
+    await expect(
+      uninstall({ ...scripted, keepApp: true }, deps),
+    ).rejects.toThrow(
+      /removed its GitHub App from acme although --keep-app asked to keep it\. Everything else was uninstalled/,
+    );
+    expect(calls).toContain(DELETE_HOSTED);
   });
 
   it('reports an App another install keeps, and a failed removal', async () => {

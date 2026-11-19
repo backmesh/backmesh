@@ -36,14 +36,27 @@ const range = (rate: ReturnType<typeof classRate>) =>
     ? `$${[...new Set([rate.low, rate.high])].map((v) => v.toFixed(2)).join('–')}`
     : 'an unpriced amount';
 
-/** The line install prints per cloud, priced at its default class. */
+/**
+ * The lines install prints per cloud: priced at its default class, and at
+ * its GPU class when it has one.
+ */
 export function formatRate(
   classes: readonly RunnerClass[],
   details: readonly VmTypeDetails[],
-): string {
+): string[] {
   const [spot, onDemand] = [true, false].map((s) =>
-    classes.find((c) => c.vcpus === 4 && !c.kvm && c.spot === s),
+    classes.find((c) => c.vcpus === 4 && !c.kvm && !c.gpu && c.spot === s),
   );
   const { cloud, regions } = (spot ?? onDemand)!;
-  return `${where(cloud, regions)}: no VM while idle; while its job runs, a ${spot?.label ?? 'backmesh-4'} VM costs about ${range(spot ? classRate(spot, details) : null)} an hour on spot and ${range(onDemand ? classRate(onDemand, details) : null)} on demand, plus its disk, and the other sizes scale with their vCPUs`;
+  const [gpuSpot, gpuOnDemand] = [true, false].map((s) =>
+    classes.find((c) => c.gpu && c.spot === s),
+  );
+  return [
+    `${where(cloud, regions)}: no VM while idle; while its job runs, a ${spot?.label ?? 'backmesh-4'} VM costs about ${range(spot ? classRate(spot, details) : null)} an hour on spot and ${range(onDemand ? classRate(onDemand, details) : null)} on demand, plus its disk, and the other sizes scale with their vCPUs`,
+    ...(gpuSpot && gpuOnDemand
+      ? [
+          `${where(cloud, gpuSpot.regions)}: a ${gpuSpot.label} VM (${gpuSpot.vmTypes.join(', ')}) costs about ${range(classRate(gpuSpot, details))} an hour on spot and ${range(classRate(gpuOnDemand, details))} on demand, plus its disk`,
+        ]
+      : []),
+  ];
 }

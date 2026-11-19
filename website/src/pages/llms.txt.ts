@@ -20,20 +20,32 @@ export const GET: APIRoute = async ({ site }) => {
       }),
     ].join('\n'),
   );
+  const posts = [...docs.values()]
+    .filter((d) => d.id.startsWith('blog/'))
+    .sort((a, b) => +(b.data.date ?? 0) - +(a.data.date ?? 0))
+    .map(
+      (d) => `- [${d.data.title}](${link(`/${d.id}/`)}): ${d.data.description}`,
+    );
   const text = `# backmesh
 
 > ${SUMMARY}
 
-- Linux x86-64 jobs in private repositories only: no macOS, Windows, Arm or GPU runners.
+- Linux x86-64 jobs in private repositories only: no macOS, Windows or Arm runners.
+- GPU: NVIDIA T4 runners on AWS and Azure, not yet GCP (${link('/labels/#gpu')}). At list prices, $0.18–$0.53 an hour, spot to on demand, against $3.12 for GitHub-hosted: 6–18× cheaper (${link('/cost/#gpu')}); speed isn't benchmarked.
 - A job's \`runs-on\` label, such as \`backmesh-4\`, picks its size and cloud. Spot is the default; \`backmesh-od-*\` labels run on demand.
+- Builds: in our benchmarks (${link('/benchmarks/')}), a 4-vCPU \`backmesh-4\` spot VM ran Docker, Rust and TypeScript builds 1.4 to 2.1× faster than GitHub's 2-vCPU \`ubuntu-latest\`, at 2.8 to 5.5× less per build (up to 2× faster, 5× cheaper builds), before backmesh's control plane.
 - Compute: ${MINUTES.toLocaleString('en-US')} minutes a month of 4-vCPU Linux jobs cost ${money(headline.github)} on GitHub-hosted runners and ${money(headline.low)}–${money(headline.high)} on backmesh at spot prices, control plane included, before disks, VM boots and runners started ahead of jobs.
-- Pricing: the core features are free, with unlimited jobs and the cache included. Premium adds Slack monitoring, logs and runtime history; talk to us at luis@backmesh.com.
+- Pricing: free and open source (Apache-2.0; the cache action is MIT), with unlimited jobs and the cache included; your clouds bill you for the VMs. Premium adds Slack monitoring, logs and runtime history; talk to us at luis@backmesh.com.
 
 ## Agents
 
 - [SKILL.md](${link('/SKILL.md')}): how a coding agent installs backmesh, moves jobs onto its runners and cues each push.
 
 ${sections.join('\n\n')}
+
+## Blog
+
+${posts.join('\n')}
 
 ## Optional
 

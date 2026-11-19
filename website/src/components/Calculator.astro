@@ -1,0 +1,135 @@
+---
+// The cost calculator: GitHub-hosted 4-core Linux against backmesh's 4-vCPU
+// spot VMs on each cloud, from the same figures as the landing page
+// (src/cost.ts), for the minutes and job length a visitor enters.
+import { CATALOG_DATE, GITHUB_4_CORE_PER_MIN, per1000 } from '../cost';
+
+const data = JSON.stringify({
+  github: GITHUB_4_CORE_PER_MIN,
+  clouds: per1000.map((p) => ({
+    cloud: p.cloud,
+    region: p.region,
+    fixed: p.controlPlane,
+    low: p.low / 1000,
+    high: p.high / 1000,
+    bootLow: p.bootLow / 1000,
+    bootHigh: p.bootHigh / 1000,
+  })),
+});
+---
+
+<div class="calc not-content" data-cost={data}>
+  <div class="fields">
+    <label>
+      <span>Minutes a month of 4-vCPU Linux jobs</span>
+      <input name="minutes" type="number" min="0" step="1000" value="150000" />
+    </label>
+    <label>
+      <span>Average job length, minutes</span>
+      <input name="job" type="number" min="1" step="1" value="8" />
+    </label>
+  </div>
+  <table>
+    <thead>
+      <tr><th>Where jobs run</th><th>Per month</th><th>Saving</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  <p class="note">
+    GitHub-hosted <code>linux_4_core</code> at ${GITHUB_4_CORE_PER_MIN} a minute,
+    before included usage. backmesh: the control plane, plus spot VMs over the
+    cheapest and most expensive VM types and their boots, at spot prices
+    on {CATALOG_DATE}. Disks and runners started ahead of jobs aren't included.
+  </p>
+</div>
+
+<script>
+  type Cloud = {
+    cloud: string;
+    region: string;
+    fixed: number;
+    low: number;
+    high: number;
+    bootLow: number;
+    bootHigh: number;
+  };
+  const money = (v: number) => `$${Math.round(v).toLocaleString('en-US')}`;
+  for (const root of document.querySelectorAll<HTMLElement>('.calc')) {
+    const cost = JSON.parse(root.dataset.cost!) as {
+      github: number;
+      clouds: Cloud[];
+    };
+    const minutes = root.querySelector<HTMLInputElement>('[name=minutes]')!;
+    const job = root.querySelector<HTMLInputElement>('[name=job]')!;
+    const body = root.querySelector('tbody')!;
+    const render = () => {
+      const m = Math.max(0, Number(minutes.value) || 0);
+      const jobs = m / Math.max(1, Number(job.value) || 1);
+      const github = m * cost.github;
+      const rows = [
+        `<tr><td>GitHub-hosted</td><td>${money(github)}</td><td></td></tr>`,
+        ...cost.clouds.map((c) => {
+          const lo = c.fixed + m * c.low + jobs * c.bootLow;
+          const hi = c.fixed + m * c.high + jobs * c.bootHigh;
+          const save =
+            github > hi
+              ? `${money(github - hi)}–${money(github - lo)}`
+              : github > lo
+                ? `up to ${money(github - lo)}`
+                : 'none at this volume';
+          return `<tr><td>backmesh on ${c.cloud} <small>${c.region}</small></td><td>${money(lo)}–${money(hi)}</td><td>${save}</td></tr>`;
+        }),
+      ];
+      body.innerHTML = rows.join('');
+    };
+    minutes.addEventListener('input', render);
+    job.addEventListener('input', render);
+    render();
+  }
+</script>
+
+<style>
+  .calc {
+    margin-top: 1.5rem;
+  }
+  .fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 2rem;
+  }
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: var(--sl-text-sm);
+  }
+  input {
+    width: 14rem;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 4px;
+    background: var(--sl-color-bg);
+    color: var(--sl-color-white);
+    font: inherit;
+  }
+  table {
+    width: 100%;
+    margin-top: 1.5rem;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+  }
+  th,
+  td {
+    padding: 0.55rem 0.75rem 0.55rem 0;
+    border-bottom: 1px solid var(--sl-color-hairline);
+    text-align: left;
+  }
+  td small {
+    color: var(--sl-color-gray-3);
+  }
+  .note {
+    margin-top: 1rem;
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-sm);
+  }
+</style>

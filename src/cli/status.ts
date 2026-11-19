@@ -4,7 +4,6 @@
 import { CACHE_CAP_ENV } from '../listener/sweep.js';
 import { z } from 'zod';
 
-import type { RunAnycloud } from '../anycloud/binary.js';
 import type { AnycloudApi, AnycloudExec } from '../anycloud/client.js';
 import {
   FEATURES,
@@ -18,6 +17,8 @@ import { INSTALL_KEY_ENV, ROTATING_FROM_ENV } from './worker.js';
 import { parseRoutes, RUNNERS_ENV } from '../listener/routes.js';
 import { where } from '../runners/classes.js';
 import {
+  KIND_NAME,
+  formatGpuQuota,
   formatQuota,
   quotaCheck,
   quotaCode,
@@ -29,7 +30,9 @@ import {
   formatJobs,
   formatPlanner,
   formatSlow,
+  kindOf,
   listenerStatusSchema,
+  tokenRefused,
 } from '../listener/status.js';
 import {
   CONTROL_POOL,
@@ -48,6 +51,7 @@ import {
   API_TOKEN_ENV,
   LISTENER_IMAGE_ENV,
   RUNNER_GROUP_ENV,
+  STANDBY_ENV,
 } from '../listener/env.js';
 
 // The listener binds loopback only and its image has Node but no curl, so
@@ -118,6 +122,7 @@ export async function readListener(
       LISTENER_IMAGE_ENV,
       RUNNER_GROUP_ENV,
       API_TOKEN_ENV,
+      STANDBY_ENV,
     ],
   });
   return {
@@ -129,6 +134,9 @@ export async function readListener(
     runnerGroup: env[RUNNER_GROUP_ENV],
     // Its anycloud service token, absent before its VM.
     apiToken: env[API_TOKEN_ENV],
+    // Started in standby by a move off `bm-control` that didn't finish: it
+    // takes no jobs until a roll without it.
+    standby: !!env[STANDBY_ENV],
     status: listenerStatusSchema.parse(body),
     // The listener doesn't start without it.
     org: z.string().parse(env.ORG),
@@ -148,21 +156,6 @@ export async function readListener(
       Number(env[CACHE_CAP_ENV]) > 0 ? Number(env[CACHE_CAP_ENV]) : undefined,
   };
 }
-
-// A listener on `bm-control` read through the binary, by its Deployment's
-// name, as install, upgrade and rotate-key still roll it.
-export const readDeployedListener = (
-  run: RunAnycloud,
-  deployment: Deployment,
-) =>
-  readListener(
-    async (id, command) => ({
-      code: 0,
-      stdout: await run(['exec', id, command]),
-      stderr: '',
-    }),
-    { deployment: { ...deployment, id: deployment.name } },
-  );
 
 export interface StatusDeps {
   api: AnycloudApi;
@@ -287,10 +280,21 @@ export async function readStatus({
         `${org}: the token broker has failed since ${minute(broker.since)}: ${broker.error}. The listener keeps its current token until it expires, then stops scaling.`,
       );
     }
-    const refused = 'status' in listener && listener.status.anycloud;
-    if (refused) {
+    const anycloud = 'status' in listener && listener.status.anycloud;
+    if (anycloud) {
       warnings.push(
-        `${org}: the control plane has refused the listener's service token since ${minute(refused.since)}, so it can't start runners; a restore from a backup older than the token does this. Run \`backmesh upgrade\` to issue it a new one.`,
+        tokenRefused(anycloud)
+          ? `${org}: the control plane has refused the listener's service token since ${minute(anycloud.since)}, so it can't start runners; a restore from a backup older than the token does this. Run \`backmesh upgrade\` to issue it a new one.`
+          : `${org}: the listener hasn't reached the control plane since ${minute(anycloud.since)}: ${anycloud.error}.`,
+      );
+    }
+    if (
+      'standby' in listener &&
+      listener.standby &&
+      !('deployment' in section)
+    ) {
+      warnings.push(
+        `${org}'s listener is in standby and takes no jobs: its move off ${CONTROL_POOL} didn't finish. Run \`backmesh upgrade\`.`,
       );
     }
     if ('error' in listener) {
@@ -306,14 +310,12 @@ export async function readStatus({
           `The backmesh App's installation on ${listener.org} is gone since ${minute(lost.since)}, so the listener can't reach GitHub or start runners. An org owner installs the App again at ${lost.installUrl}; the listener picks it up without a restart.`,
         );
       }
+      // The installation's Actions permission: backmesh.com reruns and
+      // cancels for the listener with its write.
       const actions = listener.status.actionsPermission;
-      // `install --public-repos`.
-      const forks = listener.status.scaleSets.some(
-        (set) => set.label.startsWith('backmesh-public-') && !set.retiring,
-      );
       if (actions && actions !== 'write') {
         warnings.push(
-          `The backmesh App has Actions: ${actions}; it needs Actions: write to rerun reclaimed jobs${forks ? ' and to cancel fork runs that ask for a label other than backmesh-public-*' : ''}. An org owner accepts the App's new permissions at https://github.com/organizations/${listener.org}/settings/installations.`,
+          `The backmesh App has Actions: ${actions} on ${listener.org}; backmesh.com needs Actions: write there to rerun reclaimed jobs and cancel fork runs. An org owner accepts the App's new permissions at https://github.com/organizations/${listener.org}/settings/installations.`,
         );
       }
       for (const set of listener.status.scaleSets) {
@@ -328,7 +330,7 @@ export async function readStatus({
           .map(({ region, limit }) => `${region} ${limit} vCPU`)
           .join(', ');
         warnings.push(
-          `${listener.org}: ${set.label} starts no runners: every runner region's ${skipped.spot ? 'spot' : 'on-demand'} quota is under one ${skipped.vcpus}-vCPU runner (${regions}). Its jobs wait at GitHub until ${quotaCode(skipped.cloud, skipped.spot)} is raised; nothing to reinstall.`,
+          `${listener.org}: ${set.label} starts no runners: every runner region's ${KIND_NAME[kindOf(skipped.spot, skipped.regions[0]?.kind)]} quota is under one ${skipped.vcpus}-vCPU runner (${regions}). Its jobs wait at GitHub until ${[...new Set(skipped.regions.map((r) => quotaCode(skipped.cloud, kindOf(skipped.spot, r.kind))))].join(' or ')} is raised; nothing to reinstall.`,
         );
       }
     }
@@ -377,11 +379,22 @@ async function runnerClouds(json: string | undefined, api: AnycloudApi) {
         readQuotaStatus(api, cloud, credentials, region),
       ).then(
         (limits) =>
-          [true, false]
-            .map((spot) =>
-              formatQuota(quotaCheck(cloud, regions, limits, spot), spot),
-            )
-            .join(', '),
+          [
+            [true, false]
+              .map((spot) =>
+                formatQuota(quotaCheck(cloud, regions, limits, spot), spot),
+              )
+              .join(', '),
+            ...(labels.some((r) => r.gpu)
+              ? [
+                  formatGpuQuota(
+                    cloud,
+                    limits,
+                    labels.filter((r) => r.gpu),
+                  ),
+                ]
+              : []),
+          ].join('; '),
         (error: unknown) => `unread (${message(error)})`,
       );
       return `${line}; quota: ${quota}`;

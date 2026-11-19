@@ -1,24 +1,34 @@
-// Sets up the Worker, idempotently, for .github/workflows/worker-setup.yml:
-// the D1 database and its migrations, the Worker and its secrets. A dry run
-// only reads and prints the plan.
+// Sets up the Worker, idempotently, for release.yml's deploy and
+// worker-setup.yml's first setup: the D1 database and its migrations, the
+// Worker, built from GITHUB_SHA's commit, and its secrets. A dry run only
+// reads and prints the plan. `--staging` sets up the staging Worker an rc
+// qualifies on instead (wrangler.jsonc's staging environment), with its own
+// database and hostname and the same App.
 //
-//   node worker/scripts/setup.ts [--apply]
+//   node worker/scripts/setup.ts [--apply] [--staging]
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 import { appJwt } from '../src/app.ts';
 
-const HOST = 'https://api.backmesh.com';
-const DATABASE = 'backmesh-billing';
-const WORKER = 'backmesh-billing';
+const TARGETS = {
+  production: {
+    host: 'https://api.backmesh.com',
+    database: 'backmesh-billing',
+    worker: 'backmesh-billing',
+    env: [] as string[],
+  },
+  staging: {
+    host: 'https://api-staging.backmesh.com',
+    database: 'backmesh-staging',
+    worker: 'backmesh-staging',
+    env: ['--env', 'staging'],
+  },
+};
 const CONFIG = 'worker/wrangler.jsonc';
 const SETUP_CONFIG = 'worker/wrangler.setup.jsonc';
 // Owner-set in the publish environment; the Worker gets them as secrets.
-export const REQUIRED = [
-  'CLOUDFLARE_API_TOKEN',
-  'CLOUDFLARE_ACCOUNT_ID',
-  'BILLING_GITHUB_CLIENT_ID',
-];
+export const REQUIRED = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID'];
 // The backmesh App: its ID and its private key as PKCS#8, which
 // WebCrypto imports. GitHub issues PKCS#1; convert it with
 // `openssl pkcs8 -topk8 -nocrypt -in app.pem`. Both or neither: until the App
@@ -27,9 +37,11 @@ const APP = ['BILLING_GITHUB_APP_ID', 'BILLING_GITHUB_APP_PRIVATE_KEY'];
 // During a rotation, the next key, which the Worker signs with once set.
 const NEXT_KEY = 'BILLING_GITHUB_APP_PRIVATE_KEY_NEXT';
 // Retired secrets, deleted where a Worker still has them: the billing
-// Worker's, and the OAuth client secret only connect links' web flow used
-// (owner, 2026-11-12: device flow only).
+// Worker's, the OAuth client secret only connect links' web flow used
+// (owner, 2026-11-12: device flow only), and the OAuth app's client ID,
+// which sign-ins used until they moved to the App (owner, 2026-11-19).
 const RETIRED = [
+  'GITHUB_CLIENT_ID',
   'GITHUB_CLIENT_SECRET',
   'STRIPE_SECRET_KEY',
   'STRIPE_WEBHOOK_SECRET',
@@ -42,6 +54,7 @@ const RETIRED = [
 export interface Deps {
   env: Record<string, string | undefined>;
   apply: boolean;
+  staging?: boolean;
   fetch: typeof fetch;
   // Runs wrangler with the arguments, and stdin; returns stdout.
   wrangler: (args: string[], input?: string) => string;
@@ -53,6 +66,7 @@ export interface Deps {
 // fails on that limit can leave them partly changed. Read-only, so a dry
 // run reports them too; after a deploy, a difference stops the setup.
 export async function checkTriggers(
+  worker: string,
   env: Deps['env'],
   fetch: Deps['fetch'],
   log: Deps['log'],
@@ -64,7 +78,7 @@ export async function checkTriggers(
     ) as string[]
   ).sort();
   const res = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${WORKER}/schedules`,
+    `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${worker}/schedules`,
     { headers: { Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}` } },
   );
   if (!res.ok) {
@@ -83,11 +97,26 @@ export async function checkTriggers(
   log(`${differ} The apply sets them.`);
 }
 
-export async function setup({ env, apply, fetch, wrangler, log }: Deps) {
+export async function setup({
+  env,
+  apply,
+  staging,
+  fetch,
+  wrangler,
+  log,
+}: Deps) {
+  const target = TARGETS[staging ? 'staging' : 'production'];
+  const { host, database: databaseName, worker } = target;
   const missing = REQUIRED.filter((name) => !env[name]);
   if (missing.length) {
     throw new Error(
       `Add these to the publish environment first: ${missing.join(', ')}`,
+    );
+  }
+  // Actions sets it: the commit checked out, which /v1/version answers.
+  if (!/^[0-9a-f]{40}$/.test(env.GITHUB_SHA ?? '')) {
+    throw new Error(
+      'GITHUB_SHA, the commit the Worker is built from, is unset',
     );
   }
   const app = APP.filter((name) => env[name]);
@@ -137,36 +166,45 @@ export async function setup({ env, apply, fetch, wrangler, log }: Deps) {
     uuid: string;
     name: string;
   }[];
-  let database = databases.find((d) => d.name === DATABASE)?.uuid;
+  let database = databases.find((d) => d.name === databaseName)?.uuid;
   if (!database) {
-    plan(`create the D1 database ${DATABASE}`);
+    plan(`create the D1 database ${databaseName}`);
     if (apply) {
-      wrangler(['d1', 'create', DATABASE]);
+      wrangler(['d1', 'create', databaseName]);
       database = (
         JSON.parse(wrangler(['d1', 'list', '--json'])) as typeof databases
-      ).find((d) => d.name === DATABASE)?.uuid;
+      ).find((d) => d.name === databaseName)?.uuid;
     }
   }
   if (database && apply) {
     writeFileSync(
       SETUP_CONFIG,
       readFileSync(CONFIG, 'utf8').replace(
-        /"database_id": "[^"]*"/,
-        `"database_id": "${database}"`,
+        new RegExp(
+          `("database_name": "${databaseName}",[^}]*"database_id": ")[^"]*`,
+        ),
+        `$1${database}`,
       ),
     );
   }
-  const config = ['--config', SETUP_CONFIG];
+  const config = ['--config', SETUP_CONFIG, ...target.env];
   const listSecrets = () =>
     (
       JSON.parse(
-        wrangler(['secret', 'list', '--format', 'json', '--name', WORKER]),
+        wrangler(['secret', 'list', '--format', 'json', '--name', worker]),
       ) as { name: string }[]
     ).map((s) => s.name);
-  plan(`apply ${DATABASE}'s migrations and deploy the Worker on ${HOST}`);
+  plan(`apply ${databaseName}'s migrations and deploy the Worker on ${host}`);
   if (apply) {
-    wrangler(['d1', 'migrations', 'apply', DATABASE, '--remote', ...config]);
-    wrangler(['deploy', ...config]);
+    wrangler([
+      'd1',
+      'migrations',
+      'apply',
+      databaseName,
+      '--remote',
+      ...config,
+    ]);
+    wrangler(['deploy', ...config, '--var', `COMMIT:${env.GITHUB_SHA}`]);
   }
   // After a deploy the Worker exists, so a failure here is real; a dry run
   // may find no Worker yet.
@@ -179,19 +217,19 @@ export async function setup({ env, apply, fetch, wrangler, log }: Deps) {
       log('No Worker yet.');
     }
   }
-  await checkTriggers(env, fetch, log, apply);
+  await checkTriggers(worker, env, fetch, log, apply);
 
   // The Worker's secrets, through stdin so no value reaches the log.
-  const pending: Record<string, string> = {
-    GITHUB_CLIENT_ID: env.BILLING_GITHUB_CLIENT_ID!,
-  };
+  const pending: Record<string, string> = {};
   if (app.length) {
     pending.GITHUB_APP_ID = env.BILLING_GITHUB_APP_ID!;
     pending.GITHUB_APP_PRIVATE_KEY = env.BILLING_GITHUB_APP_PRIVATE_KEY!;
   }
   if (env[NEXT_KEY]) pending.GITHUB_APP_PRIVATE_KEY_NEXT = env[NEXT_KEY];
-  plan(`set the Worker secrets ${Object.keys(pending).sort().join(', ')}`);
-  if (apply) wrangler(['secret', 'bulk', ...config], JSON.stringify(pending));
+  if (Object.keys(pending).length) {
+    plan(`set the Worker secrets ${Object.keys(pending).sort().join(', ')}`);
+    if (apply) wrangler(['secret', 'bulk', ...config], JSON.stringify(pending));
+  }
   // Once a rotation is promoted, the Worker stops signing with the old next
   // key, which it would otherwise prefer, and no retired secret stays.
   const stale = [
@@ -208,6 +246,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   await setup({
     env: process.env,
     apply: process.argv.includes('--apply'),
+    staging: process.argv.includes('--staging'),
     fetch,
     wrangler: (args, input) =>
       execFileSync('website/node_modules/.bin/wrangler', args, {

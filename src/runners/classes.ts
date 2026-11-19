@@ -42,7 +42,7 @@ export const VM_TYPES: Record<Cloud, (vcpus: number) => string[]> = {
 };
 
 // The code's first character: the cloud, whether the class is spot, and
-// whether it's a KVM or a public class.
+// whether it's a KVM, a public or a GPU class.
 const CLOUD_CODE: Record<
   Cloud,
   [
@@ -51,12 +51,39 @@ const CLOUD_CODE: Record<
     kvmSpot: string,
     kvmOnDemand: string,
     publicSpot: string,
+    gpuSpot: string,
+    gpuOnDemand: string,
   ]
 > = {
-  aws: ['a', 'b', 'k', 'l', 'c'],
-  gcp: ['g', 'h', 'm', 'n', 'i'],
-  azure: ['z', 'y', 'v', 'w', 'x'],
+  aws: ['a', 'b', 'k', 'l', 'c', 'd', 'e'],
+  gcp: ['g', 'h', 'm', 'n', 'i', 'j', 'o'],
+  azure: ['z', 'y', 'v', 'w', 'x', 't', 'u'],
 };
+const SPOT_CODES = [0, 2, 4, 5];
+const GPU_CODES = [5, 6];
+
+/**
+ * The GPU classes' types, in launch order, as GitHub's GPU runner: one
+ * NVIDIA T4 and 4 vCPUs (owner, 2026-11-18). AWS's `g4dn.xlarge` has 16 GiB
+ * of memory to GitHub's 28, at 70 % of `g4dn.2xlarge`'s price, which follows
+ * it with the same T4: with one type, a spot capacity refusal in all three
+ * regions left anycloud no untried target, so v0.4.3-rc.1's runner backed
+ * off 12 min before it launched (coordinator, 2026-11-18). Azure's matches
+ * GitHub's. GCP has none: anycloud 0.1.78's GCP catalog leaves T4 out
+ * (`INTENTIONALLY_EXCLUDED_ACCELERATORS`, `src/shared/catalog/gcp.ts`), and
+ * `n1` isn't a GPU series it launches (`gcp-machine-capabilities.ts`).
+ */
+export const GPU_TYPES: Record<Cloud, string[]> = {
+  aws: ['g4dn.xlarge', 'g4dn.2xlarge'],
+  gcp: [],
+  azure: ['Standard_NC4as_T4_v3'],
+};
+/**
+ * The GPU classes' shape. Quota checks count each runner at these 4 vCPUs,
+ * so a region with room for one `g4dn.xlarge` keeps the label; a
+ * `g4dn.2xlarge` fallback uses 8 of it.
+ */
+export const GPU = { model: 'T4', vcpus: 4 } as const;
 
 /** `backmesh-public-<n>`'s sizes: the home cloud's spot, no KVM. */
 export const PUBLIC_VCPUS = [2, 4] as const;
@@ -66,12 +93,17 @@ export const PUBLIC_VCPU_CAP = 32;
 /** The cloud, spot-ness and vCPUs a runner class's code names. */
 export function codeClass(
   code: string,
-): { cloud: Cloud; spot: boolean; vcpus: number } | undefined {
+): { cloud: Cloud; spot: boolean; vcpus: number; gpu: boolean } | undefined {
   for (const [cloud, letters] of Object.entries(CLOUD_CODE)) {
     const i = letters.indexOf(code[0] ?? '');
     const vcpus = parseInt(code.slice(1), 36);
     if (i >= 0 && Number.isInteger(vcpus) && vcpus > 0) {
-      return { cloud: cloud as Cloud, spot: i % 2 === 0, vcpus };
+      return {
+        cloud: cloud as Cloud,
+        spot: SPOT_CODES.includes(i),
+        vcpus,
+        gpu: GPU_CODES.includes(i),
+      };
     }
   }
   return undefined;
@@ -111,6 +143,8 @@ export interface RunnerClass extends CloudTarget {
    * request may use.
    */
   public?: boolean;
+  /** `backmesh-gpu-t4`: its VMs' one GPU, passed into the job. */
+  gpu?: typeof GPU.model;
 }
 
 /**
@@ -128,9 +162,20 @@ export const classLabel = (
 ) =>
   `backmesh-${prefixed ? `${cloud}-` : ''}${kvm ? 'kvm-' : ''}${onDemand ? 'od-' : ''}${vcpus}`;
 
+/** A GPU class's label, such as `backmesh-gpu-od-t4` or `backmesh-azure-gpu-t4`. */
+export const gpuLabel = (cloud: Cloud, prefixed: boolean, onDemand: boolean) =>
+  `backmesh-${prefixed ? `${cloud}-` : ''}gpu-${onDemand ? 'od-' : ''}${GPU.model.toLowerCase()}`;
+
 /** Where a spot class's reclaims count for the breaker, such as "aws spot". */
-export const spotCapacity = ({ cloud, kvm }: { cloud: Cloud; kvm: boolean }) =>
-  `${cloud}${kvm ? ' KVM' : ''} spot`;
+export const spotCapacity = ({
+  cloud,
+  kvm,
+  gpu,
+}: {
+  cloud: Cloud;
+  kvm: boolean;
+  gpu?: string;
+}) => `${cloud}${kvm ? ' KVM' : ''}${gpu ? ' GPU' : ''} spot`;
 
 /** Why `vmType`, offered in `details`, can't be a class's VM; undefined when it can. */
 function shapeProblem(
@@ -167,6 +212,8 @@ export interface ClassPlan {
   problems: string[];
   /** The targets whose regions have no KVM class. */
   noKvm: CloudTarget[];
+  /** The targets whose regions have no GPU class. */
+  noGpu: CloudTarget[];
 }
 
 /**
@@ -189,7 +236,7 @@ export function planClasses(
   // `install --public-repos`: the home cloud's `backmesh-public-<n>` too.
   publicRepos = false,
 ): ClassPlan {
-  const plan: ClassPlan = { classes: [], problems: [], noKvm: [] };
+  const plan: ClassPlan = { classes: [], problems: [], noKvm: [], noGpu: [] };
   for (const target of targets) {
     const byRegion = [...(catalog.get(target.cloud) ?? [])];
     const fits = (
@@ -269,7 +316,39 @@ export function planClasses(
       ),
     );
     if (!classes.some((c) => c.kvm)) plan.noKvm.push(target);
-    plan.classes.push(...classes);
+    // The GPU classes: their types' regions that offer one T4 with at
+    // least the class's vCPUs. Among the runner regions, Azure's catalog offers its
+    // type only in those anycloud's GPU image reaches
+    // (`AZURE_GPU_COMMUNITY_IMAGE_REGIONS`, `src/shared/catalog/azure-gpu-map.ts`
+    // at 0.1.78). A cloud with none gets no GPU labels, and install says so.
+    const gpuFits = (details: readonly VmTypeDetails[], vmType: string) => {
+      const type = findVmType(details, vmType);
+      const [one, ...more] = type?.accelerators ?? [];
+      return (
+        (type?.vCPUs ?? 0) >= GPU.vcpus &&
+        one?.name === GPU.model &&
+        one.count === 1 &&
+        !more.length
+      );
+    };
+    const gpuRegions = byRegion.flatMap(([region, details]) =>
+      GPU_TYPES[target.cloud].some((t) => gpuFits(details, t)) ? [region] : [],
+    );
+    const gpu = gpuRegions.length
+      ? [true, false].map((spot): RunnerClass => ({
+          ...target,
+          label: gpuLabel(target.cloud, target.cloud !== home, !spot),
+          code: `${CLOUD_CODE[target.cloud][spot ? 5 : 6]}${GPU.vcpus.toString(36)}`,
+          vcpus: GPU.vcpus,
+          spot,
+          kvm: false,
+          vmTypes: GPU_TYPES[target.cloud],
+          regions: gpuRegions,
+          gpu: GPU.model,
+        }))
+      : [];
+    if (!gpu.length) plan.noGpu.push(target);
+    plan.classes.push(...classes, ...gpu);
     if (publicRepos && target.cloud === home) {
       plan.classes.push(
         ...classes.flatMap((c) =>

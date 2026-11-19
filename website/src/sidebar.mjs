@@ -19,6 +19,16 @@ export const sidebar = [
   },
   {
     label: 'Reference',
-    items: ['security', 'telemetry', 'cost', 'faq', 'terms', 'privacy'],
+    items: [
+      'security',
+      'telemetry',
+      'cost',
+      'benchmarks',
+      'calculator',
+      'changelog',
+      'faq',
+      'terms',
+      'privacy',
+    ],
   },
 ];

@@ -66,3 +66,22 @@ takes about 12 minutes a round (one cued push at its default 75 s lead, one not,
 Cost: the target's jobs run for about 2 minutes each on the label's spot VMs,
 and a cued round's runner idles at most 180 s before its push; the driver's
 hosted runner is billed per minute.
+
+## Results
+
+Measured on 2026-11-10 on backmesh's own CI installation, on `backmesh-4`.
+This run used a one-off workflow of 8 parallel `sleep 60` jobs per push
+rather than `run.ts`. Three warm-up pushes came first. Then three pushes each
+sent 120 s after `backmesh cue --in 120` alternated with three uncued pushes.
+A job's queue wait is its `started_at` minus its `created_at`; the median and
+p90 use the nearest rank.
+
+|        | Jobs | Median wait | p90 wait | On a pre-started runner |
+| ------ | ---- | ----------- | -------- | ----------------------- |
+| Uncued | 24   | 100.5 s     | 121 s    | 0 of 24                 |
+| Cued   | 24   | 17 s        | 70 s     | 20 of 24                |
+
+A job counts as on a pre-started runner when it waited under 30 s; every
+wait seen was either at most 28 s or at least 43 s. In one cued push only 4
+of 8 jobs were, and the other 4 waited 43 to 84 s, while other CI work was
+using the same installation.

@@ -1,7 +1,7 @@
 // The backmesh Worker on api.backmesh.com: install keys and telemetry,
-// the backmesh App's token broker, the CLI's
-// device-flow sign-ins and the cue relay.
-import { GitHubError } from './app.js';
+// the backmesh App's token broker, the check of the CLI's sign-ins and the
+// cue relay.
+import { GitHubError, GitHubTimeout } from './app.js';
 import {
   cleanup,
   cleanupFinish,
@@ -12,13 +12,14 @@ import {
 import { cue } from './cue.js';
 import type { RelayNamespace } from './relay.js';
 import {
-  AppRestricted,
   createInstall,
-  deviceCode,
   keyInstall,
-  relaySignIn,
+  notServed,
+  oldSignIn,
   revokeInstall,
+  SignInRefused,
 } from './installs.js';
+import { cancel, rerun } from './runs.js';
 import { intake, retain } from './telemetry.js';
 
 // The cue relay's Durable Object class, which the runtime finds as an export
@@ -53,7 +54,6 @@ export interface Env {
   TOKEN_LIMIT: RateLimit;
   // One Relay Durable Object per org, for cues (cue.ts).
   RELAY: RelayNamespace;
-  GITHUB_CLIENT_ID: string;
   // The backmesh App: its ID, URL slug and PKCS#8 private key, and
   // the next key during a rotation, which signs once set. Unset until the
   // App exists, when the broker routes answer 503.
@@ -61,6 +61,11 @@ export interface Env {
   GITHUB_APP_SLUG: string;
   GITHUB_APP_PRIVATE_KEY?: string;
   GITHUB_APP_PRIVATE_KEY_NEXT?: string;
+  // The staging Worker's test orgs, comma-separated logins (notServed).
+  STAGING_ORGS?: string;
+  // The commit the Worker was built from, which the deploy sets
+  // (worker/scripts/setup.ts); e2e.yml checks it is the release's.
+  COMMIT?: string;
 }
 
 async function route(request: Request, env: Env): Promise<Response> {
@@ -82,35 +87,26 @@ async function route(request: Request, env: Env): Promise<Response> {
       ? response
       : tooMany();
   };
+  if (pathname === '/v1/version' && request.method === 'GET') {
+    return Response.json({ commit: env.COMMIT ?? null });
+  }
   if (pathname === '/v1/cue' || pathname.startsWith('/v1/cue/')) {
     return cue(request, env, refused);
   }
-  const broker = pathname === '/v1/token' || Object.hasOwn(cleanups, pathname);
-  if (
-    pathname === '/v1/installs' ||
-    pathname === '/v1/installs/device' ||
-    pathname === '/v1/sign-in' ||
-    Object.hasOwn(cleanups, pathname)
-  ) {
+  const broker =
+    pathname === '/v1/token' ||
+    pathname === '/v1/rerun' ||
+    pathname === '/v1/cancel' ||
+    Object.hasOwn(cleanups, pathname);
+  if (pathname === '/v1/installs' || Object.hasOwn(cleanups, pathname)) {
     const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
     if (!(await env.SIGNIN_LIMIT.limit({ key: ip })).success) return tooMany();
   }
-  if (pathname === '/v1/installs/device' && request.method === 'POST') {
-    // `{ control_plane: true }`: a sign-in whose token the CLI keeps as
-    // anycloud's, with the scopes its hosted API exchanges. Any other,
-    // such as uninstall's cleanup sign-in, asks only for read:org.
-    const { control_plane } = ((await request.json().catch(() => null)) ??
-      {}) as { control_plane?: unknown };
-    return deviceCode(
-      env,
-      control_plane === true ? 'read:org read:packages' : undefined,
-    );
+  if (pathname === '/v1/installs/device' || pathname === '/v1/sign-in') {
+    return oldSignIn();
   }
   if (pathname === '/v1/installs' && request.method === 'POST') {
     return createInstall(request, env);
-  }
-  if (pathname === '/v1/sign-in' && request.method === 'POST') {
-    return relaySignIn(request, env);
   }
   if (broker && request.method !== 'POST') {
     return Response.json({ error: 'Use POST.' }, { status: 405 });
@@ -119,13 +115,15 @@ async function route(request: Request, env: Env): Promise<Response> {
     const error = 'backmesh App not configured yet.';
     return Response.json({ error }, { status: 503 });
   }
-  // An org admin's sign-in, and the install key when there is one.
+  // An org owner's sign-in, and the install key when there is one.
   if (Object.hasOwn(cleanups, pathname))
     return cleanups[pathname]!(request, env);
   if (
     pathname === '/v1/status' ||
     pathname === '/v1/events' ||
     pathname === '/v1/token' ||
+    pathname === '/v1/rerun' ||
+    pathname === '/v1/cancel' ||
     pathname === '/v1/installs/revoke'
   ) {
     // An install key (installs.ts) names the org and the install.
@@ -136,6 +134,13 @@ async function route(request: Request, env: Env): Promise<Response> {
         'Missing or refused install sign-in; run backmesh upgrade to sign in with GitHub again.';
       return refused(Response.json({ error }, { status: 401 }));
     }
+    if (env.STAGING_ORGS) {
+      const org = await env.DB.prepare('SELECT login FROM orgs WHERE id = ?')
+        .bind(install.org)
+        .first<{ login: string }>();
+      const other = notServed(env, org?.login ?? String(install.org));
+      if (other) return other;
+    }
     if (pathname === '/v1/token') {
       if (!(await env.TOKEN_LIMIT.limit({ key: install.id })).success) {
         return tooMany();
@@ -145,6 +150,8 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (!(await env.INSTALL_LIMIT.limit({ key: install.id })).success) {
       return tooMany();
     }
+    if (pathname === '/v1/rerun') return rerun(request, env, install);
+    if (pathname === '/v1/cancel') return cancel(request, env, install);
     if (pathname === '/v1/events' && request.method === 'POST') {
       return intake(request, env, install);
     }
@@ -166,8 +173,14 @@ export default {
       if (error instanceof GitHubError) {
         return Response.json({ error: error.message }, { status: 502 });
       }
-      if (error instanceof AppRestricted) {
-        return Response.json({ error: error.message }, { status: 403 });
+      if (error instanceof GitHubTimeout) {
+        return Response.json({ error: error.message }, { status: 504 });
+      }
+      if (error instanceof SignInRefused) {
+        return Response.json(
+          { error: error.message },
+          { status: error.status },
+        );
       }
       throw error;
     });

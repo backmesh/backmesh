@@ -28,6 +28,7 @@ const tokenSchema = z.object({
   token: z.string(),
   expires_at: z.iso.datetime(),
   permissions: z.record(z.string(), z.string()),
+  installation_permissions: z.record(z.string(), z.string()).optional(),
   org: z.object({ id: z.number(), login: z.string() }),
 });
 const notInstalledSchema = z.object({
@@ -49,6 +50,19 @@ export class InstallationTokens {
   // installation keeps its old permissions until an org owner approves new
   // ones. Undefined before the first mint.
   permissions: Record<string, string | undefined> | undefined;
+  // What the installation grants the App, such as `{ actions: 'write' }`,
+  // which backmesh.com's run actions need. Undefined before the first mint.
+  installationPermissions: Record<string, string | undefined> | undefined;
+
+  // The installation's Actions permission, as `status` reports it:
+  // backmesh.com reruns and cancels with its write. Undefined before the
+  // first mint.
+  actionsPermission() {
+    return (
+      this.installationPermissions &&
+      (this.installationPermissions.actions ?? 'none')
+    );
+  }
   // Since when the broker has failed or refused, and the latest reason;
   // null once it mints or answers 409.
   unreachable: { since: string; error: string } | null = null;
@@ -138,6 +152,7 @@ export class InstallationTokens {
     }
     this.token = { value: data.token, expiresAt: Date.parse(data.expires_at) };
     this.permissions = data.permissions;
+    this.installationPermissions = data.installation_permissions;
     this.unreachable = null;
     this.notInstalled = null;
     return data.token;

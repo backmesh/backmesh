@@ -7,13 +7,13 @@ import type { Octokit } from '@octokit/rest';
 // runners, unless `install --public-repos` turned it on.
 
 // `backmesh-<tag>-<6>`: the org's install tag and six base-36 characters
-// from its listener Deployment's ID, which anycloud sets as
-// ANYCLOUD_DEPLOYMENT_ID and `deployment upgrade` keeps. GitHub routes no
-// jobs to a group whose name was deleted and created again, so
-// each install, a new Deployment, takes a new name, and restarts and
-// upgrades keep it.
-export function runnerGroupName(tag: string, deploymentId: string): string {
-  const digest = createHash('sha256').update(deploymentId).digest();
+// from the ID of the listener VM install creates (a listener from before
+// its VM: its Deployment's). GitHub routes no jobs to a group whose name was
+// deleted and created again, so each install takes a new name, and the
+// org's Secret keeps it (`RUNNER_GROUP_ENV`) through restarts, upgrades and
+// a VM created again.
+export function runnerGroupName(tag: string, listenerId: string): string {
+  const digest = createHash('sha256').update(listenerId).digest();
   const id = (digest.readUInt32BE(0) % 36 ** 6).toString(36).padStart(6, '0');
   return `backmesh-${tag}-${id}`;
 }

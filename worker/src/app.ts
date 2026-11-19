@@ -5,12 +5,12 @@ import type { Env } from './index.js';
 
 const HOUR = 3_600_000;
 
-// The four permissions the App asks for. A token asks for these,
-// narrowed to what the installation grants.
+// What an install key's token asks for, narrowed to what the installation
+// grants: no more than a runner manager's role (owner, 2026-11-19). The App
+// also holds Actions write, which only the Worker's own /v1/rerun uses.
 const WANTED: Record<string, 'read' | 'write'> = {
   organization_self_hosted_runners: 'write',
-  actions: 'write',
-  checks: 'write',
+  actions: 'read',
   metadata: 'read',
 };
 
@@ -74,8 +74,11 @@ export async function appJwt(
   return `${data}.${base64url(new Uint8Array(signature))}`;
 }
 
-// A GitHub call gives up after this long.
-export const GITHUB_TIMEOUT_MS = 30_000;
+// A GitHub call gives up after this long, so a sign-in's four calls in a
+// row (the user and org together, the runner groups, then the App's
+// installation by ID and by login) answer within the CLI's 30 s. GitHub's
+// API answers in well under a second.
+export const GITHUB_TIMEOUT_MS = 7_000;
 
 export const randomHex = () =>
   Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) =>
@@ -84,10 +87,26 @@ export const randomHex = () =>
 
 // GitHub failing a call the Worker needs; answered as 502.
 export class GitHubError extends Error {}
+// GitHub not answering within GITHUB_TIMEOUT_MS; answered as 504.
+export class GitHubTimeout extends Error {}
+
+// Every call to GitHub's API, cut at GITHUB_TIMEOUT_MS.
+export async function gitHub(path: string, init: RequestInit = {}) {
+  try {
+    return await fetch(`https://api.github.com${path}`, {
+      ...init,
+      signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (!(error instanceof Error && error.name === 'TimeoutError')) throw error;
+    throw new GitHubTimeout(
+      `GitHub didn't answer ${path.split('?')[0]} in ${GITHUB_TIMEOUT_MS / 1000} s; retry in a minute.`,
+    );
+  }
+}
 
 export async function app(env: Env, path: string, init: RequestInit = {}) {
-  return fetch(`https://api.github.com${path}`, {
-    signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
+  return gitHub(path, {
     ...init,
     headers: {
       Accept: 'application/vnd.github+json',
@@ -210,7 +229,7 @@ export async function mintToken(
       permissions: minted.permissions,
       org: { id: org, login },
     };
-    return { answer, installation: id };
+    return { answer, installation: id, granted: installation.permissions };
   }
   throw new GitHubError('GitHub refused a token for a fresh installation.');
 }

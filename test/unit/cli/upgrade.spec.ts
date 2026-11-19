@@ -7,15 +7,21 @@ import type { StatusReport } from '../../../src/cli/status.js';
 import { GitHubError } from '../../../src/app/github.js';
 import { NeedsPlan, PlanChanged, UsageError } from '../../../src/cli/errors.js';
 import { upgrade, type UpgradeDeps } from '../../../src/cli/upgrade.js';
+import { runnerGroupName } from '../../../src/github/runner-group.js';
 import { parseRoutes } from '../../../src/listener/routes.js';
 import { planClasses } from '../../../src/runners/classes.js';
 import { awsInRegions, CATALOG, catalogs } from '../runners/fixtures.js';
 import {
   fakeApi,
   fakeBinary,
+  fakeExec,
   fakeWorker,
+  listenerVm,
   githubOrg,
   INSTALL_KEY,
+  DEVICE,
+  GITHUB_TOKEN,
+  NEXT_DEVICE,
   SIGNED_IN,
   versionMismatch,
 } from './fakes.js';
@@ -71,6 +77,65 @@ function quotaStatus(
   };
 }
 
+// Each org's listener VM, and what its Secret holds beside the runners.
+const VM: Record<string, string> = {
+  acme: 'bml-l8u5e-aaaaaa',
+  beta: 'bml-8278o-bbbbbb',
+};
+const TAG: Record<string, string> = { acme: 'l8u5e', beta: '8278o' };
+const ORG_ID: Record<string, number> = { acme: 7, beta: 8 };
+const GROUP = 'backmesh-l8u5e-k3j9x0';
+const TOKEN = 'acapi_service';
+// The org's Secret as upgrade saves it for this release.
+const secretOf = (org: string, over: Record<string, string> = {}) => ({
+  ORG: org,
+  ORG_ID: String(ORG_ID[org]),
+  BACKMESH_INSTALL: TAG[org]!,
+  BACKMESH_LISTENER_IMAGE: RELEASE.listenerImage,
+  BACKMESH_RUNNER_GROUP: GROUP,
+  ANYCLOUD_API_URL: HOSTED,
+  ANYCLOUD_API_TOKEN: TOKEN,
+  BACKMESH_RUNNER_IMAGE: RELEASE.runnerImage,
+  BACKMESH_INSTALL_KEY: INSTALL_KEY,
+  BACKMESH_RUNNERS: RUNNERS,
+  ...over,
+});
+const LISTENING = {
+  installed: true,
+  broker: null,
+  runners: 0,
+  cap: 500,
+  scaleSets: [],
+};
+// The values a roll's command writes, base64 in it (`rollCommand`).
+const rolledValues = (command: string) => {
+  const b64 = /printf %s '([^']*)' \| base64 -d/.exec(command)?.[1];
+  if (b64 === undefined) return undefined;
+  return Object.fromEntries(
+    Buffer.from(b64, 'base64')
+      .toString()
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const i = line.indexOf('=');
+        return [line.slice(0, i), line.slice(i + 1)];
+      }),
+  );
+};
+
+// One listener as `anycloud exec` reaches it: its environment, whether it
+// answers, and its `/status`.
+interface Host {
+  org: string;
+  env?: Record<string, string>;
+  // The Secret as the VM got it at create (`vm --secret`).
+  created?: Record<string, string>;
+  up: boolean;
+  // A listener that never answers, even started again.
+  stuck?: boolean;
+  body: object;
+}
+
 function setUp({
   version = '0.1.70',
   image = OLD_LISTENER,
@@ -78,10 +143,13 @@ function setUp({
   watch = watched('running'),
   keyStatus = Response.json(ACCEPTED),
   installs,
-  // 'down' answers nothing; 'no-key' is a listener from before install keys.
+  // 'down' answers nothing, even started again; 'no-key' is a listener
+  // from before install keys.
   listener,
   // A second org's listener on the same control plane.
   beta = false,
+  // beta's listener is still a Deployment on `bm-control` too.
+  betaMoves = false,
   // The listener's BACKMESH_RUNNERS; null: one from before VM Jobs.
   runners = RUNNERS as string | null,
   // The install region's catalog.
@@ -90,10 +158,17 @@ function setUp({
   rotatingFrom,
   // bm-aws's cache buckets, when an install made them.
   cacheBuckets,
+  // Where acme's listener runs: its VM, a VM anycloud found gone, still
+  // a Deployment on `bm-control` (one from before its VM), or that
+  // Deployment with the VM a stopped move made, its listener not started.
+  host = 'vm',
+  // acme's listener's `/status` beyond its defaults.
+  body = {},
 }: {
   cacheBuckets?: string[];
   catalog?: typeof CATALOG.aws;
   beta?: boolean;
+  betaMoves?: boolean;
   runners?: string | null;
   installs?: (Response | Error)[];
   listener?: 'down' | 'no-key';
@@ -104,58 +179,90 @@ function setUp({
   watch?: string;
   keyStatus?: Response | Error | (Response | Error)[];
   rotatingFrom?: string;
+  host?: 'vm' | 'lost' | 'deployment' | 'both';
+  body?: object;
 } = {}) {
-  const probe = (org: string) =>
-    JSON.stringify({
-      code: 200,
-      env: {
-        ORG: org,
-        BACKMESH_RUNNER_IMAGE: RELEASE.runnerImage,
-        BACKMESH_INSTALL_KEY: INSTALL_KEY,
-        ...(runners !== null && { BACKMESH_RUNNERS: runners }),
-        ...(rotatingFrom && { BACKMESH_ROTATING_FROM: rotatingFrom }),
-      },
-      body: {
-        installed: true,
-        broker: null,
-        runners: 0,
-        cap: 500,
-        scaleSets: [],
-      },
+  const envOf = (org: string, mine: boolean): Record<string, string> => ({
+    ORG: org,
+    ...(mine
+      ? {
+          ...(runnerImage !== null && { BACKMESH_RUNNER_IMAGE: runnerImage }),
+          ...(listener !== 'no-key' && { BACKMESH_INSTALL_KEY: INSTALL_KEY }),
+        }
+      : {
+          BACKMESH_RUNNER_IMAGE: RELEASE.runnerImage,
+          BACKMESH_INSTALL_KEY: INSTALL_KEY,
+        }),
+    ...(runners !== null && { BACKMESH_RUNNERS: runners }),
+    ...(rotatingFrom && { BACKMESH_ROTATING_FROM: rotatingFrom }),
+    // A Deployment's image is its own, and it has no runner group or token.
+    ...(!(mine ? host === 'deployment' || host === 'both' : betaMoves) && {
+      BACKMESH_LISTENER_IMAGE: mine ? image : OLD_LISTENER,
+      BACKMESH_RUNNER_GROUP: GROUP,
+      ANYCLOUD_API_TOKEN: TOKEN,
+    }),
+  });
+  const hosts = new Map<string, Host>();
+  const onDeployment = host === 'deployment' || host === 'both';
+  const acmeId = onDeployment ? 'dep-acme' : VM.acme!;
+  hosts.set(acmeId, {
+    org: 'acme',
+    env: host === 'lost' ? undefined : envOf('acme', true),
+    up: host !== 'lost' && listener !== 'down',
+    stuck: listener === 'down',
+    body: { ...LISTENING, ...body },
+  });
+  if (host === 'both') {
+    hosts.set(VM.acme!, { org: 'acme', up: false, body: LISTENING });
+  }
+  if (beta) {
+    hosts.set(betaMoves ? 'dep-beta' : VM.beta!, {
+      org: 'beta',
+      env: envOf('beta', false),
+      up: true,
+      body: LISTENING,
     });
+  }
+  // Each org's Secret as last saved; a lost VM's was saved before it.
+  const secrets: Record<string, Record<string, string>> = {
+    ...(host === 'lost' && { 'backmesh-acme': envOf('acme', true) }),
+  };
+  const workloads: object[] = [
+    ...(host === 'vm' || host === 'both'
+      ? [listenerVm('acme', VM.acme!)]
+      : host === 'lost'
+        ? [
+            listenerVm('acme', VM.acme!, {
+              state: 'failed',
+              region: 'us-east-2',
+            }),
+          ]
+        : []),
+    ...(beta && !betaMoves ? [listenerVm('beta', VM.beta!)] : []),
+  ];
+  const deployment = (org: string) => ({
+    id: `dep-${org}`,
+    name: `backmesh-${org}`,
+    managed: false,
+    nodePoolId: 'np-1',
+    deletedAt: null as number | null,
+    image: org === 'acme' ? image : OLD_LISTENER,
+  });
+  const deployments = [
+    ...(onDeployment ? [deployment('acme')] : []),
+    ...(beta && betaMoves ? [deployment('beta')] : []),
+  ];
   const binary = fakeBinary({
     'vm-types aws us-east-2': JSON.stringify(catalog),
     'vm-types aws us-east-1': JSON.stringify(CATALOG.aws),
     'vm-types aws us-west-2': JSON.stringify(CATALOG.aws),
     'vm-types gcp us-central1': JSON.stringify(CATALOG.gcp),
-    ...(beta && { 'exec backmesh-beta': probe('beta') }),
     'api status --json': JSON.stringify({ url: HOSTED }),
     'api token': 't0ken',
     'api status --watch --json': watch,
-    'exec backmesh':
-      listener === 'down'
-        ? ''
-        : JSON.stringify({
-            code: 200,
-            env: {
-              ORG: 'acme',
-              ...(runnerImage !== null && {
-                BACKMESH_RUNNER_IMAGE: runnerImage,
-              }),
-              ...(listener === 'no-key'
-                ? {}
-                : { BACKMESH_INSTALL_KEY: INSTALL_KEY }),
-              ...(runners !== null && { BACKMESH_RUNNERS: runners }),
-              ...(rotatingFrom && { BACKMESH_ROTATING_FROM: rotatingFrom }),
-            },
-            body: {
-              installed: true,
-              broker: null,
-              runners: 0,
-              cap: 500,
-              scaleSets: [],
-            },
-          }),
+    'api access add --service': JSON.stringify({ token: 'acapi_issued' }),
+    'api token rotate --service': JSON.stringify({ token: 'acapi_rotated' }),
+    'credentials list --json': JSON.stringify([{ name: 'bm-aws' }]),
   });
   // The API serves `version` until `api upgrade`, and refuses this
   // release's client on every read before then if it's older.
@@ -171,49 +278,83 @@ function setUp({
   const run = async (args: string[]) => {
     const out = await binary.run(args);
     if (args[0] === 'api' && args[1] === 'upgrade') served = RELEASE.anycloud;
-    // The binary's reads through the hosted API (`exec`, `cluster list`).
-    const refused = ['exec', 'cluster'].includes(args[0]!) && refusal();
+    // The binary's reads through the hosted API (`cluster list`).
+    const refused = args[0] === 'cluster' && refusal();
     if (refused) {
       throw new Error(((await refused.json()) as { message: string }).message);
     }
+    if (args[0] === 'vm') {
+      const id = args[args.indexOf('--id') + 1]!;
+      const secret = args[args.indexOf('--secret') + 1]!;
+      const org = secret.replace('backmesh-', '');
+      hosts.set(id, {
+        org,
+        created: secrets[secret],
+        up: false,
+        body: LISTENING,
+      });
+      workloads.push(listenerVm(org, id));
+    }
+    if (args[0] === 'deployment' && args[1] === 'delete') {
+      for (const d of deployments) if (d.id === args[2]) d.deletedAt = 1;
+    }
     return out;
   };
+  // Hooks a test sets: a roll's values that fail, a start that fails.
+  const hooks: {
+    roll?: (values: Record<string, string>) => boolean;
+  } = {};
+  // `anycloud exec`'s route, as each listener answers it; recorded in
+  // `calls` as `status <id>`, `roll <id>` or `start <id>`.
+  const { exec } = fakeExec((id, command) => {
+    const refused = refusal();
+    if (refused) return new Error('Client/API version mismatch.');
+    const target = hosts.get(id);
+    if (!target) return new Error(`Workload or Deployment not found`);
+    const values = rolledValues(command);
+    if (values) {
+      calls.push(`roll ${id}`);
+      if (hooks.roll?.(values))
+        return { code: 1, stdout: '', stderr: 'Error: rollout failed\n' };
+      target.env = values;
+      target.up = !target.stuck;
+      return '';
+    }
+    if (command.startsWith('set -e')) {
+      calls.push(`start ${id}`);
+      target.env ??= target.created;
+      target.up = !target.stuck;
+      return '';
+    }
+    calls.push(`status ${id}`);
+    if (!target.up) {
+      return { code: 1, stdout: '', stderr: 'Error: No such container\n' };
+    }
+    return JSON.stringify({ code: 200, env: target.env, body: target.body });
+  });
   const routes = {
     'GET /v1/node-pools': {
-      nodePools: [
-        {
-          id: 'np-1',
-          name: 'bm-control',
-          state: 'running',
-          allowPrivilegedJobs: false,
-          cloudProvider: 'AWS',
-          region: 'us-east-2',
-        },
-      ],
+      nodePools: deployments.length
+        ? [
+            {
+              id: 'np-1',
+              name: 'bm-control',
+              state: 'running',
+              allowPrivilegedJobs: false,
+              cloudProvider: 'AWS',
+              region: 'us-east-2',
+            },
+          ]
+        : [],
     },
-    'GET /v1/deployments': {
-      deployments: [
-        {
-          name: 'backmesh-acme',
-          managed: false,
-          nodePoolId: 'np-1',
-          deletedAt: null,
-          image,
-        },
-        ...(beta
-          ? [
-              {
-                name: 'backmesh-beta',
-                managed: false,
-                nodePoolId: 'np-1',
-                deletedAt: null,
-                image: OLD_LISTENER,
-              },
-            ]
-          : []),
-      ],
-    },
-    'GET /v1/workloads': [],
+    'GET /v1/deployments': () => ({ deployments }),
+    'GET /v1/workloads': () => workloads,
+    'GET /v1/secrets': () =>
+      Object.keys(secrets).map((name) => ({
+        name,
+        createdAt: 1,
+        updatedAt: 1,
+      })),
     ...(cacheBuckets && {
       'GET /v1/credentials/bm-aws/buckets': {
         buckets: cacheBuckets.map((name) => ({
@@ -224,8 +365,14 @@ function setUp({
         nextCursor: null,
       },
     }),
-    'PUT /v1/secrets/backmesh-acme': {},
-    'PUT /v1/secrets/backmesh-beta': {},
+    'PUT /v1/secrets/backmesh-acme': (body: string) => {
+      secrets['backmesh-acme'] = JSON.parse(body).values;
+      return {};
+    },
+    'PUT /v1/secrets/backmesh-beta': (body: string) => {
+      secrets['backmesh-beta'] = JSON.parse(body).values;
+      return {};
+    },
   };
   const { api, requests } = fakeApi(routes, refusal);
   const lines: string[] = [];
@@ -241,11 +388,14 @@ function setUp({
     status: Array.isArray(keyStatus) ? keyStatus : [keyStatus],
     installs,
     tokens: beta ? [token('acme'), token('beta')] : [token('acme')],
+    // The first code expires before anyone enters it.
+    codes: [Response.json(DEVICE), Response.json(NEXT_DEVICE)],
+    polls: [Response.json({ error: 'expired_token' }), GITHUB_TOKEN],
   });
   const deps: UpgradeDeps = {
     // No saved anycloud files, whatever this machine holds.
     env: { BACKMESH_ANYCLOUD_DIR: mkdtempSync(join(tmpdir(), 'backmesh-')) },
-    signInScopes: async () => ['read:org', 'read:packages'],
+    signInCheck: async () => ({ login: 'octocat', appIds: [] }),
     run,
     runLong: run,
     release: async () => RELEASE,
@@ -254,8 +404,11 @@ function setUp({
     // An older client's reads go to the same routes with its header.
     api: (_url, _token, _fetch, _refresh, clientVersion) =>
       clientVersion ? fakeApi(routes, refusal, clientVersion).api : api,
+    exec: () => exec,
     fetch: async (url, init) =>
-      String(url).startsWith('https://api.backmesh.com/')
+      /^https:\/\/(api(-staging)?\.backmesh\.com|github\.com)\//.test(
+        String(url),
+      )
         ? worker.fetch(url, init)
         : String(url).startsWith('https://api.github.com/')
           ? githubOrg(new URL(String(url)).pathname)
@@ -273,15 +426,40 @@ function setUp({
       c28: undefined,
     },
   };
-  return { deps, calls, requests, lines, worker, routes };
+  return {
+    deps,
+    calls,
+    requests,
+    lines,
+    worker,
+    routes,
+    hooks,
+    hosts,
+    workloads,
+    secrets,
+  };
 }
 
-const rolledAny = (calls: string[]) =>
-  calls.some((c) => c.startsWith('deployment upgrade'));
+const ROLL = `roll ${VM.acme}`;
+const rolledAny = (calls: string[]) => calls.some((c) => c.startsWith('roll '));
 const mutations = (calls: string[]) =>
   calls.filter((c) =>
-    /^(api upgrade|api status --watch|deployment|node-pool)/.test(c),
+    /^(api upgrade|api status --watch|api access|api token rotate|deployment|node-pool|vm |roll |start )/.test(
+      c,
+    ),
   );
+// The values each PUT of `name`'s Secret saved.
+const saved = (requests: string[], name = 'backmesh-acme') =>
+  requests
+    .filter((r) => r.startsWith(`PUT /v1/secrets/${name} `))
+    .map(
+      (r) =>
+        (
+          JSON.parse(r.slice(r.indexOf(' {'))) as {
+            values: Record<string, string>;
+          }
+        ).values,
+    );
 
 describe('upgrade', () => {
   it('signs in again when the hosted API refuses its token, as status and uninstall do', async () => {
@@ -294,18 +472,18 @@ describe('upgrade', () => {
     };
     // anycloud's login relays a device code until backmesh has signed in.
     const dir = deps.env.BACKMESH_ANYCLOUD_DIR!;
-    writeFileSync(join(dir, '.token'), 'gho_revoked\n');
-    deps.signInScopes = async (token) => {
-      if (token === 'gho_revoked')
+    writeFileSync(join(dir, '.token'), 'ghu_revoked\n');
+    deps.signInCheck = async (token) => {
+      if (token === 'ghu_revoked')
         throw new GitHubError(401, 'Bad credentials');
-      return ['read:org', 'read:packages'];
+      return { login: 'octocat', appIds: [] };
     };
     const run = deps.run;
     const logins: string[] = [];
     deps.run = async (args) => {
       if (args[0] !== 'login') return run(args);
       logins.push(args.join(' '));
-      if (readFileSync(join(dir, '.token'), 'utf8').startsWith('gho_revoked')) {
+      if (readFileSync(join(dir, '.token'), 'utf8').startsWith('ghu_revoked')) {
         throw Object.assign(new Error('Command failed: anycloud login'), {
           stdout: `${JSON.stringify({ actionRequired: { code: 'GITHUB_SIGN_IN_REQUIRED' } })}\n`,
         });
@@ -317,23 +495,35 @@ describe('upgrade', () => {
     await refresh!(undefined);
     expect(logins).toEqual([`login ${HOSTED}`, `login ${HOSTED}`]);
     expect(lines).toContain(
-      `GitHub revoked the saved sign-in. backmesh signs in again.`,
+      `The saved GitHub sign-in expired or was revoked. backmesh signs in again.`,
     );
     expect(readFileSync(join(dir, '.token'), 'utf8')).toBe(`${SIGNED_IN}\n`);
   });
 
+  it('keeps the listener on the Worker the CLI signs in through', async () => {
+    const { deps, requests } = setUp();
+    deps.env.BACKMESH_API_URL = 'https://api-staging.backmesh.com';
+    await upgrade(deps);
+    const secret = requests.find((r) =>
+      r.startsWith('PUT /v1/secrets/backmesh-acme '),
+    )!;
+    expect(JSON.parse(secret.split(' ')[2]!).values).toMatchObject({
+      BACKMESH_API_URL: 'https://api-staging.backmesh.com',
+    });
+  });
+
   it("upgrades the API, then rolls the listener with this release's classes", async () => {
-    const { deps, calls, requests } = setUp();
+    const { deps, calls, requests, hosts } = setUp();
     const result = await upgrade(deps);
 
     expect(mutations(calls)).toEqual([
-      'api upgrade',
+      'api upgrade --sign-in-apps 5622376',
       'api status --watch --json',
-      `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --cpus 0.5 --wait`,
+      ROLL,
     ]);
-    expect(requests).toContain(
-      `PUT /v1/secrets/backmesh-acme ${JSON.stringify({ values: { ORG: 'acme', ORG_ID: '7', BACKMESH_RUNNER_IMAGE: RELEASE.runnerImage, BACKMESH_INSTALL_KEY: INSTALL_KEY, BACKMESH_RUNNERS: RUNNERS } })}`,
-    );
+    // The Secret, then the same values written to the VM.
+    expect(saved(requests)).toEqual([secretOf('acme')]);
+    expect(hosts.get(VM.acme!)!.env).toEqual(secretOf('acme'));
     // A listener from before the cache gets its region's bucket, checked
     // with a test mint.
     expect(requests.filter((r) => /^(POST|PUT \/v1\/cred)/.test(r))).toEqual([
@@ -347,6 +537,20 @@ describe('upgrade', () => {
     });
   });
 
+  it('says a cancel came after it started a listener again', async () => {
+    const { deps, routes, hosts } = setUp({
+      version: RELEASE.anycloud,
+      image: RELEASE.listenerImage,
+      runnerImage: RELEASE.runnerImage,
+    });
+    quotaStatus(routes, { 'us-east-2': [2, 2] });
+    hosts.get(VM.acme!)!.up = false;
+    deps.confirm = async () => false;
+    await expect(upgrade(deps)).rejects.toThrow(
+      "Upgrade cancelled after acme's listener started again, with no other listener changed; raise the quotas named above",
+    );
+  });
+
   it('names a label that would start no runners, and asks before anything changes, no unless yes', async () => {
     const { deps, calls, lines, routes } = setUp({
       version: RELEASE.anycloud,
@@ -358,7 +562,7 @@ describe('upgrade', () => {
     const confirm = vi.fn(async () => false);
     deps.confirm = confirm;
     await expect(upgrade(deps)).rejects.toThrow(
-      'Upgrade cancelled; nothing changed. Raise the quotas named above, then run upgrade again.',
+      'Upgrade cancelled before anything changed. Raise the quotas named above, then run `backmesh upgrade` again.',
     );
     expect(lines).toContain(
       "acme: backmesh-4 would start no runners: every runner region's spot quota is under one 4-vCPU runner (us-east-2 2 vCPU); raise L-34B43A08 in us-east-2 to use it.",
@@ -394,7 +598,9 @@ describe('upgrade', () => {
     await expect(upgrade(moved.deps)).rejects.toThrow(
       'Upgrade cancelled after the control plane updated, with no listener changed; raise the quotas named above, then run `backmesh upgrade` again.',
     );
-    expect(mutations(moved.calls)).toContain('api upgrade');
+    expect(mutations(moved.calls)).toContain(
+      'api upgrade --sign-in-apps 5622376',
+    );
     expect(rolledAny(moved.calls)).toBe(false);
   });
 
@@ -402,21 +608,19 @@ describe('upgrade', () => {
     const { deps, calls, requests } = setUp({ beta: true });
     const result = await upgrade(deps);
 
-    expect(
-      calls
-        .filter((c) => /^(exec|api upgrade|deployment|node-pool)/.test(c))
-        .map((c) => c.split(' node -e')[0]),
-    ).toEqual([
-      // An older API reads nothing for this release's client until it moves.
-      'api upgrade',
-      'exec backmesh-acme',
-      'exec backmesh-beta',
-      `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --cpus 0.5 --wait`,
-      `deployment upgrade backmesh-beta --image ${RELEASE.listenerImage} --secret backmesh-beta --cpus 0.5 --wait`,
+    const order = calls.filter((c) => /^(status|api upgrade|roll)/.test(c));
+    // An older API reads nothing for this release's client until it moves.
+    expect(order[0]).toBe('api upgrade --sign-in-apps 5622376');
+    // Every org is read once before any roll; each roll is then read again.
+    expect(order.slice(1)).toEqual([
+      `status ${VM.acme}`,
+      `status ${VM.beta}`,
+      ROLL,
+      `status ${VM.acme}`,
+      `roll ${VM.beta}`,
+      `status ${VM.beta}`,
     ]);
-    expect(requests).toContain(
-      `PUT /v1/secrets/backmesh-beta ${JSON.stringify({ values: { ORG: 'beta', ORG_ID: '8', BACKMESH_RUNNER_IMAGE: RELEASE.runnerImage, BACKMESH_INSTALL_KEY: INSTALL_KEY, BACKMESH_RUNNERS: RUNNERS } })}`,
-    );
+    expect(saved(requests, 'backmesh-beta')).toEqual([secretOf('beta')]);
     expect(result.listeners).toEqual([
       { org: 'acme', image: RELEASE.listenerImage, rolled: true },
       { org: 'beta', image: RELEASE.listenerImage, rolled: true },
@@ -424,30 +628,37 @@ describe('upgrade', () => {
   });
 
   it("stops at the first org whose roll fails, before the next org's", async () => {
-    const { deps, calls } = setUp({ beta: true });
-    const { runLong } = deps;
-    deps.runLong = async (args) => {
-      if (args[2] === 'backmesh-acme' && args.includes(RELEASE.listenerImage)) {
-        throw new Error('roll failed');
-      }
-      return runLong(args);
-    };
+    const { deps, calls, hooks } = setUp({ beta: true });
+    hooks.roll = (values) =>
+      values.ORG === 'acme' &&
+      values.BACKMESH_LISTENER_IMAGE === RELEASE.listenerImage;
     await expect(upgrade(deps)).rejects.toThrow("acme's listener's roll");
-    expect(calls.some((c) => c.includes('upgrade backmesh-beta'))).toBe(false);
+    expect(calls).not.toContain(`roll ${VM.beta}`);
   });
 
-  it("refuses before changing anything when an org's listener doesn't answer", async () => {
-    const { deps, calls } = setUp({ version: RELEASE.anycloud, beta: true });
-    const run = deps.run;
-    deps.run = async (args) => {
-      if (args[0] === 'exec' && args[1] === 'backmesh-beta')
-        throw new Error('down');
-      return run(args);
-    };
+  it("starts a listener that doesn't answer again, and refuses before any roll when it still doesn't", async () => {
+    const { deps, calls, hosts } = setUp({
+      version: RELEASE.anycloud,
+      beta: true,
+    });
+    Object.assign(hosts.get(VM.beta!)!, { up: false, stuck: true });
     await expect(upgrade(deps)).rejects.toThrow(
-      "beta's listener didn't answer",
+      `beta's listener didn't start on ${VM.beta}.`,
     );
-    expect(mutations(calls)).toEqual([]);
+    expect(mutations(calls)).toEqual([`start ${VM.beta}`]);
+
+    // One that answers once started goes on as any other.
+    const restarted = setUp({ version: RELEASE.anycloud, beta: true });
+    restarted.hosts.get(VM.beta!)!.up = false;
+    await upgrade(restarted.deps);
+    expect(mutations(restarted.calls)).toEqual([
+      `start ${VM.beta}`,
+      ROLL,
+      `roll ${VM.beta}`,
+    ]);
+    expect(restarted.lines).toContain(
+      `Starting beta's listener on ${VM.beta} again.`,
+    );
   });
 
   it('changes nothing when the API, the images and the classes already match', async () => {
@@ -504,9 +715,7 @@ describe('upgrade', () => {
     };
     const result = await upgrade(deps);
     expect(asked).toEqual(['Proceed?']);
-    expect(mutations(calls)).toEqual([
-      `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --cpus 0.5 --wait`,
-    ]);
+    expect(mutations(calls)).toEqual([ROLL]);
     expect(
       requests.findLast((r) => r.startsWith('PUT /v1/secrets/')),
     ).toContain(JSON.stringify(RUNNERS).slice(1, -1));
@@ -556,9 +765,7 @@ describe('upgrade', () => {
         (l) => l === "acme's VM type order updated; no consent needed.",
       ),
     ).toHaveLength(1);
-    expect(mutations(calls)).toEqual([
-      `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --cpus 0.5 --wait`,
-    ]);
+    expect(mutations(calls)).toEqual([ROLL]);
     expect(
       requests.findLast((r) => r.startsWith('PUT /v1/secrets/')),
     ).toContain(JSON.stringify(RUNNERS).slice(1, -1));
@@ -640,9 +847,7 @@ describe('upgrade', () => {
       })) as { planId: string };
       const { deps, calls } = twoToOne();
       await upgrade(deps, { yes: true, planId });
-      expect(mutations(calls)).toContain(
-        `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --cpus 0.5 --wait`,
-      );
+      expect(mutations(calls)).toContain(ROLL);
 
       // --plan-id alone still asks, and needs a terminal for it.
       const alone = twoToOne();
@@ -653,7 +858,7 @@ describe('upgrade', () => {
     it('asks nothing when only the release moves', async () => {
       const { deps, calls } = setUp();
       await upgrade(deps);
-      expect(mutations(calls)).toContain('api upgrade');
+      expect(mutations(calls)).toContain('api upgrade --sign-in-apps 5622376');
     });
   });
 
@@ -731,7 +936,7 @@ describe('upgrade', () => {
       );
     // Anything but a read of the control pool, or the listener's roll.
     const controlPlaneChanges = (calls: string[], requests: string[]) => [
-      ...mutations(calls).filter((c) => !c.startsWith('deployment upgrade')),
+      ...mutations(calls).filter((c) => !c.startsWith('roll ')),
       ...requests.filter(
         (r) => /node-pools|cluster/.test(r) && !r.startsWith('GET '),
       ),
@@ -840,7 +1045,7 @@ describe('upgrade', () => {
     const confirm = vi.fn(async (q: string) => q === 'Proceed?');
     deps.confirm = confirm;
     await expect(upgrade(deps)).rejects.toThrow(
-      'Upgrade cancelled; nothing changed.',
+      'Upgrade cancelled before anything changed.',
     );
     expect(
       lines.some((l) => l.includes('backmesh-4 would start no runners')),
@@ -942,31 +1147,26 @@ describe('upgrade', () => {
     await expect(upgrade(deps)).rejects.toThrow(
       'The control plane upgrade failed: chart refused; run `backmesh upgrade` again.',
     );
-    expect(calls.some((c) => c.startsWith('deployment upgrade'))).toBe(false);
+    expect(rolledAny(calls)).toBe(false);
   });
 
   it('rolls back to the old image when the roll fails', async () => {
-    const { deps, calls, requests } = setUp({ version: '0.1.72' });
-    const run = deps.runLong;
-    deps.runLong = async (args) => {
-      if (args.includes(RELEASE.listenerImage)) {
-        throw new Error('rollout timed out');
-      }
-      return run(args);
-    };
+    const { deps, calls, requests, hooks, hosts } = setUp({
+      version: '0.1.72',
+    });
+    hooks.roll = (values) =>
+      values.BACKMESH_LISTENER_IMAGE === RELEASE.listenerImage;
     await expect(upgrade(deps)).rejects.toThrow(
       `failed, and it's back on ${OLD_LISTENER}. Run upgrade again.`,
     );
-    expect(calls).toContain(
-      `deployment upgrade backmesh-acme --image ${OLD_LISTENER} --secret backmesh-acme --cpus 0.5 --wait`,
-    );
-    // The old listener gets its own runner image back, before its roll.
-    const release = requests.filter((r) =>
-      r.startsWith('PUT /v1/secrets/backmesh-acme'),
-    );
-    expect(release.at(-1)).toContain(
-      '"BACKMESH_RUNNER_IMAGE":"ghcr.io/backmesh/backmesh-runner@sha256:old"',
-    );
+    expect(mutations(calls)).toEqual([ROLL, ROLL]);
+    // The old listener gets its own image and runner image back.
+    const old = {
+      BACKMESH_LISTENER_IMAGE: OLD_LISTENER,
+      BACKMESH_RUNNER_IMAGE: 'ghcr.io/backmesh/backmesh-runner@sha256:old',
+    };
+    expect(saved(requests).at(-1)).toEqual(secretOf('acme', old));
+    expect(hosts.get(VM.acme!)!.env).toEqual(secretOf('acme', old));
   });
 
   // rollListener's restore must still run when only the runners (classes)
@@ -975,24 +1175,17 @@ describe('upgrade', () => {
   // image, runner image or classes together) must not also skip a real
   // prior state `upgrade` has to roll back to.
   it('rolls back to the old runners when the roll fails and only the runners changed, with the image unchanged', async () => {
-    const { deps, requests } = setUp({
+    const { deps, requests, hooks } = setUp({
       version: '0.1.72',
       image: RELEASE.listenerImage,
       runnerImage: RELEASE.runnerImage,
       runners: twoRegions(),
     });
     deps.confirm = async () => true;
-    const run = deps.runLong;
     let rolls = 0;
-    deps.runLong = async (args) => {
-      if (args.join(' ').startsWith('deployment upgrade backmesh-acme')) {
-        rolls++;
-        // Only the first (forward) roll fails; the restore attempt, which
-        // rolls to the very same image, succeeds.
-        if (rolls === 1) throw new Error('rollout timed out');
-      }
-      return run(args);
-    };
+    // Only the first (forward) roll fails; the restore attempt, which
+    // rolls to the very same image, succeeds.
+    hooks.roll = () => ++rolls === 1;
 
     await expect(upgrade(deps)).rejects.toThrow(
       `failed, and it's back on ${RELEASE.listenerImage}. Run upgrade again.`,
@@ -1011,20 +1204,18 @@ describe('upgrade', () => {
   });
 
   it('rolls a listener from before the release Secret back without a runner image', async () => {
-    const { deps, requests } = setUp({ version: '0.1.72', runnerImage: null });
-    const run = deps.runLong;
-    deps.runLong = async (args) => {
-      if (args.includes(RELEASE.listenerImage)) throw new Error('timed out');
-      return run(args);
-    };
+    const { deps, requests, hooks } = setUp({
+      version: '0.1.72',
+      runnerImage: null,
+    });
+    hooks.roll = (values) =>
+      values.BACKMESH_LISTENER_IMAGE === RELEASE.listenerImage;
     await expect(upgrade(deps)).rejects.toThrow(`it's back on ${OLD_LISTENER}`);
-    const release = requests.filter((r) =>
-      r.startsWith('PUT /v1/secrets/backmesh-acme'),
-    );
     // Its built-in runner image applies again; the org stays.
-    expect(release.at(-1)).toBe(
-      `PUT /v1/secrets/backmesh-acme ${JSON.stringify({ values: { ORG: 'acme', ORG_ID: '7', BACKMESH_INSTALL_KEY: INSTALL_KEY, BACKMESH_RUNNERS: RUNNERS } })}`,
-    );
+    const { BACKMESH_RUNNER_IMAGE: _, ...restored } = secretOf('acme', {
+      BACKMESH_LISTENER_IMAGE: OLD_LISTENER,
+    });
+    expect(saved(requests).at(-1)).toEqual(restored);
   });
 
   it.each([
@@ -1056,8 +1247,7 @@ describe('upgrade', () => {
     image: RELEASE.listenerImage,
     runnerImage: RELEASE.runnerImage,
   };
-  const rolled = (calls: string[]) =>
-    calls.some((c) => c.startsWith('deployment upgrade backmesh'));
+  const rolled = rolledAny;
 
   it('signs an older install in once, saves the new key and rolls', async () => {
     const { deps, calls, requests, worker } = setUp({
@@ -1068,7 +1258,11 @@ describe('upgrade', () => {
     await upgrade(deps);
 
     expect(worker.calls).toEqual([
-      'POST /v1/installs/device',
+      // The first code expires before anyone enters it.
+      'POST github.com/login/device/code',
+      'POST github.com/login/oauth/access_token',
+      'POST github.com/login/device/code',
+      'POST github.com/login/oauth/access_token',
       'POST /v1/installs',
       'GET /v1/status',
       'POST /v1/token',
@@ -1105,19 +1299,19 @@ describe('upgrade', () => {
         Response.json({
           install: 'cd'.repeat(16),
           key: replaced,
-          github_token: SIGNED_IN,
         }),
       ],
     });
   const replaced = `bmk_${'cd'.repeat(16)}${'ef'.repeat(16)}`;
 
-  it('signs in again for a refused key, saves the replacement and rolls', async () => {
+  it('signs in again for a refused key, on a fresh code once the first expires, saves the replacement and rolls', async () => {
     const { deps, calls, requests, worker } = refusedKey();
 
     await upgrade(deps);
 
+    expect(worker.signIns()).toHaveLength(2);
     expect(worker.bodies).toEqual([
-      { org: 'acme', device_code: 'dev-3584e1', install: 'ab'.repeat(16) },
+      { org: 'acme', github_token: SIGNED_IN, install: 'ab'.repeat(16) },
     ]);
     expect(savedKey(requests)).toBe(replaced);
     expect(rolled(calls)).toBe(true);
@@ -1129,12 +1323,12 @@ describe('upgrade', () => {
   it("keeps the control plane's sign-in when one is saved or GITHUB_TOKEN is set", async () => {
     const saved = refusedKey();
     const token = join(saved.deps.env.BACKMESH_ANYCLOUD_DIR!, '.token');
-    writeFileSync(token, 'gho_owner\n');
+    writeFileSync(token, 'ghu_owner\n');
     await upgrade(saved.deps);
-    expect(readFileSync(token, 'utf8')).toBe('gho_owner\n');
+    expect(readFileSync(token, 'utf8')).toBe('ghu_owner\n');
 
     const ci = refusedKey();
-    ci.deps.env.GITHUB_TOKEN = 'gho_ci';
+    ci.deps.env.GITHUB_TOKEN = 'ghu_ci';
     await upgrade(ci.deps);
     const ciToken = join(ci.deps.env.BACKMESH_ANYCLOUD_DIR!, '.token');
     expect(existsSync(ciToken)).toBe(false);
@@ -1165,12 +1359,10 @@ describe('upgrade', () => {
       // The fakes refuse every read before `api upgrade`, as 0.1.73 does.
       const { deps, calls } = setUp();
       await upgrade(deps);
-      expect(calls.findIndex((c) => c === 'api upgrade')).toBeLessThan(
-        calls.findIndex((c) => c.startsWith('exec')),
-      );
-      expect(mutations(calls)).toContain(
-        `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --cpus 0.5 --wait`,
-      );
+      expect(
+        calls.findIndex((c) => c === 'api upgrade --sign-in-apps 5622376'),
+      ).toBeLessThan(calls.findIndex((c) => c.startsWith('status')));
+      expect(mutations(calls)).toContain(ROLL);
     });
 
     it("can't plan, and changes nothing", async () => {
@@ -1203,10 +1395,8 @@ describe('upgrade', () => {
     });
 
     it('refuses a control plane with no backmesh listener before moving it', async () => {
-      const { deps, calls, routes } = setUp();
-      (
-        routes['GET /v1/deployments'] as { deployments: unknown[] }
-      ).deployments = [];
+      const { deps, calls, workloads } = setUp();
+      workloads.length = 0;
       await expect(upgrade(deps)).rejects.toThrow("There's no listener on");
       expect(mutations(calls)).toEqual([]);
     });
@@ -1224,7 +1414,7 @@ describe('upgrade', () => {
         'Upgrade cancelled after the control plane updated, with no listener changed',
       );
       expect(mutations(calls)).toEqual([
-        'api upgrade',
+        'api upgrade --sign-in-apps 5622376',
         'api status --watch --json',
       ]);
 
@@ -1242,21 +1432,20 @@ describe('upgrade', () => {
       };
       again.deps.confirm = async () => true;
       const result = await upgrade(again.deps);
-      expect(again.calls).not.toContain('api upgrade');
+      expect(again.calls).not.toContain('api upgrade --sign-in-apps 5622376');
       expect(result).toMatchObject({ controlPlane: { upgraded: false } });
-      expect(mutations(again.calls)).toContain(
-        `deployment upgrade backmesh-acme --image ${RELEASE.listenerImage} --secret backmesh-acme --cpus 0.5 --wait`,
-      );
+      expect(mutations(again.calls)).toContain(ROLL);
     });
 
     it('leaves the new API with the old listener when a later check refuses', async () => {
       const { deps, calls } = setUp({ listener: 'down' });
       await expect(upgrade(deps)).rejects.toThrow(
-        "acme's listener didn't answer",
+        `acme's listener didn't start on ${VM.acme}.`,
       );
       expect(mutations(calls)).toEqual([
-        'api upgrade',
+        'api upgrade --sign-in-apps 5622376',
         'api status --watch --json',
+        `start ${VM.acme}`,
       ]);
     });
 
@@ -1268,20 +1457,214 @@ describe('upgrade', () => {
       });
       await expect(upgrade(deps)).rejects.toThrow(NeedsPlan);
       expect(mutations(calls)).toEqual([
-        'api upgrade',
+        'api upgrade --sign-in-apps 5622376',
         'api status --watch --json',
       ]);
     });
   });
 
-  it("refuses when the listener doesn't answer, changing nothing", async () => {
+  it("refuses when the listener doesn't answer even started again, changing nothing else", async () => {
     const { deps, calls, requests } = setUp({
       version: RELEASE.anycloud,
       listener: 'down',
     });
 
-    await expect(upgrade(deps)).rejects.toThrow();
-    expect(mutations(calls)).toEqual([]);
+    await expect(upgrade(deps)).rejects.toThrow("didn't start");
+    expect(mutations(calls)).toEqual([`start ${VM.acme}`]);
     expect(requests.filter((r) => !r.startsWith('GET'))).toEqual([]);
+  });
+
+  describe("a listener's VM", () => {
+    const current = {
+      version: RELEASE.anycloud,
+      image: RELEASE.listenerImage,
+      runnerImage: RELEASE.runnerImage,
+      cacheBuckets: ['bm-cache-l8u5e-us-east-2'],
+    };
+
+    it('moves a listener off bm-control: its VM first, the Deployment stopped before it starts, then bm-control goes', async () => {
+      const { deps, calls, requests, lines, hosts } = setUp({
+        version: RELEASE.anycloud,
+        host: 'deployment',
+      });
+      const result = await upgrade(deps);
+      const moves = mutations(calls);
+      const id = /--id (bml-l8u5e-[a-z0-9]{6})/.exec(moves.join('\n'))?.[1];
+      expect(moves).toEqual([
+        'api access add --service backmesh-acme --json',
+        expect.stringMatching(
+          new RegExp(
+            `^vm \\S+ --id ${id} --credentials bm-aws --region us-east-2 --vm-type t3.small --secret backmesh-acme --wait$`,
+          ),
+        ),
+        // In standby while the Deployment still runs, then taking jobs.
+        `roll ${id}`,
+        'deployment delete dep-acme',
+        `roll ${id}`,
+        'api access remove --service-account backmesh-acme',
+        'node-pool delete np-1',
+      ]);
+      // Read in its Pod, where it still was.
+      expect(calls.indexOf('status dep-acme')).toBeGreaterThanOrEqual(0);
+      // Its runner group keeps the Deployment's name, so its scale sets
+      // stay; the new token is the one just issued.
+      const values = secretOf('acme', {
+        BACKMESH_RUNNER_GROUP: runnerGroupName('l8u5e', 'dep-acme'),
+        ANYCLOUD_API_TOKEN: 'acapi_issued',
+      });
+      expect(saved(requests)).toEqual([values]);
+      expect(hosts.get(id!)!.env).toEqual(values);
+      expect(lines).toContain(
+        "acme's listener moves from bm-control to its own t3.small VM, about $17 a month, and bm-control, about the same, is deleted.",
+      );
+      expect(result.listeners).toEqual([
+        { org: 'acme', image: RELEASE.listenerImage, rolled: true },
+      ]);
+      // The plan names the move.
+      const plan = setUp({ version: RELEASE.anycloud, host: 'deployment' });
+      expect(await upgrade(plan.deps, { plan: true })).toMatchObject({
+        orgs: [{ org: 'acme', moves: true }],
+      });
+      expect(mutations(plan.calls)).toEqual([]);
+    });
+
+    it('finishes a move that stopped after making the VM: reads the Deployment, then rolls the VM it made', async () => {
+      const { deps, calls, hosts } = setUp({
+        version: RELEASE.anycloud,
+        host: 'both',
+      });
+      await upgrade(deps);
+      expect(calls).toContain('status dep-acme');
+      expect(mutations(calls)).toEqual([
+        'api access add --service backmesh-acme --json',
+        `roll ${VM.acme}`,
+        'deployment delete dep-acme',
+        `roll ${VM.acme}`,
+        'api access remove --service-account backmesh-acme',
+        'node-pool delete np-1',
+      ]);
+      expect(hosts.get(VM.acme!)!.env).toMatchObject({
+        BACKMESH_RUNNER_GROUP: runnerGroupName('l8u5e', 'dep-acme'),
+      });
+    });
+
+    it("keeps the Deployment running when the VM's listener can't use its token in standby", async () => {
+      const { deps, calls, hooks, hosts } = setUp({
+        version: RELEASE.anycloud,
+        host: 'deployment',
+      });
+      hooks.roll = (values) => {
+        // The control plane refuses the new token.
+        if (values.BACKMESH_STANDBY) {
+          for (const [id, h] of hosts) {
+            if (id.startsWith('bml-')) {
+              h.body = {
+                ...h.body,
+                anycloud: {
+                  since: '2026-11-18T06:00:00.000Z',
+                  error: 'HTTP 401: {}',
+                },
+              };
+            }
+          }
+        }
+        return false;
+      };
+      await expect(upgrade(deps)).rejects.toThrow(
+        /can't use the control plane \(HTTP 401: \{\}\), so its Deployment keeps running/,
+      );
+      expect(calls.filter((c) => c.startsWith('deployment'))).toEqual([]);
+      expect(calls).not.toContain('node-pool delete np-1');
+    });
+
+    it('takes a listener a stopped move left in standby out of it, with nothing else to change', async () => {
+      const { deps, calls, hosts } = setUp({ ...current });
+      const acme = hosts.get(VM.acme!)!;
+      acme.env = { ...acme.env, BACKMESH_STANDBY: '1' };
+      await upgrade(deps);
+      // The move's last step too.
+      expect(mutations(calls)).toEqual([
+        ROLL,
+        'api access remove --service-account backmesh-acme',
+      ]);
+      expect(acme.env).not.toHaveProperty('BACKMESH_STANDBY');
+    });
+
+    it('asks before moving several orgs, with the VMs’ total cost', async () => {
+      const { deps, calls, lines } = setUp({
+        version: RELEASE.anycloud,
+        host: 'deployment',
+        beta: true,
+        betaMoves: true,
+      });
+      await expect(upgrade(deps)).rejects.toThrow(NeedsPlan);
+      expect(lines).toContain(
+        "acme, beta's listeners move from bm-control to t3.small VMs of their own: about $34 a month in all, instead of bm-control's one Node at about $17, which is deleted.",
+      );
+      expect(mutations(calls)).toEqual([]);
+    });
+
+    it('refuses --plan and --plan-id while a listener must start again first, changing nothing', async () => {
+      for (const host of ['lost', 'vm'] as const) {
+        const { deps, calls, hosts } = setUp({ ...current, host });
+        if (host === 'vm') hosts.get(VM.acme!)!.up = false;
+        await expect(upgrade(deps, { plan: true })).rejects.toThrow(
+          host === 'lost'
+            ? `acme's listener VM ${VM.acme} is gone, so \`--plan\` works only after upgrade starts it again`
+            : `acme's listener on ${VM.acme} isn't answering, so \`--plan\``,
+        );
+        await expect(
+          upgrade(deps, { yes: true, planId: 'p-000000000000' }),
+        ).rejects.toThrow(PlanChanged);
+        expect(mutations(calls)).toEqual([]);
+      }
+    });
+
+    it('creates a lost VM again from the Secret, where it was, and reads it there', async () => {
+      const { deps, calls, lines, hosts } = setUp({
+        ...current,
+        host: 'lost',
+      });
+      const result = await upgrade(deps);
+      const moves = mutations(calls);
+      const id = /--id (bml-l8u5e-[a-z0-9]{6})/.exec(moves.join('\n'))?.[1];
+      expect(id).not.toBe(VM.acme);
+      expect(moves).toEqual([
+        expect.stringMatching(
+          new RegExp(
+            `^vm \\S+ --id ${id} --credentials bm-aws --region us-east-2 --vm-type t3.small --secret backmesh-acme --wait$`,
+          ),
+        ),
+        `start ${id}`,
+      ]);
+      expect(lines).toContain(
+        `acme's listener VM ${VM.acme} is gone; creating ${id} on aws us-east-2.`,
+      );
+      // Its listener starts from the Secret it was created with.
+      expect(hosts.get(id!)!.env).toMatchObject({ ORG: 'acme' });
+      expect(result.listeners).toEqual([
+        { org: 'acme', image: RELEASE.listenerImage, rolled: false },
+      ]);
+    });
+
+    it('issues a new service token when the control plane refuses the old one, and rolls it in', async () => {
+      const { deps, calls, requests } = setUp({
+        ...current,
+        body: {
+          anycloud: { since: '2026-11-05T11:00:00.000Z', error: 'HTTP 401' },
+        },
+      });
+      const result = await upgrade(deps);
+      expect(mutations(calls)).toEqual([
+        'api token rotate --service backmesh-acme --json',
+        ROLL,
+      ]);
+      expect(saved(requests)).toEqual([
+        secretOf('acme', { ANYCLOUD_API_TOKEN: 'acapi_rotated' }),
+      ]);
+      expect(result.listeners).toEqual([
+        { org: 'acme', image: RELEASE.listenerImage, rolled: true },
+      ]);
+    });
   });
 });
