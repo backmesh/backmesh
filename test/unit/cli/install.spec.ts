@@ -2497,3 +2497,135 @@ describe('install', () => {
     });
   });
 });
+
+// `az vm list-skus --all --resource-type virtualMachines --output json` as
+// Azure documents it (learn.microsoft.com, "Resolve errors for SKU not
+// available"): one entry per size and region, and a `Location` restriction
+// with `NotAvailableForSubscription` where the subscription may not create
+// it. The outside org's sponsorship subscription: Standard_B2s restricted in
+// eastus, eastus2 and westus2; `restricted` adds more.
+const skus = (restricted: Record<string, string[]> = {}) =>
+  JSON.stringify(
+    ['Standard_D2s_v5', 'Standard_B2s'].flatMap((name) =>
+      RUNNER_REGIONS.azure.map((location) => {
+        const denied = [
+          ...(name === 'Standard_B2s' ? ['eastus', 'eastus2', 'westus2'] : []),
+          ...(restricted[name] ?? []),
+        ].includes(location);
+        return {
+          apiVersions: null,
+          capabilities: [{ name: 'vCPUs', value: '2' }],
+          capacity: null,
+          costs: null,
+          family: name === 'Standard_B2s' ? 'standardBSFamily' : 'standardDSv5Family',
+          kind: null,
+          locationInfo: [{ location, zoneDetails: [], zones: ['1', '2', '3'] }],
+          locations: [location],
+          name,
+          resourceType: 'virtualMachines',
+          restrictions: denied
+            ? [
+                {
+                  reasonCode: 'NotAvailableForSubscription',
+                  restrictionInfo: { locations: [location], zones: null },
+                  type: 'Location',
+                  values: [location],
+                },
+              ]
+            : [],
+          size: name.replace('Standard_', ''),
+          tier: 'Standard',
+        };
+      }),
+    ),
+  );
+
+describe("install's always-on VM sizes on Azure", () => {
+  const binary = Object.fromEntries(
+    RUNNER_REGIONS.azure.map((r) => [
+      `vm-types azure ${r}`,
+      JSON.stringify(CATALOG.azure),
+    ]),
+  );
+  const azure = (restricted?: Record<string, string[]>) => {
+    const set = setUp({ tty: false }, binary);
+    const { command } = set.deps;
+    set.deps.command = async (args, env) =>
+      args.slice(0, 3).join(' ') === 'az vm list-skus'
+        ? skus(restricted)
+        : command(args, env);
+    return set;
+  };
+  const opts = { ...options, controlPlane: 'azure:eastus' };
+
+  it('names each restricted size in the region before any sign-in, and places them where all are offered', async () => {
+    const { deps, lines, worker, commands } = azure();
+    const plan = (await install({ ...opts, plan: true }, deps)) as InstallPlan;
+    expect(commands).toContain(
+      "az vm list-skus --all --resource-type virtualMachines --query [?name=='Standard_D2s_v5' || name=='Standard_B2s'] --output json",
+    );
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        "Azure won't create acme's listener VM (Standard_B2s) in eastus for this subscription: NotAvailableForSubscription.",
+        "Always on: the control plane's VM (Standard_D2s_v5) on azure centralus, about $79 a month with its disk and address.",
+        "Always on: acme's listener VM (Standard_B2s) on azure centralus, about $32 a month with its disk and address.",
+        'If Azure has no capacity for them in centralus, install tries northcentralus, southcentralus, westcentralus, westus, westus3, in turn.',
+      ]),
+    );
+    expect(plan.controlPlane.region).toBe('centralus');
+    expect(plan.listener!.region).toBe('centralus');
+    expect(worker.calls.filter((c) => c.startsWith('POST'))).toEqual([]);
+  });
+
+  it('names every restricted size', async () => {
+    const { deps, lines } = azure({ Standard_D2s_v5: ['eastus'] });
+    await install({ ...opts, plan: true }, deps);
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        "Azure won't create the control plane's VM (Standard_D2s_v5) in eastus for this subscription: NotAvailableForSubscription.",
+        "Azure won't create acme's listener VM (Standard_B2s) in eastus for this subscription: NotAvailableForSubscription.",
+      ]),
+    );
+  });
+
+  it('stops before any sign-in when no region offers every size', async () => {
+    const { deps, worker } = azure({ Standard_D2s_v5: RUNNER_REGIONS.azure });
+    await expect(install({ ...opts, plan: true }, deps)).rejects.toThrow(
+      "No Azure region backmesh tries offers this subscription both the control plane's VM (Standard_D2s_v5) and acme's listener VM (Standard_B2s)",
+    );
+    expect(worker.calls).toEqual([]);
+  });
+
+  it('deletes what a capacity-refused cluster create started and tries the next region, signing in once', async () => {
+    const { deps, calls, worker } = azure();
+    const { runLong } = deps;
+    deps.runLong = async (args, env) => {
+      if (args[1] === 'create' && args.includes('centralus')) {
+        throw new StepFailed(
+          args,
+          '{"error":{"code":"UNEXPECTED","message":"az deployment group create failed: (SkuNotAvailable) The requested VM size for resource \'Following SKUs have failed for Capacity Restrictions: Standard_D2s_v5\' is currently not available in location \'centralus\'. Please try another size or deploy to a different location or zones. See https://aka.ms/azureskunotavailable for details."}}\n',
+          '[12:00:00] Using azure account sub-1 as ops@example.com\n[12:00:01] Creating cluster backmesh (ID: backmesh-2611191200abc)\n[12:00:02] Deploying the management VM in centralus\n',
+          { cause: new Error('exit 1') },
+        );
+      }
+      return runLong(args, env);
+    };
+    const central = { ...options, controlPlane: 'azure:centralus' };
+    const { planId } = (await install({ ...central, plan: true }, deps)) as {
+      planId: string;
+    };
+    await install({ ...central, planId }, deps);
+    const steps = calls.filter((c) => /^(cluster (create|delete)|vm )/.test(c));
+    expect(steps).toEqual([
+      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --json',
+      'cluster delete backmesh-2611191200abc --cloud azure --region centralus --delete-vms --delete-buckets --confirm backmesh-2611191200abc --json',
+      'cluster create backmesh --cloud azure --region northcentralus --vm-type Standard_D2s_v5 --json',
+      expect.stringContaining(
+        '--region northcentralus --vm-type Standard_B2s --secret backmesh-acme --wait',
+      ),
+    ]);
+    expect(
+      worker.calls.filter((c) => c === 'POST /v1/installs/device'),
+    ).toHaveLength(1);
+  });
+});
