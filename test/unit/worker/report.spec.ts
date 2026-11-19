@@ -14,7 +14,9 @@ async function report(
   let n = 0;
   for (const [org, install, details, age = 1] of events) {
     await db
-      .prepare('INSERT OR IGNORE INTO installs VALUES (?, ?, ?, 0, ?, 0)')
+      .prepare(
+        'INSERT OR IGNORE INTO installs (id, org, key_hash, created_at, disowned, revoked) VALUES (?, ?, ?, 0, ?, 0)',
+      )
       .bind(install, org, `hash-${install}`, install === 'gone' ? 1 : 0)
       .run();
     await db

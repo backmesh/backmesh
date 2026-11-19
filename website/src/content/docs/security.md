@@ -100,7 +100,7 @@ names backmesh, so enter a code only if your own terminal printed it. A code
 that expires is replaced by a new one. The sign-in is a GitHub App user token
 that lasts 8 hours, and can do only what both [the App](#the-github-app) and
 you can: manage the org's self-hosted runners, read workflow runs and their
-logs, rerun or cancel them, post check runs, and read repositories' metadata.
+logs, rerun or cancel them, and read repositories' metadata.
 It can't read code, secrets or the org's member list. The CLI sends it to
 backmesh once, which
 checks with it that you can manage the org's self-hosted runners, mints the
@@ -135,14 +135,21 @@ backmesh uses one public GitHub App, `backmesh`. During install, an org owner
 installs it on your org with one click. Its webhook is off, and it has only
 these permissions:
 
-| Permission                       | Why backmesh needs it                                                                                                                         |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Self-hosted runners: write (org) | Scale sets, runner registration, the runner group, removing idle runners                                                                      |
-| Actions: write                   | Read a run's commit for reclaim notes, jobs' runner names, and past runs' jobs to start runners ahead of predicted jobs; rerun reclaimed jobs |
-| Checks: write                    | Post a check run when spot reclaims fail jobs                                                                                                 |
-| Metadata: read                   | Required by GitHub                                                                                                                            |
+| Permission                       | Why backmesh needs it                                                                                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Self-hosted runners: write (org) | Scale sets, runner registration, the runner group, removing idle runners                                                                                |
+| Actions: write                   | Your listener reads runs and jobs (read only); backmesh.com reruns jobs a spot reclaim failed, only when they all ran on your install's runners (write) |
+| Metadata: read                   | Required by GitHub                                                                                                                                      |
 
-It has no Contents, Secrets, Members or Administration permission.
+It has no Contents, Secrets, Members, Checks or Administration permission.
+
+Your listener's tokens are narrower than the App: Self-hosted runners write,
+Actions read and Metadata read, so your install's key grants no more than
+someone who manages your org's runners. The App's Actions write is used only
+by `api.backmesh.com` itself, to rerun a run's failed jobs after a spot
+reclaim: it checks your org owns the repository, the run finished at its first
+or second attempt, and every failed job ran on your install's runners, then
+reruns with a token that lasts for that one call.
 
 backmesh holds the App's private key, as a secret of the service at
 `api.backmesh.com`. It's never in your accounts, and the listener never holds
@@ -161,7 +168,6 @@ holds it, backmesh or anyone who steals it from backmesh, can:
   which cloud trust policies match on. Together with the runner permission, it
   can dispatch or rerun a job on a backmesh label and take it with its own runner,
   reaching that job's secrets.
-- **Checks: write**: write misleading check runs.
 - **Metadata: read**: list the installation's repositories.
 
 Through GitHub's API it can't read code or Secrets or change Administration

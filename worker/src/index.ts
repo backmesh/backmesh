@@ -18,6 +18,7 @@ import {
   revokeInstall,
   SignInRefused,
 } from './installs.js';
+import { rerun } from './rerun.js';
 import { intake, retain } from './telemetry.js';
 
 // The cue relay's Durable Object class, which the runtime finds as an export
@@ -83,7 +84,10 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (pathname === '/v1/cue' || pathname.startsWith('/v1/cue/')) {
     return cue(request, env, refused);
   }
-  const broker = pathname === '/v1/token' || Object.hasOwn(cleanups, pathname);
+  const broker =
+    pathname === '/v1/token' ||
+    pathname === '/v1/rerun' ||
+    Object.hasOwn(cleanups, pathname);
   if (pathname === '/v1/installs' || Object.hasOwn(cleanups, pathname)) {
     const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
     if (!(await env.SIGNIN_LIMIT.limit({ key: ip })).success) return tooMany();
@@ -108,6 +112,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     pathname === '/v1/status' ||
     pathname === '/v1/events' ||
     pathname === '/v1/token' ||
+    pathname === '/v1/rerun' ||
     pathname === '/v1/installs/revoke'
   ) {
     // An install key (installs.ts) names the org and the install.
@@ -127,6 +132,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (!(await env.INSTALL_LIMIT.limit({ key: install.id })).success) {
       return tooMany();
     }
+    if (pathname === '/v1/rerun') return rerun(request, env, install);
     if (pathname === '/v1/events' && request.method === 'POST') {
       return intake(request, env, install);
     }

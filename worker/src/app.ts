@@ -5,12 +5,12 @@ import type { Env } from './index.js';
 
 const HOUR = 3_600_000;
 
-// The four permissions the App asks for. A token asks for these,
-// narrowed to what the installation grants.
+// What an install key's token asks for, narrowed to what the installation
+// grants: no more than a runner manager's role (owner, 2026-11-19). The App
+// also holds Actions write, which only the Worker's own /v1/rerun uses.
 const WANTED: Record<string, 'read' | 'write'> = {
   organization_self_hosted_runners: 'write',
-  actions: 'write',
-  checks: 'write',
+  actions: 'read',
   metadata: 'read',
 };
 

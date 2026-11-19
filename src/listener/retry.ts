@@ -67,9 +67,8 @@ interface Waiting {
 }
 
 export interface RetrierDeps {
+  // Reads with the install's token; reruns through the Worker's /v1/rerun.
   runs: WorkflowRuns;
-  // The installation token has Actions: write.
-  canRerun: () => boolean;
   // A runner name this installation minted.
   ours: (runner: string) => boolean;
   log: Log;
@@ -99,7 +98,6 @@ export class Retrier implements Routing {
   // Step 1, at reclaim detection: `ScalerDeps.retry`. A rejection is
   // `unavailable` there.
   async decide(run: WorkflowRun, reclaims: Reclaim[]): Promise<RetryDecision> {
-    if (!this.deps.canRerun()) return 'unavailable';
     const { attempt } = await this.deps.runs.get(run);
     if (attempt >= ATTEMPT_CAP) return 'attempt-cap';
     const jobs = await this.deps.runs.jobs(run, attempt);
@@ -135,8 +133,8 @@ export class Retrier implements Routing {
   }
 
   // Steps 2 and 3: polls each waiting run that's due and, once it's
-  // completed, reruns its failed jobs or drops it with a log line and no
-  // check run. Returns the rerun rows.
+  // completed, reruns its failed jobs through the Worker or drops it with a
+  // log line. Returns the rerun rows.
   async poll(now: number): Promise<JobRow[]> {
     for (const [key, at] of this.expected) {
       if (now - at >= DAY_MS) this.expected.delete(key);

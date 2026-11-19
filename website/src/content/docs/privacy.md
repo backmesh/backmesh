@@ -32,7 +32,7 @@ You sign in with GitHub to backmesh's GitHub App with `backmesh install` and
 `backmesh upgrade`, with a GitHub device code. The sign-in is a GitHub App user
 token that lasts 8 hours, and can do only what both the App and you can:
 manage the org's self-hosted runners, read, rerun or cancel workflow runs and
-read their logs, post check runs, and read repositories' metadata; not code,
+read their logs, and read repositories' metadata; not code,
 secrets or the org's member list. Your machine keeps it for your control plane, and
 sends it to `api.backmesh.com` once to check you can manage the org's
 self-hosted runners; we keep no token. Uninstall's check is the same. We store the
