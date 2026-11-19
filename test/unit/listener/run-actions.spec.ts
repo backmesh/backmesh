@@ -2,7 +2,10 @@
 // its install key and runner tag: its own GitHub token can only read.
 import { describe, expect, it } from 'vitest';
 
-import { workerCancel, workerRerun } from '../../../src/listener/rerun.js';
+import {
+  workerCancel,
+  workerRerun,
+} from '../../../src/listener/run-actions.js';
 
 const KEY = `bmk_${'ab'.repeat(32)}`;
 const RUN = { owner: 'acme', repo: 'app', runId: 42 };
