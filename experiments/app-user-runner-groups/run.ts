@@ -127,11 +127,19 @@ async function probe(role: string, token: string) {
     },
     installations: {
       status: installations.status,
-      accounts: (
+      // Which App each installation is, so a user token's installations
+      // can be told to be the issuing App's.
+      installations: (
         (installations.body.installations ?? []) as {
           account?: { login?: string };
+          app_id?: number;
+          app_slug?: string;
         }[]
-      ).map((i) => i.account?.login),
+      ).map((i) => ({
+        account: i.account?.login,
+        app_id: i.app_id,
+        app_slug: i.app_slug,
+      })),
     },
     orgs: {
       status: orgs.status,
