@@ -24,13 +24,16 @@ name: E2E
 # each print a GitHub device sign-in, in the run's annotations and summary,
 # which an admin of the test org approves, as for ci-install.yml. The
 # backmesh App stays installed on the test org (`uninstall --keep-app`): only
-# an org owner can install it. The owner's one-time setup is the `e2e`
-# environment's secrets (E2E_TEST_ORG_DISPATCH_TOKEN, AWS_ROLE_ARN, and
-# AZURE_CLIENT_ID, AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID: an app that can
-# generate install's Azure identity, as ci-install.yml's does, with a
-# federated credential for this repository's e2e environment) and the test
-# org's e2e repository with its labels.yml (the owner's setup notes). It
-# refuses an org ANYCLOUD_API_URLS names: those are live.
+# an org owner can install it. The AWS leg runs in the `e2e` environment
+# (AWS_ROLE_ARN). The Azure leg runs in ci-install.yml's `ci-install`
+# environment and reads only its Azure IDs (AZURE_CLIENT_ID, AZURE_TENANT_ID,
+# AZURE_SUBSCRIPTION_ID): our Azure CI app trusts that environment's OIDC
+# subject only, and can't add a federated credential for another (no Graph
+# rights to edit itself). So the Azure leg runs from main and waits for
+# ci-install's reviewer. The owner's one-time setup is
+# E2E_TEST_ORG_DISPATCH_TOKEN in both environments, AWS_ROLE_ARN in `e2e`,
+# and the test org's e2e repository with its labels.yml (the owner's setup
+# notes). It refuses an org ANYCLOUD_API_URLS names: those are live.
 
 on:
   workflow_dispatch:
@@ -200,11 +203,14 @@ jobs:
           - cloud: aws
             placement: --runners aws
             control-plane-region: us-east-2
+            environment: e2e
           - cloud: azure
             placement: --runners azure
+            environment: ci-install
     runs-on: ubuntu-24.04
-    # Holds the secrets, and is the subject the clouds' OIDC trusts name.
-    environment: e2e
+    # Holds the leg's secrets, and is the subject its cloud's OIDC trust
+    # names (see the header).
+    environment: ${{ matrix.environment }}
     timeout-minutes: 240
     permissions:
       contents: read # the release's assets
@@ -220,7 +226,7 @@ jobs:
       # `worker` job checks.
       BACKMESH_API_URL: ${{ needs.plan.outputs.api-url }}
       # Our Azure CI subscription (131eed90-…), as ci-install.yml's.
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ matrix.cloud == 'azure' && secrets.AZURE_SUBSCRIPTION_ID || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

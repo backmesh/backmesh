@@ -362,12 +362,10 @@ describe("e2e.yml's Worker and Azure checks", () => {
       cloud: string;
       environment: string;
     }[];
-    expect(legs.map(({ cloud, environment }) => [cloud, environment])).toEqual(
-      [
-        ['aws', 'e2e'],
-        ['azure', 'ci-install'],
-      ],
-    );
+    expect(legs.map(({ cloud, environment }) => [cloud, environment])).toEqual([
+      ['aws', 'e2e'],
+      ['azure', 'ci-install'],
+    ]);
 
     const secrets = (text: string) =>
       [...text.matchAll(/secrets\.([A-Z0-9_]+)/g)].map((m) => m[1]);
