@@ -23,6 +23,8 @@ import {
 } from '../../../src/cue/seal.js';
 
 const BASE = 'https://api.backmesh.test';
+// The relay's cue credential for alice, traded for her App sign-in.
+const CREDENTIAL = `bmc_${'a1'.repeat(32)}`;
 
 // The relay and GitHub as `backmesh cue` sees them: the org's listener keys,
 // opened here to check what was sealed.
@@ -30,6 +32,8 @@ class Relay {
   listeners: Awaited<ReturnType<typeof generateKey>>[] = [];
   received: { cue: Cue; tag: string; hash: string }[] = [];
   calls: string[] = [];
+  // Each request's Authorization header.
+  auths: (string | null)[] = [];
   // The next POST's answer, when set.
   answer?: { status: number; body: object };
   hang = false;
@@ -44,16 +48,34 @@ class Relay {
       );
     }
     const auth = new Headers(init.headers).get('Authorization');
-    if (auth !== 'Bearer ghu_alice') {
+    this.auths.push(auth);
+    // A fresh App sign-in, traded once for the cue credential; the cue
+    // routes take only that, and GitHub is never asked.
+    if (url.pathname === '/v1/cue/sign-in') {
+      if (auth !== 'Bearer ghu_alice') {
+        return Response.json(
+          { error: 'GitHub sign-in expired' },
+          { status: 401 },
+        );
+      }
+      return Response.json({
+        credential: CREDENTIAL,
+        login: 'alice',
+        expires_at: '2100-01-01T00:00:00.000Z',
+      });
+    }
+    if (url.host === 'api.github.com') {
+      return Response.json({ message: 'unexpected' }, { status: 500 });
+    }
+    if (auth !== `Bearer ${CREDENTIAL}`) {
       return Response.json(
-        { error: 'GitHub sign-in expired' },
+        { error: 'Cue sign-in expired; run `backmesh cue --sign-in`.' },
         { status: 401 },
       );
     }
-    if (url.host === 'api.github.com') return Response.json({ login: 'alice' });
     const keys = this.listeners.map((l) => l.key);
     if (url.pathname === '/v1/cue/keys') {
-      return Response.json({ org_id: 11, keys });
+      return Response.json({ org_id: 11, login: 'alice', keys });
     }
     if (this.answer) {
       const { status, body } = this.answer;
@@ -109,6 +131,67 @@ beforeEach(async () => {
 });
 
 describe('backmesh cue', () => {
+  // App user tokens last 8 hours (owner, 2026-11-19): cue trades one for
+  // the relay's own 30-day credential and sends GitHub nothing after.
+  describe('the cue credential', () => {
+    const saved = () => join(dir, 'backmesh-cue-credential');
+
+    it('trades the saved sign-in for a credential once, then sends only the credential', async () => {
+      expect((await cue({ inS: 120, signIn: false }, deps)).outcome).toBe(
+        'sent',
+      );
+      expect(relay.calls).toEqual([
+        'POST api.backmesh.test/v1/cue/sign-in',
+        'GET api.backmesh.test/v1/cue/keys',
+        'POST api.backmesh.test/v1/cue',
+      ]);
+      expect(readFileSync(saved(), 'utf8')).toBe(`${CREDENTIAL}\n`);
+      expect(statSync(saved()).mode & 0o777).toBe(0o600);
+      // The saved sign-in can expire now: cue doesn't need it.
+      writeFileSync(join(dir, '.token'), 'ghu_expired\n');
+      relay.calls = [];
+      relay.auths = [];
+      expect(
+        (await cue({ inS: 120, signIn: false, branch: 'dev' }, deps)).outcome,
+      ).toBe('sent');
+      expect(relay.auths).toEqual([`Bearer ${CREDENTIAL}`]);
+    });
+
+    it('trades again when the credential is refused, from the saved sign-in', async () => {
+      writeFileSync(saved(), 'bmc_old\n');
+
+      expect((await cue({ inS: 120, signIn: false }, deps)).outcome).toBe(
+        'sent',
+      );
+      expect(readFileSync(saved(), 'utf8')).toBe(`${CREDENTIAL}\n`);
+    });
+
+    it('takes a credential in BACKMESH_CUE_TOKEN as it is, for a sandbox', async () => {
+      rmSync(join(dir, '.token'));
+      const given = {
+        ...deps,
+        env: { ...deps.env, BACKMESH_CUE_TOKEN: CREDENTIAL },
+      };
+
+      expect((await cue({ inS: 120, signIn: false }, given)).outcome).toBe(
+        'sent',
+      );
+      expect(relay.calls).not.toContain(
+        'POST api.backmesh.test/v1/cue/sign-in',
+      );
+      expect(existsSync(saved())).toBe(false);
+    });
+
+    it('trades a fresh sign-in after --sign-in', async () => {
+      writeFileSync(saved(), `${CREDENTIAL}\n`);
+
+      await cue({ inS: 120, signIn: true }, deps);
+
+      expect(signIns).toBe(1);
+      expect(relay.calls[0]).toBe('POST api.backmesh.test/v1/cue/sign-in');
+    });
+  });
+
   it("seals the repo, branch, user and lead to the listener's key", async () => {
     const result = await cue({ inS: 120, signIn: false }, deps);
     expect(result).toEqual({

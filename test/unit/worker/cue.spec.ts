@@ -260,6 +260,71 @@ describe('cueMember', () => {
   });
 });
 
+describe('the cue credential', () => {
+  // A fresh App sign-in, traded once: cue sends no GitHub token after
+  // (owner, 2026-11-19; App user tokens last 8 hours).
+  const trade = (login: string) =>
+    request('/v1/cue/sign-in', { method: 'POST', headers: as(login) });
+  const withCredential = (credential: string, path = '/v1/cue/keys?org=acme') =>
+    request(path, { headers: { Authorization: `Bearer ${credential}` } });
+
+  it('trades a sign-in for a 30-day credential bound to the orgs it reaches, keeping only its hash', async () => {
+    const res = await trade('alice');
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      credential: string;
+      login: string;
+      expires_at: string;
+    };
+    expect(body).toEqual({
+      credential: expect.stringMatching(/^bmc_[0-9a-f]{64}$/),
+      login: 'alice',
+      expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+    });
+    const stored = JSON.stringify(
+      (await env.DB.prepare('SELECT * FROM cue_credentials').all()).results,
+    );
+    expect(stored).not.toContain(body.credential);
+    expect(stored).not.toContain('token-alice');
+  });
+
+  it('answers the cue routes for its orgs with no GitHub call, until it expires', async () => {
+    const { credential } = (await (await trade('alice')).json()) as {
+      credential: string;
+    };
+    const calls = upstream.calls.length;
+
+    const listed = await withCredential(credential);
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toMatchObject({ org_id: ORG, login: 'alice' });
+    expect(upstream.calls).toHaveLength(calls);
+    // Not an org it didn't reach.
+    expect(
+      (await withCredential(credential, '/v1/cue/keys?org=globex')).status,
+    ).toBe(403);
+    advance(30 * 86_400_000);
+    const expired = await withCredential(credential);
+    expect(expired.status).toBe(401);
+    expect(await expired.json()).toEqual({
+      error: 'Cue sign-in expired; run `backmesh cue --sign-in`.',
+    });
+  });
+
+  it('refuses a sign-in GitHub refuses, and one that reaches no installation', async () => {
+    upstream.revoked.add('mallory');
+    upstream.reaches.set('nora', []);
+
+    expect((await trade('mallory')).status).toBe(401);
+    expect((await trade('nora')).status).toBe(403);
+    expect((await withCredential(`bmc_${'0'.repeat(64)}`)).status).toBe(401);
+  });
+
+  it('names the signed-in login with the keys', async () => {
+    expect(await keys()).toMatchObject({ org_id: ORG, login: 'alice' });
+  });
+});
+
 describe('sign-ins', () => {
   // The listener acts on a cue only for a user GitHub says can push to its
   // repository, so the Worker's check is who reaches the org's App
