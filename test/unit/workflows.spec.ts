@@ -373,7 +373,7 @@ describe("e2e.yml's Worker and Azure checks", () => {
       expect(call).toContain('--control-plane azure:centralus');
     }
     expect(labelMatrix('aws').args[1]).toContain(
-      '--control-plane aws:us-east-2',
+      '--control-plane aws:us-west-2',
     );
   });
 
@@ -527,6 +527,81 @@ describe("e2e.yml's Azure sweep", () => {
     expect(out.stdout.match(/^::error.*$/gm)).toEqual([
       '::error title=Left in Azure::resource-group:anycloud-new',
     ]);
+  });
+});
+
+// Our production control plane is a cluster named backmesh in us-east-2 of
+// the e2e's AWS account, and anycloud finds a cluster by name per region:
+// v0.5.0-rc.3's e2e (run 44634950328) resumed it there.
+describe("e2e.yml's AWS leg, away from our production control plane", () => {
+  const e2e = read('e2e.yml');
+  const job = e2e.jobs['test-org']!;
+  const aws = (
+    job.strategy!.matrix!.include as Record<string, string | undefined>[]
+  ).find((l) => l.cloud === 'aws')!;
+  const guard = job.steps!.find((s) => s.id === 'guard')!;
+
+  it('puts its control plane in us-west-2, a region its labels and sweep cover', () => {
+    expect(aws['control-plane-region']).toBe('us-west-2');
+    const labels = (
+      e2e.on.workflow_dispatch as {
+        inputs: Record<string, { default: string }>;
+      }
+    ).inputs.labels!.default;
+    for (const entry of labels.trim().split(/\s+/)) {
+      expect(entry.split(':')[1]!.split(','), entry).toContain('us-west-2');
+    }
+  });
+
+  // describe-stacks lists no deleted stack.
+  const stack = (name: string, value: string) => ({
+    StackName: name,
+    Tags: [{ Key: 'anycloud_cluster_name', Value: value }],
+  });
+  const run = (answer: string) =>
+    runStep(guard.run!, {
+      env: { CONTROL_PLANE_REGION: 'us-west-2' },
+      commands: {
+        aws: `[[ " $* " == *" cloudformation describe-stacks --region us-west-2 "* ]] || exit 7\n${answer}`,
+      },
+    });
+
+  it("fails before install while the leg's region has a backmesh cluster", () => {
+    expect(guard.if).toBe("matrix.cloud == 'aws'");
+    const steps = job.steps!;
+    expect(steps.indexOf(guard)).toBeGreaterThan(
+      steps.findIndex((s) => s.id === 'aws'),
+    );
+    expect(steps.indexOf(guard)).toBeLessThan(
+      steps.findIndex((s) => s.id === 'install'),
+    );
+
+    const other = JSON.stringify({
+      Stacks: [stack('anycloud-other', 'other'), { StackName: 'untagged' }],
+    });
+    expect(run(`echo '${other}'`).status).toBe(0);
+    expect(run(`echo '{"Stacks":[]}'`).status).toBe(0);
+    const ours = JSON.stringify({
+      Stacks: [stack('anycloud-backmesh-1', 'backmesh')],
+    });
+    const out = run(`echo '${ours}'`);
+    expect(out.status).toBe(1);
+    expect(out.stdout).toContain('anycloud-backmesh-1');
+    // An unreadable region is refused too.
+    expect(run('exit 255').status).not.toBe(0);
+  });
+
+  // Uninstall would act on the backmesh cluster the guard found.
+  it("doesn't uninstall after the guard refuses the region", () => {
+    const uninstall = job.steps!.find((s) => s.name === 'backmesh uninstall')!;
+    const runs = (guarded: string) =>
+      evaluate(unwrap(uninstall.if!)!.replace('always()', 'true'), {
+        'steps.bin.outcome': 'success',
+        'steps.guard.outcome': guarded,
+      });
+    expect(runs('failure')).toBe(false);
+    expect(runs('success')).toBe(true);
+    expect(runs('skipped')).toBe(true);
   });
 });
 
