@@ -62,20 +62,21 @@ export interface Deps {
 }
 
 // The Worker's cron triggers, read back from Cloudflare, must be exactly
-// wrangler.jsonc's: the free plan allows 5 per account, and a deploy that
-// fails on that limit can leave them partly changed. Read-only, so a dry
-// run reports them too; after a deploy, a difference stops the setup.
+// wrangler.jsonc's, production's or the staging environment's (after
+// `"env":`): the free plan allows 5 per account, and a deploy that fails on
+// that limit can leave them partly changed. Read-only, so a dry run reports
+// them too; after a deploy, a difference stops the setup.
 export async function checkTriggers(
   worker: string,
+  staging: boolean,
   env: Deps['env'],
   fetch: Deps['fetch'],
   log: Deps['log'],
   apply: boolean,
 ) {
+  const config = readFileSync(CONFIG, 'utf8').split('"env":')[staging ? 1 : 0]!;
   const wanted = (
-    JSON.parse(
-      /"crons":\s*(\[[^\]]*\])/.exec(readFileSync(CONFIG, 'utf8'))![1]!,
-    ) as string[]
+    JSON.parse(/"crons":\s*(\[[^\]]*\])/.exec(config)![1]!) as string[]
   ).sort();
   const res = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${worker}/schedules`,
@@ -92,7 +93,7 @@ export async function checkTriggers(
   const crons = (result?.schedules ?? []).map((s) => s.cron).sort();
   log(`The Worker's cron triggers: ${crons.join(', ') || 'none'}.`);
   if (crons.join('\n') === wanted.join('\n')) return;
-  const differ = `They should be exactly ${wanted.join(', ')}, as ${CONFIG} sets them.`;
+  const differ = `They should be exactly ${wanted.join(', ') || 'none'}, as ${CONFIG} sets them.`;
   if (apply) throw new Error(differ);
   log(`${differ} The apply sets them.`);
 }
@@ -228,7 +229,7 @@ export async function setup({
       log('No Worker yet.');
     }
   }
-  await checkTriggers(worker, env, fetch, log, apply);
+  await checkTriggers(worker, !!staging, env, fetch, log, apply);
 
   // The Worker's secrets, through stdin so no value reaches the log.
   const pending: Record<string, string> = {};

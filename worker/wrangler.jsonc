@@ -59,10 +59,12 @@
   "observability": { "enabled": true },
   // Staging: release.yml deploys it from each -rc.N tag, and the rc's e2e
   // signs in through it (BACKMESH_API_URL). Its own database, hostname and
-  // rate limits; the same App and, inherited, cron (2 of the 5).
+  // rate limits; the same App. No cron: it holds only test orgs' data, and
+  // the free plan's crons are used up.
   "env": {
     "staging": {
       "name": "backmesh-staging",
+      "triggers": { "crons": [] },
       // It holds the App's key and runs rc code, so it serves only these
       // test orgs (installs.ts, notServed).
       "vars": {
