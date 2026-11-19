@@ -68,6 +68,13 @@ const benchmarks = [
     cheaper: '2.8×',
   },
 ];
+// GPU list prices, not a benchmark: GitHub's linux_4_core_gpu ($0.052 a
+// minute) against the catalog's T4 prices on 2026-11-18 (/cost/#gpu): spot
+// $0.1766 on Azure to on demand $0.526 on AWS and Azure.
+const gpu = [
+  { runner: 'GitHub-hosted T4', price: '$3.12', points: [] },
+  { runner: 'backmesh T4', price: '$0.18–0.53', points: ['6–18× cheaper', 'Spot to on demand'] },
+];
 const money = (v: number) => `$${Math.round(v).toLocaleString('en-US')}`;
 const range = (lo: number, hi: number) => `${money(lo)}–${money(hi)}`;
 const minutes = MINUTES.toLocaleString('en-US');
@@ -115,10 +122,19 @@ const faq = [
     q: 'Will backmesh work for my jobs?',
     short: 'Linux x86-64 only. Private repos only.',
     points: [
-      'No macOS, Windows, Arm or GPU runners.',
+      'No macOS, Windows or Arm runners.',
       "Each job waits for its VM to boot: about 30 s on AWS, 60–70 s on GCP and Azure. Starting runners ahead of predicted jobs, and your agent's cue, mostly hide it.",
       "A reclaimed spot VM fails its job; if reclaims were the run's only failures, backmesh reruns them, up to twice.",
       'Each job starts with an empty Docker layer cache.',
+    ],
+  },
+  {
+    q: 'Do you support GPUs?',
+    short: 'NVIDIA T4 on AWS and Azure. GCP is coming.',
+    points: [
+      'GPU quotas are 0 on most new cloud accounts. Install and backmesh status show yours and name the one to request more of.',
+      "At list prices, $0.18–0.53 an hour, spot to on demand, against $3.12 for GitHub's: 6–18× cheaper. We haven't compared their speed.",
+      "A job's container sees the GPU with options: --gpus all, as on GitHub's runner.",
     ],
   },
   {
@@ -354,6 +370,33 @@ const jsonLd = {
         <p class="method"><a href="/benchmarks/">How we measured →</a></p>
       </section>
 
+      <section id="gpu" class="wrap section benchmarks">
+        <h2>NVIDIA T4 GPU runners, by the hour.</h2>
+        <p class="lead">
+          List prices on 2026-11-18, not a benchmark.
+        </p>
+        <ul class="plans">
+          {
+            gpu.map(({ runner, price, points }) => (
+              <li>
+                <b>{runner}</b>
+                <strong>
+                  <a href="/cost/#gpu">{price}</a>
+                  <span class="per">/h</span>
+                </strong>
+                <ul>
+                  {points.map((p) => (
+                    <li>{p}</li>
+                  ))}
+                </ul>
+              </li>
+            ))
+          }
+        </ul>
+        <p class="caption">AWS and Azure. Spot jobs can wait for capacity; on demand doesn't.</p>
+        <p class="method"><a href="/labels/#gpu">GPU labels →</a></p>
+      </section>
+
       <section id="cost" class="wrap section cost">
         <h2>
           {minutes} minutes a month: {money(headline.github)} on GitHub,{' '}
@@ -472,6 +515,10 @@ const jsonLd = {
               Each label runs in one cloud. Out of spot capacity, the next VM
               type launches, never the next cloud. Use{' '}
               <code>backmesh-od-*</code> (on-demand) for jobs that shouldn't be interrupted.
+            </p>
+            <p>
+              CPU and KVM runners on AWS, GCP and Azure, and NVIDIA T4{' '}
+              <a href="/labels/#gpu">GPU runners</a> on AWS and Azure.
             </p>
             <p class="links"><a class="more" href="/labels/">Learn more</a></p>
           </div>
@@ -1076,6 +1123,17 @@ const jsonLd = {
   }
   .bench strong a {
     color: inherit;
+  }
+  #gpu .caption {
+    margin-top: 32px;
+  }
+  #gpu strong a {
+    color: inherit;
+  }
+  #gpu .per {
+    color: var(--bm-soft);
+    font-size: 24px;
+    letter-spacing: 0;
   }
   .method {
     margin: 32px 0 0;
