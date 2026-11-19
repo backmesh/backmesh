@@ -109,7 +109,7 @@ describe('signInForKey', () => {
     ]);
     // One plain line, readable in a CI job's log, with when the code expires.
     expect(lines).toEqual([
-      'Sign in with GitHub once, as an admin of acme, so backmesh can connect to it: open https://github.com/login/device and enter ABCD-1234 (it expires at 05:45 UTC).',
+      'Sign in with GitHub once, as an owner of acme, so backmesh can connect to it: open https://github.com/login/device and enter ABCD-1234 (it expires at 05:45 UTC).',
     ]);
     // The device code never leaves the CLI; the Worker gets the token.
     expect(worker.calls).not.toContain('POST /v1/installs/device');
@@ -191,6 +191,26 @@ describe('signInForKey', () => {
       'GitHub refused the sign-in: Device Flow must be explicitly enabled for this App',
     );
     expect(worker.signIns()).toHaveLength(1);
+  });
+
+  it('stops on a 4xx GitHub answers without a reason, and retries a 429', async () => {
+    const page = () =>
+      new Response('<html>Forbidden</html>', {
+        status: 403,
+        headers: { 'Content-Type': 'text/html' },
+      });
+    const refused = fakeWorker({ codes: [page] });
+
+    await expect(signIn(refused).key).rejects.toThrow(
+      'GitHub refused the sign-in: HTTP 403',
+    );
+    expect(refused.signIns()).toHaveLength(1);
+
+    const limited = fakeWorker({
+      codes: [new Response('slow down', { status: 429 }), json(DEVICE)],
+    });
+    expect((await signIn(limited).key).key).toBe(INSTALL_KEY);
+    expect(limited.signIns()).toHaveLength(2);
   });
 
   it('ends the sign-in when the person denies it', async () => {
@@ -279,6 +299,33 @@ describe('signIn (plain, for a re-sign-in)', () => {
 });
 
 describe('signInForCleanup', () => {
+  it('waits out a 429 and asks again with the same sign-in, as install does', async () => {
+    const limited = json({ error: 'Too many requests; retry later.' }, 429);
+    const worker = fakeWorker({
+      cleanups: [
+        limited,
+        json({
+          token: 'ghs_7',
+          expires_at: '2100-01-01T00:00:00Z',
+          org: { id: 7, login: 'acme' },
+          cleanup_id: 'c'.repeat(64),
+        }),
+      ],
+    });
+    const lines: string[] = [];
+    const cleanup = await settle(
+      signInForCleanup('acme', undefined, {
+        env: {},
+        fetch: worker.fetch,
+        print: (line) => lines.push(line),
+      }),
+    );
+
+    expect(cleanup.token).toBe('ghs_7');
+    expect(worker.signIns()).toHaveLength(1);
+    expect(lines[0]).toMatch(/^Sign in with GitHub as an owner of acme, /);
+  });
+
   it('sends the token, not a device code, and survives an expired code', async () => {
     const worker = fakeWorker({ polls: [expired, token] });
     const cleanup = await settle(

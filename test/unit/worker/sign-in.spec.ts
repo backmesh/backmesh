@@ -105,7 +105,7 @@ describe('POST /v1/installs', () => {
       expect(res.status).toBe(403);
       expect(await res.json()).toEqual({
         error:
-          'Creating a backmesh install for acme needs the right to manage its self-hosted runners: sign in as an owner of acme.',
+          'Creating a backmesh install for acme needs the right to manage its self-hosted runners: sign in as an owner of acme, or a member who manages its self-hosted runners.',
       });
       expect(
         (await env.DB.prepare('SELECT * FROM installs').all()).results,
@@ -134,24 +134,87 @@ describe('POST /v1/installs', () => {
     expect(res.status).toBe(401);
   });
 
-  it('refuses the device_code form an older CLI sends', async () => {
+  it('refuses a sign-in without a token, such as the device_code form', async () => {
     const res = await post('/v1/installs', {
       org: 'acme',
       device_code: 'alice',
     });
 
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({
-      error: expect.stringContaining('Update backmesh'),
-    });
+    expect(await res.json()).toEqual({ error: 'github_token is required' });
     expect(upstream.calls).toEqual([]);
   });
 
+  // A v0.4.3 CLI asks for a device code first: it stops there, told to
+  // update.
   it.each(['/v1/installs/device', '/v1/sign-in'])(
-    'no longer serves %s',
+    'tells an older CLI calling %s to update',
     async (path) => {
-      expect((await post(path, { device_code: 'alice' })).status).toBe(404);
+      const res = await post(path, { control_plane: true });
+
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        error: expect.stringContaining('Update backmesh'),
+      });
       expect(upstream.calls).toEqual([]);
+    },
+  );
+
+  it.each([
+    [
+      'a rate limit',
+      () =>
+        Response.json(
+          { message: 'API rate limit exceeded for user ID 1.' },
+          { status: 403, headers: { 'x-ratelimit-remaining': '0' } },
+        ),
+      'API rate limit exceeded',
+    ],
+    [
+      'a suspended installation',
+      () =>
+        Response.json(
+          { message: 'This installation has been suspended' },
+          { status: 403 },
+        ),
+      'This installation has been suspended',
+    ],
+  ])(
+    "answers 502 with GitHub's reason for %s, not that the signer can't manage runners",
+    async (_, answer, reason) => {
+      upstream.answers.set('/orgs/acme/actions/runner-groups', answer);
+
+      const res = await install('token-alice');
+
+      expect(res.status).toBe(502);
+      expect(await res.json()).toEqual({
+        error: expect.stringContaining(reason),
+      });
+    },
+  );
+
+  it.each(['/user', '/orgs/acme', '/orgs/acme/actions/runner-groups'])(
+    "names the org's SAML SSO when GitHub asks for it on %s",
+    async (path) => {
+      upstream.answers.set(path, () =>
+        Response.json(
+          { message: 'Resource protected by organization SAML enforcement.' },
+          {
+            status: 403,
+            headers: {
+              'X-GitHub-SSO': 'required; url=https://github.com/orgs/acme/sso',
+            },
+          },
+        ),
+      );
+
+      const res = await install('token-alice');
+
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({
+        error:
+          "Authorize the backmesh sign-in for acme's SAML SSO on GitHub, then sign in again.",
+      });
     },
   );
 
@@ -188,7 +251,7 @@ describe('POST /v1/installs', () => {
 
       expect(answered?.status).toBe(504);
       expect(await answered!.json()).toEqual({
-        error: expect.stringMatching(/^GitHub didn't answer .* in 10 s/),
+        error: expect.stringMatching(/^GitHub didn't answer .* in 7 s/),
       });
       expect(Date.now() - start).toBeLessThanOrEqual(30_000);
     },

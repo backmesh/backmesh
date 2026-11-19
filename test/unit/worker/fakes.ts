@@ -207,10 +207,15 @@ export class Upstream {
   oauthScope = 'read:org,read:packages';
   // Paths GitHub never answers: the request waits until it's aborted.
   silent = new Set<string>();
+  // The orgs whose installation each user's token reaches, by user, when
+  // not the user's memberships.
+  reaches = new Map<string, number[]>();
   // Users whose token GitHub refuses (401).
   revoked = new Set<string>();
   // GitHub's status for a path it fails.
   failing = new Map<string, number>();
+  // GitHub's own answer for a path, such as a rate limit or an SSO refusal.
+  answers = new Map<string, () => Response>();
 
   fetch = async (input: string | URL | Request, init: RequestInit = {}) => {
     const url = new URL(String(input));
@@ -231,6 +236,8 @@ export class Upstream {
         ),
       );
     }
+    const answer = this.answers.get(path);
+    if (answer) return answer();
     if (this.failing.has(path)) {
       return new Response('', { status: this.failing.get(path) });
     }
@@ -255,13 +262,17 @@ export class Upstream {
         return Response.json({ error: 'expired_token' });
       }
     }
-    // The App's installations a user token reaches: those on the user's
-    // orgs.
+    // The App's installations a user token reaches: GitHub lists one when
+    // the user can access one of its repositories, which `reaches` sets
+    // (an outside collaborator's, or a member's with no repository), else
+    // the user's orgs.
     if (path === '/user/installations') {
-      const orgs = this.memberships.get(user) ?? [];
-      const installations = orgs.flatMap((o) => {
-        const i = this.installations.get(o.id);
-        return i ? [{ id: i.id, account: { id: o.id, login: i.login } }] : [];
+      const orgs =
+        this.reaches.get(user) ??
+        (this.memberships.get(user) ?? []).map((o) => o.id);
+      const installations = orgs.flatMap((id) => {
+        const i = this.installations.get(id);
+        return i ? [{ id: i.id, account: { id, login: i.login } }] : [];
       });
       return Response.json({
         total_count: installations.length,

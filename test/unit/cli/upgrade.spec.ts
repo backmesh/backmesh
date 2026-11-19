@@ -503,7 +503,7 @@ describe('upgrade', () => {
     const result = await upgrade(deps);
 
     expect(mutations(calls)).toEqual([
-      'api upgrade',
+      'api upgrade --github-apps 5622376',
       'api status --watch --json',
       ROLL,
     ]);
@@ -584,7 +584,9 @@ describe('upgrade', () => {
     await expect(upgrade(moved.deps)).rejects.toThrow(
       'Upgrade cancelled after the control plane updated, with no listener changed; raise the quotas named above, then run `backmesh upgrade` again.',
     );
-    expect(mutations(moved.calls)).toContain('api upgrade');
+    expect(mutations(moved.calls)).toContain(
+      'api upgrade --github-apps 5622376',
+    );
     expect(rolledAny(moved.calls)).toBe(false);
   });
 
@@ -594,7 +596,7 @@ describe('upgrade', () => {
 
     const order = calls.filter((c) => /^(status|api upgrade|roll)/.test(c));
     // An older API reads nothing for this release's client until it moves.
-    expect(order[0]).toBe('api upgrade');
+    expect(order[0]).toBe('api upgrade --github-apps 5622376');
     // Every org is read once before any roll; each roll is then read again.
     expect(order.slice(1)).toEqual([
       `status ${VM.acme}`,
@@ -842,7 +844,7 @@ describe('upgrade', () => {
     it('asks nothing when only the release moves', async () => {
       const { deps, calls } = setUp();
       await upgrade(deps);
-      expect(mutations(calls)).toContain('api upgrade');
+      expect(mutations(calls)).toContain('api upgrade --github-apps 5622376');
     });
   });
 
@@ -1343,9 +1345,9 @@ describe('upgrade', () => {
       // The fakes refuse every read before `api upgrade`, as 0.1.73 does.
       const { deps, calls } = setUp();
       await upgrade(deps);
-      expect(calls.findIndex((c) => c === 'api upgrade')).toBeLessThan(
-        calls.findIndex((c) => c.startsWith('status')),
-      );
+      expect(
+        calls.findIndex((c) => c === 'api upgrade --github-apps 5622376'),
+      ).toBeLessThan(calls.findIndex((c) => c.startsWith('status')));
       expect(mutations(calls)).toContain(ROLL);
     });
 
@@ -1398,7 +1400,7 @@ describe('upgrade', () => {
         'Upgrade cancelled after the control plane updated, with no listener changed',
       );
       expect(mutations(calls)).toEqual([
-        'api upgrade',
+        'api upgrade --github-apps 5622376',
         'api status --watch --json',
       ]);
 
@@ -1416,7 +1418,7 @@ describe('upgrade', () => {
       };
       again.deps.confirm = async () => true;
       const result = await upgrade(again.deps);
-      expect(again.calls).not.toContain('api upgrade');
+      expect(again.calls).not.toContain('api upgrade --github-apps 5622376');
       expect(result).toMatchObject({ controlPlane: { upgraded: false } });
       expect(mutations(again.calls)).toContain(ROLL);
     });
@@ -1427,7 +1429,7 @@ describe('upgrade', () => {
         `acme's listener didn't start on ${VM.acme}.`,
       );
       expect(mutations(calls)).toEqual([
-        'api upgrade',
+        'api upgrade --github-apps 5622376',
         'api status --watch --json',
         `start ${VM.acme}`,
       ]);
@@ -1441,7 +1443,7 @@ describe('upgrade', () => {
       });
       await expect(upgrade(deps)).rejects.toThrow(NeedsPlan);
       expect(mutations(calls)).toEqual([
-        'api upgrade',
+        'api upgrade --github-apps 5622376',
         'api status --watch --json',
       ]);
     });

@@ -374,7 +374,7 @@ describe('install', () => {
       ),
     ).toEqual([
       // Through the user's cloud CLI, with no local API, after the quotas.
-      'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --json',
+      'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --github-apps 5622376 --json',
       `api use ${HOSTED}`,
       // The role's trust names the hosted API, so it comes after create.
       `credentials new ${BM.aws} --provider aws --role --apply --json`,
@@ -465,7 +465,7 @@ describe('install', () => {
     expect(
       calls.filter((c) => /^(cluster|credentials new|vm )/.test(c)),
     ).toEqual([
-      'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --json',
+      'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --github-apps 5622376 --json',
       `credentials new ${BM.aws} --provider aws --profile default --account-id 123456789012 --generate`,
       expect.stringMatching(/^vm .* --secret backmesh-acme --wait$/),
     ]);
@@ -1781,7 +1781,11 @@ describe('install', () => {
       ['github_pat_x', "The GitHub sign-in isn't backmesh's"],
       ['ghs_x', "The GitHub sign-in isn't backmesh's"],
       ['gho_oauth', "The GitHub sign-in isn't backmesh's"],
-      ['ghu_revoked', 'GitHub rejected the sign-in: in CI, set GITHUB_TOKEN'],
+      // A sign-in lasts 8 hours, so CI needs one made within that time.
+      [
+        'ghu_revoked',
+        'GitHub rejected the sign-in: a backmesh sign-in lasts 8 hours, so in CI set GITHUB_TOKEN',
+      ],
       [DOWN, "Couldn't check the GitHub sign-in with GitHub. Retry"],
     ]) {
       const refused = setUp({ env: { ...OVERRIDE, GITHUB_TOKEN: token } });
@@ -2297,7 +2301,7 @@ describe('install', () => {
     // AWS, each in its one fixed anchor region (regions are never asked
     // for, owner, 2026-11-13).
     expect(calls).toContain(
-      'cluster create backmesh --cloud gcp --region us-east1 --vm-type e2-standard-2 --json',
+      'cluster create backmesh --cloud gcp --region us-east1 --vm-type e2-standard-2 --github-apps 5622376 --json',
     );
     const routes = parseRoutes(
       JSON.parse(
@@ -2644,9 +2648,9 @@ describe("install's always-on VM sizes on Azure", () => {
     await (await planned(eastus, deps)).run();
     const id = 'backmesh-1763553600000-x7k2p9';
     expect(steps(calls)).toEqual([
-      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --json',
+      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --github-apps 5622376 --json',
       `cluster delete ${id} --cloud azure --region centralus --delete-vms --delete-buckets --confirm ${id} --json`,
-      'cluster create backmesh --cloud azure --region northcentralus --vm-type Standard_D2s_v5 --json',
+      'cluster create backmesh --cloud azure --region northcentralus --vm-type Standard_D2s_v5 --github-apps 5622376 --json',
       expect.stringContaining(
         '--region northcentralus --vm-type Standard_B2s --secret backmesh-acme --wait',
       ),
@@ -2668,7 +2672,7 @@ describe("install's always-on VM sizes on Azure", () => {
       'SkuNotAvailable',
     );
     expect(steps(calls)).toEqual([
-      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --json',
+      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --github-apps 5622376 --json',
     ]);
   });
 
@@ -2685,7 +2689,7 @@ describe("install's always-on VM sizes on Azure", () => {
       'API_NOT_READY',
     );
     expect(steps(calls)).toEqual([
-      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --json',
+      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --github-apps 5622376 --json',
     ]);
   });
 
@@ -2712,7 +2716,7 @@ describe("install's always-on VM sizes on Azure", () => {
     );
     await run();
     expect(steps(calls)[0]).toBe(
-      'cluster create backmesh --cloud azure --region northcentralus --vm-type Standard_D2s_v5 --json',
+      'cluster create backmesh --cloud azure --region northcentralus --vm-type Standard_D2s_v5 --github-apps 5622376 --json',
     );
   });
 
@@ -2840,7 +2844,7 @@ describe("install's always-on VM sizes on Azure", () => {
       'InsufficientInstanceCapacity',
     );
     expect(steps(calls)).toEqual([
-      'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --json',
+      'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --github-apps 5622376 --json',
     ]);
   });
 });

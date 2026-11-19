@@ -261,6 +261,23 @@ describe('cueMember', () => {
 });
 
 describe('sign-ins', () => {
+  // The listener acts on a cue only for a user GitHub says can push to its
+  // repository, so the Worker's check is who reaches the org's App
+  // installation through a repository, member or not.
+  it('admits an outside collaborator with a repository, and refuses a member with none', async () => {
+    const path = '/v1/cue/keys?org=acme';
+    upstream.reaches.set('olivia', [ORG]);
+    upstream.reaches.set('bob', []);
+
+    expect((await request(path, { headers: as('olivia') })).status).toBe(200);
+    const refused = await request(path, { headers: as('bob') });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toEqual({
+      error:
+        "None of acme's repositories that backmesh's GitHub App is on is open to you.",
+    });
+  });
+
   it('refuses a missing or expired sign-in and a non-member', async () => {
     const path = '/v1/cue/keys?org=acme';
     expect((await request(path)).status).toBe(401);
