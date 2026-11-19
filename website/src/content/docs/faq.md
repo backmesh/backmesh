@@ -123,7 +123,11 @@ machine, run `backmesh cue --sign-in`, then copy
 `BACKMESH_CUE_TOKEN`, which `backmesh cue` uses first. It works only for cues,
 for the orgs whose backmesh App your sign-in reached, for 30 days; keep it
 secret, and copy a new one when it expires. Running `backmesh cue --sign-in`
-again revokes it, and so do `rotate-key` and `uninstall` for their org.
+again revokes it and any other copy (a cue's own sign-in doesn't), and
+`rotate-key` and `uninstall` end it for their org. Its orgs are those your
+sign-in reached when it was made, for its 30 days even if you leave one; your
+listener still acts only on a cue from someone who can push to the
+repository.
 
 ## Is it safe?
 

@@ -89,7 +89,9 @@ installations you reach (you do when you can access one of their
 repositories: an outside collaborator too, a member with no repository not);
 it keeps your GitHub user ID and login, those orgs and a hash of the
 credential, never a GitHub token. Later cues send only the credential, and
-your listener acts on a cue only if you can push to its repository. It keeps, for at most 10 minutes, your GitHub user ID per
+your listener acts on a cue only if you can push to its repository. The
+credential's orgs are those you reached when it was made, for its 30 days even
+if you leave one; that push check still guards every cue. It keeps, for at most 10 minutes, your GitHub user ID per
 cue for its rate limits, a random tag your CLI makes for each push (each repo
 and branch, new every 10 minutes) so a push's cues count once, a hash per cue
 that only its repeats match, and the encrypted cue for 60 seconds until your

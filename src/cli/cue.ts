@@ -204,26 +204,43 @@ const credentialSchema = z.object({
 });
 
 // The credential for `token`, a fresh App sign-in; undefined when the relay
-// refuses that sign-in, 'no org' when it reaches none of the App's
-// installations.
+// refuses that sign-in, else why it can't trade it: 'no org' when it reaches
+// none of the App's installations, 'sso' when an org's SAML SSO holds it
+// back. `revoke`, for an explicit `cue --sign-in`, revokes the user's other
+// credentials; a cue's own trade adds one.
 async function trade(
   deps: CueDeps,
   base: string,
   token: string,
   signal: AbortSignal,
+  revoke = false,
 ) {
   const res = await deps.fetch(`${base}/v1/cue/sign-in`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ revoke }),
     signal,
   });
   if (res.status === 401) return undefined;
-  if (res.status === 403) return 'no org';
+  if (res.status === 403) {
+    const { code } = (await res.json().catch(() => ({}))) as {
+      code?: string;
+    };
+    return code === 'sso' ? 'sso' : 'no org';
+  }
   if (!res.ok) throw new Error(`backmesh.com answered ${res.status}`);
   return credentialSchema.parse(await res.json()).credential;
 }
-const NO_ORG =
-  "Your GitHub sign-in reaches none of the orgs backmesh's GitHub App is on, so there's no org to cue. Nothing was sent.";
+const UNTRADED = {
+  'no org':
+    "Your GitHub sign-in reaches none of the orgs backmesh's GitHub App is on, so there's no org to cue. Nothing was sent.",
+  sso: "Authorize the backmesh sign-in for your org's SAML SSO on GitHub, then run `backmesh cue --sign-in`. Nothing was sent.",
+};
+const untraded = (token: string | undefined) =>
+  token === 'no org' || token === 'sso' ? token : undefined;
 
 export async function cue(
   opts: CueOptions,
@@ -237,12 +254,12 @@ export async function cue(
   const credentialPath = anycloudPath(deps.env, CREDENTIAL);
   // The saved sign-in traded for a credential, saved; the relay's answer
   // otherwise.
-  const tradeSaved = async (signal: AbortSignal) => {
+  const tradeSaved = async (signal: AbortSignal, revoke = false) => {
     const signedIn = await readSaved(anycloudPath(deps.env, '.token'));
     const traded = signedIn
-      ? await trade(deps, base, signedIn, signal)
+      ? await trade(deps, base, signedIn, signal, revoke)
       : undefined;
-    if (traded && traded !== 'no org') await save(credentialPath, traded);
+    if (traded && !untraded(traded)) await save(credentialPath, traded);
     return traded;
   };
   // A new sign-in is traded for a new credential at once, which revokes the
@@ -250,7 +267,7 @@ export async function cue(
   const signIn = async () => {
     await deps.signIn();
     await rm(credentialPath, { force: true });
-    await tradeSaved(AbortSignal.timeout(30_000)).catch(() => undefined);
+    await tradeSaved(AbortSignal.timeout(30_000), true).catch(() => undefined);
   };
   if (opts.signIn && given) {
     return done(
@@ -299,7 +316,8 @@ export async function cue(
     // Otherwise the saved credential, else the saved sign-in traded for one.
     const fromFile = !given && (await readSaved(credentialPath));
     const token = given ?? (fromFile || (await tradeSaved(signal)));
-    if (token === 'no org') return done('refused', NO_ORG);
+    const cannot = untraded(token);
+    if (cannot) return done('refused', UNTRADED[cannot]);
     if (!token) {
       return done(
         'not signed in',
@@ -349,14 +367,24 @@ export async function cue(
         signal,
         opts,
       });
-    const { status, ...result } = await sent(token);
-    // A saved credential the relay refuses (expired or revoked), or that
-    // doesn't reach the org (traded before the org's App was on it), is
-    // traded again from the saved sign-in, once.
-    if (!fromFile || (status !== 401 && status !== 403)) return result;
+    const { status, ...result } = await sent(token!);
+    if (!fromFile) return result;
+    // A saved credential that doesn't reach the org stays: a trade from
+    // here can't add an org the App isn't on, and the saved sign-in may
+    // have expired.
+    if (status === 403) {
+      return done(
+        'refused',
+        `Your cue credential doesn't reach ${org}. If backmesh's GitHub App was installed on it since, run \`backmesh cue --sign-in\`. Nothing was sent.`,
+      );
+    }
+    // One the relay refuses (expired or revoked) is traded again from the
+    // saved sign-in, once.
+    if (status !== 401) return result;
     await rm(credentialPath, { force: true });
     const fresh = await tradeSaved(signal);
-    if (fresh === 'no org') return done('refused', NO_ORG);
+    const cannotNow = untraded(fresh);
+    if (cannotNow) return done('refused', UNTRADED[cannotNow]);
     if (!fresh) return result;
     const { status: _, ...again } = await sent(fresh);
     return again;

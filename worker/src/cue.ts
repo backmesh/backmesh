@@ -93,37 +93,48 @@ async function credential(request: Request, env: Env) {
   if (!(await env.SIGNIN_LIMIT.limit({ key: ip })).success) {
     return json({ error: 'Too many requests; retry later.' }, 429);
   }
+  const { revoke } = ((await request.json().catch(() => null)) ?? {}) as {
+    revoke?: unknown;
+  };
   const who = await reached(token);
   if (who === 'expired') {
     return json({ error: 'GitHub sign-in expired; sign in again.' }, 401);
   }
+  // `code` tells the CLI which refusal it is.
   if (who === 'sso') {
     const error =
       "Authorize the backmesh sign-in for your org's SAML SSO on GitHub, then sign in again.";
-    return json({ error }, 403);
+    return json({ error, code: 'sso' }, 403);
   }
   if (!who.orgs.length) {
     const error =
       "None of your orgs' repositories that backmesh's GitHub App is on is open to you.";
-    return json({ error }, 403);
+    return json({ error, code: 'no_org' }, 403);
   }
   const issued = `bmc_${randomHex()}${randomHex()}`;
   const expires = Date.now() + CREDENTIAL_TTL;
-  // A new trade revokes the user's earlier credentials, copies included.
-  await env.DB.prepare('DELETE FROM cue_credentials WHERE user_id = ?')
-    .bind(who.id)
-    .run();
-  await env.DB.prepare(
+  const insert = env.DB.prepare(
     'INSERT INTO cue_credentials (hash, user_id, login, orgs, expires_at) VALUES (?, ?, ?, ?, ?)',
-  )
-    .bind(
-      await sha256(issued),
-      who.id,
-      who.login,
-      JSON.stringify(who.orgs),
-      expires,
-    )
-    .run();
+  ).bind(
+    await sha256(issued),
+    who.id,
+    who.login,
+    JSON.stringify(who.orgs),
+    expires,
+  );
+  // An explicit `cue --sign-in` (`revoke`) revokes the user's other
+  // credentials, copies included; a CLI's own trade adds one, so two
+  // machines don't revoke each other's.
+  await env.DB.batch(
+    revoke === true
+      ? [
+          env.DB.prepare('DELETE FROM cue_credentials WHERE user_id = ?').bind(
+            who.id,
+          ),
+          insert,
+        ]
+      : [insert],
+  );
   return json({
     credential: issued,
     login: who.login,

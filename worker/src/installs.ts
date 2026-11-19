@@ -200,15 +200,32 @@ export function notRunnersAdmin(
   return Response.json({ error }, { status: 403 });
 }
 
-// Revokes every cue credential (`cue.ts`) bound to the org: rotate-key and
-// uninstall end them with the install.
-export const forgetCueCredentials = (env: Env, org: number) =>
-  env.DB.prepare(
-    `DELETE FROM cue_credentials WHERE hash IN (SELECT c.hash FROM
-     cue_credentials c, json_each(c.orgs) o WHERE json_extract(o.value, '$.id') = ?)`,
+// Takes the org off every cue credential (`cue.ts`), and revokes one bound
+// to no other org: rotate-key and uninstall end the org's cues with the
+// install.
+export async function forgetCueCredentials(env: Env, org: number) {
+  const { results } = await env.DB.prepare(
+    `SELECT DISTINCT c.hash, c.orgs FROM cue_credentials c, json_each(c.orgs) o
+     WHERE json_extract(o.value, '$.id') = ?`,
   )
     .bind(org)
-    .run();
+    .all<{ hash: string; orgs: string }>();
+  if (!results.length) return;
+  await env.DB.batch(
+    results.map(({ hash, orgs }) => {
+      const left = (JSON.parse(orgs) as { id: number }[]).filter(
+        (o) => o.id !== org,
+      );
+      return left.length
+        ? env.DB.prepare(
+            'UPDATE cue_credentials SET orgs = ? WHERE hash = ?',
+          ).bind(JSON.stringify(left), hash)
+        : env.DB.prepare('DELETE FROM cue_credentials WHERE hash = ?').bind(
+            hash,
+          );
+    }),
+  );
+}
 
 // The login finds the org's App installation (app.ts).
 export const rememberLogin = (env: Env, id: number, login: string) =>
