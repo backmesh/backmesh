@@ -9,9 +9,10 @@
 // The run phase starts one device sign-in per ROLE at once and prints each
 // code; an owner and a plain member of ORG each enter one. A code that
 // expires gets a fresh one until SIGN_IN_MS runs out. With each token it
-// sends only GET requests: who signed in, their membership of ORG (the App
-// has no Members permission, so GitHub may refuse it), the installations
-// the token reaches, and the runner groups. Nothing is created, so cleanup
+// sends only GET requests: who signed in, their membership of ORG and their
+// orgs and memberships (the App has no Members permission, so GitHub may
+// refuse these), the installations the token reaches, and the runner
+// groups. Nothing is created, so cleanup
 // only says so.
 //
 // Evidence: report.json in SPIKE_OUTPUT_DIR: statuses, GitHub's messages and
@@ -102,6 +103,12 @@ async function probe(role: string, token: string) {
     `/user/memberships/orgs/${encodeURIComponent(ORG)}`,
   );
   const installations = await get(token, '/user/installations');
+  // What `backmesh install` without --org lists: the user's orgs.
+  const orgs = await get(token, '/user/orgs?per_page=100');
+  const memberships = await get(
+    token,
+    '/user/memberships/orgs?state=active&per_page=100',
+  );
   const groups = await get(
     token,
     `/orgs/${encodeURIComponent(ORG)}/actions/runner-groups`,
@@ -125,6 +132,27 @@ async function probe(role: string, token: string) {
           account?: { login?: string };
         }[]
       ).map((i) => i.account?.login),
+    },
+    orgs: {
+      status: orgs.status,
+      message: orgs.message,
+      accepted: orgs.accepted,
+      logins: Array.isArray(orgs.body)
+        ? (orgs.body as { login?: string }[]).map((o) => o.login)
+        : undefined,
+    },
+    memberships: {
+      status: memberships.status,
+      message: memberships.message,
+      accepted: memberships.accepted,
+      roles: Array.isArray(memberships.body)
+        ? (
+            memberships.body as {
+              role?: string;
+              organization?: { login?: string };
+            }[]
+          ).map((m) => `${m.organization?.login}:${m.role}`)
+        : undefined,
     },
     runnerGroups: {
       status: groups.status,
