@@ -204,7 +204,18 @@ export async function setup({
       '--remote',
       ...config,
     ]);
-    wrangler(['deploy', ...config, '--var', `COMMIT:${env.GITHUB_SHA}`]);
+    const deploy = () =>
+      wrangler(['deploy', ...config, '--var', `COMMIT:${env.GITHUB_SHA}`]);
+    try {
+      deploy();
+    } catch {
+      // A first deploy uploads the new Worker, then wrangler (4.158 to at
+      // least 4.165) reads it back through Cloudflare's Workers API, which
+      // may not have it yet (10007), and retries only 5xx. The Worker
+      // exists by then, so a second deploy finishes it.
+      log('The deploy failed; deploying again, as a new Worker may need.');
+      deploy();
+    }
   }
   // After a deploy the Worker exists, so a failure here is real; a dry run
   // may find no Worker yet.
