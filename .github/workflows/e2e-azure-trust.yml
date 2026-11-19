@@ -7,7 +7,7 @@ name: e2e Azure trust
 # - `trust` adds exactly that one federated credential to ci-install's Azure
 #   app, beside what's there; nothing is copied or removed. Without `apply`
 #   it only prints the credentials and the change. Idempotent;
-# - `seal` seals ci-install's AZURE_CLIENT_ID, AZURE_TENANT_ID and
+# - `seal`, after `trust` and with `apply` only, seals ci-install's AZURE_CLIENT_ID, AZURE_TENANT_ID and
 #   AZURE_SUBSCRIPTION_ID with the e2e environment's public key (libsodium
 #   sealed box, as GitHub's secrets API expects) and uploads only the
 #   ciphertext, which a maintainer then PUTs as the e2e environment's secrets.
@@ -61,6 +61,7 @@ jobs:
     env:
       SUB: ${{ needs.subject.outputs.sub }}
       ISSUER: https://token.actions.githubusercontent.com
+      NAME: backmesh-backmesh-e2e
       APPLY: ${{ inputs.apply }}
     steps:
       - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
@@ -85,7 +86,13 @@ jobs:
             echo "The app already trusts $SUB"
             exit 0
           fi
-          cred=$(jq -nc --arg s "$SUB" --arg i "$ISSUER" '{name: "backmesh-backmesh-e2e", issuer: $i, subject: $s,
+          # A credential's name is unique per app: one with this name and
+          # another subject is someone else's change, left for a person.
+          if jq -e --arg n "$NAME" 'any(.[]; .name == $n)' creds.json >/dev/null; then
+            echo "::error::The app has a credential $NAME for another subject; nothing is changed"
+            exit 1
+          fi
+          cred=$(jq -nc --arg n "$NAME" --arg s "$SUB" --arg i "$ISSUER" '{name: $n, issuer: $i, subject: $s,
             audiences: ["api://AzureADTokenExchange"], description: "backmesh/backmesh e2e environment"}')
           echo "Adds: $cred"
           [[ $APPLY == true ]] || { echo "Not applied: dispatch with apply"; exit 0; }
@@ -94,14 +101,33 @@ jobs:
           echo "Applied; now:"
           az ad app federated-credential list --id "$APP" -o json | jq 'map({name, issuer, subject, audiences})'
 
+  # Seals only once the trust is applied; a dry run installs PyNaCl, pinned
+  # by hash with its dependencies for setup-python's 3.12 on x86_64 Linux,
+  # and prints the key's SHA-256, to check against the key the PUTs use.
   seal:
+    needs: trust
     runs-on: ubuntu-24.04
     environment: ci-install
     timeout-minutes: 5
     permissions: {}
     steps:
-      - run: pip install --quiet pynacl==1.5.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Install PyNaCl
+        run: |
+          cat >requirements.txt <<'EOF'
+          pynacl==1.5.0 --hash=sha256:0c84947a22519e013607c9be43706dd42513f9e6ae5d39d3613ca1e142fba44d --hash=sha256:06b8f6fa7f5de8d5d2f7573fe8c863c051225a27b61e6860fd047b1775807858
+          cffi==1.17.1 --hash=sha256:b62ce867176a75d03a665bad002af8e6d54644fad99a3c70905c543130e39d93
+          pycparser==2.22 --hash=sha256:c3702b6d3dd8c7abc1afa565d7e63d53a1d0bd86cdc24edd75470f4de499cfcc
+          EOF
+          pip install --quiet --require-hashes --only-binary=:all: -r requirements.txt
+      - name: The e2e key's SHA-256
+        env:
+          KEY: ${{ inputs.e2e_key }}
+        run: printf %s "$KEY" | sha256sum
       - name: Seal
+        if: ${{ inputs.apply }}
         env:
           KEY: ${{ inputs.e2e_key }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -121,6 +147,7 @@ jobs:
           print('sealed:', ' '.join(sealed))
           PY
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ inputs.apply }}
         with:
           name: sealed-e2e
           path: sealed-e2e.json
