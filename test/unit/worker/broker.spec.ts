@@ -285,6 +285,21 @@ describe('POST /v1/token', () => {
   });
 });
 
+// A cue credential bound to the org, as `/v1/cue/sign-in` keeps one.
+const cueCredential = (org: number, login: string) =>
+  env.DB.prepare(
+    'INSERT INTO cue_credentials (hash, user_id, login, orgs, expires_at) VALUES (?, 1, ?, ?, ?)',
+  )
+    .bind(
+      `hash-${org}`,
+      'alice',
+      JSON.stringify([{ id: org, login }]),
+      Date.now() + 86_400_000,
+    )
+    .run();
+const cueCredentials = async () =>
+  (await env.DB.prepare('SELECT hash FROM cue_credentials').all()).results;
+
 describe("uninstall's cleanup", () => {
   beforeEach(async () => {
     await installed(11, { id: 7, login: 'acme', permissions: ALL });
@@ -444,6 +459,25 @@ describe("uninstall's cleanup", () => {
     // Once only.
     expect((await finish(cleanup_id)).status).toBe(401);
     expect((await refresh(cleanup_id)).status).toBe(401);
+  });
+
+  it("revokes the org's cue credentials at the finish, the App kept or not", async () => {
+    await cueCredential(11, 'acme');
+    await cueCredential(12, 'acme-labs');
+    const { cleanup_id } = await signedIn();
+    await live();
+
+    await finish(cleanup_id);
+
+    expect(await cueCredentials()).toEqual([{ hash: 'hash-12' }]);
+  });
+
+  it("revokes the org's cue credentials when the App isn't on it", async () => {
+    upstream.installations.delete(11);
+    await cueCredential(11, 'acme');
+
+    expect((await cleanup('alice')).status).toBe(200);
+    expect(await cueCredentials()).toEqual([]);
   });
 
   it('keeps the installation while another install has gone live since', async () => {

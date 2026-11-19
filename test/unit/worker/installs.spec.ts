@@ -47,7 +47,41 @@ const statusCall = (key: string) =>
     env,
   );
 
+// A cue credential bound to the org, as `/v1/cue/sign-in` keeps one.
+const cueCredential = (org: number, login: string) =>
+  env.DB.prepare(
+    'INSERT INTO cue_credentials (hash, user_id, login, orgs, expires_at) VALUES (?, 1, ?, ?, ?)',
+  )
+    .bind(
+      `hash-${org}`,
+      'alice',
+      JSON.stringify([{ id: org, login }]),
+      Date.now() + 86_400_000,
+    )
+    .run();
+const cueCredentials = async () =>
+  (await env.DB.prepare('SELECT hash FROM cue_credentials').all()).results;
+
 describe('POST /v1/installs/revoke', () => {
+  it("revokes the org's cue credentials with the old install", async () => {
+    await remember(7, 'acme');
+    upstream.memberships.set('alice', [
+      { id: 7, login: 'acme', role: 'admin' },
+    ]);
+    await cueCredential(7, 'acme');
+    await cueCredential(8, 'globex');
+    const { install: oldInstall } = await mintKey(env.DB, 7);
+    const { key: newKey } = await mintKey(env.DB, 7);
+
+    const res = await call(newKey, {
+      install: oldInstall,
+      github_token: 'token-alice',
+    });
+
+    expect(res.status).toBe(200);
+    expect(await cueCredentials()).toEqual([{ hash: 'hash-8' }]);
+  });
+
   it("revokes another install of the bearer's own org when its admin token checks out, which then gets 401", async () => {
     await remember(7, 'acme');
     upstream.memberships.set('alice', [

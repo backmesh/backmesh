@@ -25,6 +25,7 @@ import {
 const BASE = 'https://api.backmesh.test';
 // The relay's cue credential for alice, traded for her App sign-in.
 const CREDENTIAL = `bmc_${'a1'.repeat(32)}`;
+const STALE = `bmc_${'b2'.repeat(32)}`;
 
 // The relay and GitHub as `backmesh cue` sees them: the org's listener keys,
 // opened here to check what was sealed.
@@ -52,6 +53,10 @@ class Relay {
     // A fresh App sign-in, traded once for the cue credential; the cue
     // routes take only that, and GitHub is never asked.
     if (url.pathname === '/v1/cue/sign-in') {
+      // A sign-in that reaches none of the App's installations.
+      if (auth === 'Bearer ghu_nobody') {
+        return Response.json({ error: 'No org.' }, { status: 403 });
+      }
       if (auth !== 'Bearer ghu_alice') {
         return Response.json(
           { error: 'GitHub sign-in expired' },
@@ -67,7 +72,12 @@ class Relay {
     if (url.host === 'api.github.com') {
       return Response.json({ message: 'unexpected' }, { status: 500 });
     }
-    if (auth !== `Bearer ${CREDENTIAL}`) {
+    // A credential traded before the org's App was installed.
+    if (auth === `Bearer ${STALE}`) {
+      return Response.json({ error: 'Not your org.' }, { status: 403 });
+    }
+    // An App sign-in still works on the cue routes, as the Worker's does.
+    if (auth !== `Bearer ${CREDENTIAL}` && auth !== 'Bearer ghu_alice') {
       return Response.json(
         { error: 'Cue sign-in expired; run `backmesh cue --sign-in`.' },
         { status: 401 },
@@ -182,13 +192,62 @@ describe('backmesh cue', () => {
       expect(existsSync(saved())).toBe(false);
     });
 
-    it('trades a fresh sign-in after --sign-in', async () => {
-      writeFileSync(saved(), `${CREDENTIAL}\n`);
+    it('trades a fresh sign-in at --sign-in, with no cue needed', async () => {
+      writeFileSync(saved(), 'bmc_old\n');
 
-      await cue({ inS: 120, signIn: true }, deps);
+      expect(await cue({ signIn: true }, deps)).toEqual({
+        outcome: 'signed in',
+        message: 'Signed in. Nothing was sent.',
+      });
 
       expect(signIns).toBe(1);
-      expect(relay.calls[0]).toBe('POST api.backmesh.test/v1/cue/sign-in');
+      expect(relay.calls).toEqual(['POST api.backmesh.test/v1/cue/sign-in']);
+      expect(readFileSync(saved(), 'utf8')).toBe(`${CREDENTIAL}\n`);
+    });
+
+    it("trades again when the saved credential doesn't reach the org", async () => {
+      writeFileSync(saved(), `${STALE}\n`);
+
+      expect((await cue({ inS: 120, signIn: false }, deps)).outcome).toBe(
+        'sent',
+      );
+      expect(readFileSync(saved(), 'utf8')).toBe(`${CREDENTIAL}\n`);
+    });
+
+    it('says so when the sign-in reaches none of the orgs the App is on', async () => {
+      writeFileSync(join(dir, '.token'), 'ghu_nobody\n');
+
+      expect(await cue({ inS: 120, signIn: false }, deps)).toEqual({
+        outcome: 'refused',
+        message:
+          "Your GitHub sign-in reaches none of the orgs backmesh's GitHub App is on, so there's no org to cue. Nothing was sent.",
+      });
+    });
+
+    it('names the cue credential when it was refused and the sign-in is gone too', async () => {
+      writeFileSync(saved(), 'bmc_old\n');
+      writeFileSync(join(dir, '.token'), 'ghu_revoked\n');
+
+      expect(await cue({ inS: 120, signIn: false }, deps)).toEqual({
+        outcome: 'not signed in',
+        message:
+          'The saved cue credential expired or was revoked. Run `backmesh cue --sign-in` to sign in again. Nothing was sent.',
+      });
+    });
+
+    it('sends an App sign-in in BACKMESH_CUE_TOKEN as it is', async () => {
+      const given = {
+        ...deps,
+        env: { ...deps.env, BACKMESH_CUE_TOKEN: 'ghu_alice' },
+      };
+
+      expect((await cue({ inS: 120, signIn: false }, given)).outcome).toBe(
+        'sent',
+      );
+      expect(relay.calls).not.toContain(
+        'POST api.backmesh.test/v1/cue/sign-in',
+      );
+      expect(relay.auths).toContain('Bearer ghu_alice');
     });
   });
 

@@ -320,6 +320,35 @@ describe('the cue credential', () => {
     expect((await withCredential(`bmc_${'0'.repeat(64)}`)).status).toBe(401);
   });
 
+  it("revokes the user's earlier credentials at a new trade", async () => {
+    const first = (await (await trade('alice')).json()) as {
+      credential: string;
+    };
+    await trade('alice');
+
+    expect((await withCredential(first.credential)).status).toBe(401);
+  });
+
+  it('checks the format before any lookup, and counts a refused one against the client IP', async () => {
+    env.SIGNIN_LIMIT = limiter(2);
+    const bogus = () => withCredential(`bmc_${'0'.repeat(64)}`);
+
+    expect((await withCredential('bmc_short')).status).toBe(401);
+    expect((await bogus()).status).toBe(401);
+    expect((await bogus()).status).toBe(429);
+  });
+
+  it('lets the daily cron delete expired credentials', async () => {
+    await trade('alice');
+    advance(30 * 86_400_000 + 1);
+
+    await worker.scheduled({ cron: '17 3 * * *' }, env);
+
+    expect(
+      (await env.DB.prepare('SELECT * FROM cue_credentials').all()).results,
+    ).toEqual([]);
+  });
+
   it('names the signed-in login with the keys', async () => {
     expect(await keys()).toMatchObject({ org_id: ORG, login: 'alice' });
   });
