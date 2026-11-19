@@ -1156,7 +1156,7 @@ describe('install', () => {
       );
       await install({ ...options, org: 'ACME' }, deps);
       // Its running listener keeps its key: no new sign-in.
-      expect(worker.calls).not.toContain('POST /v1/installs/device');
+      expect(worker.signIns()).toEqual([]);
       expect(worker.calls).not.toContain('POST /v1/installs');
       expect(calls.some((c) => c.startsWith('vm '))).toBe(false);
     });
@@ -2653,9 +2653,7 @@ describe("install's always-on VM sizes on Azure", () => {
     ]);
     // Its API never answered, so delete goes on without it.
     expect(envs).toEqual([{ API_URL: `https://${id}.anycloud.sh` }]);
-    expect(
-      worker.calls.filter((c) => c === 'POST /v1/installs/device'),
-    ).toHaveLength(1);
+    expect(worker.signIns()).toHaveLength(1);
   });
 
   it('never deletes a resumed cluster that Azure refuses for capacity', async () => {
