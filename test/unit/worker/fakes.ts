@@ -213,6 +213,8 @@ export class Upstream {
       attempt: number;
       // The head repository's `owner/repo`: a fork's when it isn't the run's.
       head?: string;
+      // GitHub's event, `pull_request` unless set.
+      event?: string;
       jobs: {
         conclusion: string | null;
         runner_name: string | null;
@@ -372,6 +374,7 @@ export class Upstream {
         id: Number(id),
         status: run.status,
         run_attempt: run.attempt,
+        event: run.event ?? 'pull_request',
         repository: { full_name: `${owner}/${repo}` },
         head_repository: { full_name: run.head ?? `${owner}/${repo}` },
       });

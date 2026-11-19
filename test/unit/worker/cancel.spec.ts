@@ -92,6 +92,39 @@ describe('POST /v1/cancel', () => {
     expect(rows).toEqual([expect.objectContaining({ outcome: 'ok' })]);
   });
 
+  it("allows the listener's clock 2 minutes at the runtime limit, and names the refusal", async () => {
+    const run = upstream.runs.get('acme/app/42')!;
+    run.jobs = [
+      {
+        conclusion: null,
+        status: 'in_progress',
+        runner_name: OURS,
+        labels: ['backmesh-public-4'],
+        started_at: ago(57),
+      },
+    ];
+    const early = await cancel({ reason: 'limit' });
+    expect(early.status).toBe(403);
+    expect(await early.json()).toMatchObject({ code: 'not_gated' });
+    run.jobs[0]!.started_at = ago(58);
+    expect((await cancel({ reason: 'limit' })).status).toBe(200);
+  });
+
+  it("refuses a run that isn't a pull request", async () => {
+    upstream.runs.get('acme/app/42')!.event = 'push';
+
+    expect((await cancel()).status).toBe(403);
+    expect(upstream.cancels).toEqual([]);
+  });
+
+  it("counts only cancels made, not refusals, toward the hour's 20", async () => {
+    upstream.runs.get('acme/app/42')!.jobs[0]!.labels = ['backmesh-public-4'];
+    for (let i = 0; i < 25; i++) expect((await cancel()).status).toBe(403);
+    upstream.runs.get('acme/app/42')!.jobs[0]!.labels = ['backmesh-kvm-4'];
+
+    expect((await cancel()).status).toBe(200);
+  });
+
   it("cancels at the runtime limit only for a job on this install's runner past 60 minutes", async () => {
     const run = upstream.runs.get('acme/app/42')!;
     run.jobs = [
@@ -103,6 +136,7 @@ describe('POST /v1/cancel', () => {
         started_at: ago(59),
       },
     ];
+    run.jobs[0]!.started_at = ago(50);
     expect((await cancel({ reason: 'limit' })).status).toBe(403);
     run.jobs[0]!.started_at = ago(60);
     expect((await cancel({ reason: 'limit' })).status).toBe(200);

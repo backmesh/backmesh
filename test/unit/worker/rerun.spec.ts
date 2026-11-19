@@ -176,13 +176,70 @@ describe('POST /v1/rerun', () => {
   });
 
   it('binds one tag when two first calls race', async () => {
+    // Each run's failed job ran on its own tag's runner, so only the
+    // binding tells them apart.
+    upstream.runs.set('acme/app/43', {
+      status: 'completed',
+      attempt: 1,
+      jobs: [{ conclusion: 'failure', runner_name: 'bmzzzzz-a4-k3j9x0qz' }],
+    });
     const [a, b] = await Promise.all([
       rerun({ ...RUN, install: TAG }),
-      rerun({ ...RUN, install: 'zzzzz' }),
+      rerun({ ...RUN, run_id: 43, install: 'zzzzz' }),
     ]);
 
     expect([a.status, b.status].sort()).toEqual([200, 403]);
+    expect(upstream.reruns).toHaveLength(1);
   });
+
+  it('answers 409 with where to accept Actions write while the installation grants it read only', async () => {
+    upstream.installations.get(11)!.permissions.actions = 'read';
+
+    const res = await rerun();
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      error: 'actions_write_needed',
+      code: 'actions_write_needed',
+      accept_url:
+        'https://github.com/organizations/acme/settings/installations/7',
+    });
+    expect(upstream.reruns).toEqual([]);
+    expect(upstream.mints).not.toContainEqual({
+      actions: 'write',
+      metadata: 'read',
+    });
+  });
+
+  it.each([
+    [
+      "GitHub's rate limit",
+      () =>
+        Response.json(
+          { message: 'API rate limit exceeded' },
+          { status: 403, headers: { 'x-ratelimit-remaining': '0' } },
+        ),
+      502,
+    ],
+    ['a 429', () => new Response('', { status: 429 }), 502],
+    ['a 500', () => new Response('', { status: 500 }), 502],
+  ])(
+    'answers 502 for %s on the rerun, and records it, never left pending',
+    async (_, answer, status) => {
+      upstream.answers.set(
+        '/repos/acme/app/actions/runs/42/rerun-failed-jobs',
+        answer,
+      );
+
+      expect((await rerun()).status).toBe(status);
+      const outcomes = (
+        await env.DB.prepare('SELECT outcome FROM run_actions').all<{
+          outcome: string;
+        }>()
+      ).results.map((r) => r.outcome);
+      expect(outcomes).toEqual(['github_failed']);
+    },
+  );
 
   it("answers GitHub's own 4xx for the rerun, which the listener then drops", async () => {
     upstream.answers.set(
