@@ -133,8 +133,8 @@ T4 VM there.
 A GPU job starts slower than a CPU one: its VM boots NVIDIA's larger image,
 and pulling and starting the runner's image takes about 90 seconds more. When
 spot T4s are short, a `backmesh-gpu-t4` job waits for one: like every spot
-label, it never falls back on demand. Run jobs that must start quickly on
-`backmesh-gpu-od-t4`.
+label, it never falls back on demand. `backmesh-gpu-od-t4` runs on demand
+instead.
 
 The job sees the GPU as on GitHub's runner: `nvidia-smi` works in a step, and
 `docker run --gpus all` works on the VM's Docker through the NVIDIA container
