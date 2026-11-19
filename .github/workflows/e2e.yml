@@ -13,14 +13,20 @@ name: E2E
 # `uninstall` drain would.
 #
 # With `version` (a release or release candidate, such as v0.4.3-rc.1), the
-# `test-org` job installs that release fresh on AWS for `org`, the test org
-# (backmesh-dryrun), runs the label member there, then uninstalls it and
-# sweeps AWS for anything left. Install and uninstall each print a GitHub
-# device sign-in, in the run's annotations and summary, which an admin of the
-# test org approves, as for ci-install.yml. The backmesh App stays installed
+# `production` job checks api.backmesh.com runs the Worker built from that
+# tag's commit, and the `test-org` job installs that release fresh for `org`,
+# the test org (backmesh-dryrun), once per leg: on AWS, running the label
+# member, and on Azure, in our Azure CI subscription, with the control plane
+# where install puts it by default, running one job. Each leg then
+# uninstalls it and sweeps its cloud for anything left. Install and uninstall
+# each print a GitHub device sign-in, in the run's annotations and summary,
+# which an admin of the test org approves, as for ci-install.yml. The backmesh App stays installed
 # on the test org (`uninstall --keep-app`): only an org owner can install
 # it. The owner's one-time setup is the `e2e` environment's secrets
-# (E2E_TEST_ORG_DISPATCH_TOKEN, AWS_ROLE_ARN) and the test org's e2e
+# (E2E_TEST_ORG_DISPATCH_TOKEN, AWS_ROLE_ARN, AZURE_CLIENT_ID and
+# AZURE_TENANT_ID: an app that can generate install's Azure identity, as
+# ci-install.yml's does, with a federated credential for this repository's e2e
+# environment) and the test org's e2e
 # repository with its labels.yml (the owner's setup notes). It refuses an org ANYCLOUD_API_URLS names: those are
 # live.
 
@@ -150,23 +156,58 @@ jobs:
       - name: 'Stop member: terminate the runner Job, GitHub must fail the job within 15 s'
         run: node test/e2e/run-stop-member.ts
 
-  # A fresh install of `version` on the test org, on AWS, the label member on
-  # its runners, then the uninstall and a sweep, whatever came before them.
-  # On GitHub's runners: it makes the runners it tests.
-  test-org:
+  # The Worker on api.backmesh.com is the one release.yml deployed for
+  # `version`: a release's CLI is tested against what production runs.
+  production:
     needs: plan
     if: ${{ inputs.version }}
     runs-on: ubuntu-24.04
-    # Holds the secrets, and is the subject the AWS role's OIDC trust names.
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: api.backmesh.com runs the Worker built from the tag under test
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          want=$(gh api "repos/$GITHUB_REPOSITORY/commits/$VERSION" --jq .sha)
+          got=$(curl -fsS --max-time 30 https://api.backmesh.com/v1/version | jq -r .commit) || got=
+          [[ $got == "$want" ]] \
+            || { echo "::error::api.backmesh.com runs the Worker built from ${got:-an unknown commit}, not $VERSION's $want"; exit 1; }
+          echo "api.backmesh.com runs $VERSION's Worker, $want."
+
+  # A fresh install of `version` on the test org, per leg, then the uninstall
+  # and a sweep, whatever came before them. AWS, with the control plane
+  # placed, runs the label member; Azure, where install picks the control
+  # plane's region as it does for a customer who names none, runs one job.
+  # One leg at a time: the test org holds one installation. On GitHub's
+  # runners: it makes the runners it tests.
+  test-org:
+    needs: plan
+    if: ${{ inputs.version }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - cloud: aws
+            placement: --control-plane aws:us-east-2 --runners aws
+          - cloud: azure
+            placement: --runners azure
+    runs-on: ubuntu-24.04
+    # Holds the secrets, and is the subject the clouds' OIDC trusts name.
     environment: e2e
     timeout-minutes: 240
     permissions:
       contents: read # the release's assets
-      id-token: write # the AWS role's OIDC sign-in
+      id-token: write # the clouds' OIDC sign-ins
     env:
       ORG: ${{ inputs.org }}
       VERSION: ${{ needs.plan.outputs.version }}
-      CONTROL_PLANE_REGION: us-east-2
+      CLOUD: ${{ matrix.cloud }}
+      # Our Azure CI subscription.
+      AZURE_SUBSCRIPTION_ID: 132fb71c-65af-40f2-84a6-63a7eda9414e
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -214,13 +255,15 @@ jobs:
       # uninstall deletes it as the same; anycloud generates only from a
       # named profile, so the session is saved as the default one.
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        if: matrix.cloud == 'aws'
         id: aws
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.CONTROL_PLANE_REGION }}
+          aws-region: us-east-2
           role-duration-seconds: 14400
           output-credentials: true
       - name: Save the role's session as the default profile
+        if: matrix.cloud == 'aws'
         env:
           KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
           SECRET: ${{ steps.aws.outputs.aws-secret-access-key }}
@@ -231,18 +274,45 @@ jobs:
             "$KEY_ID" "$SECRET" "$SESSION" >~/.aws/credentials
           chmod 600 ~/.aws/credentials
 
+      # Install generates the runners' Azure identity as this app, and
+      # uninstall deletes it as the same. Only az is signed in, so install
+      # puts the control plane on Azure.
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        if: matrix.cloud == 'azure'
+        id: azure
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+      # The sweep tells this run's resource groups from others' in the
+      # subscription by the ones there before it.
+      - name: The anycloud resource groups before the install
+        if: matrix.cloud == 'azure'
+        run: az group list --query '[?tags.anycloud_cluster].name' --output tsv >"$RUNNER_TEMP/groups-before"
+
       # A maintainer who is an admin of the test org approves install's
       # GitHub sign-in from the run's annotations or summary
-      # (with-sign-in.sh); the same sign-in is the control plane's.
+      # (with-sign-in.sh); the same sign-in is the control plane's. The plan
+      # names where the control plane goes, which uninstall uses, and Azure's
+      # runner regions, which its one job checks.
       - name: backmesh install
         id: install
         timeout-minutes: 90
         env:
           BACKMESH_UNSUPPORTED_CI_OVERRIDE: anycloud-ci
+          PLACEMENT: ${{ matrix.placement }}
+          MATRIX: ${{ needs.plan.outputs.matrix }}
         run: |
-          placement=(--control-plane "aws:$CONTROL_PLANE_REGION" --runners aws)
+          read -ra placement <<<"$PLACEMENT"
           plan=$(backmesh install --org "$ORG" "${placement[@]}" --plan --json) || { echo "$plan"; exit 1; }
-          id=$(tail -n1 <<<"$plan" | jq -er .planId) || { echo "$plan"; exit 1; }
+          plan=$(tail -n1 <<<"$plan")
+          id=$(jq -er .planId <<<"$plan") || { echo "$plan"; exit 1; }
+          echo "CONTROL_PLANE=$(jq -er '.controlPlane | "\(.cloud):\(.region)"' <<<"$plan")" >>"$GITHUB_ENV"
+          if [[ $CLOUD == azure ]]; then
+            MATRIX=$(jq -c --argjson plan "$plan" '{include: [.include[0] + {label: "backmesh-4", cloud: "azure",
+              regions: [$plan.runners[] | select(.cloud == "azure") | .regions[]], kvm: false, gpu: false}]}' <<<"$MATRIX")
+          fi
+          echo "LABEL_MATRIX=$MATRIX" >>"$GITHUB_ENV"
           test/e2e/with-sign-in.sh backmesh install --org "$ORG" "${placement[@]}" --yes --plan-id "$id"
 
       # The control plane's ID, for the sweep, also after a failed install
@@ -260,13 +330,12 @@ jobs:
           echo "CLUSTER_ID=$id" >>"$GITHUB_ENV"
 
       # The label member, through the test org's own repository, whose
-      # runners these are. backmesh#26's GPU labels need only their entries
-      # in `labels`, once e2e-labels.yml has its GPU step.
+      # runners these are: `labels` on AWS, one backmesh-4 job on Azure.
       - name: The label member on the test org's runners
         env:
           GH_TOKEN: ${{ secrets.E2E_TEST_ORG_DISPATCH_TOKEN }}
           TEST_ORG_REPO: ${{ inputs.org }}/e2e
-          MATRIX: ${{ needs.plan.outputs.matrix }}
+          MATRIX: ${{ env.LABEL_MATRIX }}
           REF: ${{ github.sha }}
         run: node test/e2e/run-test-org-labels.ts
 
@@ -284,7 +353,7 @@ jobs:
           if [[ -f ~/.anycloud/api-url ]]; then
             url=$(anycloud api status --json | jq -r .url) || url=
             if [[ -n $url ]] && ! curl -fsS --max-time 10 "$url/v1/version" >/dev/null; then
-              flags+=(--control-plane "aws:$CONTROL_PLANE_REGION")
+              flags+=(--control-plane "$CONTROL_PLANE")
             fi
           fi
           test/e2e/with-sign-in.sh backmesh uninstall "${flags[@]}"
@@ -297,6 +366,7 @@ jobs:
         if: ${{ always() && steps.aws.outcome == 'success' }}
         env:
           MATRIX: ${{ needs.plan.outputs.matrix }}
+          CONTROL_PLANE_REGION: us-east-2
         run: |
           left=()
           aws() { command aws --no-cli-pager --output json "$@"; }
@@ -340,3 +410,35 @@ jobs:
             exit 1
           fi
           echo "Nothing of this run's installation is left in AWS."
+
+      # The same guard on Azure: this run's resource groups, anything tagged
+      # with its control plane (VMs, disks, IPs, NICs, its managed identity),
+      # the identity install generated, and the checkpoint and cache
+      # containers. Without the control plane's ID, a resource group made
+      # during the run, such as one a failed create left, can only be told
+      # apart by not being there before.
+      - name: Sweep Azure for anything left
+        if: ${{ always() && steps.azure.outcome == 'success' }}
+        run: |
+          left=()
+          groups=$(az group list --query '[?tags.anycloud_cluster].name' --output tsv)
+          left+=($(comm -13 <(sort "$RUNNER_TEMP/groups-before") <(sort <<<"$groups") | sed 's/^/resource-group:/'))
+          if [[ -n ${CLUSTER_ID:-} ]]; then
+            eval "$(node test/e2e/sweep-names.ts)"
+            [[ $(az group exists --name "anycloud-$CLUSTER_ID") == false ]] || left+=("resource-group:anycloud-$CLUSTER_ID")
+            for tag in "anycloud_cluster=$CLUSTER_ID" "anycloud_owner_api=$OWNER_API"; do
+              left+=($(az resource list --tag "$tag" --query '[].id' --output tsv | sed 's/^/resource:/'))
+            done
+            left+=($(az ad app list --display-name "$AZURE_APP" --query '[].appId' --output tsv | sed "s/^/app:$AZURE_APP:/"))
+            account="anycloud$(tr -d - <<<"$AZURE_SUBSCRIPTION_ID" | cut -c1-8)"
+            if [[ $(az storage account check-name --name "$account" --query nameAvailable) == false ]]; then
+              left+=($(az storage container-rm list --storage-account "$account" --resource-group anycloud-storage \
+                --query "[?name == '$CLUSTER_ID' || starts_with(name, '$CACHE_PREFIX')].name" --output tsv | sed 's/^/container:/'))
+            fi
+          fi
+          left=($(printf '%s\n' "${left[@]}" | sort -u))
+          if ((${#left[@]})); then
+            printf '::error title=Left in Azure::%s\n' "${left[@]}"
+            exit 1
+          fi
+          echo "Nothing of this run's installation is left in Azure."

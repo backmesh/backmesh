@@ -1,6 +1,7 @@
-// Sets up the Worker, idempotently, for .github/workflows/worker-setup.yml:
-// the D1 database and its migrations, the Worker and its secrets. A dry run
-// only reads and prints the plan.
+// Sets up the Worker, idempotently, for release.yml's deploy and
+// worker-setup.yml's first setup: the D1 database and its migrations, the
+// Worker, built from GITHUB_SHA's commit, and its secrets. A dry run only
+// reads and prints the plan.
 //
 //   node worker/scripts/setup.ts [--apply]
 import { execFileSync } from 'node:child_process';
@@ -90,6 +91,12 @@ export async function setup({ env, apply, fetch, wrangler, log }: Deps) {
       `Add these to the publish environment first: ${missing.join(', ')}`,
     );
   }
+  // Actions sets it: the commit checked out, which /v1/version answers.
+  if (!/^[0-9a-f]{40}$/.test(env.GITHUB_SHA ?? '')) {
+    throw new Error(
+      'GITHUB_SHA, the commit the Worker is built from, is unset',
+    );
+  }
   const app = APP.filter((name) => env[name]);
   if (app.length === 1 || (!app.length && env[NEXT_KEY])) {
     throw new Error(
@@ -166,7 +173,7 @@ export async function setup({ env, apply, fetch, wrangler, log }: Deps) {
   plan(`apply ${DATABASE}'s migrations and deploy the Worker on ${HOST}`);
   if (apply) {
     wrangler(['d1', 'migrations', 'apply', DATABASE, '--remote', ...config]);
-    wrangler(['deploy', ...config]);
+    wrangler(['deploy', ...config, '--var', `COMMIT:${env.GITHUB_SHA}`]);
   }
   // After a deploy the Worker exists, so a failure here is real; a dry run
   // may find no Worker yet.

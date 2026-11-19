@@ -227,12 +227,16 @@ describe("release.yml's Worker deploy", () => {
   const deploys = Object.entries(release.jobs).filter(([, job]) =>
     job.steps?.some((s) => s.run?.includes(SETUP)),
   );
-  const [name, deploy] = deploys[0] ?? ['', {} as Job];
+  const none: Job = {};
+  const [name, deploy] = deploys[0] ?? ['', none];
   const needs = (job: string): string[] =>
     [release.jobs[job]!.needs ?? []].flat().flatMap((n) => [n, ...needs(n)]);
   const runs = (job: string, context: Context) => {
     const { if: condition } = release.jobs[job]!;
-    return condition === undefined || !!evaluate(unwrap(condition)!, context);
+    return (
+      condition === undefined ||
+      !!evaluate(unwrap(condition) ?? condition, context)
+    );
   };
   const final = { 'needs.check.outputs.rc': 'false' };
   const rc = { 'needs.check.outputs.rc': 'true' };

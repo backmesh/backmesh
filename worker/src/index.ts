@@ -61,6 +61,9 @@ export interface Env {
   GITHUB_APP_SLUG: string;
   GITHUB_APP_PRIVATE_KEY?: string;
   GITHUB_APP_PRIVATE_KEY_NEXT?: string;
+  // The commit the Worker was built from, which the deploy sets
+  // (worker/scripts/setup.ts); e2e.yml checks it is the release's.
+  COMMIT?: string;
 }
 
 async function route(request: Request, env: Env): Promise<Response> {
@@ -82,6 +85,9 @@ async function route(request: Request, env: Env): Promise<Response> {
       ? response
       : tooMany();
   };
+  if (pathname === '/v1/version' && request.method === 'GET') {
+    return Response.json({ commit: env.COMMIT ?? null });
+  }
   if (pathname === '/v1/cue' || pathname.startsWith('/v1/cue/')) {
     return cue(request, env, refused);
   }
