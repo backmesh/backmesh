@@ -38,8 +38,9 @@ backmesh install --org acme
 ```
 
 Without `--org`, install offers the org of the current repo's GitHub remote,
-else signs you in and lists the orgs you're an admin of to pick from. Without a
-terminal it asks nothing and names your orgs and the command to run instead.
+else signs you in and lists your orgs backmesh's GitHub App is already on to
+pick from; for a new org, pass `--org`. Without a terminal it asks nothing and
+names those orgs and the command to run instead.
 
 With nothing else, the control plane and runners go on the cloud your CLI is
 signed in to, near GitHub's US East. The control plane is a small always-on
