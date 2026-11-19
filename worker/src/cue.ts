@@ -39,26 +39,23 @@ async function reached(token: string) {
     asUser(token, '/user/installations?per_page=100'),
   ]);
   if (user.status === 401 || installs.status === 401) return 'expired';
-  if (
-    [user, installs].some(
-      (r) => r.status === 403 && r.headers.has('X-GitHub-SSO'),
-    )
-  ) {
-    return 'sso';
-  }
-  if (!user.ok || !installs.ok) {
-    throw new GitHubError(
-      `GitHub /user, /user/installations: ${user.status}, ${installs.status}`,
-    );
-  }
+  const sso = (r: Response) =>
+    r.status === 403 && r.headers.has('X-GitHub-SSO');
+  if (sso(user)) return 'sso';
+  if (!user.ok) throw new GitHubError(`GitHub /user: ${user.status}`);
   const { id, login } = (await user.json()) as { id: number; login: string };
+  // The user is known even when an org's SAML SSO holds the list back.
+  if (sso(installs)) return { id, login, orgs: [], sso: true };
+  if (!installs.ok) {
+    throw new GitHubError(`GitHub /user/installations: ${installs.status}`);
+  }
   const { installations } = (await installs.json()) as {
     installations: { account: { id: number; login: string } | null }[];
   };
   const orgs = installations.flatMap(({ account }) =>
     account ? [{ id: account.id, login: account.login }] : [],
   );
-  return { id, login, orgs };
+  return { id, login, orgs, sso: false };
 }
 
 const memberOf = (
@@ -73,10 +70,12 @@ const memberOf = (
 
 async function orgMember(token: string, org: string) {
   const who = await reached(token);
-  return typeof who === 'string' ? who : memberOf(who, org);
+  if (typeof who === 'string') return who;
+  return who.sso ? 'sso' : memberOf(who, org);
 }
 
 const CREDENTIAL_TTL = 30 * 86_400_000;
+const KEPT = 10;
 const credentialExpired = () =>
   json({ error: 'Cue sign-in expired; run `backmesh cue --sign-in`.' }, 401);
 
@@ -100,41 +99,45 @@ async function credential(request: Request, env: Env) {
   if (who === 'expired') {
     return json({ error: 'GitHub sign-in expired; sign in again.' }, 401);
   }
+  // An explicit `cue --sign-in` (`revoke`) revokes the user's other
+  // credentials, copies included, before anything can refuse the trade; a
+  // CLI's own trade adds one, so two machines don't revoke each other's.
+  const revoked = revoke === true && typeof who !== 'string';
+  if (revoked) {
+    await env.DB.prepare('DELETE FROM cue_credentials WHERE user_id = ?')
+      .bind(who.id)
+      .run();
+  }
   // `code` tells the CLI which refusal it is.
-  if (who === 'sso') {
+  if (who === 'sso' || who.sso) {
     const error =
       "Authorize the backmesh sign-in for your org's SAML SSO on GitHub, then sign in again.";
-    return json({ error, code: 'sso' }, 403);
+    return json({ error, code: 'sso', revoked }, 403);
   }
   if (!who.orgs.length) {
     const error =
       "None of your orgs' repositories that backmesh's GitHub App is on is open to you.";
-    return json({ error, code: 'no_org' }, 403);
+    return json({ error, code: 'no_org', revoked }, 403);
   }
   const issued = `bmc_${randomHex()}${randomHex()}`;
   const expires = Date.now() + CREDENTIAL_TTL;
-  const insert = env.DB.prepare(
-    'INSERT INTO cue_credentials (hash, user_id, login, orgs, expires_at) VALUES (?, ?, ?, ?, ?)',
-  ).bind(
-    await sha256(issued),
-    who.id,
-    who.login,
-    JSON.stringify(who.orgs),
-    expires,
-  );
-  // An explicit `cue --sign-in` (`revoke`) revokes the user's other
-  // credentials, copies included; a CLI's own trade adds one, so two
-  // machines don't revoke each other's.
-  await env.DB.batch(
-    revoke === true
-      ? [
-          env.DB.prepare('DELETE FROM cue_credentials WHERE user_id = ?').bind(
-            who.id,
-          ),
-          insert,
-        ]
-      : [insert],
-  );
+  // The user's newest 10 are kept.
+  await env.DB.batch([
+    env.DB.prepare(
+      'INSERT INTO cue_credentials (hash, user_id, login, orgs, expires_at) VALUES (?, ?, ?, ?, ?)',
+    ).bind(
+      await sha256(issued),
+      who.id,
+      who.login,
+      JSON.stringify(who.orgs),
+      expires,
+    ),
+    env.DB.prepare(
+      `DELETE FROM cue_credentials WHERE user_id = ?1 AND hash NOT IN
+       (SELECT hash FROM cue_credentials WHERE user_id = ?1
+        ORDER BY expires_at DESC LIMIT ${KEPT})`,
+    ).bind(who.id),
+  ]);
   return json({
     credential: issued,
     login: who.login,

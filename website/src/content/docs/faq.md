@@ -127,7 +127,8 @@ again revokes it and any other copy (a cue's own sign-in doesn't), and
 `rotate-key` and `uninstall` end it for their org. Its orgs are those your
 sign-in reached when it was made, for its 30 days even if you leave one; your
 listener still acts only on a cue from someone who can push to the
-repository.
+repository. After you or an org is renamed on GitHub, run `backmesh cue --sign-in`
+again.
 
 ## Is it safe?
 

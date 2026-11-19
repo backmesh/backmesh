@@ -226,21 +226,31 @@ async function trade(
   });
   if (res.status === 401) return undefined;
   if (res.status === 403) {
-    const { code } = (await res.json().catch(() => ({}))) as {
+    const { code, revoked } = (await res.json().catch(() => ({}))) as {
       code?: string;
+      revoked?: boolean;
     };
-    return code === 'sso' ? 'sso' : 'no org';
+    return {
+      cannot: code === 'sso' ? ('sso' as const) : ('no org' as const),
+      revoked: revoked === true,
+    };
   }
   if (!res.ok) throw new Error(`backmesh.com answered ${res.status}`);
   return credentialSchema.parse(await res.json()).credential;
 }
 const UNTRADED = {
   'no org':
-    "Your GitHub sign-in reaches none of the orgs backmesh's GitHub App is on, so there's no org to cue. Nothing was sent.",
-  sso: "Authorize the backmesh sign-in for your org's SAML SSO on GitHub, then run `backmesh cue --sign-in`. Nothing was sent.",
+    "Your GitHub sign-in reaches none of the orgs backmesh's GitHub App is on, so there's no org to cue.",
+  sso: "Authorize the backmesh sign-in for your org's SAML SSO on GitHub, then run `backmesh cue --sign-in`.",
 };
-const untraded = (token: string | undefined) =>
-  token === 'no org' || token === 'sso' ? token : undefined;
+const untraded = ({
+  cannot,
+  revoked,
+}: {
+  cannot: keyof typeof UNTRADED;
+  revoked: boolean;
+}) =>
+  `${UNTRADED[cannot]}${revoked ? ' Your other cue credentials were revoked.' : ''} Nothing was sent.`;
 
 export async function cue(
   opts: CueOptions,
@@ -259,15 +269,30 @@ export async function cue(
     const traded = signedIn
       ? await trade(deps, base, signedIn, signal, revoke)
       : undefined;
-    if (traded && !untraded(traded)) await save(credentialPath, traded);
+    if (typeof traded === 'string') await save(credentialPath, traded);
     return traded;
   };
   // A new sign-in is traded for a new credential at once, which revokes the
-  // earlier ones; one that can't be traded now is at the next cue.
+  // others. Answers why it couldn't be, if it couldn't.
   const signIn = async () => {
     await deps.signIn();
     await rm(credentialPath, { force: true });
-    await tradeSaved(AbortSignal.timeout(30_000), true).catch(() => undefined);
+    let traded;
+    try {
+      traded = await tradeSaved(AbortSignal.timeout(30_000), true);
+    } catch (error) {
+      return done(
+        'unavailable',
+        `Signed in, but backmesh.com didn't answer (${error instanceof Error ? error.message : String(error)}), so your other cue credentials weren't revoked. Run \`backmesh cue --sign-in\` again when it's reachable. Nothing was sent.`,
+      );
+    }
+    if (typeof traded === 'object') return done('refused', untraded(traded));
+    if (!traded) {
+      return done(
+        'not signed in',
+        'GitHub refused the new sign-in; run `backmesh cue --sign-in` again. Nothing was sent.',
+      );
+    }
   };
   if (opts.signIn && given) {
     return done(
@@ -280,8 +305,9 @@ export async function cue(
     // --sign-in` once (below) tells a signed-out user to run. Neither --in
     // nor --cancel is implied, so nothing is sent.
     if (opts.signIn) {
-      await signIn();
-      return done('signed in', 'Signed in. Nothing was sent.');
+      return (
+        (await signIn()) ?? done('signed in', 'Signed in. Nothing was sent.')
+      );
     }
     return done(
       'refused',
@@ -297,7 +323,10 @@ export async function cue(
   ) {
     return done('refused', `--in takes whole seconds, up to ${MAX_LEAD_S}.`);
   }
-  if (opts.signIn) await signIn();
+  if (opts.signIn) {
+    const failed = await signIn();
+    if (failed) return failed;
+  }
   // A quick follow-up push (owner, 2026-11-09): nothing to start early,
   // and not a mistake, so nothing is sent, counted or cached.
   if (inS !== undefined && inS < MIN_LEAD_S) {
@@ -316,8 +345,7 @@ export async function cue(
     // Otherwise the saved credential, else the saved sign-in traded for one.
     const fromFile = !given && (await readSaved(credentialPath));
     const token = given ?? (fromFile || (await tradeSaved(signal)));
-    const cannot = untraded(token);
-    if (cannot) return done('refused', UNTRADED[cannot]);
+    if (typeof token === 'object') return done('refused', untraded(token));
     if (!token) {
       return done(
         'not signed in',
@@ -375,7 +403,7 @@ export async function cue(
     if (status === 403) {
       return done(
         'refused',
-        `Your cue credential doesn't reach ${org}. If backmesh's GitHub App was installed on it since, run \`backmesh cue --sign-in\`. Nothing was sent.`,
+        `Your cue credential doesn't reach ${org}: backmesh's GitHub App was installed there, its key rotated or it was uninstalled since. Run \`backmesh cue --sign-in\`. Nothing was sent.`,
       );
     }
     // One the relay refuses (expired or revoked) is traded again from the
@@ -383,8 +411,7 @@ export async function cue(
     if (status !== 401) return result;
     await rm(credentialPath, { force: true });
     const fresh = await tradeSaved(signal);
-    const cannotNow = untraded(fresh);
-    if (cannotNow) return done('refused', UNTRADED[cannotNow]);
+    if (typeof fresh === 'object') return done('refused', untraded(fresh));
     if (!fresh) return result;
     const { status: _, ...again } = await sent(fresh);
     return again;

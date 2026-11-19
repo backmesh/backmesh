@@ -203,29 +203,18 @@ export function notRunnersAdmin(
 // Takes the org off every cue credential (`cue.ts`), and revokes one bound
 // to no other org: rotate-key and uninstall end the org's cues with the
 // install.
-export async function forgetCueCredentials(env: Env, org: number) {
-  const { results } = await env.DB.prepare(
-    `SELECT DISTINCT c.hash, c.orgs FROM cue_credentials c, json_each(c.orgs) o
-     WHERE json_extract(o.value, '$.id') = ?`,
-  )
-    .bind(org)
-    .all<{ hash: string; orgs: string }>();
-  if (!results.length) return;
-  await env.DB.batch(
-    results.map(({ hash, orgs }) => {
-      const left = (JSON.parse(orgs) as { id: number }[]).filter(
-        (o) => o.id !== org,
-      );
-      return left.length
-        ? env.DB.prepare(
-            'UPDATE cue_credentials SET orgs = ? WHERE hash = ?',
-          ).bind(JSON.stringify(left), hash)
-        : env.DB.prepare('DELETE FROM cue_credentials WHERE hash = ?').bind(
-            hash,
-          );
-    }),
-  );
-}
+export const forgetCueCredentials = (env: Env, org: number) =>
+  env.DB.batch([
+    env.DB.prepare(
+      `UPDATE cue_credentials SET orgs = (SELECT json_group_array(json(o.value))
+       FROM json_each(cue_credentials.orgs) o WHERE json_extract(o.value, '$.id') != ?1)
+       WHERE EXISTS (SELECT 1 FROM json_each(cue_credentials.orgs) o
+       WHERE json_extract(o.value, '$.id') = ?1)`,
+    ).bind(org),
+    env.DB.prepare(
+      'DELETE FROM cue_credentials WHERE json_array_length(orgs) = 0',
+    ),
+  ]);
 
 // The login finds the org's App installation (app.ts).
 export const rememberLogin = (env: Env, id: number, login: string) =>
