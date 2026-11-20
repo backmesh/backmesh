@@ -27,15 +27,19 @@ name: e2e GCP identity
 #   - iam.roleAdmin: the setup's custom role, made or updated each run;
 #   - iam.workloadIdentityPoolAdmin: the role connection's pool and
 #     provider, made by the setup and deleted by e2e's cleanup;
-#   - serviceusage.serviceUsageViewer: the setup lists the enabled APIs;
+#   - serviceusage.serviceUsageViewer: the setup lists the enabled APIs,
+#     and enables none: this checks the four it needs are enabled;
 #   - resourcemanager.projectIamAdmin, only for grants of
 #     compute.instanceAdmin.v1 (the seed's, to the control plane's account,
 #     on its own VM) and of the custom role (the setup's, to its account).
-#   The service account roles reach every account in the project, ci-install's
-#   included, so this identity can act as them: an accepted risk, kept to the
-#   e2e environment's reviewers. For comparison it prints the roles
-#   ci-install's account holds. Without `apply` it only prints what it would
-#   do. Idempotent; it refuses anything there it didn't make. It prints the
+#     The condition limits which roles it grants, not what they hold.
+#   This is project owner in effect, an accepted risk kept to the e2e
+#   environment's reviewers: iam.roleAdmin can put any permission in the
+#   custom role, which it may grant, and iam.serviceAccountAdmin and
+#   iam.serviceAccountUser reach every account in the project, ci-install's
+#   included. For comparison it prints the roles ci-install's account holds.
+#   Without `apply` it only prints what it would do. Idempotent; it refuses
+#   anything there it didn't make. It prints the
 #   e2e environment's GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_SERVICE_ACCOUNT and
 #   GCP_PROJECT_ID.
 # Deleted after use.
@@ -103,6 +107,11 @@ jobs:
           # The project ID is a secret, so the log masks it.
           project=$(gcloud config get-value project)
           number=$(gcloud projects describe "$project" --format='value(projectNumber)')
+          # anycloud's setup script enables any of these that's off, which
+          # this identity may not.
+          missing=$(comm -23 <(printf '%s.googleapis.com\n' compute iam iamcredentials sts | sort) \
+            <(gcloud services list --enabled --format='value(config.name)' | sort))
+          [[ -z $missing ]] || { echo "::error::Enable these APIs in the project first; nothing is changed:" $missing; exit 1; }
           pool=projects/$number/locations/global/workloadIdentityPools/$POOL
           account=$NAME@$project.iam.gserviceaccount.com
           member=principal://iam.googleapis.com/$pool/subject/$SUB
