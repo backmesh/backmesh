@@ -1056,6 +1056,81 @@ describe('uninstall', () => {
     expect(lines.some((line) => line.includes('i2'))).toBe(true);
   });
 
+  // An install that failed before its listener started (rc.9's e2e): the
+  // control plane answers, but no listener holds a key, so the cleanup's
+  // sign-in is keyless, and the Worker refuses it while another install of
+  // the org is live. The control plane goes all the same.
+  it.each([
+    ['before its Secret', []],
+    ['after its Secret', ['acme']],
+  ])(
+    'deletes the control plane of an install that failed %s, when GitHub refuses the keyless cleanup',
+    async (_, secrets) => {
+      const refusal =
+        'backmesh install i2 (last token 2026-11-20T23:23:06.465Z) of acme got a token in the last hour, so a control plane may still run there. If its control plane is gone too, run uninstall again an hour after the latest token listed.';
+      const worker = fakeWorker({
+        cleanups: [
+          Response.json(
+            {
+              error: refusal,
+              live: [
+                { install: 'i2', last_token_at: '2026-11-20T23:23:06.465Z' },
+              ],
+            },
+            { status: 409 },
+          ),
+        ],
+      });
+      const { deps, calls, lines, requests } = setUp({
+        listener: false,
+        secrets,
+        worker,
+      });
+
+      const result = await uninstall(scripted, deps);
+
+      expect(changes(calls)).toEqual([
+        'POST /v1/installs/cleanup',
+        'api access remove --service-account backmesh-acme',
+        'api access remove --service backmesh-acme',
+        // A Secret goes with the control plane.
+        'node-pool delete np-1',
+        'node-pool delete np-2',
+        DELETE_HOSTED,
+      ]);
+      // The cache buckets, by the org's ID from GitHub.
+      expect(requests).toContain(
+        'DELETE /v1/credentials/bm-aws/buckets/bm-cache-l8u5e-us-east-2?region=us-east-2',
+      );
+      expect(lines).toContain(
+        "backmesh's GitHub cleanup on acme was skipped: backmesh.com refused it while install i2 (last token 2026-11-20T23:23:06.465Z) of acme got a token in the last hour. This machine's control plane is deleted all the same. To finish, run `backmesh uninstall --org acme` an hour after that token, which removes runner groups backmesh-l8u5e-* and the backmesh GitHub App from acme.",
+      );
+      expect(result).toMatchObject({
+        orgs: [],
+        githubSkipped: ['acme'],
+        cloud: 'deleted',
+      });
+    },
+  );
+
+  it('still refuses before any change when another org keeps the control plane', async () => {
+    const worker = fakeWorker({
+      cleanups: [
+        Response.json(
+          { error: 'live', live: [{ install: 'i2', last_token_at: 'x' }] },
+          { status: 409 },
+        ),
+      ],
+    });
+    const { deps, calls } = setUp({
+      orgs: ['beta'],
+      secrets: ['acme', 'beta'],
+      worker,
+    });
+    await expect(uninstall(scripted, deps)).rejects.toThrow('live');
+    expect(changes(calls)).toEqual(['POST /v1/installs/cleanup']);
+  });
+
   it('with --keep-app, deletes everything else and asks the Worker to keep the App', async () => {
     const { deps, calls, lines, worker } = setUp({
       worker: fakeWorker({

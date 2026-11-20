@@ -661,6 +661,68 @@ describe('install', () => {
     );
   });
 
+  // GCP refuses a token at a workload identity provider it made seconds
+  // before (rc.9's e2e), until the provider propagates.
+  describe("GCP's propagation of a new provider", () => {
+    const invalidTarget =
+      '{"error":{"code":"CLOUD_RIGHTS_MISSING","message":"Role connection \\"bm-gcp\\" was not saved: GCP refused the token at projects/420243425029/locations/global/workloadIdentityPools/anycloud/providers/anycloud-api. (Error code invalid_target: The target service indicated by the \\"audience\\" parameters is invalid.)"}}\n';
+    const gcp = async (refusals: number) => {
+      const { deps, calls, lines } = setUp(
+        { tty: false },
+        { 'vm-types gcp us-central1': JSON.stringify(CATALOG.gcp) },
+      );
+      const waits: number[] = [];
+      deps.wait = async (ms) => {
+        waits.push(ms);
+      };
+      const runLong = deps.runLong;
+      let left = refusals;
+      deps.runLong = async (args, env) => {
+        if (args.includes('--apply') && left-- > 0) {
+          calls.push(args.join(' '));
+          throw new StepFailed(args, invalidTarget, '', {
+            cause: new Error('exit'),
+          });
+        }
+        return runLong(args, env);
+      };
+      const opts = { ...options, controlPlane: 'gcp:us-central1' };
+      const { planId } = (await install({ ...opts, plan: true }, deps)) as {
+        planId: string;
+      };
+      const applies = () =>
+        calls.filter((c) => c.startsWith('credentials new')).length;
+      return {
+        result: install({ ...opts, planId }, deps),
+        applies,
+        waits,
+        lines,
+      };
+    };
+
+    it('makes the role again until GCP takes the token', async () => {
+      const { result, applies, waits, lines } = await gcp(3);
+      await result;
+      expect(applies()).toBe(4);
+      expect(waits.filter((ms) => ms >= 10_000)).toHaveLength(3);
+      expect(lines).toContain(
+        "GCP doesn't take the new role's token yet, as a new workload identity provider takes a minute or two to propagate; trying again in 10s.",
+      );
+    });
+
+    it('gives up after about two minutes, with the reason', async () => {
+      const { result, applies, waits } = await gcp(Infinity);
+      await expect(result).rejects.toThrow(
+        /^gcp's role connection wasn't made: GCP still refused the new role's token after 2 minutes: credentials new failed: .*invalid_target.*\. Run install again; the control plane stays and is reused\.$/,
+      );
+      const waited = waits
+        .filter((ms) => ms >= 10_000)
+        .reduce((a, b) => a + b, 0);
+      expect(waited).toBe(120_000);
+      expect(applies()).toBe(5);
+    });
+  });
+
   it.each([
     ['gcp', 'gcp:us-central1', ['--project-id', 'proj-1']],
     ['azure', 'azure:westus2', ['--subscription-id', 'sub-1']],
