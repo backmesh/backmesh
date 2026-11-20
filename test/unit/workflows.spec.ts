@@ -192,6 +192,26 @@ describe('the workflows', () => {
     },
   );
 
+  // A GitHub-hosted runner's shared IP soon spends the 60 anonymous API
+  // reads an hour, and GitHub then answers 403.
+  it("read GitHub's SSH host keys with the job's token", () => {
+    const steps = workflows.flatMap((f) =>
+      Object.values(read(f).jobs).flatMap((job) =>
+        (job.steps ?? [])
+          .filter((step) => step.run?.includes('known_hosts'))
+          .map((step) => ({ where: `${f} ${step.name}`, step })),
+      ),
+    );
+    expect(steps.length).toBeGreaterThan(0);
+    for (const { where, step } of steps) {
+      expect(step.run, where).not.toContain('api.github.com');
+      expect(step.run, where).toContain(
+        `gh api meta --jq '.ssh_keys[] | "github.com " + .' >>~/.ssh/known_hosts`,
+      );
+      expect(step.env?.GH_TOKEN, where).toBe('${{ github.token }}');
+    }
+  });
+
   it('keep a same-repository pull request on backmesh', () => {
     const jobs = onPullRequest.flatMap((f) => started(f, SAME_REPO));
     for (const { job, runsOn } of jobs) expect(runsOn, job).toBe('backmesh-4');
