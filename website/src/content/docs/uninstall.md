@@ -30,8 +30,8 @@ For each org, in order, it:
    backmesh's scale sets in the `backmesh` group older releases used, but not
    that group.
 4. Removes backmesh's GitHub App from the org and ends the installation's
-   sign-in, unless another backmesh installation in the org has used the App
-   in the last hour, which it names.
+   sign-in. While another backmesh installation in the org is running, the
+   App stays (see below).
 
 Then it ends any runner VM left and waits for it to go, then has the control
 plane delete itself: its VMs, its cloud connections and its DNS name. It
@@ -42,10 +42,15 @@ If anything fails, run the same command again: it picks up where it stopped. If 
 
 ## When another installation is running
 
-backmesh.com refuses the token while another backmesh installation in the org
-has used the App in the last hour, since its listener may still be serving
-jobs. The message names each installation. If its control plane is gone too,
-run `uninstall` again an hour after that installation's last token.
+Another backmesh installation in the org that has used the App in the last
+hour may still be serving jobs. With a control plane configured on this
+machine, `uninstall` removes only this installation: its listener, its scale
+sets, runners and `backmesh-` runner groups, and its control plane. The App,
+the other installation's runners and the shared `backmesh` group's scale sets
+stay, and `uninstall` names the other installation. Without a control plane
+configured, backmesh.com refuses the token and nothing changes. If the other
+installation's control plane is gone too, run `uninstall --org <org>` an hour
+after its last token to remove the rest.
 backmesh.com keeps an audit record of every request.
 
 ## When the control plane is gone

@@ -163,7 +163,15 @@ const CLEANUP: Record<string, string> = {
 // GitHub cleanup and the cloud side come before the App's removal.
 const CLEANUP_TTL = 3 * HOUR;
 
-type Cleanup = { id: string; org: number; install: string | null };
+// `installOnly`: the CLI's ask, with the install key, to remove that
+// install alone (its control plane, scale sets, runners and runner groups)
+// and leave the rest of the org's GitHub side to its live installs.
+type Cleanup = {
+  id: string;
+  org: number;
+  install: string | null;
+  installOnly: boolean;
+};
 const recorder =
   (env: Env, request: Request) =>
   (outcome: string, org?: number, row: Partial<AuditRow> = {}) =>
@@ -174,7 +182,9 @@ const recorder =
 // admin check, counted from the audit rows. Pending polls and refusals
 // before the admin check don't count, so a sign-in that isn't an admin's
 // can't lock the admin out; SIGNIN_LIMIT bounds those per IP. The App not
-// installed answers no token: there's nothing at GitHub to remove.
+// installed answers no token: there's nothing at GitHub to remove. An
+// `installOnly` cleanup isn't refused for a live install: the answer names
+// the live installs, and the CLI removes only its own install's part.
 async function cleanupToken(
   env: Env,
   request: Request,
@@ -189,7 +199,7 @@ async function cleanupToken(
     });
   const recent = await env.DB.prepare(
     `SELECT count(*) AS n FROM audit WHERE org = ? AND action = 'cleanup'
-     AND at > ? AND outcome IN ('ok', 'live_install', 'app_not_installed', 'github_failed')`,
+     AND at > ? AND outcome IN ('ok', 'ok_install_only', 'live_install', 'app_not_installed', 'github_failed')`,
   )
     .bind(cleanup.org, Date.now() - HOUR)
     .first<{ n: number }>();
@@ -198,7 +208,8 @@ async function cleanupToken(
     return tooMany();
   }
   const live = await liveInstalls(env, cleanup.org, cleanup.install);
-  if (live.length) {
+  const installOnly = cleanup.installOnly && !!cleanup.install;
+  if (live.length && !installOnly) {
     await at('live_install');
     const error = `backmesh ${live.length === 1 ? 'install' : 'installs'} ${live.map((l) => `${l.install} (last token ${l.last_token_at})`).join(', ')} of ${login} got a token in the last hour, so a control plane may still run there. If its control plane is gone too, run uninstall again an hour after the latest token listed.`;
     return Response.json({ error, live }, { status: 409 });
@@ -217,7 +228,7 @@ async function cleanupToken(
   );
   if (!minted) await at('app_not_installed');
   else {
-    await at('ok', {
+    await at(live.length ? 'ok_install_only' : 'ok', {
       installation: minted.installation,
       permissions: minted.answer.permissions,
       expires_at: minted.answer.expires_at,
@@ -227,21 +238,25 @@ async function cleanupToken(
     token: minted?.answer.token ?? null,
     expires_at: minted?.answer.expires_at ?? null,
     org: { id: cleanup.org, login: minted?.answer.org.login ?? login },
+    ...(live.length ? { live } : {}),
   });
 }
 
-// POST /v1/installs/cleanup { github_token, org }, with the install key as
-// the bearer when the CLI could read it: the App user token of someone who
-// can manage `org`'s runners (`runnersAdmin`). The key, if sent, must be the
-// org's; its own last mint doesn't count as live, and it's revoked before
-// the mint. Answers a runners-only token and a `cleanup_id` for the
-// re-mint and the App's removal, bound to the org and the signer, so
-// uninstall needs one sign-in. Where the App isn't installed GitHub can't
+// POST /v1/installs/cleanup { github_token, org, install_only? }, with the
+// install key as the bearer when the CLI could read it: the App user token
+// of someone who can manage `org`'s runners (`runnersAdmin`). The key, if
+// sent, must be the org's; its own last mint doesn't count as live, and
+// it's revoked before the mint. Answers a runners-only token and a
+// `cleanup_id` for the re-mint and the App's removal, bound to the org and
+// the signer, so uninstall needs one sign-in. Where the App isn't installed GitHub can't
 // say who manages the runners, and there's nothing of backmesh's there to
 // remove: the answer has no token and no cleanup, and only the sent key's
-// install is revoked. No key names the org when the control plane is gone, so the
-// sign-in does, and the installation's account.id must be that org
-// (installationOf).
+// install is revoked. While another install of the org is live, it's
+// refused, unless the key is sent with `install_only`: then its install is
+// revoked, and the token comes with the live installs (`live`), so the CLI
+// removes its own install's part and leaves the App. No key names the org
+// when the control plane is gone, so the sign-in does, and the
+// installation's account.id must be that org (installationOf).
 export async function cleanup(request: Request, env: Env) {
   const record = recorder(env, request);
   const body = await signInBody(request, ['github_token', 'org']);
@@ -249,7 +264,11 @@ export async function cleanup(request: Request, env: Env) {
     await record('bad_request');
     return body;
   }
-  const { github_token, org } = body as { github_token: string; org: string };
+  const { github_token, org, install_only } = body as {
+    github_token: string;
+    org: string;
+    install_only?: unknown;
+  };
   const refused = notServed(env, org);
   if (refused) return refused;
   const admin = await runnersAdmin(env, github_token, org).catch(
@@ -299,7 +318,7 @@ export async function cleanup(request: Request, env: Env) {
   const answer = await cleanupToken(
     env,
     request,
-    { id, org: admin.id, install },
+    { id, org: admin.id, install, installOnly: install_only === true },
     admin.login,
   );
   if (!answer.ok) return answer;
@@ -322,11 +341,14 @@ export async function cleanup(request: Request, env: Env) {
 }
 
 // The unexpired, unfinished cleanup a body's `cleanup_id` names, or null,
-// and whether the body asks to keep the App.
+// and whether the body asks to keep the App or to remove its install only.
 async function cleanupOf(env: Env, request: Request) {
-  const { cleanup_id, keep_app } = (await request.json().catch(() => ({}))) as {
+  const { cleanup_id, keep_app, install_only } = (await request
+    .json()
+    .catch(() => ({}))) as {
     cleanup_id?: unknown;
     keep_app?: unknown;
+    install_only?: unknown;
   };
   if (typeof cleanup_id !== 'string') return null;
   const row = await env.DB.prepare(
@@ -335,7 +357,14 @@ async function cleanupOf(env: Env, request: Request) {
   )
     .bind(await sha256(cleanup_id), Date.now())
     .first<{ org: number; install: string | null; login: string }>();
-  return row && { ...row, id: cleanup_id, keepApp: keep_app === true };
+  return (
+    row && {
+      ...row,
+      id: cleanup_id,
+      keepApp: keep_app === true,
+      installOnly: install_only === true,
+    }
+  );
 }
 const unknownCleanup = () =>
   Response.json(
@@ -343,8 +372,9 @@ const unknownCleanup = () =>
     { status: 401 },
   );
 
-// POST /v1/installs/cleanup/token { cleanup_id }: a fresh runners-only
-// token, for a GitHub cleanup that starts after the first one's half-life.
+// POST /v1/installs/cleanup/token { cleanup_id, install_only? }: a fresh
+// runners-only token, for a GitHub cleanup that starts after the first
+// one's half-life.
 export async function cleanupRefresh(request: Request, env: Env) {
   const cleanup = await cleanupOf(env, request);
   if (!cleanup) return unknownCleanup();
@@ -353,10 +383,11 @@ export async function cleanupRefresh(request: Request, env: Env) {
 
 // POST /v1/installs/cleanup/finish { cleanup_id, keep_app? }: uninstall's
 // last step. Deletes the org's installation of the App and revokes all its
-// installs' keys, unless another install of the org is live, which it names;
-// the cleanup's own install was revoked at the sign-in. One already gone
-// counts as done. `keep_app` (`uninstall --keep-app`) revokes the keys and
-// leaves the installation, which only an org owner can make again.
+// installs' keys and cue credentials, unless another install of the org is
+// live, which it names; the cleanup's own install was revoked at the
+// sign-in. One already gone counts as done. `keep_app` (`uninstall
+// --keep-app`) revokes the keys and cues and leaves the installation, which
+// only an org owner can make again.
 export async function cleanupFinish(request: Request, env: Env) {
   const cleanup = await cleanupOf(env, request);
   if (!cleanup) return unknownCleanup();
@@ -389,8 +420,8 @@ export async function cleanupFinish(request: Request, env: Env) {
       .bind(org)
       .run();
   }
-  // Cues end with the install, the App kept or not.
-  await forgetCueCredentials(env, org);
+  // Cues end with the org's last install, the App kept or not.
+  if (!live.length) await forgetCueCredentials(env, org);
   await env.DB.prepare('UPDATE cleanups SET finished = 1 WHERE id = ?')
     .bind(await sha256(cleanup.id))
     .run();

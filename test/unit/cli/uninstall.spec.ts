@@ -432,8 +432,9 @@ describe('uninstall', () => {
       'POST /v1/installs/cleanup',
       'POST /v1/installs/cleanup/finish',
     ]);
+    // With its key, only this install's part goes while another is live.
     expect(worker.bodies).toEqual([
-      { github_token: SIGNED_IN, org: 'acme' },
+      { github_token: SIGNED_IN, org: 'acme', install_only: true },
       { cleanup_id: CLEANUP_ID },
     ]);
     expect(bearers).toEqual([
@@ -953,6 +954,46 @@ describe('uninstall', () => {
     ).toEqual(new Set(['token ghs_8']));
   });
 
+  it('scopes the GitHub cleanup to this install when another goes live by the re-mint', async () => {
+    const worker = fakeWorker({
+      cleanups: [
+        Response.json({
+          token: 'ghs_7',
+          expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+          org: { id: 7, login: 'acme' },
+          cleanup_id: CLEANUP_ID,
+        }),
+      ],
+      refreshes: [
+        Response.json({
+          token: 'ghs_8',
+          expires_at: '2100-01-01T00:00:00Z',
+          org: { id: 7, login: 'acme' },
+          live: [{ install: 'i2', last_token_at: '2026-11-20T10:00:00.000Z' }],
+        }),
+      ],
+    });
+    const { deps, calls } = setUp({ worker });
+
+    const result = await uninstall(scripted, deps);
+
+    expect(worker.calls).not.toContain('POST /v1/installs/cleanup/finish');
+    expect(worker.bodies[1]).toEqual({
+      cleanup_id: CLEANUP_ID,
+      install_only: true,
+    });
+    // The other installs' runners (100, 101) stay.
+    expect(changes(calls).filter((c) => c.startsWith('github'))).toEqual([
+      'github DELETE /abc/_apis/runtime/runnerscalesets/1',
+      'github DELETE /abc/_apis/runtime/runnerscalesets/2',
+      'github DELETE /orgs/acme/actions/runner-groups/3',
+    ]);
+    expect(result).toMatchObject({
+      orgs: [{ org: 'acme', appRemoved: false }],
+      cloud: 'deleted',
+    });
+  });
+
   it('goes on without a GitHub cleanup when the App was never installed', async () => {
     const worker = fakeWorker({
       cleanups: [
@@ -974,6 +1015,45 @@ describe('uninstall', () => {
     expect(lines).toContain(
       "The backmesh GitHub App isn't installed on acme, so backmesh can't reach its runners there. Check the org's Actions settings for runner groups backmesh-l8u5e-*.",
     );
+  });
+
+  it('deletes its own control plane and GitHub side while another install of the org is live, and keeps the App', async () => {
+    const worker = fakeWorker({
+      cleanups: [
+        Response.json({
+          token: 'ghs_7',
+          expires_at: '2100-01-01T00:00:00Z',
+          org: { id: 7, login: 'acme' },
+          cleanup_id: CLEANUP_ID,
+          live: [{ install: 'i2', last_token_at: '2026-11-20T10:00:00.000Z' }],
+        }),
+      ],
+    });
+    const { deps, calls, lines } = setUp({ worker });
+
+    const result = await uninstall(scripted, deps);
+
+    // Only this install's scale sets and group: the other install's
+    // runners (100, 101) stay.
+    expect(changes(calls)).toEqual([
+      'POST /v1/installs/cleanup',
+      'exec backmesh-acme POST /drain',
+      'terminate bml-l8u5e-acme00',
+      'api access remove --service backmesh-acme',
+      'github DELETE /abc/_apis/runtime/runnerscalesets/1',
+      'github DELETE /abc/_apis/runtime/runnerscalesets/2',
+      'github DELETE /orgs/acme/actions/runner-groups/3',
+      'secrets delete backmesh-acme',
+      'node-pool delete np-1',
+      'node-pool delete np-2',
+      DELETE_HOSTED,
+    ]);
+    expect(worker.bodies[0]).toMatchObject({ install_only: true });
+    expect(result).toMatchObject({
+      orgs: [{ org: 'acme', appRemoved: false }],
+      cloud: 'deleted',
+    });
+    expect(lines.some((line) => line.includes('i2'))).toBe(true);
   });
 
   it('with --keep-app, deletes everything else and asks the Worker to keep the App', async () => {

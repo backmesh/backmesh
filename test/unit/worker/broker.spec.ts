@@ -461,6 +461,78 @@ describe("uninstall's cleanup", () => {
     expect(await res.json()).toMatchObject({ token: 'ghs_7' });
   });
 
+  it('with its key and install_only, revokes only its install and mints while another is live', async () => {
+    const own = await live();
+    const other = await live();
+
+    const res = await call('/v1/installs/cleanup', own.key, {
+      github_token: 'token-alice',
+      org: 'acme',
+      install_only: true,
+    });
+
+    const answer = (await res.json()) as { cleanup_id: string };
+    expect(answer).toEqual({
+      token: 'ghs_7',
+      expires_at: '2026-11-06T13:00:00Z',
+      org: { id: 11, login: 'acme' },
+      cleanup_id: expect.stringMatching(/^[0-9a-f]{64}$/),
+      live: [{ install: other.install, last_token_at: expect.any(String) }],
+    });
+    expect(upstream.mints).toEqual([
+      { organization_self_hosted_runners: 'write' },
+    ]);
+    expect((await call('/v1/token', own.key)).status).toBe(401);
+    expect((await call('/v1/token', other.key)).status).toBe(200);
+    expect(await auditRows()).toContainEqual(
+      expect.objectContaining({
+        action: 'cleanup',
+        outcome: 'ok_install_only',
+        install: own.install,
+        org: 11,
+      }),
+    );
+    // Its re-mint too, while the other stays live.
+    const again = await call('/v1/installs/cleanup/token', null, {
+      cleanup_id: answer.cleanup_id,
+      install_only: true,
+    });
+    expect(await again.json()).toMatchObject({
+      token: 'ghs_7',
+      live: [{ install: other.install }],
+    });
+    // Without its key, install_only changes nothing.
+    expect(
+      (
+        await call('/v1/installs/cleanup', null, {
+          github_token: 'token-alice',
+          org: 'acme',
+          install_only: true,
+        })
+      ).status,
+    ).toBe(409);
+  });
+
+  it('counts install_only cleanups in the hourly limit', async () => {
+    await live();
+    for (let i = 0; i < 5; i++) {
+      const own = await mintKey(env.DB, 11);
+      const res = await call('/v1/installs/cleanup', own.key, {
+        github_token: 'token-alice',
+        org: 'acme',
+        install_only: true,
+      });
+      expect(res.status).toBe(200);
+    }
+    const own = await mintKey(env.DB, 11);
+    const res = await call('/v1/installs/cleanup', own.key, {
+      github_token: 'token-alice',
+      org: 'acme',
+      install_only: true,
+    });
+    expect(res.status).toBe(429);
+  });
+
   it("leaves the sender's own key working when a sibling install or the limit refuses", async () => {
     const own = await live();
     await live();
@@ -532,7 +604,6 @@ describe("uninstall's cleanup", () => {
     await cueCredential('acme', [11, 'acme']);
     await cueCredential('labs', [12, 'acme-labs']);
     const { cleanup_id } = await signedIn();
-    await live();
 
     await finish(cleanup_id);
 
@@ -570,6 +641,7 @@ describe("uninstall's cleanup", () => {
   });
 
   it('keeps the installation while another install has gone live since', async () => {
+    await cueCredential('acme', [11, 'acme']);
     const { cleanup_id } = await signedIn();
     const other = await live();
 
@@ -581,6 +653,10 @@ describe("uninstall's cleanup", () => {
     });
     expect(upstream.installations.has(11)).toBe(true);
     expect((await call('/v1/token', other.key)).status).toBe(200);
+    // Its cues stay with it.
+    expect(await cueCredentials()).toEqual([
+      { hash: 'acme', orgs: [{ id: 11, login: 'acme' }] },
+    ]);
   });
 
   it('counts an installation already gone as removed', async () => {

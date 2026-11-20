@@ -20,6 +20,9 @@ import { CLASS_VCPUS, classLabel, CLOUDS } from '../runners/classes.js';
 export interface GitHubCleanupDeps {
   // The org's install tag, when the control plane's ID is known.
   tag?: string;
+  // Only the tag's runners and groups, and not the shared legacy group's
+  // scale sets, while another install of the org is live.
+  installOnly?: boolean;
   print: (line: string) => void;
   fetch?: typeof globalThis.fetch;
   sleep?: Sleep;
@@ -46,13 +49,17 @@ const LABELS = [
 ];
 
 // Answers what GitHub still lists after about 10 minutes of retries. Every
-// backmesh runner in the org goes, of any installation: the Worker mints the
-// token only while no other install of the org is live.
+// backmesh runner in the org goes, of any installation, unless
+// `installOnly`: the Worker mints the token for the rest only while no other
+// install of the org is live.
 export async function removeFromGitHub(
   org: string,
   token: string,
   deps: GitHubCleanupDeps,
 ): Promise<string[]> {
+  if (deps.installOnly && !deps.tag) {
+    throw new Error("An install-only GitHub cleanup needs the install's tag.");
+  }
   const fetch = deps.fetch ?? globalThis.fetch;
   const octokit = new Octokit({ auth: token, request: { fetch } });
   const actions = new ActionsClient({ org, octokit, fetch, sleep: deps.sleep });
@@ -77,8 +84,11 @@ export async function removeFromGitHub(
       pollMs: deps.pollMs,
     },
     {
-      runner: (name) => RUNNER_NAME.test(name),
+      runner: (name) =>
+        RUNNER_NAME.test(name) &&
+        (!deps.installOnly || name.startsWith(`bm${deps.tag}-`)),
       group: isOurRunnerGroup(deps.tag),
+      legacy: !deps.installOnly,
     },
   );
 }
