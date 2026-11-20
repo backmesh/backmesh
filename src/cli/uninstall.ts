@@ -21,6 +21,7 @@ import {
   finishCleanup,
   refreshCleanupToken,
   signInForCleanup,
+  LiveInstalls,
   type Cleanup,
 } from './worker.js';
 import { removeFromGitHub } from './cleanup.js';
@@ -283,6 +284,9 @@ async function drainListener(
 export interface UninstallResult {
   // Each org removed from GitHub, and whether its App installation went.
   orgs: { org: string; appRemoved: boolean }[];
+  // Orgs whose GitHub side was skipped, as the Worker refused a keyless
+  // cleanup while another install of the org was live.
+  githubSkipped?: string[];
   // The control plane, when it answered.
   apiUrl?: string;
   clusterId?: string;
@@ -515,10 +519,22 @@ async function removeOrg(
 ) {
   const { ui } = deps;
   const worker = workerDeps(deps, ui.print);
-  const cleanup = await signInForCleanup(org, installKey, worker);
-  const login = cleanup.org.login;
+  // Without a key, as when install failed before its listener started, the
+  // Worker refuses the sign-in while another install of the org is live.
+  // When this machine's control plane goes, only the org's GitHub side is
+  // skipped: the control plane is deleted all the same.
+  let cleanup: Cleanup | undefined;
+  let refused: LiveInstalls | undefined;
+  try {
+    cleanup = await signInForCleanup(org, installKey, worker);
+  } catch (error) {
+    if (!(plane?.whole && error instanceof LiveInstalls)) throw error;
+    refused = error;
+  }
+  const login = cleanup?.org.login ?? org;
+  const orgId = cleanup?.org.id ?? (await readOrgId(org, deps.fetch, deps.env));
   // This org's runner groups on this control plane (`isOurRunnerGroup`).
-  const tag = clusterId ? installTag(clusterId, cleanup.org.id) : undefined;
+  const tag = clusterId ? installTag(clusterId, orgId) : undefined;
   const groups = tag ? `backmesh-${tag}-*` : 'backmesh-*-*';
   if (plane) {
     // An org's other listener VMs go before the drain, so none takes a job
@@ -542,7 +558,17 @@ async function removeOrg(
     }
     if (plane.whole) await removeOthers(plane, deps);
   }
-  const { token, live = [] } = await cleanupTokenNow(cleanup, deps);
+  if (refused) {
+    const last = refused.live
+      .map((l) => l.last_token_at)
+      .sort()
+      .at(-1);
+    ui.print(
+      `backmesh's GitHub cleanup on ${login} was skipped: backmesh.com refused it while ${refused.live.length === 1 ? 'install' : 'installs'} ${refused.live.map((l) => `${l.install} (last token ${l.last_token_at})`).join(', ')} of ${login} got a token in the last hour. This machine's control plane is deleted all the same. To finish, run \`backmesh uninstall --org ${login}\` an hour after ${refused.live.length === 1 ? 'that token' : `the latest, ${last}`}, which removes runner groups ${groups} and the backmesh GitHub App from ${login}.`,
+    );
+    return undefined;
+  }
+  const { token, live = [] } = await cleanupTokenNow(cleanup!, deps);
   // Another install of the org is live: only this one's part goes.
   const installOnly = live.length > 0;
   if (token) {
@@ -576,8 +602,8 @@ async function removeOrg(
   // install uses it.
   const app =
     !installOnly &&
-    cleanup.cleanup_id &&
-    (await finishCleanup(cleanup.cleanup_id, worker, keepApp).catch(
+    cleanup!.cleanup_id &&
+    (await finishCleanup(cleanup!.cleanup_id, worker, keepApp).catch(
       (cause: unknown) => {
         throw new Error(
           `backmesh couldn't remove its GitHub App from ${login}: ${cause instanceof Error ? cause.message : String(cause)}. Run \`backmesh uninstall --org ${login}\` again.`,
@@ -792,9 +818,12 @@ export async function uninstall(
   );
 
   const removed: UninstallResult['orgs'] = [];
+  const githubSkipped: string[] = [];
   const clusterId = plane?.clusterId ?? gone?.clusterId;
   for (const org of orgs) {
-    removed.push(await removeOrg(org, plane, clusterId, deps, options.keepApp));
+    const done = await removeOrg(org, plane, clusterId, deps, options.keepApp);
+    if (done) removed.push(done);
+    else githubSkipped.push(org.org);
   }
 
   // An older Worker ignores --keep-app and removes the App anyway; said once
@@ -818,7 +847,7 @@ export async function uninstall(
   }
   if (plane) {
     await deleteCloudSide(plane, deps);
-    if (!removed.length) {
+    if (!removed.length && !githubSkipped.length) {
       ui.print(
         "No listener named an org, so nothing was removed from GitHub. Run `backmesh uninstall --org <org>` to remove backmesh's runners and App from an org.",
       );
@@ -875,6 +904,7 @@ export async function uninstall(
   keptApp();
   return {
     orgs: removed,
+    ...(githubSkipped.length && { githubSkipped }),
     ...(plane
       ? {
           apiUrl: plane.url,
