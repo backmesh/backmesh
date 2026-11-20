@@ -1129,6 +1129,16 @@ describe('install', () => {
         planId: string;
       };
 
+    it("takes --control-plane-id naming this machine's control plane", async () => {
+      const { deps, calls } = adding();
+      const own = { ...options, controlPlaneId: 'c1' };
+      const { planId } = (await install({ ...own, plan: true }, deps)) as {
+        planId: string;
+      };
+      await install({ ...own, planId }, deps);
+      expect(calls.some((c) => c.startsWith('cluster create'))).toBe(false);
+    });
+
     it("keeps this machine's control plane, and refuses moving it", async () => {
       const { deps, lines } = adding();
       const plan = await install({ org: 'acme', yes: false, plan: true }, deps);
@@ -3083,6 +3093,42 @@ describe("a control plane named backmesh that this machine doesn't use", () => {
     ).toBe(
       "--control-plane-id backmesh-2: this AWS account's us-east-2 has no control plane named backmesh, not that one.",
     );
+  });
+
+  it("stops on two named backmesh, or a cloud CLI that can't list them, on AWS and GCP too", async () => {
+    expect(
+      await refused(options, { stacks: [stack(ID), stack('backmesh-2')] }),
+    ).toBe(
+      `This AWS account's us-east-2 has 2 control planes named backmesh: ${ID} in us-east-2, backmesh-2 in us-east-2. install can't tell which to resume: delete the ones you don't use, then run install again.`,
+    );
+    const gcp = { ...options, controlPlane: 'gcp:us-east4' };
+    const binary = { 'vm-types gcp us-east4': JSON.stringify(CATALOG.gcp) };
+    expect(
+      await refused(
+        gcp,
+        {
+          serviceAccounts: [ID, 'backmesh-2'].map((id) => ({
+            description: `anycloud_cluster=${id} anycloud_cluster_name=backmesh`,
+          })),
+        },
+        binary,
+      ),
+    ).toMatch(/^This GCP project has 2 control planes named backmesh: /);
+    for (const [opts, cli, more] of [
+      [options, 'aws cloudformation', {}],
+      [gcp, 'gcloud iam', binary],
+    ] as const) {
+      const { deps, worker } = setUp({ tty: false }, more);
+      const { command } = deps;
+      deps.command = async (args, env) => {
+        if (args.join(' ').startsWith(cli)) throw new Error('AccessDenied');
+        return command(args, env);
+      };
+      await expect(install({ ...opts, plan: true }, deps)).rejects.toThrow(
+        /couldn't list this (AWS account's us-east-2|GCP project)'s control planes, so install can't tell whether one named backmesh exists\./,
+      );
+      expect(worker.calls).toEqual([]);
+    }
   });
 
   it('resumes the one this machine targets with no flag', async () => {

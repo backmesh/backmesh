@@ -1201,14 +1201,14 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   const found = reused
     ? undefined
     : await namedControlPlane(CLUSTER, cloud, region, deps.command);
-  checkOwn(
-    CLUSTER,
+  checkOwn({
+    name: CLUSTER,
     cloud,
     region,
     found,
-    targeted && clusterIdOf(targeted.url),
-    options.controlPlaneId,
-  );
+    targeted: targeted && clusterIdOf(targeted.url),
+    given: options.controlPlaneId,
+  });
   const started = !listeners && cloud === 'azure' ? found?.region : undefined;
   if (found) {
     note.print(

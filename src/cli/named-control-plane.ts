@@ -65,7 +65,10 @@ const PARSE: Record<
     (JSON.parse(out) as { description?: string }[]).flatMap(
       ({ description = '' }) => {
         const values = Object.fromEntries(
-          description.split(' ').map((pair) => pair.split('=')),
+          description.split(' ').map((pair) => {
+            const at = pair.indexOf('=');
+            return [pair.slice(0, at), pair.slice(at + 1)];
+          }),
         ) as Record<string, string | undefined>;
         const id = values.anycloud_cluster;
         return id && values.anycloud_cluster_name === name ? [{ id }] : [];
@@ -104,18 +107,26 @@ export async function namedControlPlane(
  * Refuses a control plane named `name` that this machine's target
  * (`targeted`) and `--control-plane-id` (`given`) don't name, before any
  * sign-in: it may be another installation's, and resuming it fails only
- * after the sign-in, at its DNS record. `given` must name the one found.
+ * after the sign-in, at its DNS record. `given` must name the one found,
+ * or this machine's own.
  */
-export function checkOwn(
-  name: string,
-  cloud: Cloud,
-  region: string,
-  found: NamedControlPlane | undefined,
-  targeted: string | undefined,
-  given: string | undefined,
-) {
+export function checkOwn({
+  name,
+  cloud,
+  region,
+  found,
+  targeted,
+  given,
+}: {
+  name: string;
+  cloud: Cloud;
+  region: string;
+  found: NamedControlPlane | undefined;
+  targeted: string | undefined;
+  given: string | undefined;
+}) {
   const scope = SCOPE[cloud](region);
-  if (given && given !== found?.id) {
+  if (given && given !== found?.id && given !== targeted) {
     throw new UsageError(
       `--control-plane-id ${given}: this ${scope} has ${found ? `${found.id}` : 'no control plane'} named ${name}, not that one.`,
     );
