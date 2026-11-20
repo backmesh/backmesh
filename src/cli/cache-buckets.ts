@@ -9,7 +9,6 @@ import { bucketName } from '../cache/format.js';
 import { cacheBuckets } from '../listener/sweep.js';
 import type { Route } from '../listener/routes.js';
 import {
-  CLOUDS,
   type Cloud,
   type CloudTarget,
   type RunnerClass,
@@ -251,16 +250,23 @@ export async function withAllowedRegions(
 }
 
 // Uninstall, after the drain: every cache bucket of this installation, through
-// each cloud's `bm-<cloud>` connection still there; a failure is named and
+// each connection install made on its control plane (`installConnection`),
+// or none, named, when they couldn't be read; a failure is named and
 // uninstall goes on.
 export async function deleteCacheBuckets(
   api: Api,
   install: string,
+  connections: ReadonlyMap<Cloud, { connection: string }> | undefined,
   print: (line: string) => void,
 ): Promise<void> {
   const prefix = bucketName(install, '');
-  for (const cloud of CLOUDS) {
-    const credentialName = `bm-${cloud}`;
+  if (!connections) {
+    print(
+      `Couldn't read the control plane's connections, so the cache buckets weren't removed. Delete any bucket named ${prefix}<region> in the clouds install connected by hand; it holds only cache entries.`,
+    );
+    return;
+  }
+  for (const [cloud, { connection: credentialName }] of connections) {
     try {
       for (const bucket of (await owned(api, credentialName)).filter((b) =>
         b.startsWith(prefix),
@@ -272,7 +278,6 @@ export async function deleteCacheBuckets(
         print(`Deleted the cache bucket ${bucket}.`);
       }
     } catch (error) {
-      if (error instanceof ORPCError && error.status === 404) continue;
       print(
         `Couldn't remove the cache buckets through ${credentialName} (${error instanceof Error ? error.message : String(error)}). Delete any bucket named ${prefix}<region> in ${cloud} by hand; it holds only cache entries.`,
       );

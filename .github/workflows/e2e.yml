@@ -411,6 +411,7 @@ jobs:
       - name: The label member on the test org's runners
         env:
           DEPLOY_KEY: ${{ secrets.E2E_TEST_ORG_DEPLOY_KEY }}
+          GH_TOKEN: ${{ github.token }}
           TEST_ORG_REPO: ${{ inputs.org }}/e2e
           MATRIX: ${{ env.LABEL_MATRIX }}
           REF: ${{ github.sha }}
@@ -419,9 +420,10 @@ jobs:
           trap 'rm -f "$key"' EXIT
           install -m 600 /dev/null "$key"
           printf '%s\n' "$DEPLOY_KEY" >"$key"
-          # GitHub's host keys, over HTTPS.
+          # GitHub's host keys, over HTTPS with the job's token: anonymous
+          # reads from a hosted runner's shared IP soon get 403.
           install -m 700 -d ~/.ssh
-          curl -fsS https://api.github.com/meta | jq -r '.ssh_keys[] | "github.com " + .' >>~/.ssh/known_hosts
+          gh api meta --jq '.ssh_keys[] | "github.com " + .' >>~/.ssh/known_hosts
           # GitHub cancels a step by signalling this shell: the script gets
           # it, and deletes its branch before the EXIT trap removes the key.
           GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes" node test/e2e/run-test-org-labels.ts &
