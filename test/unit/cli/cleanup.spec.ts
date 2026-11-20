@@ -5,6 +5,7 @@ import {
   finishCleanup,
   refreshCleanupToken,
   signInForCleanup,
+  waitForApp,
 } from '../../../src/cli/worker.js';
 import { removeFromGitHub } from '../../../src/cli/cleanup.js';
 import type { Env } from '../../../worker/src/index.js';
@@ -135,6 +136,19 @@ describe("uninstall's cleanup", () => {
     );
     await expect(
       signInForCleanup('acme', own.key, client),
+    ).resolves.toMatchObject({ token: 'ghs_7' });
+  });
+
+  it("doesn't count a failed install's own App check as a running listener", async () => {
+    // Install checked the App with its key, then failed before any
+    // listener ran, and its key is no longer readable.
+    await rememberLogin(env, 11, 'acme');
+    const own = await mintKey(env.DB, 11);
+    const { client } = setUp();
+    await waitForApp('acme', own.key, client);
+
+    await expect(
+      signInForCleanup('acme', undefined, client),
     ).resolves.toMatchObject({ token: 'ghs_7' });
   });
 

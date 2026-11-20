@@ -448,7 +448,9 @@ const tokenSchema = z.object({ org: z.object({ login: z.string() }) });
 
 // Before the listener starts, the broker must mint a token for the org, so
 // the App is installed there. Its 409 carries the install
-// link, printed once; a 429 or an unreachable Worker is waited out.
+// link, printed once; a 429 or an unreachable Worker is waited out. The
+// mint says it's a check, so uninstall doesn't take it for a running
+// listener's.
 export async function waitForApp(org: string, key: string, deps: WorkerDeps) {
   const wait =
     deps.wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
@@ -458,7 +460,11 @@ export async function waitForApp(org: string, key: string, deps: WorkerDeps) {
     if (attempt > 1) await wait(APP_POLL_MS);
     const answer = await call(deps, '/v1/token', tokenSchema, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${key}` },
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ purpose: 'check' }),
     }).catch((error: unknown) => {
       if (!(error instanceof WorkerUnreachable)) throw error;
       if (!unreachable) {
