@@ -1,0 +1,167 @@
+name: e2e Azure identity
+
+# One-off, for e2e's Azure leg: its own Azure identity, so it signs in from
+# the `e2e` environment rather than ci-install's. In our Azure CI
+# subscription (131eed90-…), as ci-install.yml's app, through ARM only:
+# - `subject` reads the exact OIDC subject GitHub issues to this
+#   repository's e2e environment;
+# - `identity` makes the resource group backmesh-e2e-identity in centralus
+#   and the user-assigned managed identity backmesh-e2e in it, gives that
+#   identity one federated credential, for that subject, and assigns it
+#   Contributor and User Access Administrator on the subscription, and no
+#   other role. e2e's install makes the control plane (Contributor) and a
+#   role connection, whose setup defines a custom role and assigns it to
+#   its own identity (Microsoft.Authorization/*/write: User Access
+#   Administrator); uninstall and the cleanup after it delete them. For
+#   comparison it prints the roles ci-install's app holds there. Without
+#   `apply` it only prints what it would do. Idempotent; it refuses anything
+#   there it didn't make. It prints the identity's client ID, the e2e
+#   environment's AZURE_CLIENT_ID.
+# Deleted after use.
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: make the identity, its credential and its roles; otherwise only print them
+        type: boolean
+        default: false
+
+permissions: {}
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  subject:
+    runs-on: ubuntu-24.04
+    environment: e2e
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+    outputs:
+      sub: ${{ steps.sub.outputs.sub }}
+    steps:
+      - name: The e2e environment's OIDC subject
+        id: sub
+        run: |
+          token=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)
+          payload=$(cut -d. -f2 <<<"$token" | tr '_-' '/+')
+          while ((${#payload} % 4)); do payload+='='; done
+          sub=$(base64 -d <<<"$payload" | jq -r .sub)
+          [[ $sub =~ ^repo:backmesh(@[0-9]+)?/backmesh(@[0-9]+)?:environment:e2e$ ]] \
+            || { echo "::error::Unexpected subject $sub"; exit 1; }
+          echo "Subject: $sub"
+          echo "sub=$sub" >>"$GITHUB_OUTPUT"
+
+  identity:
+    needs: subject
+    runs-on: ubuntu-24.04
+    environment: ci-install
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+    env:
+      SUB: ${{ needs.subject.outputs.sub }}
+      ISSUER: https://token.actions.githubusercontent.com
+      GROUP: backmesh-e2e-identity
+      LOCATION: centralus
+      NAME: backmesh-e2e
+      APPLY: ${{ inputs.apply }}
+    steps:
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: The identity, its credential and its roles
+        run: |
+          # Our Azure CI subscription and tenant (prefixes: a secret's whole
+          # value is masked in the log).
+          read -r sub tenant < <(az account show --query '[id, tenantId]' -o tsv | paste -sd' ')
+          echo "Subscription ${sub:0:8}…, tenant ${tenant:0:8}…"
+          [[ $sub == 131eed90-* && $tenant == b99251a3-* ]] \
+            || { echo "::error::ci-install's app isn't in our Azure CI subscription 131eed90…, tenant b99251a3…"; exit 1; }
+          scope=/subscriptions/$sub
+          arm=https://management.azure.com
+
+          # A principal's role assignments on the subscription itself, not
+          # those above or below it.
+          roles() {
+            az rest --url "$arm$scope/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01&\$filter=principalId%20eq%20'$1'" \
+              | jq --arg scope "$scope" '[.value[].properties | select(.scope == $scope)
+                | {roleDefinitionId, condition, conditionVersion}] | sort_by(.roleDefinitionId) | unique'
+          }
+          named() {
+            jq -c '.[]' <<<"$1" | while read -r role; do
+              printf '  %s %s\n' "$(az rest --url "$arm$(jq -r .roleDefinitionId <<<"$role")?api-version=2022-04-01" \
+                --query properties.roleName -o tsv)" "$(jq -r '.condition // ""' <<<"$role")"
+            done
+          }
+
+          # The app's object ID, from its ARM token's claims: reading it by
+          # client ID would take Microsoft Graph.
+          claims=$(az account get-access-token --query accessToken -o tsv | cut -d. -f2 | tr '_-' '/+')
+          while ((${#claims} % 4)); do claims+='='; done
+          app=$(base64 -d <<<"$claims" | jq -r .oid)
+          echo "ci-install's app holds, on the subscription:" && named "$(roles "$app")"
+          # Contributor and User Access Administrator, Azure's built-in IDs.
+          want=$(jq -n --arg scope "$scope" '["b24988ac-6180-42a0-ab88-20f7382dd24c", "18d7d88d-d35e-4fb5-a5c3-7773c20a72d9"]
+            | map({roleDefinitionId: "\($scope)/providers/Microsoft.Authorization/roleDefinitions/\(.)",
+              condition: null, conditionVersion: null}) | sort_by(.roleDefinitionId)')
+
+          cred=$(jq -nc --arg s "$SUB" --arg i "$ISSUER" \
+            '{issuer: $i, subject: $s, audiences: ["api://AzureADTokenExchange"]}')
+          identity=null
+          if [[ $(az group exists --name "$GROUP") == true ]]; then
+            location=$(az group show --name "$GROUP" --query location -o tsv)
+            [[ $location == "$LOCATION" ]] \
+              || { echo "::error::$GROUP is in $location, not $LOCATION; nothing is changed"; exit 1; }
+            identity=$(az identity list --resource-group "$GROUP" -o json | jq --arg n "$NAME" 'map(select(.name == $n))[0]')
+          else
+            echo "Creates the resource group $GROUP in $LOCATION"
+          fi
+
+          creds='[]' held='[]'
+          if [[ $identity == null ]]; then
+            echo "Creates the managed identity $NAME in $GROUP"
+          else
+            principal=$(jq -r .principalId <<<"$identity")
+            creds=$(az identity federated-credential list --identity-name "$NAME" --resource-group "$GROUP" -o json \
+              | jq 'map({issuer, subject, audiences})')
+            held=$(roles "$principal")
+            echo "$NAME exists (client ID $(jq -r .clientId <<<"$identity")), with credentials $(jq -c . <<<"$creds")"
+            echo "and, on the subscription:" && named "$held"
+          fi
+          # Anything there this didn't make is someone else's change, left
+          # for a person.
+          jq -e --argjson c "$cred" 'all(.[]; . == $c)' <<<"$creds" >/dev/null \
+            || { echo "::error::$NAME has another federated credential; nothing is changed"; exit 1; }
+          jq -e --argjson w "$want" 'all(.[]; IN($w[]))' <<<"$held" >/dev/null \
+            || { echo "::error::$NAME holds another role; nothing is changed"; exit 1; }
+          adds=$(jq -n --argjson w "$want" --argjson h "$held" '$w - $h')
+          [[ $creds == '[]' ]] && echo "Adds the federated credential $NAME: $cred"
+          [[ $adds != '[]' ]] && echo "Assigns $NAME, on the subscription:" && named "$adds"
+          [[ $APPLY == true ]] || { echo "Not applied: dispatch with apply"; exit 0; }
+
+          if [[ $identity == null ]]; then
+            [[ $(az group exists --name "$GROUP") == true ]] || az group create --name "$GROUP" --location "$LOCATION" -o none
+            identity=$(az identity create --resource-group "$GROUP" --name "$NAME" --location "$LOCATION" -o json)
+            principal=$(jq -r .principalId <<<"$identity")
+          fi
+          if [[ $creds == '[]' ]]; then
+            az identity federated-credential create --name "$NAME" --identity-name "$NAME" --resource-group "$GROUP" \
+              --issuer "$ISSUER" --subject "$SUB" --audiences api://AzureADTokenExchange -o none
+          fi
+          # principalType lets ARM assign a principal Entra ID hasn't
+          # replicated yet.
+          jq -c '.[]' <<<"$adds" | while read -r role; do
+            az rest --method put -o none \
+              --url "$arm$scope/providers/Microsoft.Authorization/roleAssignments/$(cat /proc/sys/kernel/random/uuid)?api-version=2022-04-01" \
+              --body "$(jq -c --arg p "$principal" '{properties: {principalId: $p, principalType: "ServicePrincipal",
+                roleDefinitionId}}' <<<"$role")"
+          done
+          echo "Applied; $NAME now holds, on the subscription:" && named "$(roles "$principal")"
+          client=$(jq -r .clientId <<<"$identity")
+          echo "The e2e environment's AZURE_CLIENT_ID: $client (AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID are ci-install's)"
+          echo "e2e's AZURE_CLIENT_ID: \`$client\`" >>"$GITHUB_STEP_SUMMARY"

@@ -774,6 +774,7 @@ describe("e2e.yml's AWS leg, away from our production control plane", () => {
       evaluate(unwrap(uninstall.if!)!.replace('always()', 'true'), {
         'steps.bin.outcome': 'success',
         'steps.guard.outcome': guarded,
+        'steps.role-guard.outcome': 'skipped',
       });
     expect(runs('failure')).toBe(false);
     expect(runs('success')).toBe(true);

@@ -19,21 +19,23 @@ name: E2E
 # that same Worker, installs that release fresh for `org`,
 # the test org (backmesh-dryrun), once per leg: on AWS, running the label
 # member, and on Azure, in our Azure CI subscription, with the control plane
-# in centralus, running one job. Each leg then
-# uninstalls it and sweeps its cloud for anything left. Install and uninstall
+# in centralus, running one job. Each installs as a customer does, with a
+# role connection to its cloud. Each leg then uninstalls it, deletes the
+# role connection's setup that uninstall leaves, and sweeps its cloud for
+# anything left. Install and uninstall
 # each print a GitHub device sign-in, in the run's annotations and summary
 # and as a comment on the open "e2e sign-in codes" issue, which an admin of
 # the test org approves, as for ci-install.yml. The
 # backmesh App stays installed on the test org (`uninstall --keep-app`): only
-# an org owner can install it. The AWS leg runs in the `e2e` environment
-# (AWS_ROLE_ARN). The Azure leg runs in ci-install.yml's `ci-install`
-# environment and reads only its Azure IDs (AZURE_CLIENT_ID, AZURE_TENANT_ID,
-# AZURE_SUBSCRIPTION_ID): our Azure CI app trusts that environment's OIDC
-# subject only, and can't add a federated credential for another (no Graph
-# rights to edit itself). So the Azure leg runs from main and waits for
-# ci-install's reviewer. The owner's one-time setup is
-# E2E_TEST_ORG_DEPLOY_KEY (a write deploy key on the test org's e2e
-# repository) in both environments, AWS_ROLE_ARN in `e2e`, and that
+# an org owner can install it. Both legs run in the `e2e` environment: AWS
+# as AWS_ROLE_ARN, and Azure as the managed identity backmesh-e2e (resource
+# group backmesh-e2e-identity), which trusts that environment's OIDC subject
+# only and holds Contributor and User Access Administrator on the
+# subscription: the role connection's setup makes a custom role and assigns
+# it. The owner's
+# one-time setup is, in `e2e`, E2E_TEST_ORG_DEPLOY_KEY (a write deploy key
+# on the test org's e2e repository), AWS_ROLE_ARN, the identity's
+# AZURE_CLIENT_ID, AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID, and that
 # repository with test/e2e/test-org/labels.yml as its
 # .github/workflows/labels.yml: after a change to the copy merges, a
 # maintainer pushes it there; until then the test-org leg fails, naming the
@@ -210,18 +212,16 @@ jobs:
             # Not us-east-2: our production control plane is a cluster
             # named backmesh there, in this same account (see the guard).
             control-plane-region: us-west-2
-            environment: e2e
           - cloud: azure
             placement: --runners azure
             # Both control-plane sizes are offered here in our subscription.
             control-plane-region: centralus
             # Our Azure CI subscription has 3 spot vCPUs per region: back to backmesh-4 once its quota is raised.
             label: backmesh-2
-            environment: ci-install
     runs-on: ubuntu-24.04
-    # Holds the leg's secrets, and is the subject its cloud's OIDC trust
+    # Holds the legs' secrets, and is the subject each cloud's OIDC trust
     # names (see the header).
-    environment: ${{ matrix.environment }}
+    environment: e2e
     timeout-minutes: 240
     permissions:
       contents: read # the release's assets
@@ -236,7 +236,7 @@ jobs:
       # Every sign-in, and the listener install makes, use the Worker the
       # `worker` job checks.
       BACKMESH_API_URL: ${{ needs.plan.outputs.api-url }}
-      # Our Azure CI subscription (131eed90-…), as ci-install.yml's.
+      # Our Azure CI subscription (131eed90-…).
       AZURE_SUBSCRIPTION_ID: ${{ matrix.cloud == 'azure' && secrets.AZURE_SUBSCRIPTION_ID || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -281,9 +281,8 @@ jobs:
           echo "ANYCLOUD_DIR=$HOME/.anycloud" >>"$GITHUB_ENV"
           echo "BACKMESH_ANYCLOUD_DIR=$HOME/.anycloud" >>"$GITHUB_ENV"
 
-      # Install generates the runners' AWS identity as this role, and
-      # uninstall deletes it as the same; anycloud generates only from a
-      # named profile, so the session is saved as the default one.
+      # Install makes the control plane and the role connection's stack, in
+      # the control plane's region, as this role.
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         if: matrix.cloud == 'aws'
         id: aws
@@ -291,18 +290,6 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.CONTROL_PLANE_REGION }}
           role-duration-seconds: 14400
-          output-credentials: true
-      - name: Save the role's session as the default profile
-        if: matrix.cloud == 'aws'
-        env:
-          KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
-          SECRET: ${{ steps.aws.outputs.aws-secret-access-key }}
-          SESSION: ${{ steps.aws.outputs.aws-session-token }}
-        run: |
-          mkdir -p ~/.aws
-          printf '[default]\naws_access_key_id = %s\naws_secret_access_key = %s\naws_session_token = %s\n' \
-            "$KEY_ID" "$SECRET" "$SESSION" >~/.aws/credentials
-          chmod 600 ~/.aws/credentials
 
       # anycloud finds a cluster by name per region, so install would resume
       # a backmesh cluster already in the leg's region, as v0.5.0-rc.3's did
@@ -319,9 +306,9 @@ jobs:
             exit 1
           fi
 
-      # Install generates the runners' Azure identity as this app, and
-      # uninstall deletes it as the same. Only az is signed in, so install
-      # can put the control plane on Azure.
+      # Install makes the control plane and the role connection's setup as
+      # this identity. Only az is signed in, so install can put the control
+      # plane on Azure.
       - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         if: matrix.cloud == 'azure'
         id: azure
@@ -334,19 +321,34 @@ jobs:
       - name: The anycloud resource groups before the install
         if: matrix.cloud == 'azure'
         run: az group list --query "[?tags.anycloud_cluster && starts_with(name, 'anycloud-')].name" --output tsv >"$RUNNER_TEMP/groups-before"
+      # A subscription holds one role connection setup, anycloud-role, so
+      # one there already is another's: install would take it over, and the
+      # cleanup after uninstall would delete it.
+      - name: Refuse a subscription with a role connection
+        if: matrix.cloud == 'azure'
+        id: role-guard
+        run: |
+          if [[ $(az group exists --name anycloud-role) == true \
+            || -n $(az deployment sub list --query "[?name == 'anycloud-role'].name" --output tsv) ]]; then
+            echo "::error title=A role connection in the subscription::anycloud-role is there already"
+            exit 1
+          fi
 
       # Nobody can read a running job's annotations or log through GitHub's
       # API, so with-sign-in.sh also comments each code here, where GitHub
-      # notifies the owner. One open issue for every run, opened by a run.
-      # Without it, the codes are in the annotations and summary only.
+      # notifies the owner. One open issue for every run, opened by a run:
+      # the oldest, by the author gh's JSON names, as its --author finds no
+      # app's issue. Without it, the codes are in the annotations and
+      # summary only.
       - name: The sign-in codes issue
         env:
           GH_TOKEN: ${{ github.token }}
           TITLE: e2e sign-in codes
         run: |
           url=
-          if ! issue=$(gh issue list --repo "$GITHUB_REPOSITORY" --author app/github-actions --state open \
-            --limit 1000 --json number,title | jq -r --arg title "$TITLE" 'map(select(.title == $title))[0].number // empty') \
+          if ! issue=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 1000 --json number,title,author \
+            | jq -r --arg title "$TITLE" 'map(select(.title == $title and .author.login == "app/github-actions"))
+              | min_by(.number).number // empty') \
             || { [[ -z $issue ]] && ! url=$(gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" \
               --body "e2e.yml's test-org job comments each GitHub device sign-in here, for an admin of the test org to approve."); }; then
             echo "::warning::Couldn't find or open the \"$TITLE\" issue: the sign-in codes are in the annotations and summary only"
@@ -369,7 +371,6 @@ jobs:
         id: install
         timeout-minutes: 90
         env:
-          BACKMESH_UNSUPPORTED_CI_OVERRIDE: anycloud-ci
           GH_TOKEN: ${{ github.token }}
           ISSUE_TOKEN: ${{ github.token }}
           PLACEMENT: ${{ matrix.placement }}
@@ -436,7 +437,7 @@ jobs:
       # GitHub sign-in is approved as install's is, and it reads GitHub with
       # the job's token as install does.
       - name: backmesh uninstall
-        if: ${{ always() && steps.bin.outcome == 'success' && steps.guard.outcome != 'failure' }}
+        if: ${{ always() && steps.bin.outcome == 'success' && steps.guard.outcome != 'failure' && steps.role-guard.outcome != 'failure' }}
         timeout-minutes: 60
         env:
           GH_TOKEN: ${{ github.token }}
@@ -455,6 +456,38 @@ jobs:
             fi
           fi
           ISSUE_TOKEN=$t test/e2e/with-sign-in.sh backmesh uninstall "${flags[@]}"
+
+      # Uninstall leaves each role connection's setup, which trusts only the
+      # deleted control plane, and says so. This deletes what anycloud's
+      # `credentials delete --apply` (role-connection-teardown.ts at
+      # v0.1.79) would have, which needs the control plane. A connection
+      # comes only with a control plane; on Azure, the guard found none
+      # there before.
+      - name: Delete the role connection's setup
+        if: ${{ always() && steps.bin.outcome == 'success' && steps.guard.outcome != 'failure' && steps.role-guard.outcome != 'failure' }}
+        timeout-minutes: 30
+        run: |
+          if [[ $CLOUD == aws ]]; then
+            [[ -n ${CLUSTER_ID:-} ]] || { echo "No control plane, so no role connection"; exit 0; }
+            eval "$(node test/e2e/sweep-names.ts)"
+            for verb in delete-stack 'wait stack-delete-complete'; do
+              aws cloudformation $verb --region "$CONTROL_PLANE_REGION" --stack-name "$ROLE_STACK"
+            done
+            exit 0
+          fi
+          scope=/subscriptions/$AZURE_SUBSCRIPTION_ID
+          role="Anycloud role connection $AZURE_SUBSCRIPTION_ID"
+          if [[ $(az group exists --name anycloud-role) == true ]]; then
+            principal=$(az identity show --resource-group anycloud-role --name anycloud-role --query principalId --output tsv)
+            ids=$(az role assignment list --scope "$scope" --fill-principal-name false \
+              --query "[?principalId == '$principal'].id" --output tsv)
+            [[ -z $ids ]] || az role assignment delete --ids $ids
+            az group delete --name anycloud-role --yes
+          fi
+          [[ -z $(az role definition list --name "$role" --scope "$scope" --query '[].name' --output tsv) ]] \
+            || az role definition delete --name "$role" --scope "$scope"
+          [[ -z $(az deployment sub list --query "[?name == 'anycloud-role'].name" --output tsv) ]] \
+            || az deployment sub delete --name anycloud-role
 
       # The cost guard: fails, naming them, while anything this run's
       # installation made is still in AWS. Without the control plane's ID,
@@ -476,7 +509,8 @@ jobs:
             left+=($(stacks '.[] | select((.StackName | startswith("anycloud-")) and .CreationTime >= $started) | "stack:\(.StackName)"'))
           else
             eval "$(node test/e2e/sweep-names.ts)"
-            left+=($(stacks --arg stack "$STACK" '.[] | select(.StackName == $stack) | "stack:\(.StackName)"'))
+            left+=($(stacks --arg stack "$STACK" --arg role "$ROLE_STACK" \
+              '.[] | select(.StackName == $stack or .StackName == $role) | "stack:\(.StackName)"'))
             regions=$( (echo "$CONTROL_PLANE_REGION"; jq -r '.include[] | select(.cloud == "aws") | .regions[]' <<<"$MATRIX") | sort -u)
             for region in $regions; do
               for tag in "anycloud_cluster=$CLUSTER_ID" "anycloud_owner_api=$OWNER_API"; do
@@ -496,7 +530,6 @@ jobs:
               out=$(aws iam "get-$1" --"$1"-name "$2" 2>&1) && { left+=("iam-$1:$2"); return; }
               grep -q NoSuchEntity <<<"$out" || { echo "$out"; echo "::error::couldn't check $1 $2"; exit 1; }
             }
-            iam user "$IAM_USER"
             iam role "anycloud-$CLUSTER_ID-cfn"
             iam role "anycloud-$CLUSTER_ID-vm"
             left+=($(aws s3api list-buckets | jq -r --arg id "$CLUSTER_ID" --arg cache "$CACHE_PREFIX" \
@@ -531,13 +564,17 @@ jobs:
             for tag in "anycloud_cluster=$CLUSTER_ID" "anycloud_owner_api=$OWNER_API"; do
               left+=($(az resource list --tag "$tag" --query '[].id' --output tsv | named resource:))
             done
-            left+=($(az ad app list --display-name "$AZURE_APP" --query '[].appId' --output tsv | named "app:$AZURE_APP:"))
             account="anycloud$(tr -d - <<<"$AZURE_SUBSCRIPTION_ID" | cut -c1-8)"
             if [[ $(az storage account check-name --name "$account" --query nameAvailable) == false ]]; then
               left+=($(az storage container-rm list --storage-account "$account" --resource-group anycloud-storage \
                 --query "[?name == '$CLUSTER_ID' || starts_with(name, '$CACHE_PREFIX')].name" --output tsv | named container:))
             fi
           fi
+          # The role connection's setup, which the guard found none of before.
+          [[ $(az group exists --name anycloud-role) == false ]] || left+=(resource-group:anycloud-role)
+          left+=($(az deployment sub list --query "[?name == 'anycloud-role'].name" --output tsv | named deployment:))
+          left+=($(az role definition list --name "Anycloud role connection $AZURE_SUBSCRIPTION_ID" \
+            --scope "/subscriptions/$AZURE_SUBSCRIPTION_ID" --query '[].name' --output tsv | named role-definition:))
           left=($(printf '%s\n' "${left[@]}" | sort -u))
           if ((${#left[@]})); then
             printf '::error title=Left in Azure::%s\n' "${left[@]}"
