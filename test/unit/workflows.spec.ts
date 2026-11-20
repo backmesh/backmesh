@@ -242,6 +242,7 @@ describe("e2e.yml's test-org run", () => {
     const steps = e2e.jobs['test-org']!.steps!;
     const step = (name: string) => steps.find((s) => s.name === name)!;
     const uninstall = step('backmesh uninstall');
+    const roles = step("Delete the role connection's setup");
     const sweep = step('Sweep AWS for anything left');
 
     expect(uninstall.if).toMatch(/^\$\{\{ always\(\) &&/);
@@ -250,7 +251,17 @@ describe("e2e.yml's test-org run", () => {
     );
     expect(uninstall.run).toMatch(/backmesh uninstall "\$\{flags\[@\]\}"/);
     expect(sweep.if).toMatch(/^\$\{\{ always\(\) &&/);
-    expect(steps.indexOf(sweep)).toBeGreaterThan(steps.indexOf(uninstall));
+    expect(roles.if).toBe(uninstall.if);
+    expect(steps.indexOf(roles)).toBe(steps.indexOf(uninstall) + 1);
+    expect(steps.indexOf(sweep)).toBeGreaterThan(steps.indexOf(roles));
+  });
+
+  // The customer path: install connects each cloud with a role connection
+  // through its CLI, so neither leg needs Microsoft Graph or an IAM user.
+  it('installs without our CI override, and reads nothing through Microsoft Graph', () => {
+    const job = JSON.stringify(e2e.jobs['test-org']);
+    expect(job).not.toContain('BACKMESH_UNSUPPORTED_CI_OVERRIDE');
+    expect(job).not.toMatch(/\baz ad\b/);
   });
 });
 
@@ -462,19 +473,12 @@ describe("e2e.yml's Worker and Azure checks", () => {
     expect(aws.got).toEqual(aws.matrix);
   });
 
-  // Our Azure CI app trusts only ci-install's federated subject, so the
-  // Azure leg signs in from that environment, reading only its Azure IDs.
-  it("signs in to Azure from ci-install's environment and to AWS from e2e's", () => {
+  // Both legs sign in from the e2e environment: AWS as its role, Azure as
+  // its own managed identity (e2e-azure-identity.yml), so neither waits for
+  // ci-install's reviewer.
+  it("signs in to both clouds from e2e's environment", () => {
     const job = e2e.jobs['test-org']!;
-    expect(job.environment).toBe('${{ matrix.environment }}');
-    const legs = job.strategy!.matrix!.include as {
-      cloud: string;
-      environment: string;
-    }[];
-    expect(legs.map(({ cloud, environment }) => [cloud, environment])).toEqual([
-      ['aws', 'e2e'],
-      ['azure', 'ci-install'],
-    ]);
+    expect(job.environment).toBe('e2e');
 
     const secrets = (text: string) =>
       [...text.matchAll(/secrets\.([A-Z0-9_]+)/g)].map((m) => m[1]);
@@ -519,13 +523,31 @@ describe("e2e.yml's Azure sweep", () => {
   )!;
 
   // Without the control plane's ID: the anycloud groups az lists now,
-  // against those listed before the install.
-  const run = (before: string, now: string) => {
+  // against those listed before the install; `role` answers az's reads of
+  // the role connection's setup.
+  const run = (
+    before: string,
+    now: string,
+    role: Record<string, string> = {},
+  ) => {
     const dir = mkdtempSync(join(tmpdir(), 'sweep-'));
     writeFileSync(join(dir, 'groups-before'), before);
     return runStep(sweep.run!, {
-      env: { RUNNER_TEMP: dir, CLUSTER_ID: '' },
-      commands: { az: `printf '%s' '${now}'` },
+      env: {
+        RUNNER_TEMP: dir,
+        CLUSTER_ID: '',
+        AZURE_SUBSCRIPTION_ID: 's-1',
+      },
+      commands: {
+        az: `case "$1 $2" in
+  "group list") printf '%s' '${now}' ;;
+  "group exists") echo ${role.group ?? 'false'} ;;
+  "deployment sub") printf '%s' '${role.deployment ?? ''}' ;;
+  "role definition") [[ " $* " == *" --name Anycloud role connection s-1 --scope /subscriptions/s-1 "* ]] || exit 7
+    printf '%s' '${role.definition ?? ''}' ;;
+  *) exit 8 ;;
+esac`,
+      },
     });
   };
 
@@ -547,6 +569,140 @@ describe("e2e.yml's Azure sweep", () => {
     expect(out.stdout.match(/^::error.*$/gm)).toEqual([
       '::error title=Left in Azure::resource-group:anycloud-new',
     ]);
+  });
+
+  // The guard found none before the install.
+  it("fails naming the role connection's setup while any of it is there", () => {
+    const out = run('', '', {
+      group: 'true',
+      deployment: 'anycloud-role\n',
+      definition: 'd-1\n',
+    });
+    expect(out.status).toBe(1);
+    expect(out.stdout.match(/^::error.*$/gm)).toEqual([
+      '::error title=Left in Azure::deployment:anycloud-role',
+      '::error title=Left in Azure::resource-group:anycloud-role',
+      '::error title=Left in Azure::role-definition:d-1',
+    ]);
+  });
+});
+
+// A subscription holds one role connection setup, anycloud-role, so one
+// there before the leg's install is another's: install would take it over,
+// and the cleanup would delete it.
+describe("e2e.yml's Azure leg, alone in its subscription's role connection", () => {
+  const job = read('e2e.yml').jobs['test-org']!;
+  const steps = job.steps!;
+  const guard = steps.find((s) => s.id === 'role-guard')!;
+  const run = (group: string, deployments: string) =>
+    runStep(guard.run!, {
+      commands: {
+        az: `case "$1 $2" in
+  "group exists") [[ " $* " == *" --name anycloud-role "* ]] || exit 7; echo ${group} ;;
+  "deployment sub") printf '%s' '${deployments}' ;;
+  *) exit 8 ;;
+esac`,
+      },
+    });
+
+  it('fails before install while the subscription has a role connection', () => {
+    expect(guard.if).toBe("matrix.cloud == 'azure'");
+    expect(steps.indexOf(guard)).toBeGreaterThan(
+      steps.findIndex((s) => s.id === 'azure'),
+    );
+    expect(steps.indexOf(guard)).toBeLessThan(
+      steps.findIndex((s) => s.id === 'install'),
+    );
+    expect(run('false', '').status).toBe(0);
+    expect(run('true', '').status).toBe(1);
+    expect(run('false', 'anycloud-role\n').status).toBe(1);
+    expect(run('false', '').stdout).not.toContain('::error');
+  });
+
+  it("doesn't uninstall or delete a role connection after it refuses", () => {
+    for (const name of [
+      'backmesh uninstall',
+      "Delete the role connection's setup",
+    ]) {
+      const step = steps.find((s) => s.name === name)!;
+      const runs = (guarded: string) =>
+        evaluate(unwrap(step.if!)!.replace('always()', 'true'), {
+          'steps.bin.outcome': 'success',
+          'steps.guard.outcome': 'skipped',
+          'steps.role-guard.outcome': guarded,
+        });
+      expect(runs('failure'), name).toBe(false);
+      expect(runs('success'), name).toBe(true);
+    }
+  });
+});
+
+// Uninstall leaves each role connection's setup, which trusts only the
+// deleted control plane, and says so; the leg deletes what anycloud's
+// `credentials delete --apply` would have.
+describe("e2e.yml's role connection cleanup", () => {
+  const step = read('e2e.yml').jobs['test-org']!.steps!.find(
+    (s) => s.name === "Delete the role connection's setup",
+  )!;
+  const run = (
+    env: Record<string, string>,
+    commands: Record<string, string>,
+  ) => {
+    const dir = mkdtempSync(join(tmpdir(), 'roles-'));
+    const calls = join(dir, 'calls');
+    const out = runStep(step.run!, {
+      env,
+      commands: Object.fromEntries(
+        Object.entries(commands).map(([name, body]) => [
+          name,
+          `echo "${name} $*" >>${calls}\n${body}`,
+        ]),
+      ),
+    });
+    expect(out.status, out.stderr).toBe(0);
+    return existsSync(calls)
+      ? readFileSync(calls, 'utf8').trim().split('\n')
+      : [];
+  };
+
+  it("deletes the AWS leg's stack, named for its control plane, in its region", () => {
+    const env = {
+      CLOUD: 'aws',
+      CONTROL_PLANE_REGION: 'us-west-2',
+      ORG_ID: '7',
+    };
+    expect(run({ ...env, CLUSTER_ID: 'k3x9q2' }, { aws: '' })).toEqual([
+      'aws cloudformation delete-stack --region us-west-2 --stack-name anycloud-role-k3x9q2-anycloud-sh',
+      'aws cloudformation wait stack-delete-complete --region us-west-2 --stack-name anycloud-role-k3x9q2-anycloud-sh',
+    ]);
+    // No control plane, no role connection.
+    expect(run({ ...env, CLUSTER_ID: '' }, { aws: 'exit 9' })).toEqual([]);
+  });
+
+  it("deletes the Azure leg's identity's assignments, its group, the role and the deployment", () => {
+    const env = { CLOUD: 'azure', AZURE_SUBSCRIPTION_ID: 's-1' };
+    const az = (group: string) => `case "$1 $2 $3" in
+  "group exists "*) echo ${group} ;;
+  "identity show "*) echo p-1 ;;
+  "role assignment list") echo a-1; echo a-2 ;;
+  "role definition list") echo d-1 ;;
+  "deployment sub list") echo anycloud-role ;;
+esac`;
+    expect(run(env, { az: az('true') })).toEqual([
+      'az group exists --name anycloud-role',
+      'az identity show --resource-group anycloud-role --name anycloud-role --query principalId --output tsv',
+      "az role assignment list --scope /subscriptions/s-1 --fill-principal-name false --query [?principalId == 'p-1'].id --output tsv",
+      'az role assignment delete --ids a-1 a-2',
+      'az group delete --name anycloud-role --yes',
+      'az role definition list --name Anycloud role connection s-1 --scope /subscriptions/s-1 --query [].name --output tsv',
+      'az role definition delete --name Anycloud role connection s-1 --scope /subscriptions/s-1',
+      "az deployment sub list --query [?name == 'anycloud-role'].name --output tsv",
+      'az deployment sub delete --name anycloud-role',
+    ]);
+    // Without the group, its identity's assignments went with it.
+    expect(run(env, { az: az('false') })).not.toContainEqual(
+      expect.stringMatching(/^az (identity|role assignment|group delete)/),
+    );
   });
 });
 
@@ -666,17 +822,29 @@ esac`,
     };
   };
 
-  it('finds the open issue a run opened by its exact title, else opens it', () => {
+  // gh's --author finds no app's issue, so every leg opened another
+  // (#42-#60): the run's issues are told apart by the author gh's JSON
+  // names, and the oldest is the one every run uses.
+  it('finds the oldest open issue a run opened by its exact title, else opens it', () => {
+    const bot = { login: 'app/github-actions' };
     const found = findIssue(
       JSON.stringify([
-        { number: 3, title: `${ISSUE} (old)` },
-        { number: 7, title: ISSUE },
+        { number: 9, title: ISSUE, author: bot },
+        { number: 3, title: `${ISSUE} (old)`, author: bot },
+        { number: 2, title: ISSUE, author: { login: 'someone' } },
+        { number: 7, title: ISSUE, author: bot },
       ]),
     );
     expect(found.issue).toBe('7');
-    expect(found.calls).toMatch(/issue list .*--author app\/github-actions /);
+    expect(found.calls).toMatch(/issue list .*--json number,title,author/);
+    expect(found.calls).not.toMatch(/--author/);
     expect(found.calls).not.toMatch(/issue create/);
-    const made = findIssue(JSON.stringify([{ number: 3, title: 'other' }]));
+    const made = findIssue(
+      JSON.stringify([
+        { number: 3, title: 'other', author: bot },
+        { number: 4, title: ISSUE, author: { login: 'someone' } },
+      ]),
+    );
     expect(made.issue).toBe('42');
     expect(made.calls).toMatch(
       new RegExp(`issue create --repo backmesh/backmesh --title ${ISSUE} `),
