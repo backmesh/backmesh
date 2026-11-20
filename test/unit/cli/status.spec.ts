@@ -7,6 +7,7 @@ import {
   fakeExec,
   githubOrg,
   listenerVm,
+  PUBLIC_REPOS,
   versionMismatch,
 } from './fakes.js';
 import { formatJobs } from '../../../src/listener/status.js';
@@ -567,6 +568,31 @@ describe('status', () => {
     expect(report.warnings).toEqual([
       "acme: the control plane has refused the listener's service token since 2026-11-05 11:00Z, so it can't start runners; a restore from a backup older than the token does this. Run `backmesh upgrade` to issue it a new one.",
     ]);
+  });
+
+  // A runner group without public classes refuses public repositories,
+  // whose jobs then wait at GitHub with no word to the listener.
+  it("says which public repositories can't use runners without the public labels", async () => {
+    PUBLIC_REPOS.acme = ['acme/site', 'acme/docs', 'acme/old-archived'];
+    try {
+      expect((await setUp().read()).warnings).toEqual([
+        "acme: 2 public repositories (such as acme/site) can't use these runners, and their jobs wait at GitHub. `backmesh upgrade --public-repos` adds backmesh-public-2 and backmesh-public-4 for them to use.",
+      ]);
+      const withPublic = JSON.stringify(
+        planClasses(
+          [{ cloud: 'aws', region: 'us-east-2', credentials: 'bm-aws' }],
+          catalogs({ aws: CATALOG.aws }),
+          'aws',
+          true,
+        ).classes,
+      );
+      const listener = probed(LISTENER.status, 'acme', {
+        BACKMESH_RUNNERS: withPublic,
+      });
+      expect((await setUp({ listener }).read()).warnings).toEqual([]);
+    } finally {
+      delete PUBLIC_REPOS.acme;
+    }
   });
 
   it('warns about a silent listener and an API before release 1', async () => {

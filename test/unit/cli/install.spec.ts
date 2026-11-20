@@ -39,6 +39,7 @@ import {
   fakeWorker,
   INSTALL_KEY,
   listenerVm,
+  PUBLIC_REPOS,
   SIGNED_IN,
 } from './fakes.js';
 
@@ -1540,9 +1541,19 @@ describe('install', () => {
     ).toEqual([]);
 
     // --no-public-repos retires them like any removed class.
+    // The plan then names the org's public repositories that can't use
+    // the runners.
     const off = rerun({ BACKMESH_RUNNERS: json });
-    await install({ ...options, publicRepos: false }, off.deps);
+    PUBLIC_REPOS.acme = ['acme/site', 'acme/docs'];
+    try {
+      await install({ ...options, publicRepos: false }, off.deps);
+    } finally {
+      delete PUBLIC_REPOS.acme;
+    }
     expect(off.lines).not.toContain(PUBLIC_REPOS_LINE);
+    expect(off.lines).toContain(
+      "acme: 2 public repositories (such as acme/site) can't use these runners, and their jobs wait at GitHub. `backmesh install --org acme --public-repos` adds backmesh-public-2 and backmesh-public-4 for them to use.",
+    );
     expect(
       runnersOf(off.requests)
         .filter((r) => r.public)

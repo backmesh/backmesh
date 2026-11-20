@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { StatusReport } from '../../../src/cli/status.js';
 import { GitHubError } from '../../../src/app/github.js';
 import { NeedsPlan, PlanChanged, UsageError } from '../../../src/cli/errors.js';
+import { PUBLIC_REPOS_LINE } from '../../../src/cli/install.js';
 import { upgrade, type UpgradeDeps } from '../../../src/cli/upgrade.js';
 import { runnerGroupName } from '../../../src/github/runner-group.js';
 import { parseRoutes } from '../../../src/listener/routes.js';
@@ -19,6 +20,7 @@ import {
   listenerVm,
   githubOrg,
   INSTALL_KEY,
+  PUBLIC_REPOS,
   DEVICE,
   GITHUB_TOKEN,
   NEXT_DEVICE,
@@ -696,6 +698,41 @@ describe('upgrade', () => {
     await upgrade(deps);
     expect(mutations(calls)).toEqual([]);
     expect(requests.filter((r) => !r.startsWith('GET'))).toEqual([]);
+  });
+
+  // Our own installs gain them this way: install refuses a re-run's
+  // sign-in that upgrade takes.
+  it('adds the public classes with --public-repos, and names the public repos that need them', async () => {
+    PUBLIC_REPOS.acme = ['acme/site'];
+    try {
+      const { deps, lines, secrets } = setUp({
+        version: '0.1.72',
+        image: RELEASE.listenerImage,
+        runnerImage: RELEASE.runnerImage,
+        cacheBuckets: ['bm-cache-l8u5e-us-east-2'],
+      });
+      await upgrade(deps, { plan: true });
+      expect(lines).toContain(
+        "acme: 1 public repository (such as acme/site) can't use these runners, and their jobs wait at GitHub. `backmesh upgrade --public-repos` adds backmesh-public-2 and backmesh-public-4 for them to use.",
+      );
+      lines.length = 0;
+      const plan = await upgrade(deps, { plan: true, publicRepos: true });
+      expect(lines).toContain(PUBLIC_REPOS_LINE);
+      expect(lines.join('\n')).not.toContain('public repository (such as');
+      expect(lines.join('\n')).toContain('backmesh-public-4');
+      await upgrade(deps, {
+        publicRepos: true,
+        yes: true,
+        planId: 'planId' in plan ? plan.planId : '',
+      });
+      expect(
+        parseRoutes(secrets['backmesh-acme']!.BACKMESH_RUNNERS!)
+          .filter((r) => r.public)
+          .map((r) => r.label),
+      ).toEqual(['backmesh-public-2', 'backmesh-public-4']);
+    } finally {
+      delete PUBLIC_REPOS.acme;
+    }
   });
 
   it("rolls a current listener whose classes this release's catalog changes", async () => {
