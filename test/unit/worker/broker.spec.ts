@@ -461,12 +461,38 @@ describe("uninstall's cleanup", () => {
     expect(await res.json()).toMatchObject({ token: 'ghs_7' });
   });
 
-  it("leaves the sender's own key working when a sibling install or the limit refuses", async () => {
+  it('with its key, revokes only the uninstalling install while another is live', async () => {
     const own = await live();
-    await live();
+    const other = await live();
 
-    expect((await cleanup('alice', 'acme', own.key)).status).toBe(409);
-    expect((await call('/v1/token', own.key)).status).toBe(200);
+    const res = await cleanup('alice', 'acme', own.key);
+
+    // No token and no cleanup: the org's GitHub side stays for the other.
+    expect(await res.json()).toEqual({
+      token: null,
+      expires_at: null,
+      org: { id: 11, login: 'acme' },
+      cleanup_id: null,
+      live: [{ install: other.install, last_token_at: expect.any(String) }],
+    });
+    expect(upstream.mints).toEqual([]);
+    expect((await call('/v1/token', own.key)).status).toBe(401);
+    expect((await call('/v1/token', other.key)).status).toBe(200);
+    expect(
+      (await env.DB.prepare('SELECT * FROM cleanups').all()).results,
+    ).toEqual([]);
+    expect(await auditRows()).toContainEqual(
+      expect.objectContaining({
+        action: 'cleanup',
+        outcome: 'ok_install_only',
+        install: own.install,
+        org: 11,
+      }),
+    );
+  });
+
+  it("leaves the sender's own key working when the limit refuses", async () => {
+    const own = await live();
     await env.DB.prepare(
       "INSERT INTO audit (at, action, outcome, org) VALUES (?, 'cleanup', 'ok', 11), (?, 'cleanup', 'ok', 11), (?, 'cleanup', 'ok', 11), (?, 'cleanup', 'ok', 11), (?, 'cleanup', 'ok', 11)",
     )

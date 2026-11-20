@@ -174,12 +174,17 @@ const recorder =
 // admin check, counted from the audit rows. Pending polls and refusals
 // before the admin check don't count, so a sign-in that isn't an admin's
 // can't lock the admin out; SIGNIN_LIMIT bounds those per IP. The App not
-// installed answers no token: there's nothing at GitHub to remove.
+// installed answers no token: there's nothing at GitHub to remove. The
+// sign-in with an install key (`ownOnly`), whose control plane uninstall
+// deletes, isn't refused for a live install: it revokes that install alone
+// and answers no token and the live installs, which keep the org's
+// GitHub side.
 async function cleanupToken(
   env: Env,
   request: Request,
   cleanup: Cleanup,
   login: string,
+  ownOnly = false,
 ) {
   const record = recorder(env, request);
   const at = (outcome: string, row: Partial<AuditRow> = {}) =>
@@ -198,7 +203,8 @@ async function cleanupToken(
     return tooMany();
   }
   const live = await liveInstalls(env, cleanup.org, cleanup.install);
-  if (live.length) {
+  ownOnly &&= !!cleanup.install;
+  if (live.length && !ownOnly) {
     await at('live_install');
     const error = `backmesh ${live.length === 1 ? 'install' : 'installs'} ${live.map((l) => `${l.install} (last token ${l.last_token_at})`).join(', ')} of ${login} got a token in the last hour, so a control plane may still run there. If its control plane is gone too, run uninstall again an hour after the latest token listed.`;
     return Response.json({ error, live }, { status: 409 });
@@ -208,6 +214,15 @@ async function cleanupToken(
     await env.DB.prepare('UPDATE installs SET revoked = 1 WHERE id = ?')
       .bind(cleanup.install)
       .run();
+  }
+  if (live.length) {
+    await at('ok_install_only');
+    return Response.json({
+      token: null,
+      expires_at: null,
+      org: { id: cleanup.org, login },
+      live,
+    });
   }
   const minted = await mintToken(env, cleanup.org, CLEANUP).catch(
     async (error: unknown) => {
@@ -239,7 +254,9 @@ async function cleanupToken(
 // uninstall needs one sign-in. Where the App isn't installed GitHub can't
 // say who manages the runners, and there's nothing of backmesh's there to
 // remove: the answer has no token and no cleanup, and only the sent key's
-// install is revoked. No key names the org when the control plane is gone, so the
+// install is revoked. While another install of the org is live, a sent key
+// still revokes its install and the answer names the live installs, with
+// no token and no cleanup; without a key it's refused. No key names the org when the control plane is gone, so the
 // sign-in does, and the installation's account.id must be that org
 // (installationOf).
 export async function cleanup(request: Request, env: Env) {
@@ -301,8 +318,11 @@ export async function cleanup(request: Request, env: Env) {
     request,
     { id, org: admin.id, install },
     admin.login,
+    true,
   );
   if (!answer.ok) return answer;
+  const answered = (await answer.json()) as { live?: unknown };
+  if (answered.live) return Response.json({ ...answered, cleanup_id: null });
   // Only an answered cleanup is kept.
   await env.DB.prepare(
     'INSERT INTO cleanups (id, org, admin, install, expires_at) VALUES (?, ?, ?, ?, ?)',
@@ -315,10 +335,7 @@ export async function cleanup(request: Request, env: Env) {
       Date.now() + CLEANUP_TTL,
     )
     .run();
-  return Response.json({
-    ...((await answer.json()) as object),
-    cleanup_id: id,
-  });
+  return Response.json({ ...answered, cleanup_id: id });
 }
 
 // The unexpired, unfinished cleanup a body's `cleanup_id` names, or null,

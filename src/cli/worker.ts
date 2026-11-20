@@ -342,9 +342,14 @@ const cleanupTokenSchema = z.object({
   org: z.object({ id: z.number(), login: z.string() }),
 });
 // No cleanup where the App isn't installed: nothing of backmesh's is at
-// GitHub to remove, and nothing for the Worker to finish.
+// GitHub to remove, and nothing for the Worker to finish. Nor while
+// another install of the org is live (`live`): the key's install alone is
+// revoked, and the org's GitHub side stays for the others.
 const cleanupSchema = cleanupTokenSchema.extend({
   cleanup_id: z.string().nullable(),
+  live: z
+    .array(z.object({ install: z.string(), last_token_at: z.string() }))
+    .optional(),
 });
 export type Cleanup = z.infer<typeof cleanupSchema>;
 

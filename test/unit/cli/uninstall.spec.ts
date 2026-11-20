@@ -976,6 +976,41 @@ describe('uninstall', () => {
     );
   });
 
+  it("deletes its own control plane while another install of the org is live, and leaves the org's GitHub side", async () => {
+    const worker = fakeWorker({
+      cleanups: [
+        Response.json({
+          token: null,
+          expires_at: null,
+          org: { id: 7, login: 'acme' },
+          cleanup_id: null,
+          live: [{ install: 'i2', last_token_at: '2026-11-20T10:00:00.000Z' }],
+        }),
+      ],
+    });
+    const { deps, calls, lines } = setUp({ worker });
+
+    const result = await uninstall(scripted, deps);
+
+    expect(changes(calls)).toEqual([
+      'POST /v1/installs/cleanup',
+      'exec backmesh-acme POST /drain',
+      'terminate bml-l8u5e-acme00',
+      'api access remove --service backmesh-acme',
+      'secrets delete backmesh-acme',
+      'node-pool delete np-1',
+      'node-pool delete np-2',
+      DELETE_HOSTED,
+    ]);
+    expect(result).toMatchObject({
+      orgs: [{ org: 'acme', appRemoved: false }],
+      cloud: 'deleted',
+    });
+    expect(lines).toContain(
+      "backmesh install i2 (last token 2026-11-20T10:00:00.000Z) of acme got a token in the last hour, so uninstall leaves acme's GitHub side to it: backmesh's scale sets, runner groups backmesh-l8u5e-* and App stay. If its control plane is gone too, run `backmesh uninstall --org acme` an hour after its last token.",
+    );
+  });
+
   it('with --keep-app, deletes everything else and asks the Worker to keep the App', async () => {
     const { deps, calls, lines, worker } = setUp({
       worker: fakeWorker({

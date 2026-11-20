@@ -543,7 +543,14 @@ async function removeOrg(
     }
     if (plane.whole) await removeOthers(plane, deps);
   }
-  const token = await cleanupTokenNow(cleanup, deps);
+  // Another install of the org is live: its runners, groups and App stay.
+  const live = cleanup.live ?? [];
+  if (live.length) {
+    ui.print(
+      `backmesh ${live.length === 1 ? 'install' : 'installs'} ${live.map((l) => `${l.install} (last token ${l.last_token_at})`).join(', ')} of ${login} got a token in the last hour, so uninstall leaves ${login}'s GitHub side to ${live.length === 1 ? 'it' : 'them'}: backmesh's scale sets, runner groups ${groups} and App stay. If ${live.length === 1 ? 'its control plane is' : 'their control planes are'} gone too, run \`backmesh uninstall --org ${login}\` an hour after ${live.length === 1 ? 'its' : 'their'} last token.`,
+    );
+  }
+  const token = !live.length && (await cleanupTokenNow(cleanup, deps));
   if (token) {
     const remaining = await removeFromGitHub(login, token, {
       tag,
@@ -560,7 +567,7 @@ async function removeOrg(
     ui.print(
       `Removed backmesh's scale sets, runners and runner groups ${groups} from ${login}.`,
     );
-  } else {
+  } else if (!live.length) {
     ui.print(
       `The backmesh GitHub App isn't installed on ${login}, so backmesh can't reach its runners there. Check the org's Actions settings for runner groups ${groups}.`,
     );
@@ -593,7 +600,7 @@ async function removeOrg(
       await deps.run(['secrets', 'delete', name]);
     }
   }
-  return { org: login, appRemoved: app ? app.removed : true };
+  return { org: login, appRemoved: app ? app.removed : !live.length };
 }
 
 // Step 1 for one org: its listener's VM and service, then a wait until the
