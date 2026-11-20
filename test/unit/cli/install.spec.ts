@@ -3080,11 +3080,20 @@ describe("install's always-on VM sizes on Azure", () => {
     const set = azure();
     const { command } = set.deps;
     const timeouts: (number | undefined)[] = [];
-    let failures = 1;
+    // `execFile`'s errors: a kill at the timeout, or az's own on stderr.
+    const failed = (more: object) =>
+      Object.assign(
+        new Error(
+          `Command failed: az vm list-skus --all --resource-type virtualMachines`,
+        ),
+        { stderr: '', killed: false, ...more },
+      );
+    let failures: Error[] = [failed({ killed: true })];
     set.deps.command = async (args, env, timeout) => {
       if (args[2] === 'list-skus') {
         timeouts.push(timeout);
-        if (failures-- > 0) throw new Error('Command failed: az vm list-skus');
+        const failure = failures.shift();
+        if (failure) throw failure;
       }
       return command(args, env, timeout);
     };
@@ -3092,13 +3101,32 @@ describe("install's always-on VM sizes on Azure", () => {
     const { plan } = await planned(eastus, set.deps);
     expect(timeouts).toEqual([180_000, 180_000]);
     expect(plan.alwaysOnRegions?.[0]).toBe('centralus');
-    failures = 2;
-    const error = (await install({ ...eastus, plan: true }, set.deps).catch(
-      (e: unknown) => e,
-    )) as Error;
-    expect(error).toBeInstanceOf(UsageError);
-    expect(error.message).toBe(
-      "Azure's VM sizes couldn't be read with `az vm list-skus` (Command failed: az vm list-skus), so the plan can't tell which region this subscription may create the control plane's VM (Standard_D2s_v5) and acme's listener VM (Standard_B2s) in. Check that `az` answers, then run install again.",
+    const stopped = async (twice: Error[]) => {
+      failures = twice;
+      const error = (await install({ ...eastus, plan: true }, set.deps).catch(
+        (e: unknown) => e,
+      )) as Error;
+      expect(error).toBeInstanceOf(UsageError);
+      return error.message;
+    };
+    expect(
+      await stopped([failed({ killed: true }), failed({ killed: true })]),
+    ).toBe(
+      "Azure's VM sizes couldn't be read with `az vm list-skus` (it timed out after 3 minutes, twice), so the plan can't tell which region this subscription may create the control plane's VM (Standard_D2s_v5) and acme's listener VM (Standard_B2s) in. Check that `az` answers, then run install again.",
+    );
+    expect(
+      await stopped([
+        failed({ killed: true }),
+        failed({
+          stderr:
+            "WARNING: ...\nERROR: (AuthorizationFailed) The client 'ops@example.com' does not have authorization\n\n",
+        }),
+      ]),
+    ).toContain(
+      "`az vm list-skus` (ERROR: (AuthorizationFailed) The client 'ops@example.com' does not have authorization), so",
+    );
+    expect(await stopped([failed({}), failed({})])).toContain(
+      '`az vm list-skus` (Command failed: az vm list-skus --all --resource-type virtualMachines), so',
     );
     expect(set.worker.calls).toEqual([]);
   });
@@ -3324,7 +3352,7 @@ describe("a control plane named backmesh that this machine doesn't use", () => {
       `gcloud compute instances list --filter=name=anycloud-cluster-${ID} --format=json(name)`,
     ]);
     expect(gcp.message).toContain(
-      'delete its service account with `gcloud iam service-accounts delete anycloud-0123@proj.iam.gserviceaccount.com`',
+      `delete what it left with \`gcloud iam service-accounts delete anycloud-0123@proj.iam.gserviceaccount.com\` and \`gcloud compute firewall-rules delete anycloud-cluster-${ID}-k8s anycloud-cluster-${ID}-api\`, and its checkpoint bucket, if any, with \`gcloud storage rm --recursive gs://${ID}\``,
     );
   });
 

@@ -153,9 +153,10 @@ capacity or quota; labels stay the same.
 
 Each region's spot and on-demand vCPU quotas cap how many jobs run at once; jobs
 past them wait. Install prints them as how many `backmesh-4` jobs fit at once,
-each region counted on its own, and stops before anything is billed if they
-can't fit one. A label whose VM no region's quota fits gets a line that it
-`would start no runners`, naming the quota to raise. On Azure, the plan also
+each region counted on its own. It stops before anything is billed when the
+regions' quotas together are under one `backmesh-4` VM; otherwise each label
+whose VM no region's quota fits gets a line that it `would start no runners`,
+naming the quota to raise. On Azure, the plan also
 checks the always-on VMs' family quotas, such as "Standard DSv5 Family vCPUs". GCP's default `CPUS_ALL_REGIONS` is 32
 vCPUs, 8 `backmesh-4` jobs, so raise it before big bursts.
 [More](/faq/#installing).

@@ -132,7 +132,9 @@ const VMS: Record<
 };
 
 // What deletes one with no VM, through the user's own cloud CLI: AWS's
-// stack, Azure's resource group, or the service account that names GCP's.
+// stack, Azure's resource group, or what GCP's create makes before its VM
+// (anycloud `seed/gcp.ts`): the service account that names it, two
+// firewall rules, and the checkpoint bucket named for it.
 const DELETE: Record<
   Cloud,
   (found: NamedControlPlane, region: string) => string
@@ -140,8 +142,8 @@ const DELETE: Record<
   aws: ({ id }, region) =>
     `delete it with \`aws cloudformation delete-stack --stack-name anycloud-${id} --region ${region}\``,
   azure: ({ id }) => `delete it with \`az group delete --name anycloud-${id}\``,
-  gcp: ({ email }) =>
-    `delete its service account with \`gcloud iam service-accounts delete ${email}\``,
+  gcp: ({ id, email }) =>
+    `delete what it left with \`gcloud iam service-accounts delete ${email}\` and \`gcloud compute firewall-rules delete anycloud-cluster-${id}-k8s anycloud-cluster-${id}-api\`, and its checkpoint bucket, if any, with \`gcloud storage rm --recursive gs://${id}\``,
 };
 
 /**

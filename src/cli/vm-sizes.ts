@@ -125,9 +125,16 @@ export async function alwaysOnRegions(
   const region = candidates[0]!;
   const what = vms.map((vm) => `${vm.what} (${vm.size})`).join(' and ');
   const all = await readSkus(vms, command).catch((cause: unknown) => {
-    const reason = String(cause instanceof Error ? cause.message : cause).split(
-      '\n',
-    )[0];
+    // `execFile`'s error: killed at the timeout, or az's own last line.
+    const { killed, stderr, message } = cause as {
+      killed?: boolean;
+      stderr?: string;
+      message?: string;
+    };
+    const reason = killed
+      ? 'it timed out after 3 minutes, twice'
+      : (stderr?.split('\n').findLast((line) => line.trim()) ??
+        String(message ?? cause).split('\n')[0]);
     throw new UsageError(
       `Azure's VM sizes couldn't be read with \`az vm list-skus\` (${reason}), so the plan can't tell which region this subscription may create ${what} in. Check that \`az\` answers, then run install again.`,
       { cause },
