@@ -124,6 +124,14 @@ const signedIn = (run: string) =>
 
 const unwrap = (value: string) => value.match(/^\$\{\{(.*)\}\}$/s)?.[1];
 
+// The GCP leg's role connection IDs, as e2e.yml's test-org job sets them in
+// run 9's first attempt.
+const ROLE_IDS = {
+  ANYCLOUD_ROLE_POOL: 'bm-e2e-9-1',
+  ANYCLOUD_ROLE_SERVICE_ACCOUNT: 'bm-e2e-9-1',
+  ANYCLOUD_ROLE_CUSTOM_ROLE: 'backmeshE2e',
+};
+
 // No secret but GITHUB_TOKEN anywhere a job can read one.
 const noSecrets = (where: string, value: unknown) =>
   expect(
@@ -258,6 +266,7 @@ describe("e2e.yml's test-org run", () => {
     const uninstall = step('backmesh uninstall');
     const roles = step("Delete the role connection's setup");
     const sweep = step('Sweep AWS for anything left');
+    const gcp = step('Sweep GCP for anything left');
 
     expect(uninstall.if).toMatch(/^\$\{\{ always\(\) &&/);
     expect(uninstall.run).toMatch(
@@ -268,6 +277,8 @@ describe("e2e.yml's test-org run", () => {
     expect(roles.if).toBe(uninstall.if);
     expect(steps.indexOf(roles)).toBe(steps.indexOf(uninstall) + 1);
     expect(steps.indexOf(sweep)).toBeGreaterThan(steps.indexOf(roles));
+    expect(gcp.if).toBe("${{ always() && steps.gcp.outcome == 'success' }}");
+    expect(steps.indexOf(gcp)).toBeGreaterThan(steps.indexOf(roles));
   });
 
   // The customer path: install connects each cloud with a role connection
@@ -422,6 +433,25 @@ describe("e2e.yml's Worker and Azure checks", () => {
     );
   });
 
+  // anycloud finds a GCP cluster by name in the whole project (the guard
+  // below), so any region would do: us-central1, where GCP's runners go too.
+  it('installs fresh on GCP too, with its control plane in us-central1', () => {
+    expect(e2e.jobs['test-org']!.strategy!.matrix!.include).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cloud: 'gcp',
+          placement: '--runners gcp',
+          'control-plane-region': 'us-central1',
+        }),
+      ]),
+    );
+    const { args } = labelMatrix('gcp');
+    expect(args).toHaveLength(2);
+    for (const call of args) {
+      expect(call).toContain('--runners gcp --control-plane gcp:us-central1');
+    }
+  });
+
   // The install step's own script, for a leg, up to the sign-in: backmesh
   // stubbed to print a plan with Azure's runner regions.
   const labelMatrix = (cloud: string) => {
@@ -438,7 +468,10 @@ describe("e2e.yml's Worker and Azure checks", () => {
     const plan = {
       planId: 'p1',
       controlPlane: { cloud, region: 'eastus' },
-      runners: [{ cloud: 'azure', regions: ['eastus'] }],
+      runners: [
+        { cloud: 'azure', regions: ['eastus'] },
+        { cloud: 'gcp', regions: ['us-central1', 'us-east1'] },
+      ],
     };
     const matrix = {
       include: [{ label: 'backmesh-4', cloud: 'aws', regions: ['us-east-2'] }],
@@ -487,10 +520,23 @@ describe("e2e.yml's Worker and Azure checks", () => {
     expect(aws.got).toEqual(aws.matrix);
   });
 
+  // GCP's control plane makes it the home cloud, whose labels are plain.
+  it("runs the GCP leg's one job on backmesh-4 in the plan's GCP regions", () => {
+    expect(labelMatrix('gcp').got.include).toEqual([
+      expect.objectContaining({
+        label: 'backmesh-4',
+        cloud: 'gcp',
+        regions: ['us-central1', 'us-east1'],
+        kvm: false,
+        gpu: false,
+      }),
+    ]);
+  });
+
   // Both legs sign in from the e2e environment: AWS as its role, Azure as
   // its own managed identity (e2e-azure-identity.yml), so neither waits for
   // ci-install's reviewer.
-  it("signs in to both clouds from e2e's environment", () => {
+  it("signs in to every cloud from e2e's environment", () => {
     const job = e2e.jobs['test-org']!;
     expect(job.environment).toBe('e2e');
 
@@ -502,6 +548,9 @@ describe("e2e.yml's Worker and Azure checks", () => {
         'AZURE_TENANT_ID',
         'AZURE_SUBSCRIPTION_ID',
         'AWS_ROLE_ARN',
+        'GCP_WORKLOAD_IDENTITY_PROVIDER',
+        'GCP_SERVICE_ACCOUNT',
+        'GCP_PROJECT_ID',
         'E2E_TEST_ORG_DEPLOY_KEY',
       ]),
     );
@@ -524,6 +573,7 @@ describe("e2e.yml's Worker and Azure checks", () => {
     };
     only('azure', /secrets\.AZURE_/);
     only('aws', /secrets\.AWS_/);
+    only('gcp', /secrets\.GCP_/);
     expect(job.env!.AZURE_SUBSCRIPTION_ID).toBe(
       "${{ matrix.cloud == 'azure' && secrets.AZURE_SUBSCRIPTION_ID || '' }}",
     );
@@ -662,6 +712,7 @@ esac`,
           'steps.bin.outcome': 'success',
           'steps.guard.outcome': 'skipped',
           'steps.role-guard.outcome': guarded,
+          'steps.gcp-guard.outcome': 'skipped',
         });
       expect(runs('failure'), name).toBe(false);
       expect(runs('success'), name).toBe(true);
@@ -748,6 +799,44 @@ esac`;
     expect(partial).toContain('az group delete --name anycloud-role --yes');
     expect(partial).toContain('az deployment sub delete --name anycloud-role');
   });
+
+  // The run's own pool and service account (ROLE_IDS below): its pool's
+  // providers, the pool, the account's grant of the custom role, the
+  // account. The custom role stays for the next run.
+  it("deletes the GCP leg's pool, its providers, its account's grant and its account", () => {
+    const env = { CLOUD: 'gcp', ...ROLE_IDS };
+    const role = 'projects/p-1/roles/backmeshE2e';
+    const account = 'bm-e2e-9-1@p-1.iam.gserviceaccount.com';
+    const policy = JSON.stringify({
+      bindings: [
+        { role, members: [`serviceAccount:${account}`] },
+        { role: 'roles/viewer', members: ['user:someone@example.com'] },
+      ],
+    });
+    const gcloud = (left: boolean) => `case "$1 $2 $3 $4" in
+  "config get-value project "*) echo p-1 ;;
+  "iam workload-identity-pools list "*) ${left ? 'echo other; echo bm-e2e-9-1' : 'echo other'} ;;
+  "iam workload-identity-pools providers list") echo anycloud-api ;;
+  "projects get-iam-policy p-1 "*) echo '${left ? policy : '{}'}' ;;
+  "iam service-accounts list "*) ${left ? `echo ${account}` : 'true'} ;;
+esac`;
+    const pool = '--workload-identity-pool=bm-e2e-9-1 --location=global';
+    expect(run(env, { gcloud: gcloud(true) })).toEqual([
+      'gcloud config get-value project',
+      'gcloud iam workload-identity-pools list --location=global --format=value(name.basename())',
+      `gcloud iam workload-identity-pools providers list ${pool} --format=value(name.basename())`,
+      `gcloud iam workload-identity-pools providers delete anycloud-api ${pool} --quiet`,
+      'gcloud iam workload-identity-pools delete bm-e2e-9-1 --location=global --quiet',
+      'gcloud projects get-iam-policy p-1 --format=json',
+      `gcloud projects remove-iam-policy-binding p-1 --member=serviceAccount:${account} --role=${role} --all --quiet`,
+      `gcloud iam service-accounts list --filter=email=${account} --format=value(email)`,
+      `gcloud iam service-accounts delete ${account} --quiet`,
+    ]);
+    // Nothing there: only reads.
+    expect(run(env, { gcloud: gcloud(false) })).not.toContainEqual(
+      expect.stringMatching(/ (delete|remove-iam-policy-binding) /),
+    );
+  });
 });
 
 // Our production control plane is a cluster named backmesh in us-east-2 of
@@ -819,10 +908,226 @@ describe("e2e.yml's AWS leg, away from our production control plane", () => {
         'steps.bin.outcome': 'success',
         'steps.guard.outcome': guarded,
         'steps.role-guard.outcome': 'skipped',
+        'steps.gcp-guard.outcome': 'skipped',
       });
     expect(runs('failure')).toBe(false);
     expect(runs('success')).toBe(true);
     expect(runs('skipped')).toBe(true);
+  });
+});
+
+// GCP keeps a deleted workload identity pool's ID for 30 days, so each run's
+// role connection gets a pool and service account of its own, through the
+// IDs anycloud's setup script reads; its custom role is every run's.
+describe("e2e.yml's GCP leg, alone in its project", () => {
+  const e2e = read('e2e.yml');
+  const job = e2e.jobs['test-org']!;
+  const steps = job.steps!;
+  const guard = steps.find((s) => s.id === 'gcp-guard')!;
+
+  it('names its role connection for the run', () => {
+    expect(job.env).toMatchObject({
+      ANYCLOUD_ROLE_POOL:
+        'bm-e2e-${{ github.run_id }}-${{ github.run_attempt }}',
+      ANYCLOUD_ROLE_SERVICE_ACCOUNT:
+        'bm-e2e-${{ github.run_id }}-${{ github.run_attempt }}',
+      ANYCLOUD_ROLE_CUSTOM_ROLE: 'backmeshE2e',
+    });
+  });
+
+  // gcloud's answers: the anycloud- service accounts (JSON), the active
+  // pools and the project's policy (JSON).
+  const run = (accounts: unknown[], pools: string, policy: unknown) =>
+    runStep(guard.run!, {
+      env: ROLE_IDS,
+      commands: {
+        gcloud: `case "$1 $2 $3" in
+  "config get-value project") echo p-1 ;;
+  "iam service-accounts list") [[ " $* " == *" --filter=email~^anycloud- --format=json "* ]] || exit 7; echo '${JSON.stringify(accounts)}' ;;
+  "iam workload-identity-pools list") printf '%s' '${pools}' ;;
+  "projects get-iam-policy p-1") echo '${JSON.stringify(policy)}' ;;
+  *) exit 8 ;;
+esac`,
+      },
+    });
+  const account = (description: string) => ({
+    email: 'anycloud-1@p-1.iam.gserviceaccount.com',
+    description,
+  });
+
+  // anycloud finds a GCP cluster by name in the whole project, by its
+  // service account's description, and install would resume it.
+  it("fails before install while the project has a backmesh cluster or an earlier run's role connection", () => {
+    expect(guard.if).toBe("matrix.cloud == 'gcp'");
+    expect(steps.indexOf(guard)).toBeGreaterThan(
+      steps.findIndex((s) => s.id === 'gcp'),
+    );
+    expect(steps.indexOf(guard)).toBeLessThan(
+      steps.findIndex((s) => s.id === 'install'),
+    );
+    const other = account('anycloud_cluster=c-2 anycloud_cluster_name=other');
+    const clean = run([other, {}], 'anycloud\n', {
+      bindings: [{ role: 'roles/viewer', members: ['user:a@example.com'] }],
+    });
+    expect(clean.status, clean.stdout + clean.stderr).toBe(0);
+    expect(clean.stdout).not.toContain('::error');
+    expect(run([], '', {}).status).toBe(0);
+
+    const cluster = run(
+      [account('anycloud_cluster=c-1 anycloud_cluster_name=backmesh')],
+      '',
+      {},
+    );
+    expect(cluster.status).toBe(1);
+    expect(cluster.stdout).toContain(
+      'service-account:anycloud-1@p-1.iam.gserviceaccount.com',
+    );
+    const pool = run([], 'bm-e2e-8-1\n', {});
+    expect(pool.status).toBe(1);
+    expect(pool.stdout).toContain('pool:bm-e2e-8-1');
+    const grant = run([], '', {
+      bindings: [
+        {
+          role: 'projects/p-1/roles/backmeshE2e',
+          members: ['serviceAccount:bm-e2e-8-1@p-1.iam.gserviceaccount.com'],
+        },
+      ],
+    });
+    expect(grant.status).toBe(1);
+    expect(grant.stdout).toContain(
+      'binding:projects/p-1/roles/backmeshE2e:serviceAccount:bm-e2e-8-1@p-1.iam.gserviceaccount.com',
+    );
+  });
+
+  it("doesn't uninstall or delete a role connection after it refuses", () => {
+    for (const name of [
+      'backmesh uninstall',
+      "Delete the role connection's setup",
+    ]) {
+      const step = steps.find((s) => s.name === name)!;
+      const runs = (guarded: string) =>
+        evaluate(unwrap(step.if!)!.replace('always()', 'true'), {
+          'steps.bin.outcome': 'success',
+          'steps.guard.outcome': 'skipped',
+          'steps.role-guard.outcome': 'skipped',
+          'steps.gcp-guard.outcome': guarded,
+        });
+      expect(runs('failure'), name).toBe(false);
+      expect(runs('success'), name).toBe(true);
+    }
+  });
+});
+
+describe("e2e.yml's GCP sweep", () => {
+  const sweep = read('e2e.yml').jobs['test-org']!.steps!.find(
+    (s) => s.name === 'Sweep GCP for anything left',
+  )!;
+  const ID = 'k3x9q2';
+  // sweepNames('k3x9q2', 7).
+  const ACCOUNT = 'anycloud-ba26a2c1754e69e04996@p-1.iam.gserviceaccount.com';
+  const ROLE_ACCOUNT = 'bm-e2e-9-1@p-1.iam.gserviceaccount.com';
+
+  // gcloud's answers, by command; each list is filtered as the step asks
+  // (checked), so each answer is what that filter would leave.
+  const run = (clusterId: string, left: Record<string, string> = {}) =>
+    runStep(sweep.run!, {
+      env: { ...ROLE_IDS, CLUSTER_ID: clusterId, ORG_ID: '7' },
+      commands: {
+        gcloud: `filter="name=anycloud-cluster-${ID} OR labels.anycloud_cluster=${ID} OR labels.anycloud_owner_api=e304b862e42fae86c367148fe8147c06"
+has() { local want=$1; shift; [[ " $* " == *" $want "* ]]; }
+case "$1 $2 $3" in
+  "config get-value project") echo p-1 ;;
+  "compute instances list") has "--filter=$filter" "$@" || exit 7; printf '%s' '${left.instances ?? ''}' ;;
+  "compute disks list") has "--filter=$filter" "$@" || exit 7; printf '%s' '${left.disks ?? ''}' ;;
+  "compute firewall-rules list") has "--filter=name~^anycloud-cluster-${ID}-" "$@" || exit 7; printf '%s' '${left.firewalls ?? ''}' ;;
+  "storage buckets list") printf '%s' '${left.buckets ?? 'someone-elses\n'}' ;;
+  "iam service-accounts list")
+    if has --filter=email~^anycloud- "$@"; then echo '${left.named ?? '[]'}'
+    elif has "--filter=email~^anycloud-ba26a2c1754e69e04996@" "$@"; then printf '%s' '${left.account ?? ''}'
+    elif has "--filter=email~^bm-e2e-9-1@" "$@"; then printf '%s' '${left.roleAccount ?? ''}'
+    else exit 7; fi ;;
+  "iam workload-identity-pools list") printf '%s' '${left.pools ?? 'anycloud\n'}' ;;
+  "projects get-iam-policy p-1") echo '${left.policy ?? '{"bindings":[{"role":"roles/viewer","members":["user:a@example.com"]}]}'}' ;;
+  *) exit 8 ;;
+esac`,
+      },
+    });
+
+  it('passes when nothing of the run is left', () => {
+    for (const id of [ID, '']) {
+      const out = run(id);
+      expect(out.status, out.stdout + out.stderr).toBe(0);
+      expect(out.stdout).not.toContain('::error');
+    }
+  });
+
+  it('fails naming everything left of the installation and its role connection', () => {
+    const out = run(ID, {
+      instances: `anycloud-cluster-${ID}\n`,
+      disks: 'runner-1\n',
+      firewalls: `anycloud-cluster-${ID}-k8s\n`,
+      buckets: `someone-elses\n${ID}\n`,
+      account: `${ACCOUNT}\n`,
+      roleAccount: `${ROLE_ACCOUNT}\n`,
+      pools: 'anycloud\nbm-e2e-9-1\n',
+      policy: JSON.stringify({
+        bindings: [
+          {
+            role: 'roles/compute.instanceAdmin.v1',
+            members: [`deleted:serviceAccount:${ACCOUNT}?uid=1`],
+          },
+          {
+            role: 'projects/p-1/roles/backmeshE2e',
+            members: [`serviceAccount:${ROLE_ACCOUNT}`],
+          },
+        ],
+      }),
+    });
+    expect(out.status).toBe(1);
+    expect(out.stdout.match(/^::error.*$/gm)).toEqual(
+      [
+        `binding:projects/p-1/roles/backmeshE2e:serviceAccount:${ROLE_ACCOUNT}`,
+        `binding:roles/compute.instanceAdmin.v1:deleted:serviceAccount:${ACCOUNT}?uid=1`,
+        `bucket:${ID}`,
+        'disk:runner-1',
+        `firewall-rule:anycloud-cluster-${ID}-k8s`,
+        `instance:anycloud-cluster-${ID}`,
+        'pool:bm-e2e-9-1',
+        `service-account:${ACCOUNT}`,
+        `service-account:${ROLE_ACCOUNT}`,
+      ].map((what) => `::error title=Left in GCP::${what}`),
+    );
+  });
+
+  it("fails naming the cache buckets by this installation's prefix", () => {
+    const cache = /CACHE_PREFIX=(\S+)/.exec(
+      spawnSync('node', ['test/e2e/sweep-names.ts'], {
+        env: { ...process.env, CLUSTER_ID: ID, ORG_ID: '7' },
+        encoding: 'utf8',
+      }).stdout,
+    )![1]!;
+    const out = run(ID, { buckets: `${cache}us-central1\nx${cache}\n` });
+    expect(out.stdout.match(/^::error.*$/gm)).toEqual([
+      `::error title=Left in GCP::bucket:${cache}us-central1`,
+    ]);
+  });
+
+  // Without the control plane's ID: its service account, made first and
+  // deleted last, which the guard found none of before.
+  it("fails naming a backmesh cluster's service account when the run has no control plane ID", () => {
+    const out = run('', {
+      named: JSON.stringify([
+        {
+          email: ACCOUNT,
+          description: `anycloud_cluster=${ID} anycloud_cluster_name=backmesh`,
+        },
+        { email: 'anycloud-2@p-1.iam.gserviceaccount.com' },
+      ]),
+    });
+    expect(out.status).toBe(1);
+    expect(out.stdout.match(/^::error.*$/gm)).toEqual([
+      `::error title=Left in GCP::service-account:${ACCOUNT}`,
+    ]);
   });
 });
 
