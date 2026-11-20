@@ -92,20 +92,13 @@ export async function readQuota(
   cloud: Cloud,
   region: string,
   command: RunCommand,
+  usageOf = (r: string) => readUsage(r, command),
 ): Promise<QuotaLimits> {
   // Google's quotas aren't read, as anycloud's `quota status` doesn't
   // read them (`src/api/services/quota/handler.ts:47-62`).
   if (cloud === 'gcp') return {};
   if (cloud === 'aws') {
-    const read = async (code: string) =>
-      Number(
-        await command([
-          ...['aws', 'service-quotas', 'get-service-quota'],
-          ...['--service-code', 'ec2', '--quota-code', code],
-          ...['--region', region, '--query', 'Quota.Value'],
-          ...['--output', 'text'],
-        ]),
-      );
+    const read = (code: string) => readServiceQuota(code, region, command);
     // The GPU quotas are only shown, so a failed read leaves them unread.
     const gpu = (kind: 'gpuSpot' | 'gpuOnDemand') =>
       read(quota('aws', kind)[0]).catch(() => undefined);
@@ -116,24 +109,65 @@ export async function readQuota(
       gpuOnDemand: await gpu('gpuOnDemand'),
     };
   }
-  const usage = JSON.parse(
-    await command([
-      ...['az', 'vm', 'list-usage', '--location', region],
-      ...['--output', 'json'],
-    ]),
-  ) as { name?: { value?: string }; limit?: number | string }[];
-  const read = (name: string) => {
-    const found = usage.find(
-      (entry) => entry.name?.value?.toLowerCase() === name.toLowerCase(),
-    );
-    return found && Number(found.limit);
-  };
+  const usage = await usageOf(region);
+  const read = (name: string) => usageNamed(usage, name)?.limit;
   return {
     spot: read(quota('azure', 'spot')[0]),
     onDemand: read(quota('azure', 'onDemand')[0]),
     gpuOnDemand: read(quota('azure', 'gpuOnDemand')[0]),
   };
 }
+
+/** An AWS EC2 quota's value in the region, such as L-1216C47A's. */
+export const readServiceQuota = async (
+  code: string,
+  region: string,
+  command: RunCommand,
+) =>
+  Number(
+    await command([
+      ...['aws', 'service-quotas', 'get-service-quota'],
+      ...['--service-code', 'ec2', '--quota-code', code],
+      ...['--region', region, '--query', 'Quota.Value'],
+      ...['--output', 'text'],
+    ]),
+  );
+
+/** A region's Azure compute usage: its limit and what's in use, in vCPUs. */
+export interface Usage {
+  name: string;
+  limit: number;
+  current: number;
+}
+
+/**
+ * The region's Azure compute usage, through the user's `az`: the regional
+ * and low-priority vCPUs, and each VM family's.
+ */
+export const readUsage = async (
+  region: string,
+  command: RunCommand,
+): Promise<Usage[]> =>
+  (
+    JSON.parse(
+      await command([
+        ...['az', 'vm', 'list-usage', '--location', region],
+        ...['--output', 'json'],
+      ]),
+    ) as {
+      name?: { value?: string };
+      limit?: number | string;
+      currentValue?: number | string;
+    }[]
+  ).map((entry) => ({
+    name: entry.name?.value ?? '',
+    limit: Number(entry.limit),
+    current: Number(entry.currentValue ?? 0),
+  }));
+
+/** The usage named `name`, whatever its case. */
+export const usageNamed = (usage: readonly Usage[], name: string) =>
+  usage.find((entry) => entry.name.toLowerCase() === name.toLowerCase());
 
 export interface QuotaCheck {
   /** The vCPU limit, summed over the regions read; undefined on GCP. */
