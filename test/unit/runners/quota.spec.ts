@@ -87,6 +87,31 @@ describe('quota check', () => {
       '96 spot vCPUs (24 backmesh-4 jobs at once, unread in us-east-1)',
     );
   });
+
+  it("counts the jobs each region's limit fits, not the summed vCPUs'", () => {
+    // A sponsorship subscription's 3 spot vCPUs per region fit no
+    // backmesh-4 VM anywhere, though they sum past one.
+    const regions = ['eastus', 'eastus2', 'westus2', 'centralus'];
+    const limits = new Map(regions.map((r) => [r, { spot: 3 }]));
+    const check = quotaCheck('azure', regions, limits, true);
+    expect(formatQuota(check, true)).toBe(
+      '12 spot vCPUs (0 backmesh-4 jobs at once)',
+    );
+    expect(
+      formatQuota(
+        quotaCheck(
+          'aws',
+          ['us-east-1', 'us-east-2'],
+          new Map([
+            ['us-east-1', { spot: 6 }],
+            ['us-east-2', { spot: 6 }],
+          ]),
+          true,
+        ),
+        true,
+      ),
+    ).toBe('12 spot vCPUs (2 backmesh-4 jobs at once)');
+  });
 });
 
 describe('GPU quota', () => {
@@ -123,6 +148,16 @@ describe('GPU quota', () => {
       'us-east-2: GPU spot quota 0 vCPU, skipped; raise L-3819A6DF to use it',
       'us-east-2: GPU on-demand quota 0 vCPU, skipped; raise L-DB2E81BA to use it',
     ]);
+    expect(
+      formatGpuQuota(
+        'aws',
+        new Map([
+          ['us-east-1', { gpuSpot: 7 }],
+          ['us-east-2', { gpuSpot: 7 }],
+        ]),
+        classes.slice(0, 1),
+      ),
+    ).toBe('GPU quota: 14 spot vCPUs (2 backmesh-gpu-t4 jobs at once)');
     expect(formatGpuQuota('aws', limits, classes)).toBe(
       'GPU quota: 0 spot vCPUs (0 backmesh-gpu-t4 jobs at once), 8 on-demand vCPUs (2 backmesh-gpu-od-t4 jobs at once); raise EC2 "All G and VT Spot Instance Requests" (L-3819A6DF) in us-east-1, us-east-2 to run backmesh-gpu-t4',
     );

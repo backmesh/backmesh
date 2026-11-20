@@ -45,6 +45,7 @@ import {
   where,
   type Cloud,
   type CloudTarget,
+  type RunnerClass,
 } from '../runners/classes.js';
 import {
   formatGpuQuota,
@@ -247,6 +248,18 @@ export interface InstallOptions {
 
 // What `--public-repos` opens, and what it needs.
 export const PUBLIC_REPOS_LINE = `Public repositories: the org's public repositories may use the runners. Their forks' pull requests run only on ${PUBLIC_VCPUS.map((n) => `backmesh-public-${n}`).join(' and ')}, with ${PUBLIC_VCPU_CAP} vCPUs at once; a fork run that asks for another label is cancelled. Set GitHub's "Require approval for all external contributors" for the org, and keep nothing else in the runners' cloud network: a job can reach the network's other instances.`;
+
+/**
+ * The labels a workflow's `runs-on` takes, exactly as the listener's scale
+ * sets name them: the control plane's cloud's carry no cloud, so on an
+ * Azure control plane it's `backmesh-gpu-t4`, and `backmesh-azure-gpu-t4`
+ * waits at GitHub for a runner that never comes.
+ */
+export const labelsLine = (
+  classes: readonly Pick<RunnerClass, 'label' | 'cloud'>[],
+  home: Cloud,
+) =>
+  `Labels for runs-on: ${classes.map((c) => c.label).join(', ')}${classes.some((c) => c.cloud === home) ? ` (${home}'s carry no "${home}-": it runs the control plane)` : ''}.`;
 
 export interface InstallUi {
   print(line: string): void;
@@ -1133,6 +1146,8 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   // Labels whose every region's quota is under one runner: shown in the
   // plan, and asked about at a terminal.
   const noRunners: string[] = [];
+  // Every such label, GPU ones too, which install's end never suggests.
+  const blocked = new Set<string>();
   // Each runner cloud's limits, and each region's Azure usage, read once
   // for the runners and the always-on VMs.
   const read = new Map<Cloud, Map<string, QuotaLimits>>();
@@ -1184,6 +1199,9 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       ),
     );
     quotas.push(...skippedRegions(cloud, limits, mine));
+    for (const c of mine) {
+      if (startsNoRunners(cloud, limits, [c]).length) blocked.add(c.label);
+    }
   }
   if (problems.length) {
     throw new Error(`Can't run the runners:\n- ${problems.join('\n- ')}`);
@@ -1217,13 +1235,14 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   const found = reused
     ? undefined
     : await namedControlPlane(CLUSTER, cloud, region, deps.command);
-  checkOwn({
+  await checkOwn({
     name: CLUSTER,
     cloud,
     region,
     found,
     targeted: targeted && clusterIdOf(targeted.url),
     given: options.controlPlaneId,
+    command: deps.command,
   });
   const started = !listeners && cloud === 'azure' ? found?.region : undefined;
   if (found) {
@@ -1344,6 +1363,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   [...notes, ...plan.rates, ...quotas, ...plan.noKvm, ...plan.noGpu].forEach(
     (line) => ui.print(line),
   );
+  ui.print(labelsLine(plan.classes, placement.controlPlane.cloud));
   if (!plan.controlPlane.exists) {
     ui.print(
       `Always on: the control plane's VM (${MANAGEMENT_VM[controlPlane.cloud]}) on ${controlPlane.cloud} ${controlPlane.region}, about $${MANAGEMENT_MONTHLY_USD[controlPlane.cloud]} a month with its disk and address.`,
@@ -1652,10 +1672,27 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     await answering(exec, { org: options.org, vm }, deps.wait);
   }
 
-  // Step 9.
-  const label = classPlan.classes.find((c) => c.vcpus === 4);
+  // Step 9: the largest spot label up to the default 4 vCPUs that the
+  // quotas start a runner for.
+  const label = classPlan.classes
+    .filter(
+      (c) =>
+        c.spot &&
+        !c.kvm &&
+        !c.gpu &&
+        !c.public &&
+        c.vcpus <= 4 &&
+        !blocked.has(c.label),
+    )
+    .reduce<RunnerClass | undefined>(
+      (best, c) => (best && best.vcpus >= c.vcpus ? best : c),
+      undefined,
+    );
+  ui.print(labelsLine(classPlan.classes, placement.controlPlane.cloud));
   ui.print(
-    `Done. Use \`runs-on: ${label?.label}\` (a 4-vCPU spot VM) in a workflow; other sizes: https://backmesh.com/labels/`,
+    label
+      ? `Done. Use \`runs-on: ${label.label}\` (a ${label.vcpus}-vCPU spot VM) in a workflow; other sizes: https://backmesh.com/labels/`
+      : 'Done, but no spot label up to 4 vCPUs starts a runner until a quota the plan named is raised. Sizes: https://backmesh.com/labels/',
   );
   return {
     apiUrl: url,

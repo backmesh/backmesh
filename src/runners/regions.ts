@@ -18,6 +18,8 @@ import type { Cloud } from './classes.js';
 export type RunCommand = (
   command: string[],
   env?: NodeJS.ProcessEnv,
+  // Milliseconds, a minute unless given.
+  timeout?: number,
 ) => Promise<string>;
 
 /**
