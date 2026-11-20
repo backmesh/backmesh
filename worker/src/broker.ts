@@ -76,8 +76,8 @@ export const notInstalled = (env: Env, org: number) =>
 // The org's unrevoked installs but `except` that minted a token in the last
 // hour, each with its last mint: a listener that still runs refreshes its
 // token every 30 minutes. An aborted install's leftover key doesn't count,
-// nor install's and upgrade's own App check (`ok_check`), so a failed
-// install whose listener never ran doesn't hold up its uninstall.
+// nor install's and upgrade's own App check (`ok_check`, no token), so a
+// failed install whose listener never ran doesn't hold up its uninstall.
 async function liveInstalls(env: Env, org: number, except: string | null) {
   const { results } = await env.DB.prepare(
     `SELECT install, max(at) AS at FROM audit WHERE org = ?1 AND at > ?2
@@ -98,15 +98,36 @@ const tooMany = () =>
 
 // POST /v1/token: a token for the key's org. Never refused over billing:
 // an unpaid or over-cap org still gets tokens. `{ purpose: 'check' }` is
-// install's and upgrade's App check, not a listener's.
+// install's and upgrade's App check, not a listener's: it reads the
+// installation afresh and answers no token, so it can't mint one that
+// uninstall doesn't count.
 export async function token(
   request: Request,
   env: Env,
   install: { id: string; org: number },
 ) {
-  const { purpose } = (await request.json().catch(() => ({}))) as {
+  const body = (await request.json().catch(() => null)) as {
     purpose?: unknown;
-  };
+  } | null;
+  if (body?.purpose === 'check') {
+    await forget(env, install.org);
+    const found = await installationOf(env, install.org);
+    if (!found) {
+      console.log(`check refused: ${install.id} app_not_installed`);
+      return notInstalled(env, install.org);
+    }
+    await audit(env, request, {
+      action: 'token',
+      outcome: 'ok_check',
+      install: install.id,
+      org: install.org,
+      installation: found.id,
+    });
+    return Response.json({
+      org: { id: install.org, login: found.login },
+      installation_permissions: found.permissions,
+    });
+  }
   // A cached grant without Actions write is read again, so an owner's
   // acceptance shows in the answer at once.
   const cached = await installationOf(env, install.org);
@@ -121,7 +142,7 @@ export async function token(
   const { answer, installation, granted } = minted;
   await audit(env, request, {
     action: 'token',
-    outcome: purpose === 'check' ? 'ok_check' : 'ok',
+    outcome: 'ok',
     install: install.id,
     org: install.org,
     installation,

@@ -424,17 +424,41 @@ describe("uninstall's cleanup", () => {
     // A failed install's check: its listener never ran.
     const checked = await mintKey(env.DB, 11);
     const res = await call('/v1/token', checked.key, { purpose: 'check' });
-    expect(await res.json()).toMatchObject({ org: { login: 'acme' } });
+    // It confirms the installation and mints nothing: no token a key holder
+    // could use uncounted.
+    expect(await res.json()).toEqual({
+      org: { id: 11, login: 'acme' },
+      installation_permissions: ALL,
+    });
+    expect(upstream.mints).toEqual([]);
     expect(await auditRows()).toEqual([
       expect.objectContaining({
         action: 'token',
         outcome: 'ok_check',
         install: checked.install,
+        installation: 7,
+        permissions: null,
       }),
     ]);
-    upstream.mints = [];
 
     expect((await cleanup('alice')).status).toBe(200);
+  });
+
+  it("answers a check 409 where the App isn't installed, and takes a null body as a mint", async () => {
+    const theirs = await mintKey(env.DB, 12);
+    expect(
+      (await call('/v1/token', theirs.key, { purpose: 'check' })).status,
+    ).toBe(409);
+    const own = await mintKey(env.DB, 11);
+    const res = await worker.fetch(
+      new Request(`${ORIGIN}/v1/token`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${own.key}` },
+        body: 'null',
+      }),
+      env,
+    );
+    expect(await res.json()).toMatchObject({ token: 'ghs_7' });
   });
 
   it("leaves the sender's own key working when a sibling install or the limit refuses", async () => {
