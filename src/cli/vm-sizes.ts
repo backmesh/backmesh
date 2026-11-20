@@ -40,14 +40,12 @@ const refused = (skus: readonly Sku[], size: string, region: string) => {
   return restriction && (restriction.reasonCode ?? 'restricted');
 };
 
-// A region's entries for `vms`' sizes, projected to what `refused` reads.
-const readSkus = (
-  region: string,
-  vms: readonly AlwaysOn[],
-  command: RunCommand,
-) =>
+// Every region's entries for `vms`' sizes, projected to what `refused`
+// reads. One call: each `az vm list-skus` downloads Azure's whole catalog,
+// and one per region at once starved a GitHub-hosted runner.
+const readSkus = (vms: readonly AlwaysOn[], command: RunCommand) =>
   command([
-    ...['az', 'vm', 'list-skus', '--all', '--location', region],
+    ...['az', 'vm', 'list-skus', '--all'],
     ...['--resource-type', 'virtualMachines', '--query'],
     `[?${vms.map((vm) => `name=='${vm.size}'`).join(' || ')}].{name:name,locations:locations,restrictions:restrictions}`,
     ...['--output', 'json'],
@@ -56,10 +54,9 @@ const readSkus = (
 /**
  * Where install creates `vms`: the first of `candidates` offering every
  * size, and with `fallback` (a new control plane) the passing regions after
- * it, which install tries in turn when Azure has no capacity on create; a
- * region whose sizes couldn't be read is left out. `advice` ends the error
- * when none passes. Undefined when the first candidate couldn't be read, so
- * install tries it alone.
+ * it, which install tries in turn when Azure has no capacity on create.
+ * `advice` ends the error when none passes. Undefined when the sizes
+ * couldn't be read, so install tries the first candidate alone.
  */
 export async function alwaysOnRegions(
   candidates: readonly string[],
@@ -69,17 +66,13 @@ export async function alwaysOnRegions(
   report: { print: (line: string) => void },
 ): Promise<string[] | undefined> {
   const region = candidates[0]!;
-  const read = await Promise.allSettled(
-    candidates.map((r) => readSkus(r, vms, command)),
-  );
-  if (read[0]!.status === 'rejected') {
+  const all = await readSkus(vms, command).catch(() => undefined);
+  if (!all) {
     report.print(
       `Azure's VM sizes couldn't be read, so install tries ${region} alone.`,
     );
     return undefined;
   }
-  const readable = candidates.filter((_, i) => read[i]!.status === 'fulfilled');
-  const all = read.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
   const lines = vms.flatMap((vm) => {
     const why = refused(all, vm.size, region);
     return why
@@ -88,7 +81,7 @@ export async function alwaysOnRegions(
         ]
       : [];
   });
-  const passing = readable.filter((r) =>
+  const passing = candidates.filter((r) =>
     vms.every((vm) => !refused(all, vm.size, r)),
   );
   if (!passing.length) {

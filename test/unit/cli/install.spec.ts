@@ -291,7 +291,7 @@ function setUp(
         return JSON.stringify(serviceAccounts);
       }
       if (args[0] === 'az' && args[2] === 'list-skus') {
-        return skus(restricted, args[args.indexOf('--location') + 1]!);
+        return skus(restricted);
       }
       if (args[0] === 'az' && args[2] === 'list-usage') {
         return JSON.stringify(
@@ -2640,28 +2640,29 @@ describe('install', () => {
   });
 });
 
-// `az vm list-skus --all --location <region> --resource-type
-// virtualMachines` as Azure documents it (learn.microsoft.com, "Resolve
-// errors for SKU not available"), projected as install's `--query` does:
-// each size's entry for the region, with a `Location` restriction,
-// `NotAvailableForSubscription`, where `restricted` says the subscription
-// may not create it.
-function skus(restricted: Record<string, string[]>, location: string) {
+// `az vm list-skus --all --resource-type virtualMachines` as Azure
+// documents it (learn.microsoft.com, "Resolve errors for SKU not
+// available"), projected as install's `--query` does: each size's entry per
+// region, with a `Location` restriction, `NotAvailableForSubscription`,
+// where `restricted` says the subscription may not create it.
+function skus(restricted: Record<string, string[]>) {
   return JSON.stringify(
-    ['Standard_D2s_v5', 'Standard_B2s'].map((name) => ({
-      name,
-      locations: [location],
-      restrictions: (restricted[name] ?? []).includes(location)
-        ? [
-            {
-              reasonCode: 'NotAvailableForSubscription',
-              restrictionInfo: { locations: [location], zones: null },
-              type: 'Location',
-              values: [location],
-            },
-          ]
-        : [],
-    })),
+    ['Standard_D2s_v5', 'Standard_B2s'].flatMap((name) =>
+      RUNNER_REGIONS.azure.map((location) => ({
+        name,
+        locations: [location],
+        restrictions: (restricted[name] ?? []).includes(location)
+          ? [
+              {
+                reasonCode: 'NotAvailableForSubscription',
+                restrictionInfo: { locations: [location], zones: null },
+                type: 'Location',
+                values: [location],
+              },
+            ]
+          : [],
+      })),
+    ),
   );
 }
 // The outside org's sponsorship subscription.
@@ -2739,12 +2740,11 @@ describe("install's always-on VM sizes on Azure", () => {
   it('names a restricted size before any sign-in, and places the VMs where every size is offered', async () => {
     const { deps, lines, worker, commands } = azure();
     const { plan } = await planned(eastus, deps);
-    expect(commands).toContain(
-      "az vm list-skus --all --location eastus --resource-type virtualMachines --query [?name=='Standard_D2s_v5' || name=='Standard_B2s'].{name:name,locations:locations,restrictions:restrictions} --output json",
-    );
-    expect(
-      commands.filter((c) => c.startsWith('az vm list-skus')),
-    ).toHaveLength(RUNNER_REGIONS.azure.length);
+    // One read for every region: each `az vm list-skus` downloads Azure's
+    // whole catalog, which one per region at once starved a hosted runner.
+    expect(commands.filter((c) => c.startsWith('az vm list-skus'))).toEqual([
+      "az vm list-skus --all --resource-type virtualMachines --query [?name=='Standard_D2s_v5' || name=='Standard_B2s'].{name:name,locations:locations,restrictions:restrictions} --output json",
+    ]);
     expect(lines.filter((l) => l.startsWith("Azure won't create"))).toEqual([
       expect.stringContaining(
         '(Standard_B2s) in eastus for this subscription: NotAvailableForSubscription',
@@ -2917,31 +2917,17 @@ describe("install's always-on VM sizes on Azure", () => {
     expect(error.message).not.toContain('--control-plane');
   });
 
-  it("leaves out a region whose sizes can't be read, and tries the chosen one alone when it can't be", async () => {
-    const unreadable = (region: string) => {
-      const set = azure();
-      const { command } = set.deps;
-      set.deps.command = async (args, env) => {
-        if (args[2] === 'list-skus' && args.includes(region)) {
-          throw new Error('timed out');
-        }
-        return command(args, env);
-      };
-      return set;
+  it("tries the chosen region alone when Azure's sizes can't be read", async () => {
+    const set = azure();
+    const { command } = set.deps;
+    set.deps.command = async (args, env) => {
+      if (args[2] === 'list-skus') throw new Error('timed out');
+      return command(args, env);
     };
-    const other = unreadable('northcentralus');
-    expect((await planned(eastus, other.deps)).plan.alwaysOnRegions).toEqual([
-      'centralus',
-      'southcentralus',
-      'westcentralus',
-      'westus',
-      'westus3',
-    ]);
-    const chosen = unreadable('eastus');
-    const { plan } = await planned(eastus, chosen.deps);
+    const { plan } = await planned(eastus, set.deps);
     expect(plan.alwaysOnRegions).toBeUndefined();
     expect(plan.controlPlane.region).toBe('eastus');
-    expect(chosen.lines).toContain(
+    expect(set.lines).toContain(
       "Azure's VM sizes couldn't be read, so install tries eastus alone.",
     );
   });

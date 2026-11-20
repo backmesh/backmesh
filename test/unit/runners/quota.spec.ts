@@ -243,6 +243,20 @@ describe('quota read through the cloud CLI', () => {
       'OptInRequired',
     );
   });
+
+  it('reads two regions at a time', async () => {
+    let reading = 0;
+    let most = 0;
+    const read = async () => {
+      most = Math.max(most, ++reading);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      reading--;
+      return { spot: 1 };
+    };
+    const regions = ['a', 'b', 'c', 'd', 'e'];
+    expect([...(await readQuotas(regions, read)).keys()]).toEqual(regions);
+    expect(most).toBe(2);
+  });
 });
 
 describe('readQuotaStatus', () => {
