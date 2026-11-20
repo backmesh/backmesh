@@ -126,6 +126,27 @@ describe('cache buckets', () => {
     // Only the clouds install connected.
     expect(lines).toHaveLength(2);
   });
+  it("deletes only this installation's buckets", async () => {
+    const { api, owned } = fakeApi({
+      'bm-aws': [
+        'bm-cache-abc12-us-east-2',
+        'bm-cache-xyz98-us-east-2',
+        'bm-cache-x',
+        'mine',
+      ],
+    });
+    await deleteCacheBuckets(
+      api,
+      'abc12',
+      new Map([['aws', { connection: 'bm-aws' }]] as const),
+      () => {},
+    );
+    expect(owned['bm-aws']).toEqual([
+      'bm-cache-xyz98-us-east-2',
+      'bm-cache-x',
+      'mine',
+    ]);
+  });
 });
 
 describe('allowedRegions', () => {
