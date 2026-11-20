@@ -31,8 +31,14 @@ name: E2E
 # as AWS_ROLE_ARN, and Azure as the managed identity backmesh-e2e (resource
 # group backmesh-e2e-identity), which trusts that environment's OIDC subject
 # only and holds Contributor and User Access Administrator on the
-# subscription: the role connection's setup makes a custom role and assigns
-# it. The owner's
+# subscription: install's seed assigns the control plane's identity
+# Contributor and Storage Blob Data Contributor (anycloud's
+# seed/azure-template.json, and the roleAssignments/write right
+# seed/accounts.ts:138 checks, at v0.1.79), and the role connection's setup
+# writes a custom role definition and assigns it. Our Azure CI subscription
+# also holds our production control plane, so this identity can write there,
+# grant roles included: an accepted risk, kept to the e2e environment's
+# reviewers. The owner's
 # one-time setup is, in `e2e`, E2E_TEST_ORG_DEPLOY_KEY (a write deploy key
 # on the test org's e2e repository), AWS_ROLE_ARN, the identity's
 # AZURE_CLIENT_ID, AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID, and that
@@ -65,8 +71,11 @@ on:
 
 permissions: {}
 
+# A version run's install makes its subscription's one role connection setup,
+# anycloud-role (see the role guard), so version runs queue behind one
+# another whatever their test org.
 concurrency:
-  group: e2e-${{ inputs.org }}
+  group: e2e-${{ inputs.version && 'test-org' || inputs.org }}
   cancel-in-progress: false
 
 defaults:
@@ -330,7 +339,7 @@ jobs:
         run: |
           if [[ $(az group exists --name anycloud-role) == true \
             || -n $(az deployment sub list --query "[?name == 'anycloud-role'].name" --output tsv) ]]; then
-            echo "::error title=A role connection in the subscription::anycloud-role is there already"
+            echo "::error title=A role connection in the subscription::anycloud-role is there already. If no installation uses it (a run's cleanup that didn't finish), delete it as that cleanup does, in this subscription: az role assignment delete for anycloud-role's identity's assignments, az group delete --name anycloud-role, az role definition delete --name 'Anycloud role connection <subscription ID>', az deployment sub delete --name anycloud-role"
             exit 1
           fi
 
@@ -462,7 +471,9 @@ jobs:
       # `credentials delete --apply` (role-connection-teardown.ts at
       # v0.1.79) would have, which needs the control plane. A connection
       # comes only with a control plane; on Azure, the guard found none
-      # there before.
+      # there before. It runs after a failed uninstall too, deliberately: the
+      # setup is this run's either way, and the sweep still names whatever
+      # uninstall left.
       - name: Delete the role connection's setup
         if: ${{ always() && steps.bin.outcome == 'success' && steps.guard.outcome != 'failure' && steps.role-guard.outcome != 'failure' }}
         timeout-minutes: 30
@@ -478,14 +489,22 @@ jobs:
           scope=/subscriptions/$AZURE_SUBSCRIPTION_ID
           role="Anycloud role connection $AZURE_SUBSCRIPTION_ID"
           if [[ $(az group exists --name anycloud-role) == true ]]; then
-            principal=$(az identity show --resource-group anycloud-role --name anycloud-role --query principalId --output tsv)
-            ids=$(az role assignment list --scope "$scope" --fill-principal-name false \
-              --query "[?principalId == '$principal'].id" --output tsv)
-            [[ -z $ids ]] || az role assignment delete --ids $ids
+            # A setup that failed partway may have no identity; its group
+            # goes all the same.
+            principal=$(az identity show --resource-group anycloud-role --name anycloud-role --query principalId --output tsv) \
+              || principal=
+            if [[ -n $principal ]]; then
+              ids=$(az role assignment list --scope "$scope" --fill-principal-name false \
+                --query "[?principalId == '$principal'].id" --output tsv)
+              [[ -z $ids ]] || az role assignment delete --ids $ids
+            fi
             az group delete --name anycloud-role --yes
           fi
+          # Azure keeps a role definition while anything is assigned it; the
+          # sweep names it then.
           [[ -z $(az role definition list --name "$role" --scope "$scope" --query '[].name' --output tsv) ]] \
-            || az role definition delete --name "$role" --scope "$scope"
+            || az role definition delete --name "$role" --scope "$scope" \
+            || echo "::warning::Couldn't delete the role definition $role"
           [[ -z $(az deployment sub list --query "[?name == 'anycloud-role'].name" --output tsv) ]] \
             || az deployment sub delete --name anycloud-role
 
@@ -549,6 +568,8 @@ jobs:
       # left, can only be told apart by not being there before.
       - name: Sweep Azure for anything left
         if: ${{ always() && steps.azure.outcome == 'success' }}
+        env:
+          ROLE_GUARD: ${{ steps.role-guard.outcome }}
         run: |
           left=()
           # az's empty answer is a blank line, not a name.
@@ -570,11 +591,14 @@ jobs:
                 --query "[?name == '$CLUSTER_ID' || starts_with(name, '$CACHE_PREFIX')].name" --output tsv | named container:))
             fi
           fi
-          # The role connection's setup, which the guard found none of before.
-          [[ $(az group exists --name anycloud-role) == false ]] || left+=(resource-group:anycloud-role)
-          left+=($(az deployment sub list --query "[?name == 'anycloud-role'].name" --output tsv | named deployment:))
-          left+=($(az role definition list --name "Anycloud role connection $AZURE_SUBSCRIPTION_ID" \
-            --scope "/subscriptions/$AZURE_SUBSCRIPTION_ID" --query '[].name' --output tsv | named role-definition:))
+          # The role connection's setup, which the guard found none of before;
+          # after it refused, the one there is another's.
+          if [[ $ROLE_GUARD != failure ]]; then
+            [[ $(az group exists --name anycloud-role) == false ]] || left+=(resource-group:anycloud-role)
+            left+=($(az deployment sub list --query "[?name == 'anycloud-role'].name" --output tsv | named deployment:))
+            left+=($(az role definition list --name "Anycloud role connection $AZURE_SUBSCRIPTION_ID" \
+              --scope "/subscriptions/$AZURE_SUBSCRIPTION_ID" --query '[].name' --output tsv | named role-definition:))
+          fi
           left=($(printf '%s\n' "${left[@]}" | sort -u))
           if ((${#left[@]})); then
             printf '::error title=Left in Azure::%s\n' "${left[@]}"

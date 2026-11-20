@@ -9,14 +9,19 @@ name: e2e Azure identity
 #   and the user-assigned managed identity backmesh-e2e in it, gives that
 #   identity one federated credential, for that subject, and assigns it
 #   Contributor and User Access Administrator on the subscription, and no
-#   other role. e2e's install makes the control plane (Contributor) and a
-#   role connection, whose setup defines a custom role and assigns it to
-#   its own identity (Microsoft.Authorization/*/write: User Access
-#   Administrator); uninstall and the cleanup after it delete them. For
-#   comparison it prints the roles ci-install's app holds there. Without
-#   `apply` it only prints what it would do. Idempotent; it refuses anything
-#   there it didn't make. It prints the identity's client ID, the e2e
-#   environment's AZURE_CLIENT_ID.
+#   other role. e2e's install makes the control plane (Contributor) and
+#   assigns roles either way: anycloud's seed assigns the control plane's
+#   identity Contributor and Storage Blob Data Contributor
+#   (seed/azure-template.json, and the roleAssignments/write right
+#   seed/accounts.ts:138 checks, at v0.1.79), and the role connection's
+#   setup writes a custom role definition and assigns it to its own
+#   identity. Both take User Access Administrator; uninstall and the
+#   cleanup after it delete them. The subscription also holds our
+#   production control plane, so this identity can write there, grant roles
+#   included: an accepted risk, kept to the e2e environment's reviewers.
+#   Without `apply` it only prints what it would do. Idempotent; it refuses
+#   anything there it didn't make. It prints the identity's client ID, the
+#   e2e environment's AZURE_CLIENT_ID.
 # Deleted after use.
 on:
   workflow_dispatch:
@@ -99,12 +104,6 @@ jobs:
             done
           }
 
-          # The app's object ID, from its ARM token's claims: reading it by
-          # client ID would take Microsoft Graph.
-          claims=$(az account get-access-token --query accessToken -o tsv | cut -d. -f2 | tr '_-' '/+')
-          while ((${#claims} % 4)); do claims+='='; done
-          app=$(base64 -d <<<"$claims" | jq -r .oid)
-          echo "ci-install's app holds, on the subscription:" && named "$(roles "$app")"
           # Contributor and User Access Administrator, Azure's built-in IDs.
           want=$(jq -n --arg scope "$scope" '["b24988ac-6180-42a0-ab88-20f7382dd24c", "18d7d88d-d35e-4fb5-a5c3-7773c20a72d9"]
             | map({roleDefinitionId: "\($scope)/providers/Microsoft.Authorization/roleDefinitions/\(.)",
