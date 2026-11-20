@@ -94,9 +94,9 @@ import {
   alwaysOnRegions,
   candidateRegions,
   noCapacity,
-  startedRegion,
   type AlwaysOn,
 } from './vm-sizes.js';
+import { checkOwn, namedControlPlane } from './named-control-plane.js';
 import {
   RUNNER_REGIONS,
   SUGGESTED_REGION,
@@ -220,6 +220,9 @@ export interface InstallOptions {
   org: string;
   // `--control-plane <cloud>:<region>`.
   controlPlane?: string;
+  // `--control-plane-id`: the control plane named `backmesh` in the
+  // account to resume, which this machine doesn't target.
+  controlPlaneId?: string;
   // `--runners <cloud>`, repeatable: a cloud only.
   runners?: string[];
   yes: boolean;
@@ -621,10 +624,24 @@ async function bootstrapCluster(
         '--json',
       ]);
     } catch (error) {
-      const id =
-        error instanceof StepFailed &&
-        /\] Creating cluster \S+ \(ID: ([^)\s]+)\)/.exec(error.stderr)?.[1];
-      if (cloud !== 'azure' || !noCapacity(error) || !id) throw error;
+      const [, started, id] =
+        (error instanceof StepFailed &&
+          /\] (Creating|Resuming) cluster \S+ \(ID: ([^)\s]+)\)/.exec(
+            error.stderr,
+          )) ||
+        [];
+      if (
+        cloud !== 'azure' ||
+        !noCapacity(error) ||
+        started !== 'Creating' ||
+        !id
+      ) {
+        // Nothing on this machine names it until it runs (`checkOwn`).
+        if (id && error instanceof Error) {
+          error.message += `\nTo resume it, run install again with --control-plane-id ${id}.`;
+        }
+        throw error;
+      }
       // `cluster delete` looks for the cluster's API first, and with this
       // machine's local target and no local API it exits there; its own
       // never answers, so delete goes on without it (`cluster.md`, "Delete
@@ -1177,15 +1194,25 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
           },
         ]),
   ];
-  // A new Azure control plane named `backmesh` that already exists, such
-  // as one an earlier run started, resumes where it is.
-  const started =
-    placed.cloud === 'azure' && !listeners
-      ? await startedRegion(CLUSTER, deps.command)
-      : undefined;
-  if (started) {
+  // The control plane named `backmesh` that `cluster create` would
+  // resume: this machine's own, or the one `--control-plane-id` names, and
+  // on Azure in its own region.
+  const { cloud, region } = placement.controlPlane;
+  const found = reused
+    ? undefined
+    : await namedControlPlane(CLUSTER, cloud, region, deps.command);
+  checkOwn({
+    name: CLUSTER,
+    cloud,
+    region,
+    found,
+    targeted: targeted && clusterIdOf(targeted.url),
+    given: options.controlPlaneId,
+  });
+  const started = !listeners && cloud === 'azure' ? found?.region : undefined;
+  if (found) {
     note.print(
-      `A control plane named ${CLUSTER} exists in azure ${started}; install resumes it there.`,
+      `Install resumes the control plane ${found.id}${started ? ` in azure ${started}` : ''}.`,
     );
   }
   const regions =

@@ -47,7 +47,9 @@ creates it, install deletes that cluster's resource group and checkpoint bucket
 and tries the next, without signing in again. The `anycloud-storage` resource
 group and storage account that your subscription's first control plane made
 stay, as other control planes use them. A control plane named `backmesh` that
-already exists in the subscription is resumed in its own region.
+already exists in the subscription is resumed in its own region, once this
+machine uses it or `--control-plane-id` names it
+([More](/install/#a-control-plane-that-already-exists)).
 
 ## What install creates
 

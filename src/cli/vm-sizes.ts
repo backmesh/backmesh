@@ -117,35 +117,6 @@ export const candidateRegions = (region: string) =>
     ? [region, ...RUNNER_REGIONS.azure.filter((r) => r !== region)]
     : [region];
 
-/**
- * The region of the Azure control plane named `name` in this subscription,
- * if one exists, such as one an earlier run started: `cluster create`
- * resumes it by its name tag in any region (`seed/azure.ts`'s
- * `findByName`), so install must use its region. Two of them stop install,
- * as `cluster create` would.
- */
-export async function startedRegion(name: string, command: RunCommand) {
-  const groups = JSON.parse(
-    await command([
-      ...['az', 'group', 'list', '--tag', `anycloud_cluster_name=${name}`],
-      ...['--query', '[].{id:tags.anycloud_cluster,location:location}'],
-      ...['--output', 'json'],
-    ]).catch((cause: unknown) => {
-      throw new Error(
-        `az couldn't list this subscription's resource groups, so install can't tell whether a control plane named ${name} exists.`,
-        { cause },
-      );
-    }),
-  ) as { id: string; location: string }[];
-  const ids = [...new Set(groups.map((g) => g.id))];
-  if (ids.length > 1) {
-    throw new UsageError(
-      `This subscription has ${ids.length} control planes named ${name}: ${groups.map((g) => `${g.id} in ${g.location}`).join(', ')}. install can't tell which to resume: run it from the machine that created the one you use, or delete the others' resource groups (anycloud-<id>), then run install again.`,
-    );
-  }
-  return groups[0]?.location;
-}
-
 // Azure's refusal of a create for capacity or a size the region can't take
 // now: `SkuNotAvailable`, or an allocation failure.
 export const noCapacity = (error: unknown) =>
