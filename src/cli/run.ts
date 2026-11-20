@@ -497,12 +497,16 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
     )
     .option('--plan-id <id>', 'the plan --yes agrees to, from --plan')
     .option('--yes', 'apply the plan --plan-id names without asking')
+    // Hidden until RFC 0053, as install's.
+    .addOption(new Option('--public-repos').hideHelp())
+    .addOption(new Option('--no-public-repos').hideHelp())
     .action(
       async (opts: {
         runners: string[];
         plan?: boolean;
         planId?: string;
         yes?: boolean;
+        publicRepos?: boolean;
       }) => {
         const result = await upgrade(
           (io.upgradeDeps ?? realUpgradeDeps)(io, json),
@@ -511,10 +515,16 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
             plan: opts.plan,
             planId: opts.planId,
             yes: opts.yes ?? false,
+            publicRepos: opts.publicRepos,
           },
         );
         if ('planId' in result) {
-          const again = opts.runners.map((r) => `--runners ${r}`).join(' ');
+          const again = [
+            ...opts.runners.map((r) => `--runners ${r}`),
+            ...(opts.publicRepos === undefined
+              ? []
+              : [opts.publicRepos ? '--public-repos' : '--no-public-repos']),
+          ].join(' ');
           print(
             result,
             `Plan ${result.planId}. To apply it: backmesh upgrade ${again ? `${again} ` : ''}--yes --plan-id ${result.planId}`,

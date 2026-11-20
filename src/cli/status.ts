@@ -42,6 +42,8 @@ import {
   orgOfListener,
   readInstallation,
   readOrgId,
+  readPublicRepos,
+  publicReposWarning,
   sessionOf,
   type Deployment,
   type Listener,
@@ -201,6 +203,10 @@ export async function readStatus({
         async ({ installKey: _, apiToken: __, runners, ...listener }) => ({
           ...listener,
           runners: await runnerClouds(runners, api),
+          // The org's public repositories its runner group refuses.
+          refusedPublicRepos: hasPublic(runners)
+            ? []
+            : ((await readPublicRepos(login, fetch)) ?? []),
         }),
         (error: unknown) => ({ error: message(error) }),
       );
@@ -297,6 +303,18 @@ export async function readStatus({
         `${org}'s listener is in standby and takes no jobs: its move off ${CONTROL_POOL} didn't finish. Run \`backmesh upgrade\`.`,
       );
     }
+    if (
+      'refusedPublicRepos' in listener &&
+      listener.refusedPublicRepos.length
+    ) {
+      warnings.push(
+        publicReposWarning(
+          org,
+          listener.refusedPublicRepos,
+          'backmesh upgrade --public-repos',
+        ),
+      );
+    }
     if ('error' in listener) {
       warnings.push(`${org}'s listener didn't answer: ${listener.error}`);
     } else if (!listener.status.installed) {
@@ -351,6 +369,15 @@ export async function readStatus({
 }
 
 export type StatusReport = Awaited<ReturnType<typeof readStatus>>;
+
+// Whether the classes have `install --public-repos`'s public ones.
+function hasPublic(json: string | undefined) {
+  try {
+    return !!json && parseRoutes(json).some((r) => r.public && !r.retiring);
+  } catch {
+    return false;
+  }
+}
 
 // Each cloud's regions, label count and summed vCPU quotas, such as "aws
 // us-east-2, 16 labels; quota: 640 spot vCPUs (…)"; null when the listener

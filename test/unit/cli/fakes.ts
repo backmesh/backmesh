@@ -233,10 +233,7 @@ export const ORG_IDS: Record<string, number> = { acme: 7, beta: 8 };
 // sets some, and deletes them after.
 export const PUBLIC_REPOS: Record<string, string[]> = {};
 export const githubOrg = (path: string) => {
-  const [org = '', repos] = path
-    .replace('/orgs/', '')
-    .toLowerCase()
-    .split('/');
+  const [org = '', repos] = path.replace('/orgs/', '').toLowerCase().split('/');
   if (repos === 'repos') {
     return Response.json(
       (PUBLIC_REPOS[org] ?? []).map((full_name) => ({
