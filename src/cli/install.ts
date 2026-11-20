@@ -1384,7 +1384,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   if (publicRepos) ui.print(PUBLIC_REPOS_LINE);
   else {
     const repos = await readPublicRepos(options.org, deps.fetch, deps.env);
-    if (repos?.length) {
+    if (repos?.names.length) {
       ui.print(
         publicReposWarning(
           options.org,

@@ -204,9 +204,9 @@ export async function readStatus({
           ...listener,
           runners: await runnerClouds(runners, api),
           // The org's public repositories its runner group refuses.
-          refusedPublicRepos: hasPublic(runners)
-            ? []
-            : ((await readPublicRepos(login, fetch)) ?? []),
+          refusedPublicRepos: lacksPublic(runners)
+            ? await readPublicRepos(login, fetch)
+            : undefined,
         }),
         (error: unknown) => ({ error: message(error) }),
       );
@@ -305,7 +305,7 @@ export async function readStatus({
     }
     if (
       'refusedPublicRepos' in listener &&
-      listener.refusedPublicRepos.length
+      listener.refusedPublicRepos?.names.length
     ) {
       warnings.push(
         publicReposWarning(
@@ -370,10 +370,11 @@ export async function readStatus({
 
 export type StatusReport = Awaited<ReturnType<typeof readStatus>>;
 
-// Whether the classes have `install --public-repos`'s public ones.
-function hasPublic(json: string | undefined) {
+// Whether the classes parse and have none of `--public-repos`'s public
+// ones.
+function lacksPublic(json: string | undefined) {
   try {
-    return !!json && parseRoutes(json).some((r) => r.public && !r.retiring);
+    return !!json && !parseRoutes(json).some((r) => r.public && !r.retiring);
   } catch {
     return false;
   }

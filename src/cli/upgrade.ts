@@ -350,7 +350,7 @@ export async function upgrade(
     if (isPublic && !wasPublic) print(PUBLIC_REPOS_LINE);
     else if (!isPublic) {
       const repos = await readPublicRepos(org, deps.fetch, deps.env);
-      if (repos?.length) {
+      if (repos?.names.length) {
         print(
           publicReposWarning(org, repos, 'backmesh upgrade --public-repos'),
         );

@@ -725,11 +725,26 @@ describe('upgrade', () => {
         yes: true,
         planId: 'planId' in plan ? plan.planId : '',
       });
-      expect(
+      const publicRoutes = () =>
         parseRoutes(secrets['backmesh-acme']!.BACKMESH_RUNNERS!)
           .filter((r) => r.public)
-          .map((r) => r.label),
-      ).toEqual(['backmesh-public-2', 'backmesh-public-4']);
+          .map(({ label, retiring }) => [label, !!retiring]);
+      expect(publicRoutes()).toEqual([
+        ['backmesh-public-2', false],
+        ['backmesh-public-4', false],
+      ]);
+
+      // --no-public-repos retires them like any dropped class.
+      const off = await upgrade(deps, { plan: true, publicRepos: false });
+      await upgrade(deps, {
+        publicRepos: false,
+        yes: true,
+        planId: 'planId' in off ? off.planId : '',
+      });
+      expect(publicRoutes()).toEqual([
+        ['backmesh-public-2', true],
+        ['backmesh-public-4', true],
+      ]);
     } finally {
       delete PUBLIC_REPOS.acme;
     }
@@ -1047,6 +1062,15 @@ describe('upgrade', () => {
         labelsOf('gcp'),
       );
       expect(controlPlaneChanges(calls, requests)).toEqual([]);
+    });
+
+    // The public labels are the control plane's cloud's, as install's.
+    it("refuses --public-repos without runners on the control plane's cloud", async () => {
+      await expect(
+        upgrade(both().deps, { runners: ['gcp'], publicRepos: true }),
+      ).rejects.toThrow(
+        "--public-repos needs runners on the control plane's cloud",
+      );
     });
 
     it('keeps every cloud without --runners', async () => {

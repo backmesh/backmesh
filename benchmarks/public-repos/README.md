@@ -8,8 +8,10 @@ not an E2E member.
 
 ## Setup
 
-1. Install, or re-run install, with `--public-repos` on the org.
-2. Set GitHub's "Require approval for all external contributors" for the org.
+1. Set GitHub's "Require approval for all external contributors" for the org
+   first: the gate can't hold a job back, so an idle runner on another label
+   could start a fork's job before the listener stops it.
+2. Install, or re-run install, or upgrade, with `--public-repos` on the org.
 3. Create a public repo in the org, such as `public-repos-check`. Push
    [`target/`](target/)'s three workflows to its `.github/workflows/` on
    `main`. `seed.yml` runs on that push and saves the entry the fork's cache

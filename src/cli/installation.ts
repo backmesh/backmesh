@@ -67,6 +67,7 @@ async function readGitHub(
   path: string,
   fetch: typeof globalThis.fetch,
   env: NodeJS.ProcessEnv,
+  signal?: AbortSignal,
 ) {
   const token = env.GITHUB_TOKEN?.trim() || env.GH_TOKEN?.trim();
   const read = async (authorization?: string) => {
@@ -75,6 +76,7 @@ async function readGitHub(
         accept: 'application/vnd.github+json',
         ...(authorization && { authorization }),
       },
+      signal,
     });
     return { response, body: await response.text() };
   };
@@ -124,25 +126,29 @@ export async function readOrgId(
 // The org's public repositories that aren't archived, of its first 100,
 // from GitHub's public `GET /orgs/{org}/repos`: a runner group refuses them
 // without `--public-repos` (runner-group.ts), and their jobs wait at GitHub
-// with no word to the listener. Undefined when GitHub doesn't answer, since
-// it only adds a warning.
+// with no word to the listener. `more` when GitHub has another page.
+// Undefined when GitHub doesn't answer within 10 s, since it only adds a
+// warning.
 export async function readPublicRepos(
   org: string,
   fetch: typeof globalThis.fetch = globalThis.fetch,
   env: NodeJS.ProcessEnv = process.env,
-): Promise<string[] | undefined> {
+): Promise<{ names: string[]; more: boolean } | undefined> {
   try {
     const { response, body } = await readGitHub(
       `/orgs/${encodeURIComponent(org)}/repos?type=public&per_page=100`,
       fetch,
       env,
+      AbortSignal.timeout(10_000),
     );
     if (!response.ok) return undefined;
-    return z
+    const repos = z
       .array(z.object({ full_name: z.string(), archived: z.boolean() }))
-      .parse(JSON.parse(body))
-      .filter((repo) => !repo.archived)
-      .map((repo) => repo.full_name);
+      .parse(JSON.parse(body));
+    return {
+      names: repos.filter((r) => !r.archived).map((r) => r.full_name),
+      more: repos.length === 100,
+    };
   } catch {
     return undefined;
   }
@@ -152,11 +158,11 @@ export async function readPublicRepos(
 // the install no public labels; `fix` is the command that adds them.
 export function publicReposWarning(
   org: string,
-  repos: readonly string[],
+  { names, more }: { names: readonly string[]; more: boolean },
   fix: string,
 ) {
-  const [n, example] = [repos.length, repos[0]];
-  return `${org}: ${n} public repositor${n === 1 ? 'y' : 'ies'} (such as ${example}) can't use these runners, and their jobs wait at GitHub. \`${fix}\` adds ${PUBLIC_VCPUS.map((v) => `backmesh-public-${v}`).join(' and ')} for them to use.`;
+  const n = names.length;
+  return `${org}: ${n}${more ? '+' : ''} public repositor${n === 1 && !more ? 'y' : 'ies'} (such as ${names[0]}) can't use these runners, and their jobs wait at GitHub. \`${fix}\` adds ${PUBLIC_VCPUS.map((v) => `backmesh-public-${v}`).join(' and ')} for them to use.`;
 }
 
 // GitHub's primary rate limit empties `x-ratelimit-remaining`; a secondary

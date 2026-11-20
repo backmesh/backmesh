@@ -120,7 +120,11 @@ jobs:
       - name: Install the released backmesh and the pinned anycloud
         env:
           GH_TOKEN: ${{ github.token }}
+          MODE: ${{ inputs.mode }}
+          PUBLIC_REPOS: ${{ inputs.public-repos }}
         run: |
+          [[ $PUBLIC_REPOS != true || $MODE == upgrade ]] \
+            || { echo "::error::public-repos is for mode upgrade only"; exit 1; }
           [[ $BACKMESH_SHA256 =~ ^[0-9a-f]{64}$ ]] \
             || { echo "::error::BACKMESH_SHA256 isn't $BACKMESH_VERSION's binary digest"; exit 1; }
           mkdir -p "$RUNNER_TEMP/bin" && cd "$RUNNER_TEMP/bin"

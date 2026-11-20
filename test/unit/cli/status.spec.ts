@@ -590,6 +590,18 @@ describe('status', () => {
         BACKMESH_RUNNERS: withPublic,
       });
       expect((await setUp({ listener }).read()).warnings).toEqual([]);
+      // Classes that don't parse say nothing of public repositories.
+      const unparsed = probed(LISTENER.status, 'acme', {
+        BACKMESH_RUNNERS: 'not json',
+      });
+      expect((await setUp({ listener: unparsed }).read()).warnings).toEqual([]);
+      // A full page of them is 100 or more.
+      PUBLIC_REPOS.acme = Array.from({ length: 100 }, (_, i) => `acme/r${i}`);
+      expect((await setUp().read()).warnings).toEqual([
+        expect.stringMatching(
+          /^acme: 100\+ public repositories \(such as acme\/r0\)/,
+        ),
+      ]);
     } finally {
       delete PUBLIC_REPOS.acme;
     }
