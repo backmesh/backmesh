@@ -238,6 +238,20 @@ describe("e2e.yml's test-org run", () => {
     expect(e2e.jobs.stop!.if).toMatch(/&& !inputs\.version/);
   });
 
+  // A test org's installation makes its subscription's one anycloud-role
+  // setup, so every version run, on any org, queues behind the last.
+  it('runs one version run at a time, whatever its org', () => {
+    const { group } = e2e.concurrency as { group: string };
+    const [, expr] = group.match(/^e2e-\$\{\{(.*)\}\}$/)!;
+    const of = (org: string, version: string) =>
+      evaluate(expr!, { 'inputs.org': org, 'inputs.version': version });
+    expect(of('backmesh-dryrun', 'v0.4.3-rc.1')).toBe(
+      of('another-test-org', 'v0.4.3'),
+    );
+    expect(of('backmesh', '')).toBe('backmesh');
+    expect(of('backmesh-dryrun', 'v0.4.3')).not.toBe(of('backmesh', ''));
+  });
+
   it('always uninstalls, keeping the App, and always sweeps', () => {
     const steps = e2e.jobs['test-org']!.steps!;
     const step = (name: string) => steps.find((s) => s.name === name)!;
@@ -529,6 +543,7 @@ describe("e2e.yml's Azure sweep", () => {
     before: string,
     now: string,
     role: Record<string, string> = {},
+    guard = 'success',
   ) => {
     const dir = mkdtempSync(join(tmpdir(), 'sweep-'));
     writeFileSync(join(dir, 'groups-before'), before);
@@ -537,6 +552,7 @@ describe("e2e.yml's Azure sweep", () => {
         RUNNER_TEMP: dir,
         CLUSTER_ID: '',
         AZURE_SUBSCRIPTION_ID: 's-1',
+        ROLE_GUARD: guard,
       },
       commands: {
         az: `case "$1 $2" in
@@ -569,6 +585,18 @@ esac`,
     expect(out.stdout.match(/^::error.*$/gm)).toEqual([
       '::error title=Left in Azure::resource-group:anycloud-new',
     ]);
+  });
+
+  // After the guard refused, the setup there is another's.
+  it("doesn't name the role connection's setup when the guard refused", () => {
+    expect(sweep.env?.ROLE_GUARD).toBe('${{ steps.role-guard.outcome }}');
+    const out = run(
+      '',
+      '',
+      { group: 'true', deployment: 'anycloud-role\n', definition: 'd-1\n' },
+      'failure',
+    );
+    expect(out.status, out.stdout).toBe(0);
   });
 
   // The guard found none before the install.
@@ -617,6 +645,10 @@ esac`,
     expect(run('true', '').status).toBe(1);
     expect(run('false', 'anycloud-role\n').status).toBe(1);
     expect(run('false', '').stdout).not.toContain('::error');
+    // It says how to delete one the cleanup didn't.
+    expect(run('true', '').stdout).toMatch(
+      /^::error title=A role connection in the subscription::.*az group delete --name anycloud-role.*az role definition delete .*az deployment sub delete --name anycloud-role/m,
+    );
   });
 
   it("doesn't uninstall or delete a role connection after it refuses", () => {
@@ -703,6 +735,18 @@ esac`;
     expect(run(env, { az: az('false') })).not.toContainEqual(
       expect.stringMatching(/^az (identity|role assignment|group delete)/),
     );
+    // Without the identity, the group still goes; a role still assigned
+    // stays, for the sweep to name.
+    const partial = run(env, {
+      az: az('true')
+        .replace('echo p-1', 'exit 3')
+        .replace('esac', '  "role definition delete") exit 1 ;;\nesac'),
+    });
+    expect(partial).not.toContainEqual(
+      expect.stringMatching(/^az role assignment/),
+    );
+    expect(partial).toContain('az group delete --name anycloud-role --yes');
+    expect(partial).toContain('az deployment sub delete --name anycloud-role');
   });
 });
 
