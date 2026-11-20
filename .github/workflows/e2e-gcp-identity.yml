@@ -1,0 +1,192 @@
+name: e2e GCP identity
+
+# One-off, for e2e's GCP leg: its own GCP identity, so it signs in from the
+# `e2e` environment rather than ci-install's. In our GCP CI project (ci-install's
+# GCP_PROJECT_ID, which holds production's GCP setup too), as ci-install.yml's
+# service account:
+# - `subject` reads the exact OIDC subject GitHub issues to this
+#   repository's e2e environment;
+# - `identity` makes the workload identity pool backmesh-e2e, whose one
+#   provider, github, admits GitHub's tokens for that subject only, and the
+#   service account backmesh-e2e, which only that subject may impersonate. A
+#   pool of its own: a provider in ci-install's pool would let the subject
+#   in wherever that whole pool is trusted. It grants the account these
+#   project roles, and no other, for what anycloud v0.1.79 does with a
+#   role connection's install (seed/accounts.ts's SEED_RIGHTS and
+#   seed/gcp.ts, and role-connection-setup-templates.ts's
+#   gcpRoleSetupScript), uninstall, and e2e's cleanup and sweep:
+#   - compute.instanceAdmin.v1: the control plane's VM and boot disk, and
+#     the setup's read of the project's number; the sweep lists VMs and
+#     disks;
+#   - compute.securityAdmin: the control plane's two firewall rules;
+#   - storage.admin: the checkpoint bucket, with its grant to the control
+#     plane's account, deleted by uninstall; the sweep lists buckets;
+#   - iam.serviceAccountAdmin: the control plane's account and the role
+#     connection's, made and deleted, and the latter's impersonation grant;
+#   - iam.serviceAccountUser: the control plane's VM runs as its account;
+#   - iam.roleAdmin: the setup's custom role, made or updated each run;
+#   - iam.workloadIdentityPoolAdmin: the role connection's pool and
+#     provider, made by the setup and deleted by e2e's cleanup;
+#   - serviceusage.serviceUsageViewer: the setup lists the enabled APIs;
+#   - resourcemanager.projectIamAdmin, only for grants of
+#     compute.instanceAdmin.v1 (the seed's, to the control plane's account,
+#     on its own VM) and of the custom role (the setup's, to its account).
+#   The service account roles reach every account in the project, ci-install's
+#   included, so this identity can act as them: an accepted risk, kept to the
+#   e2e environment's reviewers. For comparison it prints the roles
+#   ci-install's account holds. Without `apply` it only prints what it would
+#   do. Idempotent; it refuses anything there it didn't make. It prints the
+#   e2e environment's GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_SERVICE_ACCOUNT and
+#   GCP_PROJECT_ID.
+# Deleted after use.
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: make the pool, its provider, the service account and its roles; otherwise only print them
+        type: boolean
+        default: false
+
+permissions: {}
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  subject:
+    runs-on: ubuntu-24.04
+    environment: e2e
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+    outputs:
+      sub: ${{ steps.sub.outputs.sub }}
+    steps:
+      - name: The e2e environment's OIDC subject
+        id: sub
+        run: |
+          token=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r .value)
+          payload=$(cut -d. -f2 <<<"$token" | tr '_-' '/+')
+          while ((${#payload} % 4)); do payload+='='; done
+          sub=$(base64 -d <<<"$payload" | jq -r .sub)
+          [[ $sub =~ ^repo:backmesh(@[0-9]+)?/backmesh(@[0-9]+)?:environment:e2e$ ]] \
+            || { echo "::error::Unexpected subject $sub"; exit 1; }
+          echo "Subject: $sub"
+          echo "sub=$sub" >>"$GITHUB_OUTPUT"
+
+  identity:
+    needs: subject
+    runs-on: ubuntu-24.04
+    environment: ci-install
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+    env:
+      SUB: ${{ needs.subject.outputs.sub }}
+      ISSUER: https://token.actions.githubusercontent.com
+      POOL: backmesh-e2e
+      PROVIDER: github
+      NAME: backmesh-e2e
+      # e2e.yml's ANYCLOUD_ROLE_CUSTOM_ROLE.
+      CUSTOM_ROLE: backmeshE2e
+      CI_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      APPLY: ${{ inputs.apply }}
+    steps:
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - name: The pool, its provider, the service account and its roles
+        run: |
+          # The project ID is a secret, so the log masks it.
+          project=$(gcloud config get-value project)
+          number=$(gcloud projects describe "$project" --format='value(projectNumber)')
+          pool=projects/$number/locations/global/workloadIdentityPools/$POOL
+          account=$NAME@$project.iam.gserviceaccount.com
+          member=principal://iam.googleapis.com/$pool/subject/$SUB
+          condition="assertion.sub == '$SUB'"
+          provider=$(jq -nc --arg name "$pool/providers/$PROVIDER" --arg issuer "$ISSUER" --arg condition "$condition" \
+            '{name: $name, state: "ACTIVE", issuer: $issuer, condition: $condition, mapping: {"google.subject": "assertion.sub"}}')
+          grants="api.getAttribute('iam.googleapis.com/modifiedGrantsByRole', []).hasOnly(['roles/compute.instanceAdmin.v1', 'projects/$project/roles/$CUSTOM_ROLE'])"
+          want=$(jq -n --arg grants "$grants" '[
+            "roles/compute.instanceAdmin.v1", "roles/compute.securityAdmin", "roles/storage.admin",
+            "roles/iam.serviceAccountAdmin", "roles/iam.serviceAccountUser", "roles/iam.roleAdmin",
+            "roles/iam.workloadIdentityPoolAdmin", "roles/serviceusage.serviceUsageViewer"]
+            | map({role: ., condition: null}) + [{role: "roles/resourcemanager.projectIamAdmin", condition: $grants}]
+            | sort_by(.role)')
+
+          # A member's project roles, each with its condition.
+          held() {
+            gcloud projects get-iam-policy "$project" --format=json \
+              | jq --arg m "$1" '[.bindings[]? | select(any(.members[]; . == $m))
+                | {role, condition: .condition.expression}] | sort_by(.role)'
+          }
+          named() { jq -r '.[] | "  \(.role)\(if .condition then " if \(.condition)" else "" end)"' <<<"$1"; }
+          echo "ci-install's account holds, on the project:" && named "$(held "serviceAccount:$CI_ACCOUNT")"
+
+          state=$(gcloud iam workload-identity-pools list --location=global --show-deleted --format=json \
+            | jq -r --arg name "$pool" 'map(select(.name == $name))[0].state // ""')
+          providers='[]'
+          case $state in
+            '') echo "Creates the workload identity pool $POOL" ;;
+            ACTIVE)
+              providers=$(gcloud iam workload-identity-pools providers list --workload-identity-pool="$POOL" \
+                --location=global --show-deleted --format=json \
+                | jq -c 'map({name, state, issuer: .oidc.issuerUri, condition: .attributeCondition, mapping: .attributeMapping})')
+              echo "$POOL exists, with providers $providers" ;;
+            *) echo "::error::$POOL is $state, and GCP keeps a deleted pool's ID for 30 days; nothing is changed"; exit 1 ;;
+          esac
+          exists=$(gcloud iam service-accounts list --filter="email=$account" --format='value(email)')
+          users='[]' roles='[]'
+          if [[ -z $exists ]]; then
+            echo "Creates the service account $NAME"
+          else
+            users=$(gcloud iam service-accounts get-iam-policy "$account" --format=json \
+              | jq -c '[.bindings[]? | {role, members: (.members | sort)}]')
+            roles=$(held "serviceAccount:$account")
+            echo "$NAME exists, impersonated by $users, and holds, on the project:" && named "$roles"
+          fi
+          # Anything there this didn't make is someone else's change, left
+          # for a person.
+          jq -e --argjson p "$provider" 'all(.[]; . == $p)' <<<"$providers" >/dev/null \
+            || { echo "::error::$POOL has another provider, or $PROVIDER another trust; nothing is changed"; exit 1; }
+          jq -e --arg m "$member" 'all(.[]; . == {role: "roles/iam.workloadIdentityUser", members: [$m]})' <<<"$users" >/dev/null \
+            || { echo "::error::$NAME has another IAM grant; nothing is changed"; exit 1; }
+          jq -e --argjson w "$want" 'all(.[]; IN($w[]))' <<<"$roles" >/dev/null \
+            || { echo "::error::$NAME holds another role; nothing is changed"; exit 1; }
+          adds=$(jq -n --argjson w "$want" --argjson h "$roles" '$w - $h')
+          [[ $providers == '[]' ]] && echo "Adds the provider $PROVIDER: $provider"
+          [[ $users == '[]' ]] && echo "Lets $member impersonate $NAME"
+          [[ $adds != '[]' ]] && echo "Grants $NAME, on the project:" && named "$adds"
+          [[ $APPLY == true ]] || { echo "Not applied: dispatch with apply"; exit 0; }
+
+          [[ -n $state ]] || gcloud iam workload-identity-pools create "$POOL" --location=global --display-name="backmesh e2e"
+          if [[ $providers == '[]' ]]; then
+            gcloud iam workload-identity-pools providers create-oidc "$PROVIDER" --location=global \
+              --workload-identity-pool="$POOL" --issuer-uri="$ISSUER" \
+              --attribute-mapping=google.subject=assertion.sub --attribute-condition="$condition"
+          fi
+          [[ -n $exists ]] || gcloud iam service-accounts create "$NAME" --display-name="backmesh e2e"
+          # IAM takes a few seconds to see a new service account.
+          retry() { for _ in 1 2 3 4 5 6 7 8 9; do "$@" && return; sleep 10; done; "$@"; }
+          if [[ $users == '[]' ]]; then
+            retry gcloud iam service-accounts add-iam-policy-binding "$account" \
+              --role=roles/iam.workloadIdentityUser --member="$member" --format=none
+          fi
+          # gcloud reads an expression with commas from a file only.
+          file=$RUNNER_TEMP/condition.json
+          jq -c '.[]' <<<"$adds" | while read -r grant; do
+            when=--condition=None
+            if jq -e .condition <<<"$grant" >/dev/null; then
+              jq '{title: "backmesh-e2e", expression: .condition}' <<<"$grant" >"$file"
+              when=--condition-from-file=$file
+            fi
+            retry gcloud projects add-iam-policy-binding "$project" --member="serviceAccount:$account" \
+              --role="$(jq -r .role <<<"$grant")" "$when" --format=none
+          done
+          echo "Applied; $NAME now holds, on the project:" && named "$(held "serviceAccount:$account")"
+          echo "The e2e environment's GCP_WORKLOAD_IDENTITY_PROVIDER: $pool/providers/$PROVIDER"
+          echo "Its GCP_SERVICE_ACCOUNT: $NAME@<ci-install's GCP_PROJECT_ID>.iam.gserviceaccount.com, and GCP_PROJECT_ID: ci-install's"
+          echo "e2e's GCP_WORKLOAD_IDENTITY_PROVIDER: \`$pool/providers/$PROVIDER\`" >>"$GITHUB_STEP_SUMMARY"
