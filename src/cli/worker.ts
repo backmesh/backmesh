@@ -336,20 +336,20 @@ export const signIn = (
 
 // Uninstall's cleanup. The token is null when the App
 // isn't installed on the org: nothing of backmesh's is left at GitHub.
+// `live`: the org's other installs that got a token in the last hour, for
+// an install-only cleanup, which leaves the rest of the org to them.
 const cleanupTokenSchema = z.object({
   token: z.string().nullable(),
   expires_at: z.string().nullable(),
   org: z.object({ id: z.number(), login: z.string() }),
-});
-// No cleanup where the App isn't installed: nothing of backmesh's is at
-// GitHub to remove, and nothing for the Worker to finish. Nor while
-// another install of the org is live (`live`): the key's install alone is
-// revoked, and the org's GitHub side stays for the others.
-const cleanupSchema = cleanupTokenSchema.extend({
-  cleanup_id: z.string().nullable(),
   live: z
     .array(z.object({ install: z.string(), last_token_at: z.string() }))
     .optional(),
+});
+// No cleanup where the App isn't installed: nothing of backmesh's is at
+// GitHub to remove, and nothing for the Worker to finish.
+const cleanupSchema = cleanupTokenSchema.extend({
+  cleanup_id: z.string().nullable(),
 });
 export type Cleanup = z.infer<typeof cleanupSchema>;
 
@@ -361,7 +361,8 @@ const CLEANUP_MS = 60_000;
 // answers a runners-only token for an hour and the `cleanup_id` that
 // re-mints it and finishes. `key`, the install key when the listener's
 // Secret is readable, has the Worker revoke that install first, so its own
-// last token doesn't count as a live listener. A 429 (the client's or the
+// last token doesn't count as a live listener, and asks for an install-only
+// cleanup while another install of the org is live. A 429 (the client's or the
 // org's hourly limit) is waited out with the same sign-in, as install's is;
 // any other refusal stops.
 export function signInForCleanup(
@@ -385,7 +386,11 @@ export function signInForCleanup(
             'Content-Type': 'application/json',
             ...(key && { Authorization: `Bearer ${key}` }),
           },
-          body: JSON.stringify({ org, github_token: token }),
+          body: JSON.stringify({
+            org,
+            github_token: token,
+            ...(key && { install_only: true }),
+          }),
         },
         CLEANUP_MS,
       ),
@@ -418,6 +423,7 @@ export const refreshCleanupToken = (cleanupId: string, deps: WorkerDeps) =>
     '/v1/installs/cleanup/token',
     cleanupTokenSchema,
     cleanupId,
+    { install_only: true },
   );
 
 // Uninstall's last step: the Worker removes backmesh's App from the org and

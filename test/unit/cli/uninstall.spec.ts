@@ -432,8 +432,9 @@ describe('uninstall', () => {
       'POST /v1/installs/cleanup',
       'POST /v1/installs/cleanup/finish',
     ]);
+    // With its key, only this install's part goes while another is live.
     expect(worker.bodies).toEqual([
-      { github_token: SIGNED_IN, org: 'acme' },
+      { github_token: SIGNED_IN, org: 'acme', install_only: true },
       { cleanup_id: CLEANUP_ID },
     ]);
     expect(bearers).toEqual([
@@ -976,14 +977,14 @@ describe('uninstall', () => {
     );
   });
 
-  it("deletes its own control plane while another install of the org is live, and leaves the org's GitHub side", async () => {
+  it('deletes its own control plane and GitHub side while another install of the org is live, and keeps the App', async () => {
     const worker = fakeWorker({
       cleanups: [
         Response.json({
-          token: null,
-          expires_at: null,
+          token: 'ghs_7',
+          expires_at: '2100-01-01T00:00:00Z',
           org: { id: 7, login: 'acme' },
-          cleanup_id: null,
+          cleanup_id: CLEANUP_ID,
           live: [{ install: 'i2', last_token_at: '2026-11-20T10:00:00.000Z' }],
         }),
       ],
@@ -992,23 +993,27 @@ describe('uninstall', () => {
 
     const result = await uninstall(scripted, deps);
 
+    // Only this install's scale sets and group: the other install's
+    // runners (100, 101) stay.
     expect(changes(calls)).toEqual([
       'POST /v1/installs/cleanup',
       'exec backmesh-acme POST /drain',
       'terminate bml-l8u5e-acme00',
       'api access remove --service backmesh-acme',
+      'github DELETE /abc/_apis/runtime/runnerscalesets/1',
+      'github DELETE /abc/_apis/runtime/runnerscalesets/2',
+      'github DELETE /orgs/acme/actions/runner-groups/3',
       'secrets delete backmesh-acme',
       'node-pool delete np-1',
       'node-pool delete np-2',
       DELETE_HOSTED,
     ]);
+    expect(worker.bodies[0]).toMatchObject({ install_only: true });
     expect(result).toMatchObject({
       orgs: [{ org: 'acme', appRemoved: false }],
       cloud: 'deleted',
     });
-    expect(lines).toContain(
-      "backmesh install i2 (last token 2026-11-20T10:00:00.000Z) of acme got a token in the last hour, so uninstall leaves acme's GitHub side to it: backmesh's scale sets, runner groups backmesh-l8u5e-* and App stay. If its control plane is gone too, run `backmesh uninstall --org acme` an hour after its last token.",
-    );
+    expect(lines.some((line) => line.includes('i2'))).toBe(true);
   });
 
   it('with --keep-app, deletes everything else and asks the Worker to keep the App', async () => {

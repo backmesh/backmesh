@@ -489,17 +489,16 @@ async function readControlPlane(
 }
 
 // A token for the GitHub cleanup with at least 30 minutes left, re-minted
-// with the cleanup's ID after a long drain rather than a second sign-in.
+// with the cleanup's ID after a long drain rather than a second sign-in,
+// with the installs live then.
 async function cleanupTokenNow(cleanup: Cleanup, deps: UninstallDeps) {
   const left = Date.parse(cleanup.expires_at ?? '') - Date.now();
   if (!cleanup.token || !cleanup.cleanup_id || left > 30 * 60_000)
-    return cleanup.token;
-  return (
-    await refreshCleanupToken(
-      cleanup.cleanup_id,
-      workerDeps(deps, deps.ui.print),
-    )
-  ).token;
+    return cleanup;
+  return refreshCleanupToken(
+    cleanup.cleanup_id,
+    workerDeps(deps, deps.ui.print),
+  );
 }
 
 // One org, in order (owner, 2026-11-06): an admin's sign-in for the
@@ -543,17 +542,13 @@ async function removeOrg(
     }
     if (plane.whole) await removeOthers(plane, deps);
   }
-  // Another install of the org is live: its runners, groups and App stay.
-  const live = cleanup.live ?? [];
-  if (live.length) {
-    ui.print(
-      `backmesh ${live.length === 1 ? 'install' : 'installs'} ${live.map((l) => `${l.install} (last token ${l.last_token_at})`).join(', ')} of ${login} got a token in the last hour, so uninstall leaves ${login}'s GitHub side to ${live.length === 1 ? 'it' : 'them'}: backmesh's scale sets, runner groups ${groups} and App stay. If ${live.length === 1 ? 'its control plane is' : 'their control planes are'} gone too, run \`backmesh uninstall --org ${login}\` an hour after ${live.length === 1 ? 'its' : 'their'} last token.`,
-    );
-  }
-  const token = !live.length && (await cleanupTokenNow(cleanup, deps));
+  const { token, live = [] } = await cleanupTokenNow(cleanup, deps);
+  // Another install of the org is live: only this one's part goes.
+  const installOnly = live.length > 0;
   if (token) {
     const remaining = await removeFromGitHub(login, token, {
       tag,
+      installOnly,
       print: ui.print,
       fetch: deps.fetch,
       sleep: deps.sleep,
@@ -567,13 +562,20 @@ async function removeOrg(
     ui.print(
       `Removed backmesh's scale sets, runners and runner groups ${groups} from ${login}.`,
     );
-  } else if (!live.length) {
+  } else {
     ui.print(
       `The backmesh GitHub App isn't installed on ${login}, so backmesh can't reach its runners there. Check the org's Actions settings for runner groups ${groups}.`,
     );
   }
-  // No cleanup to finish when the App isn't on the org.
+  if (installOnly) {
+    ui.print(
+      `The backmesh GitHub App and the org's other backmesh runners stay on ${login} for ${live.length === 1 ? 'install' : 'installs'} ${live.map((l) => `${l.install} (last token ${l.last_token_at})`).join(', ')}, which got a token in the last hour. If ${live.length === 1 ? 'its control plane is' : 'their control planes are'} gone too, run \`backmesh uninstall --org ${login}\` an hour after the latest token to remove them.`,
+    );
+  }
+  // No cleanup to finish when the App isn't on the org, nor while another
+  // install uses it.
   const app =
+    !installOnly &&
     cleanup.cleanup_id &&
     (await finishCleanup(cleanup.cleanup_id, worker, keepApp).catch(
       (cause: unknown) => {
@@ -600,7 +602,7 @@ async function removeOrg(
       await deps.run(['secrets', 'delete', name]);
     }
   }
-  return { org: login, appRemoved: app ? app.removed : !live.length };
+  return { org: login, appRemoved: app ? app.removed : !installOnly };
 }
 
 // Step 1 for one org: its listener's VM and service, then a wait until the

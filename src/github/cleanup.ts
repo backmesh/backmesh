@@ -31,10 +31,12 @@ const POLL_MS = 10_000;
 // it sees the job end.
 const POLLS = 60;
 
-// Which runners and runner groups are backmesh's, by name.
+// Which runners and runner groups are backmesh's, by name. `legacy: false`
+// leaves the scale sets of the shared group from before per-install names.
 export interface Ours {
   runner(name: string): boolean;
   group(name: string): boolean;
+  legacy?: boolean;
 }
 
 // Retried until step 7's check finds nothing; answers what's still left.
@@ -64,7 +66,10 @@ async function cleanUp({ labels, actions, rest }: CleanupDeps, isOurs: Ours) {
     (await rest.listRunnerGroups()).filter((g) => isOurs.group(g.name));
   // Also the shared group from before per-install names, whose scale sets
   // a listener from then registered; the group itself stays.
-  const names = [...(await groups()).map((g) => g.name), LEGACY_RUNNER_GROUP];
+  const names = [
+    ...(await groups()).map((g) => g.name),
+    ...(isOurs.legacy === false ? [] : [LEGACY_RUNNER_GROUP]),
+  ];
   for (const name of names) {
     const found = await actions.getRunnerGroupByName(name);
     const service = found?.name === name ? found : undefined;

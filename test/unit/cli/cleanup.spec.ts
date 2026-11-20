@@ -119,6 +119,57 @@ describe("uninstall's cleanup", () => {
     ]);
   });
 
+  it("removes only its own install's scale sets, runners and group while another install is live, and keeps the App", async () => {
+    await rememberLogin(env, 11, 'acme');
+    const mint = async () => {
+      const minted = await mintKey(env.DB, 11);
+      await worker.fetch(
+        new Request(`${ORIGIN}/v1/token`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${minted.key}` },
+        }),
+        env,
+      );
+      return minted;
+    };
+    const own = await mint();
+    const other = await mint();
+    const { client, github, org, calls } = setUp();
+    // The other install's group, and a set in the shared group from
+    // before per-install names, which a listener may still use.
+    org.groups.set(7, 'backmesh-zz999-abcdef');
+    org.legacySets.set('backmesh-4', 9);
+    org.runners.set(104, 'bml8u5e-a4-aaaaaaaa');
+
+    const cleanup = await signInForCleanup('acme', own.key, client);
+    const remaining = await removeFromGitHub(
+      cleanup.org.login,
+      cleanup.token!,
+      { ...github, tag: 'l8u5e', installOnly: true },
+    );
+
+    expect(cleanup.live).toEqual([
+      { install: other.install, last_token_at: expect.any(String) },
+    ]);
+    expect(remaining).toEqual([]);
+    expect(org.sets.size).toBe(0);
+    expect([...org.legacySets]).toEqual([['backmesh-4', 9]]);
+    // The other install's runners and group stay.
+    expect([...org.runners.values()]).toEqual([
+      'bm0a1b2-a4-k3j9x0qz',
+      'bmzz999-c8-aaaaaaaa',
+      'build-box',
+      'bmaster-ci',
+    ]);
+    expect([...org.groups.values()]).toEqual([
+      'Default',
+      'backmesh',
+      'backmesh-zz999-abcdef',
+    ]);
+    expect(calls).toEqual(['/v1/installs/cleanup']);
+    expect(upstream.installations.has(11)).toBe(true);
+  });
+
   it('sends the install key, so its own listener does not refuse the cleanup', async () => {
     await rememberLogin(env, 11, 'acme');
     const own = await mintKey(env.DB, 11);

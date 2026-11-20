@@ -424,6 +424,9 @@ export function fakeOrg({ stickyRunner = false } = {}) {
     [3, GROUP],
     [5, 'backmesh'],
   ]);
+  // Scale sets in the shared group from before per-install names, whose
+  // Actions service ID is 50.
+  const legacySets = new Map<string, number>();
   const removeSet = (id: number) => () => {
     for (const [name, set] of sets) if (set === id) sets.delete(name);
     return new Response(null, { status: 204 });
@@ -434,6 +437,7 @@ export function fakeOrg({ stickyRunner = false } = {}) {
   };
   return {
     sets,
+    legacySets,
     runners,
     groups,
     ...fakeGitHub({
@@ -447,7 +451,9 @@ export function fakeOrg({ stickyRunner = false } = {}) {
       },
       [`GET ${SCALE_SETS}`]: ({ url }: Call) => {
         const name = url.searchParams.get('name')!;
-        const id = sets.get(name);
+        const id = (
+          url.searchParams.get('runnerGroupId') === '50' ? legacySets : sets
+        ).get(name);
         const value = id ? [{ id, name, runnerGroupId: 30 }] : [];
         return json(200, { count: value.length, value })();
       },
@@ -463,6 +469,7 @@ export function fakeOrg({ stickyRunner = false } = {}) {
         })(),
       [`DELETE ${API}/runners/100`]: removeRunner(100),
       [`DELETE ${API}/runners/101`]: removeRunner(101),
+      [`DELETE ${API}/runners/104`]: removeRunner(104),
       [`GET ${API}/runner-groups`]: () =>
         json(200, {
           total_count: groups.size,
