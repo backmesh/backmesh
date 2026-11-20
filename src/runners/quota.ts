@@ -353,22 +353,28 @@ export async function readQuotaStatus(
 }
 
 /**
- * The runner regions' limits, home first, each read by `read`. The home
- * region's read fails as `read` does; another region that fails to read,
- * such as one the account hasn't enabled, is left unread.
+ * The runner regions' limits, home first, each read by `read`, two regions
+ * at a time: each read is a cloud CLI process, and one per region at once
+ * starved a GitHub-hosted runner. The home region's read fails as `read`
+ * does; another region that fails to read, such as one the account hasn't
+ * enabled, is left unread.
  */
 export async function readQuotas(
   regions: readonly string[],
   read: (region: string) => Promise<QuotaLimits>,
 ): Promise<Map<string, QuotaLimits>> {
-  const limits = await Promise.all(
-    regions.map((region, i) =>
-      read(region).catch((error: unknown) => {
+  const limits: QuotaLimits[] = [];
+  let next = 0;
+  const reader = async () => {
+    while (next < regions.length) {
+      const i = next++;
+      limits[i] = await read(regions[i]!).catch((error: unknown) => {
         if (i === 0) throw error;
         return {};
-      }),
-    ),
-  );
+      });
+    }
+  };
+  await Promise.all([reader(), reader()]);
   return new Map(regions.map((region, i) => [region, limits[i]!]));
 }
 
