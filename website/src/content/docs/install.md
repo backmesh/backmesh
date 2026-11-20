@@ -77,12 +77,18 @@ Install then:
 3. **Creates the control plane and cloud roles.** Through each cloud's CLI, it
    creates the control plane and, in the plan's account, a role that trusts only
    it. You own both; no cloud keys are stored.
-4. **Starts backmesh,** prints the label and runs
+4. **Starts backmesh,** prints this installation's labels and the largest
+   one up to `backmesh-4` that your quotas start a runner for, and runs
    [`backmesh status`](/status/).
 
 ```text
+Labels for runs-on: backmesh-2, backmesh-4, backmesh-8, backmesh-16, backmesh-od-2, ..., backmesh-gpu-od-t4 (aws's carry no "aws-": it runs the control plane).
 Done. Use `runs-on: backmesh-4` (a 4-vCPU spot VM) in a workflow; other sizes: https://backmesh.com/labels/
 ```
+
+The plan prints the same `Labels for runs-on:` line. Use those labels exactly:
+one that isn't there, such as `backmesh-azure-gpu-t4` on an Azure control
+plane, waits at GitHub for a runner that never comes.
 
 To change an installation's runners,
 [run install again](/upgrade/#run-install-again).
@@ -126,7 +132,9 @@ installation's, so the plan stops and names its ID. If it isn't yours, pass
 `--control-plane aws:<another region>` to create a separate one on AWS, or use
 another subscription or project on Azure or GCP. If it's yours, such as one you
 installed from another machine or an install that stopped partway, pass
-`--control-plane-id <id>` to resume it:
+`--control-plane-id <id>` to resume it. When it holds no VM, as an install that
+stopped before its control plane ran leaves it, the plan says so and prints the
+command that deletes it, such as `az group delete --name anycloud-<id>`:
 
 ```sh
 backmesh install --org acme --control-plane aws:us-east-1 --control-plane-id backmesh-1763553600000-x7k2p9
@@ -144,8 +152,11 @@ capacity or quota; labels stay the same.
 ## Quotas
 
 Each region's spot and on-demand vCPU quotas cap how many jobs run at once; jobs
-past them wait. Install prints them as `backmesh-4` jobs and stops before
-anything is billed if they can't fit one. GCP's default `CPUS_ALL_REGIONS` is 32
+past them wait. Install prints them as how many `backmesh-4` jobs fit at once,
+each region counted on its own, and stops before anything is billed if they
+can't fit one. A label whose VM no region's quota fits gets a line that it
+`would start no runners`, naming the quota to raise. On Azure, the plan also
+checks the always-on VMs' family quotas, such as "Standard DSv5 Family vCPUs". GCP's default `CPUS_ALL_REGIONS` is 32
 vCPUs, 8 `backmesh-4` jobs, so raise it before big bursts.
 [More](/faq/#installing).
 

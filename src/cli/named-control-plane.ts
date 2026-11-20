@@ -13,6 +13,8 @@ export interface NamedControlPlane {
   id: string;
   // Where it runs; GCP's lookup doesn't say.
   region?: string;
+  // GCP's: its service account, which the lookup finds it by.
+  email?: string;
 }
 
 const LISTS: Record<Cloud, (name: string, region: string) => string[]> = {
@@ -62,8 +64,8 @@ const PARSE: Record<
   // The service account's description, `anycloud_cluster=<id>
   // anycloud_cluster_name=<name> ...`.
   gcp: (out, name) =>
-    (JSON.parse(out) as { description?: string }[]).flatMap(
-      ({ description = '' }) => {
+    (JSON.parse(out) as { email?: string; description?: string }[]).flatMap(
+      ({ email, description = '' }) => {
         const values = Object.fromEntries(
           description.split(' ').map((pair) => {
             const at = pair.indexOf('=');
@@ -71,7 +73,9 @@ const PARSE: Record<
           }),
         ) as Record<string, string | undefined>;
         const id = values.anycloud_cluster;
-        return id && values.anycloud_cluster_name === name ? [{ id }] : [];
+        return id && values.anycloud_cluster_name === name
+          ? [{ id, ...(email && { email }) }]
+          : [];
       },
     ),
 };
@@ -103,20 +107,58 @@ export async function namedControlPlane(
   return found[0];
 }
 
+// Its management VM, `anycloud-cluster-<id>` in its stack or resource
+// group (anycloud `seed/types.ts`), as a JSON list: empty for an install
+// that stopped before the VM ran, or after it was deleted.
+const VMS: Record<
+  Cloud,
+  (found: NamedControlPlane, region: string) => string[]
+> = {
+  aws: ({ id }, region) => [
+    ...['aws', 'ec2', 'describe-instances', '--region', region, '--filters'],
+    `Name=tag:Name,Values=anycloud-cluster-${id}`,
+    'Name=instance-state-name,Values=pending,running,stopping,stopped',
+    ...['--query', 'Reservations[].Instances[].InstanceId'],
+    ...['--output', 'json'],
+  ],
+  azure: ({ id }) => [
+    ...['az', 'vm', 'list', '--resource-group', `anycloud-${id}`],
+    ...['--query', '[].name', '--output', 'json'],
+  ],
+  gcp: ({ id }) => [
+    ...['gcloud', 'compute', 'instances', 'list'],
+    ...[`--filter=name=anycloud-cluster-${id}`, '--format=json(name)'],
+  ],
+};
+
+// What deletes one with no VM, through the user's own cloud CLI: AWS's
+// stack, Azure's resource group, or the service account that names GCP's.
+const DELETE: Record<
+  Cloud,
+  (found: NamedControlPlane, region: string) => string
+> = {
+  aws: ({ id }, region) =>
+    `delete it with \`aws cloudformation delete-stack --stack-name anycloud-${id} --region ${region}\``,
+  azure: ({ id }) => `delete it with \`az group delete --name anycloud-${id}\``,
+  gcp: ({ email }) =>
+    `delete its service account with \`gcloud iam service-accounts delete ${email}\``,
+};
+
 /**
  * Refuses a control plane named `name` that this machine's target
  * (`targeted`) and `--control-plane-id` (`given`) don't name, before any
  * sign-in: it may be another installation's, and resuming it fails only
  * after the sign-in, at its DNS record. `given` must name the one found,
- * or this machine's own.
+ * or this machine's own. One that holds no VM gets its delete command.
  */
-export function checkOwn({
+export async function checkOwn({
   name,
   cloud,
   region,
   found,
   targeted,
   given,
+  command,
 }: {
   name: string;
   cloud: Cloud;
@@ -124,6 +166,7 @@ export function checkOwn({
   found: NamedControlPlane | undefined;
   targeted: string | undefined;
   given: string | undefined;
+  command: RunCommand;
 }) {
   const scope = SCOPE[cloud](region);
   if (given && given !== found?.id && given !== targeted) {
@@ -136,7 +179,17 @@ export function checkOwn({
     cloud === 'aws'
       ? `pass --control-plane aws:<another region> to create a separate one`
       : `use another ${cloud === 'azure' ? 'subscription' : 'project'} to create a separate one, as ${name} names one control plane per ${cloud === 'azure' ? 'subscription' : 'project'}`;
+  const exists = `A control plane named ${name} already exists in this ${scope}: ${found.id}${found.region && cloud !== 'aws' ? ` in ${found.region}` : ''}.`;
+  // A failed read takes it to hold one.
+  const vms = await command(VMS[cloud](found, region))
+    .then((out) => JSON.parse(out) as unknown[])
+    .catch(() => undefined);
+  if (vms?.length === 0 && (cloud !== 'gcp' || found.email)) {
+    throw new UsageError(
+      `${exists} It holds no VM, so it's from an install that stopped, and this machine doesn't use it. If you don't need it, ${DELETE[cloud](found, region)}, then run install again; to resume it, pass --control-plane-id ${found.id}. If it isn't yours, ${elsewhere}.`,
+    );
+  }
   throw new UsageError(
-    `A control plane named ${name} already exists in this ${scope}: ${found.id}${found.region && cloud !== 'aws' ? ` in ${found.region}` : ''}. This machine doesn't use it, so it may be another installation's. If it isn't yours, ${elsewhere}. If it's yours, such as from another machine or an install that stopped, pass --control-plane-id ${found.id} to resume it.`,
+    `${exists} This machine doesn't use it, so it may be another installation's. If it isn't yours, ${elsewhere}. If it's yours, such as from another machine or an install that stopped, pass --control-plane-id ${found.id} to resume it.`,
   );
 }

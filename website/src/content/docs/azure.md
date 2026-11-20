@@ -23,7 +23,8 @@ A job's VM is the first type in its [label's](/labels/) list that has capacity:
 
 The [KVM labels](/labels/#kvm) use `as_v5` and `s_v5` only, since `ads_v5`
 doesn't nest. When Azure is the control plane's cloud, its labels are plain,
-as above; otherwise they name it, such as `backmesh-azure-4`.
+as above, and its GPU label is `backmesh-gpu-t4`; otherwise they name it, such
+as `backmesh-azure-4`. Install prints the labels it made.
 
 ## Regions
 
@@ -75,13 +76,16 @@ delete in the console.
 Spot labels count against each region's "Total Regional Low-priority vCPUs"
 quota, and on-demand labels against "Total Regional vCPUs". Install reads both
 through `az vm list-usage` and prints them as how many `backmesh-4` jobs fit at
-once. A region whose quota can't fit one VM of a label gets none of that
-label's runners until you raise it; install and
+once, counting each region on its own: 3 spot vCPUs in every region run no
+`backmesh-4` job, only `backmesh-2`. A region whose quota can't fit one VM of a
+label gets none of that label's runners until you raise it; install and
 [`backmesh status`](/status/) name the quota. The on-demand
 [GPU label](/labels/#gpu) also counts against "Standard NCASv3_T4 Family
 vCPUs", 0 on most new subscriptions; request at least 4 under
 [Quotas](https://portal.azure.com/#view/Microsoft_Azure_Capacity/QuotaMenuBlade/~/myQuotas)
-in the portal. [More](/faq/#installing).
+in the portal. The always-on VMs count against their family's quota too,
+"Standard DSv5 Family vCPUs" and "Standard BS Family vCPUs", which the plan
+checks before any sign-in. [More](/faq/#installing).
 
 ## Cost
 
@@ -95,7 +99,9 @@ These are catalog prices in `westus2`, spot in the lowest zone, for a
 | `Standard_D4s_v5`   | 0.0355   | 0.192         |
 
 Other sizes scale with their vCPUs. Each job also pays for its VM's boot and its
-100 GB disk. The control plane costs about $111 a month. At those prices,
-150,000 minutes a month of `backmesh-4` jobs cost at least $191–$206 with the
-control plane, before disks, boots and runners started ahead of jobs; see [the
+100 GB disk. The always-on VMs cost about $111 a month: $79 for the control
+plane's VM and $32 for each org's listener VM, with their disks and addresses.
+At those prices, 150,000 minutes a month of `backmesh-4` jobs cost at least
+$191–$206 with one org's always-on VMs, before disks, boots and runners started ahead of
+jobs; see [the
 costs](/#cost). Spot prices change by the hour.

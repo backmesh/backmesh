@@ -142,7 +142,7 @@ function setUp(
     // region asked.
     stacks?: { Key: string; Value: string }[][];
     // The project's `anycloud-` service accounts' descriptions.
-    serviceAccounts?: { description?: string }[];
+    serviceAccounts?: { email?: string; description?: string }[];
     // bm-aws's cache buckets, when a previous install made them: the
     // connection an installation before 0.4.1 named, which `RUNNERS` records.
     cacheBuckets?: string[];
@@ -590,9 +590,10 @@ describe('install', () => {
     expect(lines).toContain(
       'Lowered vol-api from 8000 IOPS and 125 MiB/s to 3000 IOPS and 125 MiB/s.',
     );
-    expect(lines).toContain(
+    expect(lines.slice(-2)).toEqual([
+      'Labels for runs-on: backmesh-2, backmesh-4, backmesh-8, backmesh-16, backmesh-od-2, backmesh-od-4, backmesh-od-8, backmesh-od-16, backmesh-kvm-2, backmesh-kvm-4, backmesh-kvm-8, backmesh-kvm-16, backmesh-kvm-od-2, backmesh-kvm-od-4, backmesh-kvm-od-8, backmesh-kvm-od-16, backmesh-gpu-t4, backmesh-gpu-od-t4 (aws\'s carry no "aws-": it runs the control plane).',
       'Done. Use `runs-on: backmesh-4` (a 4-vCPU spot VM) in a workflow; other sizes: https://backmesh.com/labels/',
-    );
+    ]);
     expect(lines).toContain(
       'Connecting aws with a role connection in account 123456789012, through your aws CLI.',
     );
@@ -2883,27 +2884,36 @@ describe("install's always-on VM sizes on Azure", () => {
     expect(worker.calls).toEqual([]);
   });
 
-  it('deletes what a quota-refused cluster create started and tries the next region', async () => {
-    const { deps, calls } = azure();
-    refusedIn(
-      deps,
-      calls,
-      'centralus',
-      undefined,
-      `{"error":{"code":"UNEXPECTED","message":"az deployment group create failed: (QuotaExceeded) Operation could not be completed as it results in exceeding approved standardDSv5Family Cores quota. Location: centralus, Current Limit: 0, Current Usage: 0, Additional Required: 2"}}\n`,
-    );
-    await (await planned(eastus, deps)).run();
-    expect(steps(calls)).toEqual([
-      expect.stringContaining(
-        'cluster create backmesh --cloud azure --region centralus ',
-      ),
-      expect.stringMatching(/^cluster delete .* --region centralus /),
-      expect.stringContaining(
-        'cluster create backmesh --cloud azure --region northcentralus ',
-      ),
-      expect.stringContaining('--region northcentralus --vm-type Standard_B2s'),
-    ]);
-  });
+  it.each([
+    '(QuotaExceeded) Operation could not be completed as it results in exceeding approved standardDSv5Family Cores quota.',
+    // A sponsorship subscription's regional vCPUs.
+    '(OperationNotAllowed) Operation could not be completed as it results in exceeding approved Total Regional Cores quota.',
+  ])(
+    'deletes what a quota-refused cluster create started and tries the next region: %s',
+    async (refusal) => {
+      const { deps, calls } = azure();
+      refusedIn(
+        deps,
+        calls,
+        'centralus',
+        undefined,
+        `{"error":{"code":"UNEXPECTED","message":"az deployment group create failed: ${refusal} Location: centralus, Current Limit: 0, Current Usage: 0, Additional Required: 2"}}\n`,
+      );
+      await (await planned(eastus, deps)).run();
+      expect(steps(calls)).toEqual([
+        expect.stringContaining(
+          'cluster create backmesh --cloud azure --region centralus ',
+        ),
+        expect.stringMatching(/^cluster delete .* --region centralus /),
+        expect.stringContaining(
+          'cluster create backmesh --cloud azure --region northcentralus ',
+        ),
+        expect.stringContaining(
+          '--region northcentralus --vm-type Standard_B2s',
+        ),
+      ]);
+    },
+  );
 
   it('deletes what a capacity-refused cluster create started and tries the next region, signing in once', async () => {
     const { deps, calls, worker, envs } = azure();
@@ -3036,19 +3046,61 @@ describe("install's always-on VM sizes on Azure", () => {
     expect(error.message).not.toContain('--control-plane');
   });
 
-  it("tries the chosen region alone when Azure's sizes can't be read", async () => {
+  it("prints the exact labels, unprefixed on Azure's control plane, and ends on the largest one the quotas start a runner for", async () => {
+    // A sponsorship subscription's 3 spot vCPUs in each region.
+    const spot = (limit: number) =>
+      Object.fromEntries(
+        RUNNER_REGIONS.azure.map((r) => [r, { lowPriorityCores: [limit, 0] }]),
+      ) as Record<string, Record<string, [number, number]>>;
+    const features = { ...RELEASED, 'vm-job-regions': '0.1.0' };
+    const { deps, lines } = azure({}, { families: spot(3), features });
+    const { run } = await planned(eastus, deps);
+    const labels = lines.filter((l) => l.startsWith('Labels for runs-on: '));
+    expect(labels[0]).toMatch(
+      /^Labels for runs-on: backmesh-2, backmesh-4, .*backmesh-gpu-t4, backmesh-gpu-od-t4 \(azure's carry no "azure-": it runs the control plane\)\.$/,
+    );
+    expect(labels[0]).not.toContain('backmesh-azure-');
+    expect(lines).toContainEqual(
+      expect.stringMatching(/ spot vCPUs \(0 backmesh-4 jobs at once/),
+    );
+    lines.length = 0;
+    await run();
+    expect(lines.slice(-2)).toEqual([
+      labels[0],
+      'Done. Use `runs-on: backmesh-2` (a 2-vCPU spot VM) in a workflow; other sizes: https://backmesh.com/labels/',
+    ]);
+    const none = azure({}, { families: spot(1), features });
+    await (await planned(eastus, none.deps)).run();
+    expect(none.lines.at(-1)).toBe(
+      'Done, but no spot label up to 4 vCPUs starts a runner until a quota the plan named is raised. Sizes: https://backmesh.com/labels/',
+    );
+  });
+
+  it("reads Azure's sizes again once, with a longer timeout, and stops the plan before any sign-in when they can't be read", async () => {
     const set = azure();
     const { command } = set.deps;
-    set.deps.command = async (args, env) => {
-      if (args[2] === 'list-skus') throw new Error('timed out');
-      return command(args, env);
+    const timeouts: (number | undefined)[] = [];
+    let failures = 1;
+    set.deps.command = async (args, env, timeout) => {
+      if (args[2] === 'list-skus') {
+        timeouts.push(timeout);
+        if (failures-- > 0) throw new Error('Command failed: az vm list-skus');
+      }
+      return command(args, env, timeout);
     };
+    // A slow catalog read answers the second time.
     const { plan } = await planned(eastus, set.deps);
-    expect(plan.alwaysOnRegions).toBeUndefined();
-    expect(plan.controlPlane.region).toBe('eastus');
-    expect(set.lines).toContain(
-      "Azure's VM sizes couldn't be read, so install tries eastus alone.",
+    expect(timeouts).toEqual([180_000, 180_000]);
+    expect(plan.alwaysOnRegions?.[0]).toBe('centralus');
+    failures = 2;
+    const error = (await install({ ...eastus, plan: true }, set.deps).catch(
+      (e: unknown) => e,
+    )) as Error;
+    expect(error).toBeInstanceOf(UsageError);
+    expect(error.message).toBe(
+      "Azure's VM sizes couldn't be read with `az vm list-skus` (Command failed: az vm list-skus), so the plan can't tell which region this subscription may create the control plane's VM (Standard_D2s_v5) and acme's listener VM (Standard_B2s) in. Check that `az` answers, then run install again.",
     );
+    expect(set.worker.calls).toEqual([]);
   });
 
   it("checks only a new listener's size on an existing control plane, and never retries it", async () => {
@@ -3208,6 +3260,72 @@ describe("a control plane named backmesh that this machine doesn't use", () => {
     );
     expect(gcp).toContain(`already exists in this GCP project: ${ID}.`);
     expect(gcp).toContain(`pass --control-plane-id ${ID} to resume it.`);
+  });
+
+  it('names the delete command for one that holds no VM, as an install that stopped leaves', async () => {
+    const stopped = async (
+      opts: InstallOptions,
+      more: Parameters<typeof setUp>[0],
+      binary: Record<string, string>,
+    ) => {
+      const { deps, worker } = setUp({ tty: false, ...more }, binary);
+      const { command } = deps;
+      const lists: string[] = [];
+      deps.command = async (args, env, timeout) => {
+        const line = args.join(' ');
+        if (
+          /^(az vm list |aws ec2 describe-instances|gcloud compute instances list)/.test(
+            line,
+          )
+        ) {
+          lists.push(line);
+          return '[]';
+        }
+        return command(args, env, timeout);
+      };
+      const error = (await install({ ...opts, plan: true }, deps).catch(
+        (e: unknown) => e,
+      )) as Error;
+      expect(worker.calls).toEqual([]);
+      expect(error).toBeInstanceOf(UsageError);
+      return { message: error.message, lists };
+    };
+    const azure = await stopped(
+      { ...options, controlPlane: 'azure:eastus' },
+      { groups: [{ id: ID, location: 'eastus' }] },
+      { 'vm-types azure eastus': JSON.stringify(CATALOG.azure) },
+    );
+    expect(azure.lists).toEqual([
+      `az vm list --resource-group anycloud-${ID} --query [].name --output json`,
+    ]);
+    expect(azure.message).toBe(
+      `A control plane named backmesh already exists in this Azure subscription: ${ID} in eastus. It holds no VM, so it's from an install that stopped, and this machine doesn't use it. If you don't need it, delete it with \`az group delete --name anycloud-${ID}\`, then run install again; to resume it, pass --control-plane-id ${ID}. If it isn't yours, use another subscription to create a separate one, as backmesh names one control plane per subscription.`,
+    );
+    const aws = await stopped(options, { stacks: [stack(ID)] }, {});
+    expect(aws.lists).toEqual([
+      `aws ec2 describe-instances --region us-east-2 --filters Name=tag:Name,Values=anycloud-cluster-${ID} Name=instance-state-name,Values=pending,running,stopping,stopped --query Reservations[].Instances[].InstanceId --output json`,
+    ]);
+    expect(aws.message).toContain(
+      `delete it with \`aws cloudformation delete-stack --stack-name anycloud-${ID} --region us-east-2\``,
+    );
+    const gcp = await stopped(
+      { ...options, controlPlane: 'gcp:us-east4' },
+      {
+        serviceAccounts: [
+          {
+            email: 'anycloud-0123@proj.iam.gserviceaccount.com',
+            description: `anycloud_cluster=${ID} anycloud_cluster_name=backmesh`,
+          },
+        ],
+      },
+      { 'vm-types gcp us-east4': JSON.stringify(CATALOG.gcp) },
+    );
+    expect(gcp.lists).toEqual([
+      `gcloud compute instances list --filter=name=anycloud-cluster-${ID} --format=json(name)`,
+    ]);
+    expect(gcp.message).toContain(
+      'delete its service account with `gcloud iam service-accounts delete anycloud-0123@proj.iam.gserviceaccount.com`',
+    );
   });
 
   it("resumes the one --control-plane-id names, and refuses an ID it didn't find", async () => {

@@ -93,10 +93,11 @@ function realUi(io: CliIo, json: boolean) {
 const cloudCommand = async (
   [file, ...args]: string[],
   env?: NodeJS.ProcessEnv,
+  timeout = 60_000,
 ) =>
   (
     await execFileAsync(file!, args, {
-      timeout: 60_000,
+      timeout,
       env: { ...process.env, ...env },
     })
   ).stdout;

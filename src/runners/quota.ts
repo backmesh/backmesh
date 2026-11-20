@@ -172,6 +172,8 @@ export const usageNamed = (usage: readonly Usage[], name: string) =>
 export interface QuotaCheck {
   /** The vCPU limit, summed over the regions read; undefined on GCP. */
   vcpus?: number;
+  /** The `backmesh-4` VMs each region's limit fits, summed. */
+  jobs?: number;
   /** The quota to raise. */
   increase: string;
   /** The regions whose limit wasn't read, when another's was. */
@@ -278,6 +280,11 @@ export function quotaToRaise(
   return `${quota(cloud, kind)[1]} in ${regions.join(', ')}`;
 }
 
+// The VMs of `vcpus` each region's limit fits, summed: a VM is in one
+// region, so 3 vCPUs in each of four regions fit no 4-vCPU VM.
+const fits = (limits: readonly number[], vcpus: number) =>
+  limits.reduce((sum, v) => sum + Math.floor(v / vcpus), 0);
+
 /**
  * Runners past the quota wait in anycloud's launch retries, so the quotas of
  * the runners' regions, summed, cap how many jobs run at once; under one
@@ -312,10 +319,12 @@ export function quotaCheck(
     return { increase, problem };
   }
   const vcpus = read.reduce((sum, v) => sum + v, 0);
+  const jobs = fits(read, DEFAULT_VCPUS);
   const unread = regions.filter((_, i) => each[i] === undefined);
   const problem = `${cloud} allows ${vcpus} ${spot ? 'spot' : 'on-demand'} vCPUs, under one ${DEFAULT_VCPUS}-vCPU VM; raise ${increase}`;
   return {
     vcpus,
+    jobs,
     increase,
     ...(unread.length && { unread }),
     ...(vcpus < DEFAULT_VCPUS && { problem }),
@@ -418,7 +427,7 @@ export function formatQuota(check: QuotaCheck, spot: boolean): string {
   const unread = check.unread ? `, unread in ${check.unread.join(', ')}` : '';
   return check.vcpus === undefined
     ? `${kind} vCPUs unread (raise ${check.increase} for more jobs at once)`
-    : `${check.vcpus} ${kind} vCPUs (${Math.floor(check.vcpus / DEFAULT_VCPUS)} backmesh-4 jobs at once${unread})`;
+    : `${check.vcpus} ${kind} vCPUs (${check.jobs} backmesh-4 jobs at once${unread})`;
 }
 
 /**
@@ -449,7 +458,7 @@ export function formatGpuQuota(
     const name = spot ? 'spot' : 'on-demand';
     parts.push(
       read.length
-        ? `${vcpus} ${name} vCPUs (${Math.floor(vcpus / GPU.vcpus)} ${label} jobs at once)`
+        ? `${vcpus} ${name} vCPUs (${fits(read, GPU.vcpus)} ${label} jobs at once)`
         : `${name} vCPUs unread`,
     );
     if (!read.length || vcpus < GPU.vcpus) {

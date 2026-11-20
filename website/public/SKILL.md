@@ -38,6 +38,9 @@ Or `brew install backmesh/tap/backmesh`. Then run `backmesh --version`.
    prints a fix for anything missing; ask the human to run it. The signed-in
    identity needs the rights at
    https://backmesh.com/security/#what-install-needs.
+3. If `GITHUB_TOKEN` is set to anything but a backmesh sign-in (one that
+   starts `ghu_`), such as a `gh` or Actions token, unset it for install:
+   install would take it and stop. Install signs in itself.
 
 ## 3. Install
 
@@ -52,8 +55,22 @@ backmesh install --org <org> --control-plane aws:us-east-2 --runners aws --runne
 
 `--runners` repeats, one cloud each — never a region, which backmesh fixes
 per cloud and narrows to what the account allows. Without either flag, both
-go on the signed-in cloud in US East. The plan shows prices, quotas and the
-full install command.
+go on the signed-in cloud in US East. The plan shows prices, quotas, the
+labels this installation will have, and the full install command.
+
+Read the plan before showing it, and **Human:** stop and tell the human when:
+
+- A label they asked for is in a line that says it `would start no runners`,
+  or the quota line counts 0 jobs at once for it. Name the quota the line
+  says to raise, and where. Install can go on, but that label's jobs wait at
+  GitHub until the quota is raised; don't switch them to another label
+  without asking.
+- A label they asked for isn't in the plan's `Labels for runs-on:` line.
+- The plan stops on a control plane named `backmesh` that already exists.
+  Show them the whole message. When it says the control plane holds no VM,
+  it's from an install that stopped: they either delete it with the command
+  it prints (theirs to run) or resume it with `--control-plane-id`. Otherwise
+  ask whether it's theirs before passing `--control-plane-id`.
 
 **Human:** the human reads the plan and runs install, without `--plan`, in a
 terminal they can type into. If they tell you to run the printed
@@ -68,12 +85,15 @@ stops for them twice:
    yet, install prints GitHub's install link; the owner opens it and installs
    the App. Nothing is copied back.
 
-Install prints the label to use and runs `backmesh status`. If it stops, fix
-the cause it names and run the same command again.
+Install ends with this installation's labels and the one to use, and runs
+`backmesh status`. If it stops, fix the cause it names and run the same
+command again.
 
 ## 4. Use the labels
 
-Set a job's `runs-on` to a label. Ask before changing workflows others use.
+Set a job's `runs-on` to a label, spelled exactly as install's
+`Labels for runs-on:` line prints it; a label that isn't there waits at GitHub
+forever. Ask before changing workflows others use.
 
 ```yaml
 jobs:
@@ -84,7 +104,8 @@ jobs:
 - Sizes: `backmesh-2`, `backmesh-4` (the default), `backmesh-8` and
   `backmesh-16`, at 4 GiB of memory per vCPU.
 - The control plane's cloud has the plain labels; others name their cloud,
-  such as `backmesh-gcp-4`.
+  such as `backmesh-gcp-4`. On an Azure control plane, Azure's GPU label is
+  `backmesh-gpu-t4`, not `backmesh-azure-gpu-t4`.
 - Spot is the default. On-demand labels, such as `backmesh-od-4`, cost about 2
   to 5 times spot. When spot reclaims were a run's only failures, backmesh
   reruns its failed jobs on demand, at most twice; add `backmesh-noretry` to

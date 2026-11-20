@@ -82,14 +82,22 @@ const short = (
 
 // Every region's entries for `vms`' sizes, projected to what `refused`
 // reads. One call: each `az vm list-skus` downloads Azure's whole catalog,
-// and one per region at once starved a GitHub-hosted runner.
-const readSkus = (vms: readonly AlwaysOn[], command: RunCommand) =>
-  command([
-    ...['az', 'vm', 'list-skus', '--all'],
-    ...['--resource-type', 'virtualMachines', '--query'],
-    `[?${vms.map((vm) => `name=='${vm.size}'`).join(' || ')}].{name:name,family:family,locations:locations,restrictions:restrictions}`,
-    ...['--output', 'json'],
-  ]).then((out) => JSON.parse(out) as Sku[]);
+// and one per region at once starved a GitHub-hosted runner. That download
+// can take minutes, so it gets three, and a second try.
+const readSkus = (vms: readonly AlwaysOn[], command: RunCommand) => {
+  const read = () =>
+    command(
+      [
+        ...['az', 'vm', 'list-skus', '--all'],
+        ...['--resource-type', 'virtualMachines', '--query'],
+        `[?${vms.map((vm) => `name=='${vm.size}'`).join(' || ')}].{name:name,family:family,locations:locations,restrictions:restrictions}`,
+        ...['--output', 'json'],
+      ],
+      undefined,
+      180_000,
+    ).then((out) => JSON.parse(out) as Sku[]);
+  return read().catch(read);
+};
 
 /**
  * Where install creates `vms`: the first of `candidates` offering every
@@ -97,8 +105,7 @@ const readSkus = (vms: readonly AlwaysOn[], command: RunCommand) =>
  * VM may count there already), and with `fallback` (a new control plane)
  * the passing regions after it, which install tries in turn when Azure
  * refuses the create for capacity or quota. `advice` ends the error when
- * none passes. Undefined when the sizes couldn't be read, so install tries
- * the first candidate alone.
+ * none passes, or when the sizes can't be read.
  */
 export async function alwaysOnRegions(
   candidates: readonly string[],
@@ -114,15 +121,18 @@ export async function alwaysOnRegions(
   },
   command: RunCommand,
   report: { print: (line: string) => void },
-): Promise<string[] | undefined> {
+): Promise<string[]> {
   const region = candidates[0]!;
-  const all = await readSkus(vms, command).catch(() => undefined);
-  if (!all) {
-    report.print(
-      `Azure's VM sizes couldn't be read, so install tries ${region} alone.`,
+  const what = vms.map((vm) => `${vm.what} (${vm.size})`).join(' and ');
+  const all = await readSkus(vms, command).catch((cause: unknown) => {
+    const reason = String(cause instanceof Error ? cause.message : cause).split(
+      '\n',
+    )[0];
+    throw new UsageError(
+      `Azure's VM sizes couldn't be read with \`az vm list-skus\` (${reason}), so the plan can't tell which region this subscription may create ${what} in. Check that \`az\` answers, then run install again.`,
+      { cause },
     );
-    return undefined;
-  }
+  });
   // Why each candidate can't take `vms`, one line each; none when it can.
   // A region whose usage can't be read passes, as `cluster create` finds
   // out.
@@ -153,7 +163,6 @@ export async function alwaysOnRegions(
   }
   const passing = candidates.filter((_, i) => !reasons[i]!.length);
   if (!passing.length) {
-    const what = vms.map((vm) => `${vm.what} (${vm.size})`).join(' and ');
     const quotas = [
       ...new Set(reasons.flat().flatMap(({ name }) => name ?? [])),
     ];
@@ -183,8 +192,9 @@ export const candidateRegions = (region: string) =>
 
 // Azure's refusal of a create for capacity or a size the region can't take
 // now: `SkuNotAvailable`, an allocation failure, or a family or regional
-// quota the plan read with room that usage took since (`QuotaExceeded`).
+// quota the plan read with room that usage took since (`QuotaExceeded`, or
+// `OperationNotAllowed` "exceeding approved ... quota").
 export const noCapacity = (error: unknown) =>
-  /SkuNotAvailable|AllocationFailed|Overconstrained\w*AllocationRequest|QuotaExceeded/.test(
+  /SkuNotAvailable|AllocationFailed|Overconstrained\w*AllocationRequest|QuotaExceeded|exceeding approved/.test(
     String(error),
   );
