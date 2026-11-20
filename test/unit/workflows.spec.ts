@@ -220,9 +220,15 @@ describe('the workflows', () => {
     }
   });
 
+  // ci.yml dogfoods the public labels this public repository's install
+  // has (`--public-repos`).
   it('keep a same-repository pull request on backmesh', () => {
     const jobs = onPullRequest.flatMap((f) => started(f, SAME_REPO));
-    for (const { job, runsOn } of jobs) expect(runsOn, job).toBe('backmesh-4');
+    for (const { job, runsOn } of jobs) {
+      expect(runsOn, job).toBe(
+        job.startsWith('ci.yml ') ? 'backmesh-public-4' : 'backmesh-4',
+      );
+    }
   });
 });
 

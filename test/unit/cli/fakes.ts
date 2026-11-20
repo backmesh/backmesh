@@ -229,8 +229,19 @@ export function fakeHosted({
 
 // GitHub's public `GET /orgs/{org}`: each org's numeric ID.
 export const ORG_IDS: Record<string, number> = { acme: 7, beta: 8 };
+// GitHub's public `GET /orgs/{org}/repos?type=public`: none unless a test
+// sets some, and deletes them after.
+export const PUBLIC_REPOS: Record<string, string[]> = {};
 export const githubOrg = (path: string) => {
-  const org = path.replace('/orgs/', '').toLowerCase();
+  const [org = '', repos] = path.replace('/orgs/', '').toLowerCase().split('/');
+  if (repos === 'repos') {
+    return Response.json(
+      (PUBLIC_REPOS[org] ?? []).map((full_name) => ({
+        full_name,
+        archived: full_name.endsWith('-archived'),
+      })),
+    );
+  }
   return org in ORG_IDS
     ? Response.json({ login: org, id: ORG_IDS[org] })
     : Response.json({ message: 'Not Found' }, { status: 404 });

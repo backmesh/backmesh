@@ -8,7 +8,7 @@ import { z } from 'zod';
 
 import type { AnycloudApi } from '../anycloud/client.js';
 import { ANYCLOUD_VERSION } from '../anycloud/contract.generated.js';
-import { CLOUDS, type Cloud } from '../runners/classes.js';
+import { CLOUDS, PUBLIC_VCPUS, type Cloud } from '../runners/classes.js';
 import { listListenerVms, type ListenerVm } from './listener-vm.js';
 
 // Where listeners ran before each had its own VM; `upgrade` moves them.
@@ -58,36 +58,50 @@ export const installConnection = <T extends { name: string }>(
       name === `bm-${cloud}` || name === connectionName(cloud, clusterId),
   );
 
-// The org's numeric ID from GitHub's public `GET /orgs/{org}`, which a
-// renamed login doesn't change (external). It sends GITHUB_TOKEN, else
+// GitHub's public REST read of `path`. It sends GITHUB_TOKEN, else
 // GH_TOKEN, when set: a GitHub-hosted runner's shared IP soon spends the
 // 60 anonymous reads an hour. GitHub answers a stale token with 401, and one
-// an org's SAML SSO refuses with 403, even on this public read, so either
+// an org's SAML SSO refuses with 403, even on a public read, so either
 // gets one anonymous retry.
+async function readGitHub(
+  path: string,
+  fetch: typeof globalThis.fetch,
+  env: NodeJS.ProcessEnv,
+  signal?: AbortSignal,
+) {
+  const token = env.GITHUB_TOKEN?.trim() || env.GH_TOKEN?.trim();
+  const read = async (authorization?: string) => {
+    const response = await fetch(`https://api.github.com${path}`, {
+      headers: {
+        accept: 'application/vnd.github+json',
+        ...(authorization && { authorization }),
+      },
+      signal,
+    });
+    return { response, body: await response.text() };
+  };
+  const first = await read(token && `Bearer ${token}`);
+  const rejected = !!(
+    token &&
+    (first.response.status === 401 ||
+      (first.response.status === 403 &&
+        !rateLimited(first.response, first.body)))
+  );
+  return { ...(rejected ? await read() : first), token, rejected };
+}
+
+// The org's numeric ID from GitHub's public `GET /orgs/{org}`, which a
+// renamed login doesn't change (external).
 export async function readOrgId(
   org: string,
   fetch: typeof globalThis.fetch = globalThis.fetch,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<number> {
-  const token = env.GITHUB_TOKEN?.trim() || env.GH_TOKEN?.trim();
-  const read = async (authorization?: string) => {
-    const response = await fetch(
-      `https://api.github.com/orgs/${encodeURIComponent(org)}`,
-      {
-        headers: {
-          accept: 'application/vnd.github+json',
-          ...(authorization && { authorization }),
-        },
-      },
-    );
-    return { response, body: await response.text() };
-  };
-  let { response, body } = await read(token && `Bearer ${token}`);
-  const rejected =
-    token &&
-    (response.status === 401 ||
-      (response.status === 403 && !rateLimited(response, body)));
-  if (rejected) ({ response, body } = await read());
+  const { response, body, token, rejected } = await readGitHub(
+    `/orgs/${encodeURIComponent(org)}`,
+    fetch,
+    env,
+  );
   if (response.status === 404) {
     throw new Error(`GitHub has no org named ${org}.`);
   }
@@ -107,6 +121,48 @@ export async function readOrgId(
     );
   }
   return z.object({ id: z.number().int() }).parse(JSON.parse(body)).id;
+}
+
+// The org's public repositories that aren't archived, of its first 100,
+// from GitHub's public `GET /orgs/{org}/repos`: a runner group refuses them
+// without `--public-repos` (runner-group.ts), and their jobs wait at GitHub
+// with no word to the listener. `more` when GitHub has another page.
+// Undefined when GitHub doesn't answer within 10 s, since it only adds a
+// warning.
+export async function readPublicRepos(
+  org: string,
+  fetch: typeof globalThis.fetch = globalThis.fetch,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{ names: string[]; more: boolean } | undefined> {
+  try {
+    const { response, body } = await readGitHub(
+      `/orgs/${encodeURIComponent(org)}/repos?type=public&per_page=100`,
+      fetch,
+      env,
+      AbortSignal.timeout(10_000),
+    );
+    if (!response.ok) return undefined;
+    const repos = z
+      .array(z.object({ full_name: z.string(), archived: z.boolean() }))
+      .parse(JSON.parse(body));
+    return {
+      names: repos.filter((r) => !r.archived).map((r) => r.full_name),
+      more: repos.length === 100,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+// What the plans and `status` say when the org has public repositories and
+// the install no public labels; `fix` is the command that adds them.
+export function publicReposWarning(
+  org: string,
+  { names, more }: { names: readonly string[]; more: boolean },
+  fix: string,
+) {
+  const n = names.length;
+  return `${org}: ${n}${more ? '+' : ''} public repositor${n === 1 && !more ? 'y' : 'ies'} (such as ${names[0]}) can't use these runners, and their jobs wait at GitHub. \`${fix}\` adds ${PUBLIC_VCPUS.map((v) => `backmesh-public-${v}`).join(' and ')} for them to use.`;
 }
 
 // GitHub's primary rate limit empties `x-ratelimit-remaining`; a secondary

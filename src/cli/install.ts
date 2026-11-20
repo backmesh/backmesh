@@ -119,6 +119,8 @@ import {
   orgOfListener,
   readInstallation,
   readOrgId,
+  readPublicRepos,
+  publicReposWarning,
   controlPlaneOf,
   type Listener,
 } from './installation.js';
@@ -1380,6 +1382,18 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       `Cache: each repository keeps up to ${plan.cacheCapGb ?? 10} GB in each region.`,
     );
   if (publicRepos) ui.print(PUBLIC_REPOS_LINE);
+  else {
+    const repos = await readPublicRepos(options.org, deps.fetch, deps.env);
+    if (repos?.names.length) {
+      ui.print(
+        publicReposWarning(
+          options.org,
+          repos,
+          `backmesh install --org ${options.org} --public-repos`,
+        ),
+      );
+    }
+  }
   if (plan.changes) {
     // Optimistic: whether a reorder alone also rolls depends on the
     // account-allowed narrowing below, which needs a signed-in connection

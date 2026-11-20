@@ -66,6 +66,8 @@ import {
   orgOfListener,
   readInstallation,
   readOrgId,
+  readPublicRepos,
+  publicReposWarning,
   type Listener,
   type NodePool,
 } from './installation.js';
@@ -75,6 +77,7 @@ import {
   noGpuLine,
   noKvmLine,
   planRegions,
+  PUBLIC_REPOS_LINE,
   runnerClouds,
   takesRegions,
 } from './install.js';
@@ -183,6 +186,9 @@ export interface UpgradeOptions {
   // `--plan-id`: the plan `--yes` agrees to.
   planId?: string;
   yes?: boolean;
+  // `--public-repos` or `--no-public-repos`, as install's: adds or drops
+  // `backmesh-public-<n>`. Without it, each org keeps what it has.
+  publicRepos?: boolean;
 }
 
 export async function upgrade(
@@ -192,6 +198,7 @@ export async function upgrade(
     plan: planOnly = false,
     planId: agreed,
     yes = false,
+    publicRepos,
   }: UpgradeOptions = {},
 ) {
   const moved = new Set(runnerClouds(runners));
@@ -305,14 +312,23 @@ export async function upgrade(
   for (const entry of read) {
     const { org, targets, running, home } = entry;
     // `install --public-repos` is kept as its public classes.
+    const wasPublic =
+      !!running.runners &&
+      parseRoutes(running.runners).some((r) => r.public && !r.retiring);
+    const isPublic = publicRepos ?? wasPublic;
     const plan = await classesOf(
       targets,
       catalogs,
       planRegions(multiRegion, { print }),
       home,
-      !!running.runners &&
-        parseRoutes(running.runners).some((r) => r.public && !r.retiring),
+      isPublic,
     );
+    // The public labels are the control plane's cloud's, as install's.
+    if (isPublic && !plan.classes.some((c) => c.public)) {
+      plan.problems.push(
+        "--public-repos needs runners on the control plane's cloud: backmesh-public-2 and -4 run there.",
+      );
+    }
     if (plan.problems.length) {
       throw new Error(
         `This release's classes can't run for ${org}:\n- ${plan.problems.join('\n- ')}`,
@@ -331,6 +347,15 @@ export async function upgrade(
     const before = running.runners ? parseRoutes(running.runners) : [];
     // Classes the release dropped retire: their scale sets drain first.
     const live = new Set(running.status.scaleSets.map((set) => set.label));
+    if (isPublic && !wasPublic) print(PUBLIC_REPOS_LINE);
+    else if (!isPublic) {
+      const repos = await readPublicRepos(org, deps.fetch, deps.env);
+      if (repos?.names.length) {
+        print(
+          publicReposWarning(org, repos, 'backmesh upgrade --public-repos'),
+        );
+      }
+    }
     planned.push({
       ...entry,
       classes: plan.classes,

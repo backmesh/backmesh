@@ -65,6 +65,10 @@ on:
         description: upgrade only, allow the plan to remove clouds left out of `clouds`
         type: boolean
         default: false
+      public-repos:
+        description: upgrade only, add backmesh-public-2 and -4 to every org's runners (--public-repos, from backmesh v0.5.1), so the orgs' public repositories may use them; their fork pull requests only those. Later upgrades keep them without it
+        type: boolean
+        default: false
       delete-checkpoint-bucket:
         description: uninstall only, also delete the checkpoint bucket, which holds the control plane's backups; otherwise it's kept
         type: boolean
@@ -116,7 +120,11 @@ jobs:
       - name: Install the released backmesh and the pinned anycloud
         env:
           GH_TOKEN: ${{ github.token }}
+          MODE: ${{ inputs.mode }}
+          PUBLIC_REPOS: ${{ inputs.public-repos }}
         run: |
+          [[ $PUBLIC_REPOS != true || $MODE == upgrade ]] \
+            || { echo "::error::public-repos is for mode upgrade only"; exit 1; }
           [[ $BACKMESH_SHA256 =~ ^[0-9a-f]{64}$ ]] \
             || { echo "::error::BACKMESH_SHA256 isn't $BACKMESH_VERSION's binary digest"; exit 1; }
           mkdir -p "$RUNNER_TEMP/bin" && cd "$RUNNER_TEMP/bin"
@@ -352,14 +360,18 @@ jobs:
       # terminal a change to the runners needs a plan: the first run moves an
       # older control plane, then exits needs_plan, `--plan` reads the plan on
       # the moved control plane, and `--yes --plan-id` applies it.
+      # `public-repos` adds `--public-repos`: the public labels are a change
+      # to the runners, so the plan shows them first.
       - if: inputs.mode == 'upgrade' && inputs.plan
         name: backmesh upgrade --plan
         env:
           GITHUB_TOKEN: ${{ secrets.ANYCLOUD_GITHUB_TOKEN }}
+          PUBLIC_REPOS: ${{ inputs.public-repos }}
         run: |
           read -ra clouds <<<"$CLOUDS"
           runners=()
           for cloud in "${clouds[@]}"; do runners+=(--runners "$cloud"); done
+          if [[ $PUBLIC_REPOS == true ]]; then runners+=(--public-repos); fi
           out=$RUNNER_TEMP/upgrade-plan.json
           backmesh upgrade "${runners[@]}" --plan --json | tee "$out"
           { echo '### Upgrade plan'; echo '```json'; cat "$out"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
@@ -368,10 +380,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.ANYCLOUD_GITHUB_TOKEN }}
           REMOVE_CLOUDS: ${{ inputs.remove-clouds }}
+          PUBLIC_REPOS: ${{ inputs.public-repos }}
         run: |
           read -ra clouds <<<"$CLOUDS"
           runners=()
           for cloud in "${clouds[@]}"; do runners+=(--runners "$cloud"); done
+          if [[ $PUBLIC_REPOS == true ]]; then runners+=(--public-repos); fi
           out=$RUNNER_TEMP/upgrade.json
           if backmesh upgrade "${runners[@]}" --json >"$out"; then
             cat "$out"

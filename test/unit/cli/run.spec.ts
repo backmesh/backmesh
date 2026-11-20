@@ -309,6 +309,19 @@ describe('backmesh CLI', () => {
     });
   });
 
+  it("hands upgrade --public-repos, and keeps it in the plan's re-run", async () => {
+    const plan = { planId: 'u-0123456789ab' };
+    vi.mocked(upgrade).mockResolvedValueOnce(plan as never);
+    const result = await run('upgrade', '--public-repos', '--plan');
+    expect(vi.mocked(upgrade).mock.lastCall![1]).toMatchObject({
+      publicRepos: true,
+      plan: true,
+    });
+    expect(result.stdout).toContain(
+      'To apply it: backmesh upgrade --public-repos --yes --plan-id u-0123456789ab',
+    );
+  });
+
   it('prints the plan alone, and how to agree to it, for --plan', async () => {
     const plan = {
       planId: 'p-0123456789ab',
