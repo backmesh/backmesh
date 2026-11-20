@@ -192,6 +192,7 @@ describe("ci-install.yml's upgrade plan", () => {
     expect(step('backmesh upgrade').if).toBe(
       "inputs.mode == 'upgrade' && !inputs.plan",
     );
+    expect(steps.indexOf(move)).toBeLessThan(steps.indexOf(plan));
     const r = runStub(plan.run!);
     expect(r.code).toBe(0);
     expect(r.calls).toBe(
