@@ -84,6 +84,7 @@ function setUp({
   reads = [],
   tty,
   hostedList = true,
+  connections = [{ name: 'bm-aws', kind: 'role' }, { name: 'bm-gcp' }],
   worker = fakeWorker(),
   github = fakeOrg(),
   runners = [] as string[],
@@ -111,6 +112,9 @@ function setUp({
   tty?: { confirm: boolean[]; typed: string };
   // Whether the hosted API's `credentials list` answers.
   hostedList?: boolean;
+  // The connections install made, as it lists them; each holds acme's
+  // cache bucket in its first region.
+  connections?: { name: string; kind?: string }[];
   // backmesh.com, for the cleanup's sign-in and step 6.
   worker?: ReturnType<typeof fakeWorker>;
   // The org's GitHub, for step 2b with the cleanup token.
@@ -136,11 +140,7 @@ function setUp({
       if (!hostedList) {
         throw new Error('Command failed: anycloud credentials list --json');
       }
-      return JSON.stringify([
-        { name: 'bm-aws', kind: 'role' },
-        { name: 'bm-gcp' },
-        { name: 'mine', kind: 'key' },
-      ]);
+      return JSON.stringify([...connections, { name: 'mine', kind: 'key' }]);
     }
     if (/^(deployment|node-pool) delete /.test(line)) deleted.add(args[2]!);
     if (/^terminate /.test(line)) deleted.add(args[1]!);
@@ -207,7 +207,30 @@ function setUp({
     }
     throw new Error(`unexpected exec ${line}`);
   });
-  const { api } = fakeApi({
+  const { api, requests } = fakeApi({
+    ...Object.fromEntries(
+      connections.map(({ name }) => [
+        `GET /v1/credentials/${name}/buckets`,
+        () => ({
+          buckets: deleted.has(`bucket ${name}`)
+            ? []
+            : [
+                {
+                  name: 'bm-cache-l8u5e-us-east-2',
+                  region: null,
+                  createdAt: null,
+                },
+              ],
+          nextCursor: null,
+        }),
+      ]),
+    ),
+    ...Object.fromEntries(
+      connections.map(({ name }) => [
+        `DELETE /v1/credentials/${name}/buckets/bm-cache-l8u5e-us-east-2`,
+        () => (deleted.add(`bucket ${name}`), {}),
+      ]),
+    ),
     'GET /v1/node-pools': () => ({
       nodePools: [pool('np-1', 'bm-control'), pool('np-2', 'bm-aws-spot')].map(
         (p) => (deleted.has(p.id) ? { ...p, state: 'terminated' } : p),
@@ -342,6 +365,7 @@ function setUp({
   return {
     deps,
     calls,
+    requests,
     lines,
     questions,
     refreshable,
@@ -1368,6 +1392,40 @@ describe('uninstall', () => {
         expect.stringMatching(
           `^${cloud}'s identity anycloud-${connectionName(cloud, 'c1')} isn't in the`,
         ),
+      ),
+    );
+  });
+
+  it("deletes the cache buckets through the control plane's own connections, warning for no other cloud", async () => {
+    const connections = [
+      { name: connectionName('aws', 'c1') },
+      { name: connectionName('gcp', 'c1') },
+    ];
+    const { deps, requests, lines } = setUp({ connections });
+    await uninstall(scripted, deps);
+
+    expect(
+      requests.filter((r) => r.startsWith('DELETE /v1/credentials/')),
+    ).toEqual(
+      connections.map(
+        ({ name }) =>
+          `DELETE /v1/credentials/${name}/buckets/bm-cache-l8u5e-us-east-2?region=us-east-2`,
+      ),
+    );
+    expect(lines.filter((l) => /cache bucket/.test(l))).toEqual([
+      'Deleted the cache bucket bm-cache-l8u5e-us-east-2.',
+      'Deleted the cache bucket bm-cache-l8u5e-us-east-2.',
+    ]);
+  });
+
+  it("names the cache buckets to delete by hand when the control plane can't list its connections", async () => {
+    const { deps, requests, lines } = setUp({ hostedList: false });
+    await uninstall(scripted, deps);
+
+    expect(requests.some((r) => r.includes('/buckets'))).toBe(false);
+    expect(lines).toContainEqual(
+      expect.stringMatching(
+        /^Couldn't read the control plane's connections, so the cache buckets weren't removed.* bm-cache-l8u5e-<region> /,
       ),
     );
   });
