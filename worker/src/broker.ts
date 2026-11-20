@@ -383,10 +383,11 @@ export async function cleanupRefresh(request: Request, env: Env) {
 
 // POST /v1/installs/cleanup/finish { cleanup_id, keep_app? }: uninstall's
 // last step. Deletes the org's installation of the App and revokes all its
-// installs' keys, unless another install of the org is live, which it names;
-// the cleanup's own install was revoked at the sign-in. One already gone
-// counts as done. `keep_app` (`uninstall --keep-app`) revokes the keys and
-// leaves the installation, which only an org owner can make again.
+// installs' keys and cue credentials, unless another install of the org is
+// live, which it names; the cleanup's own install was revoked at the
+// sign-in. One already gone counts as done. `keep_app` (`uninstall
+// --keep-app`) revokes the keys and cues and leaves the installation, which
+// only an org owner can make again.
 export async function cleanupFinish(request: Request, env: Env) {
   const cleanup = await cleanupOf(env, request);
   if (!cleanup) return unknownCleanup();
@@ -419,8 +420,8 @@ export async function cleanupFinish(request: Request, env: Env) {
       .bind(org)
       .run();
   }
-  // Cues end with the install, the App kept or not.
-  await forgetCueCredentials(env, org);
+  // Cues end with the org's last install, the App kept or not.
+  if (!live.length) await forgetCueCredentials(env, org);
   await env.DB.prepare('UPDATE cleanups SET finished = 1 WHERE id = ?')
     .bind(await sha256(cleanup.id))
     .run();

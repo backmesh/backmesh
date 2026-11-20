@@ -170,6 +170,15 @@ describe("uninstall's cleanup", () => {
     expect(upstream.installations.has(11)).toBe(true);
   });
 
+  it("refuses an install-only cleanup without the install's tag", async () => {
+    const { github, org } = setUp();
+
+    await expect(
+      removeFromGitHub('acme', 'ghs_7', { ...github, installOnly: true }),
+    ).rejects.toThrow(/tag/);
+    expect(org.calls).toEqual([]);
+  });
+
   it('sends the install key, so its own listener does not refuse the cleanup', async () => {
     await rememberLogin(env, 11, 'acme');
     const own = await mintKey(env.DB, 11);

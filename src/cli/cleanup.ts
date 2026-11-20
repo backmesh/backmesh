@@ -57,6 +57,9 @@ export async function removeFromGitHub(
   token: string,
   deps: GitHubCleanupDeps,
 ): Promise<string[]> {
+  if (deps.installOnly && !deps.tag) {
+    throw new Error("An install-only GitHub cleanup needs the install's tag.");
+  }
   const fetch = deps.fetch ?? globalThis.fetch;
   const octokit = new Octokit({ auth: token, request: { fetch } });
   const actions = new ActionsClient({ org, octokit, fetch, sleep: deps.sleep });

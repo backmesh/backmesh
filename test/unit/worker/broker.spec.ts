@@ -604,7 +604,6 @@ describe("uninstall's cleanup", () => {
     await cueCredential('acme', [11, 'acme']);
     await cueCredential('labs', [12, 'acme-labs']);
     const { cleanup_id } = await signedIn();
-    await live();
 
     await finish(cleanup_id);
 
@@ -642,6 +641,7 @@ describe("uninstall's cleanup", () => {
   });
 
   it('keeps the installation while another install has gone live since', async () => {
+    await cueCredential('acme', [11, 'acme']);
     const { cleanup_id } = await signedIn();
     const other = await live();
 
@@ -653,6 +653,10 @@ describe("uninstall's cleanup", () => {
     });
     expect(upstream.installations.has(11)).toBe(true);
     expect((await call('/v1/token', other.key)).status).toBe(200);
+    // Its cues stay with it.
+    expect(await cueCredentials()).toEqual([
+      { hash: 'acme', orgs: [{ id: 11, login: 'acme' }] },
+    ]);
   });
 
   it('counts an installation already gone as removed', async () => {
