@@ -75,13 +75,14 @@ jobs:
       - name: Load the target's deploy key
         env:
           DEPLOY_KEY: ${{ secrets.CUE_BENCH_DEPLOY_KEY }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           install -m 700 -d ~/.ssh
           install -m 600 /dev/null ~/.ssh/cue-bench
           printf '%s\n' "$DEPLOY_KEY" >~/.ssh/cue-bench
-          # GitHub's host keys, over HTTPS.
-          curl -fsS https://api.github.com/meta \
-            | jq -r '.ssh_keys[] | "github.com " + .' >>~/.ssh/known_hosts
+          # GitHub's host keys, over HTTPS with the job's token: anonymous
+          # reads from a hosted runner's shared IP soon get 403.
+          gh api meta --jq '.ssh_keys[] | "github.com " + .' >>~/.ssh/known_hosts
 
       - name: Run the benchmark
         env:

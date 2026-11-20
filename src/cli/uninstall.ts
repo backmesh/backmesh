@@ -315,6 +315,8 @@ interface ControlPlane {
   others: string[];
   // Whether the control plane goes: no `--org`, or the last org's.
   whole: boolean;
+  // The connections install made, unless they couldn't be read.
+  connections?: Map<Cloud, Leftover & { connection: string }>;
   // What install left in each cloud, to print.
   leftovers: Map<Cloud, Leftover>;
   deleteBucket: boolean;
@@ -445,14 +447,15 @@ async function readControlPlane(
             !listeners.some((listener) => listener.name === name),
         )
         .map(({ name }) => orgOfListener(name)!);
-  // The hosted API's connections name the clouds; they go with it at step 4.
-  // Without them every cloud's identity cleanup runs: one that doesn't
-  // exist is only reported.
+  // The hosted API's connections name the clouds and hold the cache
+  // buckets; they go with it at step 4. Without them every cloud's identity
+  // cleanup runs: one that doesn't exist is only reported.
+  const connections = await listConnections(run, clusterId).catch(
+    () => undefined,
+  );
   const leftovers = !whole
     ? new Map<Cloud, Leftover>()
-    : await listConnections(run, clusterId).catch(() =>
-        everyCloud(deps.env, clusterId),
-      );
+    : (connections ?? everyCloud(deps.env, clusterId));
   // Any other Deployment there, such as an older listener, could register
   // scale sets again during the GitHub cleanup. Managed ones are anycloud's.
   const others =
@@ -479,6 +482,7 @@ async function readControlPlane(
     unfinishedNoteOnly: !!org && !listeners.length,
     others,
     whole,
+    connections,
     leftovers,
     deleteBucket,
   };
@@ -531,7 +535,7 @@ async function removeOrg(
     // With the runners drained, no mint names a cache bucket, and the
     // runners' cache Secrets the listener didn't get to are orphans.
     if (tag) {
-      await deleteCacheBuckets(plane.api, tag, ui.print);
+      await deleteCacheBuckets(plane.api, tag, plane.connections, ui.print);
       for (const { name } of await plane.api.listSecrets({})) {
         if (name.startsWith(`_bm-cache-bm${tag}-`))
           await deps.run(['secrets', 'delete', name]).catch(() => undefined);

@@ -840,9 +840,9 @@ setInterval(() => {}, 1000);
 '
 `,
     );
-    writeFileSync(join(bin, 'curl'), `#!/bin/bash\necho '{"ssh_keys":[]}'\n`);
+    writeFileSync(join(bin, 'gh'), '#!/bin/bash\n');
     chmodSync(join(bin, 'node'), 0o755);
-    chmodSync(join(bin, 'curl'), 0o755);
+    chmodSync(join(bin, 'gh'), 0o755);
     const shell = spawn('bash', ['-eo', 'pipefail', '-c', step.run!], {
       env: {
         ...process.env,

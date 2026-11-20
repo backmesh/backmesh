@@ -109,12 +109,22 @@ describe('cache buckets', () => {
       ['bm-gcp'],
     );
     const lines: string[] = [];
-    await deleteCacheBuckets(api, 'abc12', (l) => lines.push(l));
+    await deleteCacheBuckets(
+      api,
+      'abc12',
+      new Map([
+        ['aws', { connection: 'bm-aws' }],
+        ['gcp', { connection: 'bm-gcp' }],
+      ] as const),
+      (l) => lines.push(l),
+    );
     expect(owned['bm-aws']).toEqual([]);
     expect(lines[0]).toBe('Deleted the cache bucket bm-cache-abc12-us-east-2.');
     expect(lines[1]).toMatch(
       /^Couldn't remove the cache buckets through bm-gcp .*bm-cache-abc12-<region> in gcp/,
     );
+    // Only the clouds install connected.
+    expect(lines).toHaveLength(2);
   });
 });
 
