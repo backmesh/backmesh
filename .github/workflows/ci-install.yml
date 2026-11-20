@@ -20,8 +20,10 @@ name: CI install
 # and changes nothing: no sign-in, no billed resource. Preview a clouds change
 # with it first, such as one that connects a cloud for the first time, which
 # `upgrade` refuses to do. `upgrade` with `plan: true` prints its plan the
-# same way, after moving an older control plane to ANYCLOUD_VERSION, which
-# changes no listener or runner.
+# same way, but first moves an older control plane to ANYCLOUD_VERSION, for
+# good: until the real upgrade, the older listeners' cache Secret, storage
+# tokens and bucket sweep fail on it (its Secrets and bucket routes take only
+# their own client version), so run the upgrade right after reading the plan.
 on:
   workflow_dispatch:
     inputs:
@@ -52,7 +54,7 @@ on:
         description: stop-runner only, the runner Job ID (its runner's name) of an in-progress lost-runner-check job, which is terminated
         default: ''
       plan:
-        description: install or upgrade, show the plan (--plan --json) and exit instead of applying it; asks nothing new of a human and changes nothing billed, though upgrade's first moves an older control plane to ANYCLOUD_VERSION
+        description: install or upgrade, show the plan (--plan --json) and exit instead of applying it; asks nothing new of a human and changes nothing billed, though upgrade's first moves an older control plane to ANYCLOUD_VERSION for good, where the older listeners' caches fail until the real upgrade
         type: boolean
         default: false
       fresh:
@@ -257,6 +259,8 @@ jobs:
         env:
           BACKMESH_UNSUPPORTED_CI_OVERRIDE: anycloud-ci
           # anycloud's GitHub sign-in: the cluster's owner and DNS name.
+          # backmesh v0.5.0's install takes only its App's sign-in (ghu_), so
+          # it refuses this one (gho_, from `anycloud login`).
           GITHUB_TOKEN: ${{ secrets.ANYCLOUD_GITHUB_TOKEN }}
           ORG: ${{ inputs.org }}
         # The sign-in and App prompts also go to annotations, which show on
@@ -331,18 +335,9 @@ jobs:
         name: Move the control plane to the pinned anycloud
         env:
           GITHUB_TOKEN: ${{ secrets.ANYCLOUD_GITHUB_TOKEN }}
-        run: |
-          url=$(anycloud api status --json | jq -r .url)
-          anycloud api upgrade --sign-in-apps "$BACKMESH_APP_ID"
-          # An API older than the CLI takes the upgrade without an upgrade
-          # record, so `api status --watch` has nothing to follow.
-          for _ in $(seq 120); do
-            version=$(curl -fsS --max-time 10 "$url/v1/version" | jq -r .version) || version=
-            [[ $version == "$ANYCLOUD_VERSION" ]] && exit 0
-            sleep 10
-          done
-          echo "::error::$url still serves ${version:-nothing}, not $ANYCLOUD_VERSION"
-          exit 1
+        # With `--sign-in-apps` it waits for the API to serve its release,
+        # and fails if it doesn't, before setting the list.
+        run: anycloud api upgrade --sign-in-apps "$BACKMESH_APP_ID"
 
       # The hosted API to the release's anycloud first, then the
       # listener to its images and classes. It signs in to the hosted API with

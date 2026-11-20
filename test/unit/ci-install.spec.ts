@@ -134,8 +134,8 @@ describe("ci-install.yml's upgrade plan", () => {
   const step = (name: string) => steps.find((s) => s.name === name)!;
   const move = step('Move the control plane to the pinned anycloud');
 
-  // Runs `script` as Actions does, with stubs for anycloud, backmesh and
-  // curl that record their arguments.
+  // Runs `script` as Actions does, with stubs for anycloud and backmesh
+  // that record their arguments.
   function runStub(script: string, env: Record<string, string> = {}) {
     const dir = mkdtempSync(join(tmpdir(), 'ci-install-'));
     const stub = (name: string, body: string) => {
@@ -145,9 +145,8 @@ describe("ci-install.yml's upgrade plan", () => {
       );
       chmodSync(join(dir, name), 0o755);
     };
-    stub('anycloud', `[ "$1 $2" != "api status" ] || echo '{"url":"${URL}"}'`);
+    stub('anycloud', '');
     stub('backmesh', `echo '{"planId":"p1"}'`);
-    stub('curl', `echo '{"version":"'"$ANYCLOUD_VERSION"'"}'`);
     writeFileSync(join(dir, 'summary'), '');
     writeFileSync(join(dir, 'calls'), '');
     const result = spawnSync('bash', ['-eo', 'pipefail', '-c', script], {
@@ -156,7 +155,6 @@ describe("ci-install.yml's upgrade plan", () => {
         PATH: `${dir}:${process.env.PATH}`,
         RUNNER_TEMP: dir,
         GITHUB_STEP_SUMMARY: join(dir, 'summary'),
-        ANYCLOUD_VERSION: '0.1.79',
         CLOUDS: 'aws gcp',
         ...env,
       },
