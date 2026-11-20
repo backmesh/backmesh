@@ -133,8 +133,8 @@ function setUp(
   }: {
     // The Azure sizes this subscription may not create, by region (`skus`).
     restricted?: Record<string, string[]>;
-    // Azure's family quotas, by region: `az vm list-usage`'s limit and
-    // what's in use.
+    // Azure's family quotas, and `cores` when given, by region: `az vm
+    // list-usage`'s limit and what's in use.
     families?: Record<string, Record<string, [number, number]>>;
     // The resource groups of Azure control planes named `backmesh`.
     groups?: { id: string; location: string }[];
@@ -299,12 +299,8 @@ function setUp(
       }
       if (args[0] === 'az' && args[2] === 'list-usage') {
         const region = args[args.indexOf('--location') + 1]!;
+        // A region's own entries first: they may override the totals.
         return JSON.stringify([
-          ...['lowPriorityCores', 'cores'].map((value) => ({
-            name: { value },
-            limit: 100,
-            currentValue: 0,
-          })),
           ...Object.entries(families[region] ?? {}).map(
             ([value, [limit, currentValue]]) => ({
               name: { value },
@@ -312,6 +308,11 @@ function setUp(
               currentValue,
             }),
           ),
+          ...['lowPriorityCores', 'cores'].map((value) => ({
+            name: { value },
+            limit: 100,
+            currentValue: 0,
+          })),
         ]);
       }
       // The new management VM at anycloud 0.1.78's 8,000 IOPS; bm-control's
@@ -2831,6 +2832,37 @@ describe("install's always-on VM sizes on Azure", () => {
     expect(reads).toHaveLength(new Set(reads).size);
   });
 
+  it('counts both VMs against the regional vCPUs they share', async () => {
+    const { deps, lines } = azure(
+      {},
+      { families: { centralus: { cores: [5, 2] } } },
+    );
+    const { plan } = await planned(
+      { ...options, controlPlane: 'azure:centralus' },
+      deps,
+    );
+    expect(lines).toContain(
+      "Azure's cores quota in centralus has 3 vCPUs free (limit 5), under the 4 for the control plane's VM (Standard_D2s_v5) and acme's listener VM (Standard_B2s).",
+    );
+    expect(plan.controlPlane.region).not.toBe('centralus');
+  });
+
+  it("says which regions' quotas it couldn't read, and takes them to have room", async () => {
+    const { deps, lines } = azure();
+    const { command } = deps;
+    deps.command = async (args, env) => {
+      if (args[2] === 'list-usage' && args.includes('northcentralus')) {
+        throw new Error('AuthorizationFailed');
+      }
+      return command(args, env);
+    };
+    const { plan } = await planned(eastus, deps);
+    expect(lines).toContain(
+      "Azure's vCPU quotas couldn't be read in northcentralus, so the plan takes them to have room for the control plane's VM and acme's listener VM.",
+    );
+    expect(plan.alwaysOnRegions).toContain('northcentralus');
+  });
+
   it('stops before any sign-in, naming the quota, when no region has room', async () => {
     const { deps, worker } = azure(
       {},
@@ -3072,6 +3104,21 @@ describe("install's always-on VM sizes on Azure", () => {
       `AWS allows 2 on-demand vCPUs in us-east-2, under the 4 for the control plane's VM (t3.large) and acme's listener VM (t3.small): raise EC2 "Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances" (L-1216C47A) in us-east-2.`,
     );
     expect(worker.calls).toEqual([]);
+  });
+
+  it("goes on, saying so, when AWS's on-demand quota can't be read for the always-on VMs", async () => {
+    const { deps, lines, commands } = setUp(
+      { tty: false, quota: {} },
+      { 'vm-types gcp us-east4': JSON.stringify(CATALOG.gcp) },
+    );
+    await install({ ...options, runners: ['gcp'], plan: true }, deps);
+    expect(lines).toContain(
+      "AWS's L-1216C47A quota couldn't be read in us-east-2, so the plan takes it to have room for the control plane's VM and acme's listener VM.",
+    );
+    // L-1216C47A alone: the runners' other quotas aren't the VMs'.
+    expect(commands.filter((c) => c.startsWith('aws service-quotas'))).toEqual([
+      expect.stringContaining('--quota-code L-1216C47A '),
+    ]);
   });
 
   it("leaves another cloud's failed create as it is", async () => {

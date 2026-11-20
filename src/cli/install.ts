@@ -50,9 +50,11 @@ import {
   formatGpuQuota,
   formatQuota,
   quotaCheck,
+  quotaCode,
   quotaToRaise,
   readQuota,
   readQuotas,
+  readServiceQuota,
   readUsage,
   skippedRegions,
   startsNoRunners,
@@ -1248,18 +1250,24 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         )
       : undefined;
   // AWS's always-on VMs count against the region's standard on-demand
-  // vCPUs, which a new account may have under them. GCP's e2 types count
-  // against the region's CPUS, which no project has under 8 _(inference)_,
-  // and the plan reads no GCP quota.
+  // vCPUs, which a new account may have under them. The plan compares the
+  // limit, not the free vCPUs: Service Quotas reads no usage. GCP's e2
+  // types count against the region's CPUS, which no project has under 8
+  // _(inference)_, and the plan reads no GCP quota.
   if (placed.cloud === 'aws' && alwaysOn.length) {
-    const limit = (
-      read.get('aws')?.get(placed.region) ??
-      (await readQuota('aws', placed.region, deps.command).catch(
-        (): QuotaLimits => ({}),
-      ))
-    ).onDemand;
+    const code = quotaCode('aws', 'onDemand');
+    const known = read.get('aws')?.get(placed.region);
+    const limit = known
+      ? known.onDemand
+      : await readServiceQuota(code, placed.region, deps.command).catch(
+          () => undefined,
+        );
     const vcpus = alwaysOn.length * ALWAYS_ON_VCPUS;
-    if (limit !== undefined && Number.isFinite(limit) && limit < vcpus) {
+    if (limit === undefined || !Number.isFinite(limit)) {
+      note.print(
+        `AWS's ${code} quota couldn't be read in ${placed.region}, so the plan takes it to have room for ${alwaysOn.map((vm) => vm.what).join(' and ')}.`,
+      );
+    } else if (limit < vcpus) {
       throw new UsageError(
         `AWS allows ${limit} on-demand vCPUs in ${placed.region}, under the ${vcpus} for ${alwaysOn.map((vm) => `${vm.what} (${vm.size})`).join(' and ')}: raise ${quotaToRaise('aws', [placed.region], 'onDemand')}.`,
       );

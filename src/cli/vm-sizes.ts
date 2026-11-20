@@ -126,6 +126,7 @@ export async function alwaysOnRegions(
   // Why each candidate can't take `vms`, one line each; none when it can.
   // A region whose usage can't be read passes, as `cluster create` finds
   // out.
+  const unread: string[] = [];
   const why = async (r: string) => {
     const sizes = vms.flatMap((vm) => {
       const reason = refused(all, vm.size, r);
@@ -139,11 +140,17 @@ export async function alwaysOnRegions(
     });
     if (sizes.length || !usage) return sizes;
     const read = await usage(r).catch(() => undefined);
+    if (!read) unread.push(r);
     return read ? short(all, vms, r, read) : [];
   };
   const reasons: { name?: string; line: string }[][] = [];
   for (const r of candidates) reasons.push(await why(r));
   const lines = reasons[0]!.map(({ line }) => line);
+  if (unread.length) {
+    lines.push(
+      `Azure's vCPU quotas couldn't be read in ${unread.join(', ')}, so the plan takes them to have room for ${vms.map((vm) => vm.what).join(' and ')}.`,
+    );
+  }
   const passing = candidates.filter((_, i) => !reasons[i]!.length);
   if (!passing.length) {
     const what = vms.map((vm) => `${vm.what} (${vm.size})`).join(' and ');

@@ -98,15 +98,7 @@ export async function readQuota(
   // read them (`src/api/services/quota/handler.ts:47-62`).
   if (cloud === 'gcp') return {};
   if (cloud === 'aws') {
-    const read = async (code: string) =>
-      Number(
-        await command([
-          ...['aws', 'service-quotas', 'get-service-quota'],
-          ...['--service-code', 'ec2', '--quota-code', code],
-          ...['--region', region, '--query', 'Quota.Value'],
-          ...['--output', 'text'],
-        ]),
-      );
+    const read = (code: string) => readServiceQuota(code, region, command);
     // The GPU quotas are only shown, so a failed read leaves them unread.
     const gpu = (kind: 'gpuSpot' | 'gpuOnDemand') =>
       read(quota('aws', kind)[0]).catch(() => undefined);
@@ -125,6 +117,21 @@ export async function readQuota(
     gpuOnDemand: read(quota('azure', 'gpuOnDemand')[0]),
   };
 }
+
+/** An AWS EC2 quota's value in the region, such as L-1216C47A's. */
+export const readServiceQuota = async (
+  code: string,
+  region: string,
+  command: RunCommand,
+) =>
+  Number(
+    await command([
+      ...['aws', 'service-quotas', 'get-service-quota'],
+      ...['--service-code', 'ec2', '--quota-code', code],
+      ...['--region', region, '--query', 'Quota.Value'],
+      ...['--output', 'text'],
+    ]),
+  );
 
 /** A region's Azure compute usage: its limit and what's in use, in vCPUs. */
 export interface Usage {
