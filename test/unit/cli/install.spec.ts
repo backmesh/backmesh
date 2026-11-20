@@ -126,12 +126,16 @@ function setUp(
     answers = [] as string[],
     cacheBuckets,
     restricted = {},
+    families = {},
     groups = [],
     stacks = [],
     serviceAccounts = [],
   }: {
     // The Azure sizes this subscription may not create, by region (`skus`).
     restricted?: Record<string, string[]>;
+    // Azure's family quotas, by region: `az vm list-usage`'s limit and
+    // what's in use.
+    families?: Record<string, Record<string, [number, number]>>;
     // The resource groups of Azure control planes named `backmesh`.
     groups?: { id: string; location: string }[];
     // The tags of the account's `anycloud-` CloudFormation stacks in the
@@ -294,12 +298,21 @@ function setUp(
         return skus(restricted);
       }
       if (args[0] === 'az' && args[2] === 'list-usage') {
-        return JSON.stringify(
-          ['lowPriorityCores', 'cores'].map((value) => ({
+        const region = args[args.indexOf('--location') + 1]!;
+        return JSON.stringify([
+          ...['lowPriorityCores', 'cores'].map((value) => ({
             name: { value },
             limit: 100,
+            currentValue: 0,
           })),
-        );
+          ...Object.entries(families[region] ?? {}).map(
+            ([value, [limit, currentValue]]) => ({
+              name: { value },
+              limit,
+              currentValue,
+            }),
+          ),
+        ]);
       }
       // The new management VM at anycloud 0.1.78's 8,000 IOPS; bm-control's
       // Node is created at the baseline.
@@ -2650,6 +2663,7 @@ function skus(restricted: Record<string, string[]>) {
     ['Standard_D2s_v5', 'Standard_B2s'].flatMap((name) =>
       RUNNER_REGIONS.azure.map((location) => ({
         name,
+        family: FAMILY[name],
         locations: [location],
         restrictions: (restricted[name] ?? []).includes(location)
           ? [
@@ -2665,6 +2679,10 @@ function skus(restricted: Record<string, string[]>) {
     ),
   );
 }
+const FAMILY: Record<string, string> = {
+  Standard_D2s_v5: 'standardDSv5Family',
+  Standard_B2s: 'standardBSFamily',
+};
 // The outside org's sponsorship subscription.
 const SPONSORSHIP = { Standard_B2s: ['eastus', 'eastus2', 'westus2'] };
 
@@ -2743,7 +2761,7 @@ describe("install's always-on VM sizes on Azure", () => {
     // One read for every region: each `az vm list-skus` downloads Azure's
     // whole catalog, which one per region at once starved a hosted runner.
     expect(commands.filter((c) => c.startsWith('az vm list-skus'))).toEqual([
-      "az vm list-skus --all --resource-type virtualMachines --query [?name=='Standard_D2s_v5' || name=='Standard_B2s'].{name:name,locations:locations,restrictions:restrictions} --output json",
+      "az vm list-skus --all --resource-type virtualMachines --query [?name=='Standard_D2s_v5' || name=='Standard_B2s'].{name:name,family:family,locations:locations,restrictions:restrictions} --output json",
     ]);
     expect(lines.filter((l) => l.startsWith("Azure won't create"))).toEqual([
       expect.stringContaining(
@@ -2784,6 +2802,75 @@ describe("install's always-on VM sizes on Azure", () => {
       /\(Standard_D2s_v5\) in eastus .*NotAvailableForSubscription[\s\S]*No Azure region install tries/,
     );
     expect(worker.calls).toEqual([]);
+  });
+
+  it("skips a region without its sizes' family quota, reading each region's usage once", async () => {
+    // A new subscription: no DSv5 quota in centralus, and the B-series one
+    // used up in northcentralus.
+    const { deps, lines, commands } = azure(
+      {},
+      {
+        families: {
+          centralus: { standardDSv5Family: [0, 0] },
+          northcentralus: { standardBSFamily: [10, 9] },
+        },
+      },
+    );
+    const { plan } = await planned(
+      { ...options, controlPlane: 'azure:centralus' },
+      deps,
+    );
+    expect(lines).toContain(
+      "Azure's standardDSv5Family quota in centralus has 0 vCPUs free (limit 0), under the 2 for the control plane's VM (Standard_D2s_v5).",
+    );
+    expect(plan).toMatchObject({
+      controlPlane: { region: 'southcentralus' },
+      alwaysOnRegions: ['southcentralus', 'westcentralus', 'westus', 'westus3'],
+    });
+    const reads = commands.filter((c) => c.startsWith('az vm list-usage'));
+    expect(reads).toHaveLength(new Set(reads).size);
+  });
+
+  it('stops before any sign-in, naming the quota, when no region has room', async () => {
+    const { deps, worker } = azure(
+      {},
+      {
+        families: Object.fromEntries(
+          RUNNER_REGIONS.azure.map((r) => [r, { standardDSv5Family: [0, 0] }]),
+        ),
+      },
+    );
+    const error = (await install(
+      { ...options, controlPlane: 'azure:centralus', plan: true },
+      deps,
+    ).catch((e: unknown) => e)) as Error;
+    expect(error).toBeInstanceOf(UsageError);
+    expect(error.message).toMatch(
+      /standardDSv5Family quota in centralus has 0 vCPUs free[\s\S]*with quota for it\..* Or raise Azure's standardDSv5Family vCPU quota in one of those regions\.$/,
+    );
+    expect(worker.calls).toEqual([]);
+  });
+
+  it('deletes what a quota-refused cluster create started and tries the next region', async () => {
+    const { deps, calls } = azure();
+    refusedIn(
+      deps,
+      calls,
+      'centralus',
+      undefined,
+      `{"error":{"code":"UNEXPECTED","message":"az deployment group create failed: (QuotaExceeded) Operation could not be completed as it results in exceeding approved standardDSv5Family Cores quota. Location: centralus, Current Limit: 0, Current Usage: 0, Additional Required: 2"}}\n`,
+    );
+    await (await planned(eastus, deps)).run();
+    expect(steps(calls)).toEqual([
+      expect.stringContaining(
+        'cluster create backmesh --cloud azure --region centralus ',
+      ),
+      expect.stringMatching(/^cluster delete .* --region centralus /),
+      expect.stringContaining(
+        'cluster create backmesh --cloud azure --region northcentralus ',
+      ),
+      expect.stringContaining('--region northcentralus --vm-type Standard_B2s'),
+    ]);
   });
 
   it('deletes what a capacity-refused cluster create started and tries the next region, signing in once', async () => {
@@ -2961,6 +3048,30 @@ describe("install's always-on VM sizes on Azure", () => {
         /^vm .* --region centralus --vm-type Standard_B2s /,
       ),
     ]);
+  });
+
+  it("stops before any sign-in when AWS's on-demand quota is under the always-on VMs", async () => {
+    const { deps, worker } = setUp(
+      {
+        tty: false,
+        quota: {
+          'L-34B43A08': '640.0',
+          'L-1216C47A': '128.0',
+          'L-1216C47A@us-east-2': '2.0',
+        },
+      },
+      { 'vm-types gcp us-east4': JSON.stringify(CATALOG.gcp) },
+    );
+    // GCP's runners: AWS's quota is read for the always-on VMs alone.
+    const error = (await install(
+      { ...options, runners: ['gcp'], plan: true },
+      deps,
+    ).catch((e: unknown) => e)) as Error;
+    expect(error).toBeInstanceOf(UsageError);
+    expect(error.message).toBe(
+      `AWS allows 2 on-demand vCPUs in us-east-2, under the 4 for the control plane's VM (t3.large) and acme's listener VM (t3.small): raise EC2 "Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances" (L-1216C47A) in us-east-2.`,
+    );
+    expect(worker.calls).toEqual([]);
   });
 
   it("leaves another cloud's failed create as it is", async () => {

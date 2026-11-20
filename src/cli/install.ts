@@ -50,11 +50,14 @@ import {
   formatGpuQuota,
   formatQuota,
   quotaCheck,
+  quotaToRaise,
   readQuota,
   readQuotas,
+  readUsage,
   skippedRegions,
   startsNoRunners,
   type QuotaLimits,
+  type Usage,
 } from '../runners/quota.js';
 import { formatRate } from '../runners/rate.js';
 import type { Compatibility } from '../release/compatibility.js';
@@ -91,6 +94,7 @@ import {
 } from './prerequisites.js';
 import { PlanChanged, UsageError } from './errors.js';
 import {
+  ALWAYS_ON_VCPUS,
   alwaysOnRegions,
   candidateRegions,
   noCapacity,
@@ -594,7 +598,7 @@ export async function connectClouds(
 // cloud CLI with nothing stored here (anycloud 0.1.74's seed). Re-running
 // `cluster create` with the same name and region resumes it from the cloud's
 // own tags (`docs/reference/cli/cluster.md`). A new cluster Azure refuses
-// for capacity, by the ID its progress names (`[<time>] Creating cluster
+// for capacity or quota, by the ID its progress names (`[<time>] Creating cluster
 // <name> (ID: <id>)`, never `Resuming`), is deleted: its resource group and
 // checkpoint bucket, not the subscription's shared `anycloud-storage`. It's
 // then tried in the plan's next region (`alwaysOnRegions`).
@@ -666,19 +670,19 @@ async function bootstrapCluster(
         )
         .catch((cause: unknown) => {
           throw new Error(
-            `Azure has no capacity for the control plane's VM (${size}) in ${region}, and deleting what install started there failed: delete the resource group anycloud-${id}, then run install again.`,
+            `Azure has no capacity or quota for the control plane's VM (${size}) in ${region}, and deleting what install started there failed: delete the resource group anycloud-${id}, then run install again.`,
             { cause },
           );
         });
       const next = regions[i + 1];
       if (!next) {
         throw new Error(
-          `Azure has no capacity for the control plane's VM (${size}) in ${regions.join(', ')} now. Install deleted what it started; run it again later.`,
+          `Azure has no capacity or quota for the control plane's VM (${size}) in ${regions.join(', ')} now. Install deleted what it started; run it again later.`,
           { cause: error },
         );
       }
       deps.ui.print(
-        `Azure has no capacity for the control plane's VM (${size}) in ${region} now: install deleted what it started there, and tries ${next}.`,
+        `Azure has no capacity or quota for the control plane's VM (${size}) in ${region} now: install deleted what it started there, and tries ${next}.`,
       );
       continue;
     }
@@ -1127,13 +1131,22 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   // Labels whose every region's quota is under one runner: shown in the
   // plan, and asked about at a terminal.
   const noRunners: string[] = [];
+  // Each runner cloud's limits, and each region's Azure usage, read once
+  // for the runners and the always-on VMs.
+  const read = new Map<Cloud, Map<string, QuotaLimits>>();
+  const usages = new Map<string, Promise<Usage[]>>();
+  const usage = (region: string) => {
+    if (!usages.has(region))
+      usages.set(region, readUsage(region, deps.command));
+    return usages.get(region)!;
+  };
   for (const { cloud } of runners) {
     const regions = regionsOf(cloud);
     // A refused read, such as a role without servicequotas:GetServiceQuota,
     // shows the quotas as unread and install goes on (owner, 2026-11-09).
     let refused = false;
     const limits = await readQuotas(regions, (region) =>
-      readQuota(cloud, region, deps.command),
+      readQuota(cloud, region, deps.command, usage),
     ).catch((error: unknown) => {
       refused = true;
       note.print(
@@ -1141,6 +1154,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       );
       return new Map<string, QuotaLimits>();
     });
+    read.set(cloud, limits);
     const checks = [true, false].map((spot) => {
       const check = quotaCheck(cloud, regions, limits, spot);
       if (check.problem && !refused) problems.push(check.problem);
@@ -1222,6 +1236,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
           alwaysOn,
           {
             fallback: !listeners && !started,
+            ...(!started && { usage }),
             advice: started
               ? `Delete the control plane named ${CLUSTER} in ${started}, or use another subscription.`
               : listeners
@@ -1232,6 +1247,24 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
           note,
         )
       : undefined;
+  // AWS's always-on VMs count against the region's standard on-demand
+  // vCPUs, which a new account may have under them. GCP's e2 types count
+  // against the region's CPUS, which no project has under 8 _(inference)_,
+  // and the plan reads no GCP quota.
+  if (placed.cloud === 'aws' && alwaysOn.length) {
+    const limit = (
+      read.get('aws')?.get(placed.region) ??
+      (await readQuota('aws', placed.region, deps.command).catch(
+        (): QuotaLimits => ({}),
+      ))
+    ).onDemand;
+    const vcpus = alwaysOn.length * ALWAYS_ON_VCPUS;
+    if (limit !== undefined && Number.isFinite(limit) && limit < vcpus) {
+      throw new UsageError(
+        `AWS allows ${limit} on-demand vCPUs in ${placed.region}, under the ${vcpus} for ${alwaysOn.map((vm) => `${vm.what} (${vm.size})`).join(' and ')}: raise ${quotaToRaise('aws', [placed.region], 'onDemand')}.`,
+      );
+    }
+  }
   let place = regions ? { ...placed, region: regions[0]! } : placed;
   const controlPlane = listeners ? placement.controlPlane : place;
   const { connections } = placement;
