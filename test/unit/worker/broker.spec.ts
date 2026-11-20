@@ -420,6 +420,23 @@ describe("uninstall's cleanup", () => {
     expect((await cleanup('alice')).status).toBe(200);
   });
 
+  it("doesn't count an install's App check, only a listener's mints", async () => {
+    // A failed install's check: its listener never ran.
+    const checked = await mintKey(env.DB, 11);
+    const res = await call('/v1/token', checked.key, { purpose: 'check' });
+    expect(await res.json()).toMatchObject({ org: { login: 'acme' } });
+    expect(await auditRows()).toEqual([
+      expect.objectContaining({
+        action: 'token',
+        outcome: 'ok_check',
+        install: checked.install,
+      }),
+    ]);
+    upstream.mints = [];
+
+    expect((await cleanup('alice')).status).toBe(200);
+  });
+
   it("leaves the sender's own key working when a sibling install or the limit refuses", async () => {
     const own = await live();
     await live();
