@@ -1,9 +1,11 @@
-// e2e.yml's `test-org` sweeps: the names an installation's AWS and Azure
-// sides go by, from its cluster ID (`clusterIdOf`), so a sweep finds only
+// e2e.yml's `test-org` sweeps: the names an installation's AWS, Azure and
+// GCP sides go by, from its cluster ID (`clusterIdOf`), so a sweep finds only
 // this run's installation in an account others share. anycloud's seed stack
 // and owner tag (`seedStackName`, `hostedApiIdentity` at v0.1.78), its AWS
 // role connection's stack (`awsRoleStackName` at v0.1.79, from the control
-// plane's host <id>.anycloud.sh) and the org's cache buckets
+// plane's host <id>.anycloud.sh), its GCP control plane's service account
+// (`gcpServiceAccountEmail` at v0.1.79, less its @<project>) and the org's
+// cache buckets
 // (`bucketName(installTag(id, orgId), region)`).
 //
 //   CLUSTER_ID=<id> ORG_ID=<the org's numeric ID> \
@@ -26,6 +28,7 @@ export function sweepNames(clusterId: string, orgId: number) {
       .toString('hex')
       .slice(0, 32),
     ROLE_STACK: `anycloud-role-${clusterId}-anycloud-sh`,
+    GCP_ACCOUNT: `anycloud-${sha256(clusterId).toString('hex').slice(0, 20)}`,
     CACHE_PREFIX: `bm-cache-${base36(sha256(`${clusterId}/${orgId}`), 5)}-`,
   };
 }

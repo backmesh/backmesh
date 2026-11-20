@@ -18,8 +18,9 @@ name: E2E
 # release) runs that tag's commit, and the `test-org` job, signed in through
 # that same Worker, installs that release fresh for `org`,
 # the test org (backmesh-dryrun), once per leg: on AWS, running the label
-# member, and on Azure, in our Azure CI subscription, with the control plane
-# in centralus, running one job. Each installs as a customer does, with a
+# member; on Azure, in our Azure CI subscription, with the control plane
+# in centralus, running one job; and on GCP, in our GCP CI project, with the
+# control plane in us-central1, running one job. Each installs as a customer does, with a
 # role connection to its cloud. Each leg then uninstalls it, deletes the
 # role connection's setup that uninstall leaves, and sweeps its cloud for
 # anything left. Install and uninstall
@@ -27,8 +28,10 @@ name: E2E
 # and as a comment on the open "e2e sign-in codes" issue, which an admin of
 # the test org approves, as for ci-install.yml. The
 # backmesh App stays installed on the test org (`uninstall --keep-app`): only
-# an org owner can install it. Both legs run in the `e2e` environment: AWS
-# as AWS_ROLE_ARN, and Azure as the managed identity backmesh-e2e (resource
+# an org owner can install it. Every leg runs in the `e2e` environment: AWS
+# as AWS_ROLE_ARN, GCP as the service account backmesh-e2e, through its own
+# workload identity pool backmesh-e2e, which trusts that environment's OIDC
+# subject only (e2e-gcp-identity.yml has its roles and why), and Azure as the managed identity backmesh-e2e (resource
 # group backmesh-e2e-identity), which trusts that environment's OIDC subject
 # only and holds Contributor and User Access Administrator on the
 # subscription: install's seed assigns the control plane's identity
@@ -38,10 +41,13 @@ name: E2E
 # writes a custom role definition and assigns it. Our Azure CI subscription
 # also holds our production control plane, so this identity can write there,
 # grant roles included: an accepted risk, kept to the e2e environment's
-# reviewers. The owner's
+# reviewers; so is GCP's, in a project that holds production's GCP setup
+# too. The owner's
 # one-time setup is, in `e2e`, E2E_TEST_ORG_DEPLOY_KEY (a write deploy key
 # on the test org's e2e repository), AWS_ROLE_ARN, the identity's
-# AZURE_CLIENT_ID, AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID, and that
+# AZURE_CLIENT_ID, AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID, the service
+# account's GCP_SERVICE_ACCOUNT, GCP_WORKLOAD_IDENTITY_PROVIDER and
+# GCP_PROJECT_ID, and that
 # repository with test/e2e/test-org/labels.yml as its
 # .github/workflows/labels.yml: after a change to the copy merges, a
 # maintainer pushes it there; until then the test-org leg fails, naming the
@@ -204,7 +210,7 @@ jobs:
 
   # A fresh install of `version` on the test org, per leg, then the uninstall
   # and a sweep, whatever came before them. AWS runs the label member; Azure
-  # runs one job. Each leg names its control plane: install under --yes
+  # and GCP run one job each. Each leg names its control plane: install under --yes
   # doesn't pick one.
   # One leg at a time: the test org holds one installation. On GitHub's
   # runners: it makes the runners it tests.
@@ -227,6 +233,13 @@ jobs:
             control-plane-region: centralus
             # Our Azure CI subscription has 3 spot vCPUs per region: back to backmesh-4 once its quota is raised.
             label: backmesh-2
+          - cloud: gcp
+            placement: --runners gcp
+            # anycloud finds a GCP cluster by name in the whole project (see
+            # its guard), so the region is only where it and the runners go.
+            control-plane-region: us-central1
+            # The control plane's cloud's labels are plain.
+            label: backmesh-4
     runs-on: ubuntu-24.04
     # Holds the legs' secrets, and is the subject each cloud's OIDC trust
     # names (see the header).
@@ -247,6 +260,12 @@ jobs:
       BACKMESH_API_URL: ${{ needs.plan.outputs.api-url }}
       # Our Azure CI subscription (131eed90-…).
       AZURE_SUBSCRIPTION_ID: ${{ matrix.cloud == 'azure' && secrets.AZURE_SUBSCRIPTION_ID || '' }}
+      # The GCP leg's role connection, by the IDs anycloud's setup script
+      # reads: a pool and service account of the run's own, as GCP keeps a
+      # deleted pool's ID for 30 days, and one custom role every run reuses.
+      ANYCLOUD_ROLE_POOL: bm-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+      ANYCLOUD_ROLE_SERVICE_ACCOUNT: bm-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+      ANYCLOUD_ROLE_CUSTOM_ROLE: backmeshE2e
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -343,6 +362,41 @@ jobs:
             exit 1
           fi
 
+      # Install makes the control plane and the role connection's setup as
+      # this service account, in its project, which gcloud's config names.
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        if: matrix.cloud == 'gcp'
+        id: gcp
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        if: matrix.cloud == 'gcp'
+      # anycloud finds a GCP cluster by name in the whole project, by its
+      # service account's description, so install would resume a backmesh
+      # cluster there and uninstall would delete it. An earlier run's role
+      # connection (an active bm-e2e- pool, or a grant of the custom role)
+      # is a cleanup that didn't finish, which the sweep would blame on this
+      # run.
+      - name: Refuse a project with a backmesh cluster or an earlier role connection
+        if: matrix.cloud == 'gcp'
+        id: gcp-guard
+        run: |
+          project=$(gcloud config get-value project)
+          found=($(gcloud iam service-accounts list --filter='email~^anycloud-' --format=json \
+            | jq -r '.[] | select(.description // "" | test("(^| )anycloud_cluster_name=backmesh( |$)")) | "service-account:\(.email)"'))
+          found+=($(gcloud iam workload-identity-pools list --location=global --format='value(name.basename())' \
+            | sed -n 's/^bm-e2e-.*/pool:&/p'))
+          found+=($(gcloud projects get-iam-policy "$project" --format=json \
+            | jq -r --arg role "projects/$project/roles/$ANYCLOUD_ROLE_CUSTOM_ROLE" \
+              '.bindings[]? | select(.role == $role) | .members[] | "binding:\($role):\(.)"'))
+          if ((${#found[@]})); then
+            printf '::error title=In the GCP project before this run::%s\n' "${found[@]}"
+            echo "::error::A backmesh cluster here is another installation's. An earlier run's role connection, if no installation uses it, goes as this job's cleanup deletes it: its pool's providers and the pool, the account's grant of $ANYCLOUD_ROLE_CUSTOM_ROLE, and the account."
+            exit 1
+          fi
+
       # Nobody can read a running job's annotations or log through GitHub's
       # API, so with-sign-in.sh also comments each code here, where GitHub
       # notifies the owner. One open issue for every run, opened by a run:
@@ -394,9 +448,9 @@ jobs:
           plan=$(tail -n1 <<<"$plan")
           id=$(jq -er .planId <<<"$plan") || { echo "$plan"; exit 1; }
           echo "CONTROL_PLANE=$(jq -er '.controlPlane | "\(.cloud):\(.region)"' <<<"$plan")" >>"$GITHUB_ENV"
-          if [[ $CLOUD == azure ]]; then
-            MATRIX=$(jq -c --argjson plan "$plan" --arg label "$LABEL" '{include: [.include[0] + {label: $label, cloud: "azure",
-              regions: [$plan.runners[] | select(.cloud == "azure") | .regions[]], kvm: false, gpu: false}]}' <<<"$MATRIX")
+          if [[ $CLOUD != aws ]]; then
+            MATRIX=$(jq -c --argjson plan "$plan" --arg label "$LABEL" --arg cloud "$CLOUD" '{include: [.include[0] + {label: $label, cloud: $cloud,
+              regions: [$plan.runners[] | select(.cloud == $cloud) | .regions[]], kvm: false, gpu: false}]}' <<<"$MATRIX")
           fi
           echo "LABEL_MATRIX=$MATRIX" >>"$GITHUB_ENV"
           ISSUE_TOKEN=$t test/e2e/with-sign-in.sh backmesh install --org "$ORG" "${placement[@]}" --yes --plan-id "$id"
@@ -416,7 +470,8 @@ jobs:
           echo "CLUSTER_ID=$id" >>"$GITHUB_ENV"
 
       # The label member, through the test org's own repository, whose
-      # runners these are: `labels` on AWS, one job on the leg's label on Azure. Its
+      # runners these are: `labels` on AWS, one job on the leg's label on Azure
+      # and GCP. Its
       # write deploy key pushes the run's branch, which starts its labels.yml.
       - name: The label member on the test org's runners
         env:
@@ -446,7 +501,7 @@ jobs:
       # GitHub sign-in is approved as install's is, and it reads GitHub with
       # the job's token as install does.
       - name: backmesh uninstall
-        if: ${{ always() && steps.bin.outcome == 'success' && steps.guard.outcome != 'failure' && steps.role-guard.outcome != 'failure' }}
+        if: ${{ always() && steps.bin.outcome == 'success' && steps.guard.outcome != 'failure' && steps.role-guard.outcome != 'failure' && steps.gcp-guard.outcome != 'failure' }}
         timeout-minutes: 60
         env:
           GH_TOKEN: ${{ github.token }}
@@ -471,11 +526,11 @@ jobs:
       # `credentials delete --apply` (role-connection-teardown.ts at
       # v0.1.79) would have, which needs the control plane. A connection
       # comes only with a control plane; on Azure, the guard found none
-      # there before. It runs after a failed uninstall too, deliberately: the
+      # there before, and on GCP its pool and account are the run's own. It runs after a failed uninstall too, deliberately: the
       # setup is this run's either way, and the sweep still names whatever
       # uninstall left.
       - name: Delete the role connection's setup
-        if: ${{ always() && steps.bin.outcome == 'success' && steps.guard.outcome != 'failure' && steps.role-guard.outcome != 'failure' }}
+        if: ${{ always() && steps.bin.outcome == 'success' && steps.guard.outcome != 'failure' && steps.role-guard.outcome != 'failure' && steps.gcp-guard.outcome != 'failure' }}
         timeout-minutes: 30
         run: |
           if [[ $CLOUD == aws ]]; then
@@ -484,6 +539,30 @@ jobs:
             for verb in delete-stack 'wait stack-delete-complete'; do
               aws cloudformation $verb --region "$CONTROL_PLANE_REGION" --stack-name "$ROLE_STACK"
             done
+            exit 0
+          fi
+          if [[ $CLOUD == gcp ]]; then
+            project=$(gcloud config get-value project)
+            account=$ANYCLOUD_ROLE_SERVICE_ACCOUNT@$project.iam.gserviceaccount.com
+            role=projects/$project/roles/$ANYCLOUD_ROLE_CUSTOM_ROLE
+            pool=(--workload-identity-pool="$ANYCLOUD_ROLE_POOL" --location=global)
+            # Active pools only: a deleted one is done.
+            pools=$(gcloud iam workload-identity-pools list --location=global --format='value(name.basename())')
+            if grep -qx -- "$ANYCLOUD_ROLE_POOL" <<<"$pools"; then
+              for provider in $(gcloud iam workload-identity-pools providers list "${pool[@]}" --format='value(name.basename())'); do
+                gcloud iam workload-identity-pools providers delete "$provider" "${pool[@]}" --quiet
+              done
+              gcloud iam workload-identity-pools delete "$ANYCLOUD_ROLE_POOL" --location=global --quiet
+            fi
+            # The grant before the account: a deleted account's stays, as a
+            # deleted: member. The custom role stays for the next run.
+            policy=$(gcloud projects get-iam-policy "$project" --format=json)
+            if jq -e --arg role "$role" --arg member "serviceAccount:$account" \
+              'any(.bindings[]?; .role == $role and any(.members[]; . == $member))' <<<"$policy" >/dev/null; then
+              gcloud projects remove-iam-policy-binding "$project" --member="serviceAccount:$account" --role="$role" --all --quiet
+            fi
+            [[ -z $(gcloud iam service-accounts list --filter="email=$account" --format='value(email)') ]] \
+              || gcloud iam service-accounts delete "$account" --quiet
             exit 0
           fi
           scope=/subscriptions/$AZURE_SUBSCRIPTION_ID
@@ -605,6 +684,55 @@ jobs:
             exit 1
           fi
           echo "Nothing of this run's installation is left in Azure."
+
+      # The same guard on GCP: the control plane's VM, firewall rules and
+      # service account (anycloud's seed names them for the cluster),
+      # anything labelled with the control plane (runner VMs and disks), the
+      # checkpoint and cache buckets, and the role connection's setup: the
+      # run's pool and account, and any grant left to them or of the custom
+      # role. Without the control plane's ID, a backmesh cluster's service
+      # account, made first and deleted last, which the guard found none of
+      # before.
+      - name: Sweep GCP for anything left
+        if: ${{ always() && steps.gcp.outcome == 'success' }}
+        env:
+          GCP_GUARD: ${{ steps.gcp-guard.outcome }}
+        run: |
+          left=()
+          named() { sed -n "s|^.|$1&|p"; }
+          project=$(gcloud config get-value project)
+          if [[ -z ${CLUSTER_ID:-} ]]; then
+            left+=($(gcloud iam service-accounts list --filter='email~^anycloud-' --format=json \
+              | jq -r '.[] | select(.description // "" | test("(^| )anycloud_cluster_name=backmesh( |$)")) | "service-account:\(.email)"'))
+          else
+            eval "$(node test/e2e/sweep-names.ts)"
+            vm=anycloud-cluster-$CLUSTER_ID
+            filter="name=$vm OR labels.anycloud_cluster=$CLUSTER_ID OR labels.anycloud_owner_api=$OWNER_API"
+            left+=($(gcloud compute instances list --filter="$filter" --format='value(name)' | named instance:))
+            left+=($(gcloud compute disks list --filter="$filter" --format='value(name)' | named disk:))
+            left+=($(gcloud compute firewall-rules list --filter="name~^$vm-" --format='value(name)' | named firewall-rule:))
+            left+=($(gcloud storage buckets list --format='value(name)' \
+              | awk -v id="$CLUSTER_ID" -v cache="$CACHE_PREFIX" 'index($0, id) || index($0, cache) == 1 { print "bucket:" $0 }'))
+            left+=($(gcloud iam service-accounts list --filter="email~^$GCP_ACCOUNT@" --format='value(email)' | named service-account:))
+          fi
+          left+=($(gcloud iam workload-identity-pools list --location=global --format='value(name.basename())' \
+            | sed -n "s/^$ANYCLOUD_ROLE_POOL\$/pool:&/p"))
+          left+=($(gcloud iam service-accounts list --filter="email~^$ANYCLOUD_ROLE_SERVICE_ACCOUNT@" --format='value(email)' \
+            | named service-account:))
+          # Grants to the run's accounts, deleted ones included, and, unless
+          # the guard found an earlier run's, of the custom role.
+          custom=projects/$project/roles/$ANYCLOUD_ROLE_CUSTOM_ROLE
+          [[ $GCP_GUARD != failure ]] || custom=
+          left+=($(gcloud projects get-iam-policy "$project" --format=json \
+            | jq -r --arg custom "$custom" --arg cp "${GCP_ACCOUNT:+$GCP_ACCOUNT@}" --arg rc "$ANYCLOUD_ROLE_SERVICE_ACCOUNT@" \
+              '.bindings[]? | .role as $role | .members[]
+                | select($role == $custom or contains($rc) or ($cp != "" and contains($cp))) | "binding:\($role):\(.)"'))
+          left=($(printf '%s\n' "${left[@]}" | sort -u))
+          if ((${#left[@]})); then
+            printf '::error title=Left in GCP::%s\n' "${left[@]}"
+            exit 1
+          fi
+          echo "Nothing of this run's installation is left in GCP."
 
       # Two rcs share the staging Worker: this run tested the tag's Worker
       # only if it's still the one there once the run is done.
