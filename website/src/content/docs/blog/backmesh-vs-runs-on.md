@@ -13,7 +13,7 @@ head:
   - tag: script
     attrs:
       type: application/ld+json
-    content: '{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the difference between backmesh and RunsOn?","acceptedAnswer":{"@type":"Answer","text":"Both run each GitHub Actions job on a fresh spot VM in your own cloud account. RunsOn is AWS only, supports Linux x64 and arm64, Windows and GPU, and charges a yearly license for commercial use. backmesh runs on AWS, GCP and Azure, supports Linux x86-64 only in private repositories, with NVIDIA T4 GPUs on AWS and Azure, and is free under Apache-2.0."}},{"@type":"Question","name":"Is there a RunsOn alternative for GCP or Azure?","acceptedAnswer":{"@type":"Answer","text":"Yes. RunsOn runs on AWS only. backmesh runs each job on its own spot VM in a GCP project or an Azure subscription as well as an AWS account, and one install can use several clouds."}},{"@type":"Question","name":"Does RunsOn support Windows, arm64 and GPU runners?","acceptedAnswer":{"@type":"Answer","text":"Yes. RunsOn runs Linux x64 and arm64, Windows, and GPU instances. backmesh runs Linux x86-64 only, with NVIDIA T4 GPUs on AWS and Azure, and neither runs macOS."}}]}'
+    content: '{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the difference between backmesh and RunsOn?","acceptedAnswer":{"@type":"Answer","text":"Both run each GitHub Actions job on a fresh spot VM in your own cloud account. RunsOn is AWS only, supports Linux x64 and arm64, Windows and GPU, and charges a yearly license for commercial use. backmesh runs on AWS, GCP and Azure, supports Linux x86-64 only, in private repositories or, with --public-repos, public ones, with NVIDIA T4 GPUs on AWS and Azure, and is free under Apache-2.0."}},{"@type":"Question","name":"Is there a RunsOn alternative for GCP or Azure?","acceptedAnswer":{"@type":"Answer","text":"Yes. RunsOn runs on AWS only. backmesh runs each job on its own spot VM in a GCP project or an Azure subscription as well as an AWS account, and one install can use several clouds."}},{"@type":"Question","name":"Does RunsOn support Windows, arm64 and GPU runners?","acceptedAnswer":{"@type":"Answer","text":"Yes. RunsOn runs Linux x64 and arm64, Windows, and GPU instances. backmesh runs Linux x86-64 only, with NVIDIA T4 GPUs on AWS and Azure, and neither runs macOS."}}]}'
 ---
 
 backmesh and RunsOn both run each GitHub Actions job on a fresh spot VM in
@@ -97,8 +97,9 @@ can move one at a time.
 Pick backmesh if coding
 agents push often and `backmesh cue` would start runners first, if you want
 no license or job-count tiers, or if your runners belong on GCP, Azure or
-several clouds. It's a new project, and runs only Linux x86-64 jobs in
-private repositories, with no Docker layer cache.
+several clouds. It's a new project, and runs only Linux x86-64 jobs, in
+private repositories unless you turn on [public repositories](/public-repos/), with no Docker layer
+cache.
 
 Pick RunsOn if you need Windows, arm64 or GPUs other than a T4, per-job instance
 families and disks, a Docker layer cache, or public repositories.
@@ -111,8 +112,8 @@ For free tools on Kubernetes and AWS, see
 **What is the difference between backmesh and RunsOn?** Both run each job on a
 fresh spot VM in your own cloud account. RunsOn is AWS only, supports Linux
 x64 and arm64, Windows and GPU, and charges a yearly license for commercial
-use. backmesh runs on AWS, GCP and Azure, supports Linux x86-64 only in
-private repositories, with NVIDIA T4 GPUs on AWS and Azure, and is free under
+use. backmesh runs on AWS, GCP and Azure, supports Linux x86-64 only, in
+private repositories or, with `--public-repos`, public ones, with NVIDIA T4 GPUs on AWS and Azure, and is free under
 Apache-2.0.
 
 **Is there a RunsOn alternative for GCP or Azure?** Yes. RunsOn runs on AWS
