@@ -3,12 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import { promisify } from 'node:util';
 
-import {
-  Command,
-  CommanderError,
-  InvalidArgumentError,
-  Option,
-} from 'commander';
+import { Command, CommanderError, InvalidArgumentError } from 'commander';
 
 import {
   anycloudBinary,
@@ -310,9 +305,14 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
         return gb;
       },
     )
-    // Hidden until RFC 0053.
-    .addOption(new Option('--public-repos').hideHelp())
-    .addOption(new Option('--no-public-repos').hideHelp())
+    .option(
+      '--public-repos',
+      "let the org's public repositories use the runners; their forks' pull requests run only on backmesh-public-2 and -4. See https://backmesh.com/public-repos/",
+    )
+    .option(
+      '--no-public-repos',
+      "keep the org's public repositories off the runners",
+    )
     .option('--verbose', "show the cloud CLIs' own errors")
     .action(
       async (opts: {
@@ -497,9 +497,11 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
     )
     .option('--plan-id <id>', 'the plan --yes agrees to, from --plan')
     .option('--yes', 'apply the plan --plan-id names without asking')
-    // Hidden until RFC 0053, as install's.
-    .addOption(new Option('--public-repos').hideHelp())
-    .addOption(new Option('--no-public-repos').hideHelp())
+    .option(
+      '--public-repos',
+      "add backmesh-public-2 and -4, as install's --public-repos does; without it or --no-public-repos, each org keeps what it has",
+    )
+    .option('--no-public-repos', 'remove backmesh-public-2 and -4')
     .action(
       async (opts: {
         runners: string[];

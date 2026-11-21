@@ -57,7 +57,8 @@ jobs:
       - run: make test
 ```
 
-Only Linux x86-64 jobs in private repositories can use the runners. See
+Only Linux x86-64 jobs can use the runners, in private repositories unless
+you turn on [public repositories](https://backmesh.com/public-repos/). See
 [Install](https://backmesh.com/install/) for the options and
 [Labels](https://backmesh.com/labels/) for the sizes.
 

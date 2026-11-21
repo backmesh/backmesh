@@ -309,6 +309,14 @@ describe('backmesh CLI', () => {
     });
   });
 
+  it('shows --public-repos and --no-public-repos in install and upgrade help', async () => {
+    for (const command of ['install', 'upgrade']) {
+      const { stdout } = await run(command, '--help');
+      expect(stdout).toContain('--public-repos');
+      expect(stdout).toContain('--no-public-repos');
+    }
+  });
+
   it("hands upgrade --public-repos, and keeps it in the plan's re-run", async () => {
     const plan = { planId: 'u-0123456789ab' };
     vi.mocked(upgrade).mockResolvedValueOnce(plan as never);
