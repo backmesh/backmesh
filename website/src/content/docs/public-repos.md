@@ -31,13 +31,15 @@ narrows that risk but doesn't remove it. Read this page before you turn it on.
 - **A fork run that asks for another backmesh label is cancelled**, with a
   note on the run naming the labels it may use. backmesh.com makes the cancel
   with the App's Actions write ([Security](/security/#the-github-app)).
-- **A fork run that has run 60 minutes on a public label is cancelled**, and
-  its runners are ended 5 minutes later if still running.
+- **A fork's job that has run 60 minutes on a public label**, counted from
+  its runner's start, gets its run cancelled, and the run's runners are ended
+  5 minutes later if still running.
 - **Fork runs read the [cache](/cache/) and never save to it.**
 
 backmesh counts a run as a fork's when its event is `pull_request`,
 `pull_request_review` or `pull_request_review_comment`, the repository is
-public, and the pull request's head is in another repository.
+public, and the pull request's head is in another repository or its head
+repository was deleted.
 
 ## What it doesn't do
 
@@ -57,14 +59,15 @@ public, and the pull request's head is in another repository.
   credentials. It is still reachable, and on GCP it serves the project's
   metadata, such as SSH keys or startup scripts set there
   ([Security](/security/#what-a-job-can-reach)).
-- **The label gate acts after GitHub assigns the job.** backmesh can't hold
-  a job back; it hears of it once GitHub hands it to a runner. If a runner on
-  another label is idle when a fork's job asks for that label, the job starts
-  there and runs until backmesh has read the run from GitHub, cancelled it
-  and ended that runner.
+- **The label gate acts after GitHub assigns the job.** backmesh hears of a
+  job when GitHub assigns it. It starts no runner for a fork's job on another
+  label, or for one it hasn't classified yet, but a runner on that label that
+  is already up and idle, started ahead of predicted jobs, for a cue, or for a
+  trusted job, can take it. That job runs until backmesh has read the run
+  from GitHub and ended the runner, which doesn't wait for the cancel.
 - **Events anyone can trigger aren't fork runs.** In a public repository,
-  anyone can start `issues`, `issue_comment`, `discussion` and
-  `pull_request_target` runs, and a `workflow_run` that follows a fork's run.
+  anyone can start `issues`, `issue_comment`, `discussion`, `fork`, `watch`
+  and `pull_request_target` runs, and a `workflow_run` that follows a fork's run.
   These run your default branch's workflow with its secrets and its
   `GITHUB_TOKEN`, on any label, with no vCPU cap or runtime limit, and GitHub's
   approval setting doesn't apply to them. Keep such jobs off backmesh labels,
@@ -73,6 +76,10 @@ public, and the pull request's head is in another repository.
   code in them; GitHub's
   [guidance](https://docs.github.com/en/actions/reference/security/secure-use)
   says the same for any runner.
+- **Fork runs read what the default branch caches.** Any fork's job can
+  restore the default branch's cache entries, so keep secrets out of them:
+  no private dependencies fetched with a secret, no build outputs that hold
+  credentials.
 - **A job controls its own VM's Docker**, so it can be root on that VM, for
   the length of the job.
 
@@ -99,11 +106,13 @@ public, and the pull request's head is in another repository.
    ```yaml
    jobs:
      test:
-       runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'backmesh-public-4' || 'backmesh-4' }}
+       runs-on: ${{ github.event.pull_request && github.event.pull_request.head.repo.full_name != github.repository && 'backmesh-public-4' || 'backmesh-4' }}
    ```
 
-   The `event_name` check matters: on a push there is no pull request, and the
-   comparison alone would pick `backmesh-public-4`.
+   The `github.event.pull_request` check matters: on a push there is no pull
+   request, and the comparison alone would pick `backmesh-public-4`. It covers
+   `pull_request_review` and `pull_request_review_comment` runs too, and a
+   pull request whose fork was deleted.
 
 4. **Use a cloud account, project or subscription of its own** for an org
    with public repositories, or keep nothing else in the runners' network,
@@ -115,6 +124,8 @@ GitHub's warning is mostly about long-lived runners: code from one pull
 request can persist on the machine and read the next job's secrets or poison
 its builds. backmesh gives every job a fresh VM that is deleted when the job
 ends, keeps forks on their own labels and off the cache's writes, and caps
-their vCPUs and runtime. What a fork's job can still do is use its VM for up
-to an hour: reach the internet and, on AWS and GCP, your other instances in
+their vCPUs and runtime. What a fork's job can still do is use its VM for
+about an hour, longer while the listener is down: its runner is ended about 5
+minutes after the cancel, and the cancel depends on backmesh.com answering. It
+can reach the internet and, on AWS and GCP, your other instances in
 the runners' network, and read its cloud's metadata service.
