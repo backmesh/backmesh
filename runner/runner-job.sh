@@ -347,8 +347,9 @@ main() {
   cp -a "$root/opt/actions-runner-dist/." "$root/workspace/actions-runner/"
   cd "$root/workspace/actions-runner"
   log "Running the ephemeral runner $(cat "$root/opt/actions-runner-dist/.runner-version")"
-  local stats=$root/home/runner/.backmesh-job-stats name
-  name=$(base64 -d <<<"$jit" | jq -r '.".runner" | @base64d | fromjson | .agentName // "unknown"' 2>/dev/null) || name=unknown
+  # The runner's name, its Job's ID, from the listener: GitHub's JIT config
+  # names it too, but in a format GitHub doesn't document.
+  local stats=$root/home/runner/.backmesh-job-stats name=${BACKMESH_RUNNER_NAME:-unknown}
   (sample_job "$stats" 0 "$name") || true
   sampler "$stats" & local sampler=$!
   local work=$root/workspace/actions-runner/_work copier="" restorer=""

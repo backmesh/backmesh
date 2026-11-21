@@ -78,9 +78,11 @@ setup() {
     esac'
   # Never the host's pkill: these tests share it.
   stub pkill 'echo "pkill $*" >>"$CALLS"'
-  # A JIT config as GitHub encodes it: the runner's files, each in base64.
-  jit=$(printf '{".runner":"%s"}' "$(printf '{"agentName":"bmabcde-04-x"}' | base64 -w0)" | base64 -w0)
-  export SCRATCH=$scratch CALLS=$calls PATH=$stubs:$PATH RUNNER_JITCONFIG=$jit
+  # A JIT config as GitHub encodes it: the runner's files, each in base64,
+  # .NET's indented JSON with CRLF line ends. The runner's name is the
+  # listener's BACKMESH_RUNNER_NAME, never read from it.
+  jit=$(printf '{".runner":"%s"}' "$(printf '{\r\n  "AgentId": 7,\r\n  "AgentName": "bmabcde-04-x"\r\n}' | base64 -w0)" | base64 -w0)
+  export SCRATCH=$scratch CALLS=$calls PATH=$stubs:$PATH RUNNER_JITCONFIG=$jit BACKMESH_RUNNER_NAME=bmabcde-04-x
   # Also the job files a backmesh runner sets for the job running these tests.
   unset FAKE_RUNNER_STATUS FAKE_RUNNER_WAIT FAKE_RUNNER_HOOK FAKE_RUNNER_ON_INT SAMPLE_EVERY BACKMESH_SUBMITTED_AT \
     BACKMESH_JOB_STATS BACKMESH_JOB_MARKS BACKMESH_AUTO_STATE UPLOAD_LIMIT RUNNER_NAME
@@ -270,7 +272,7 @@ case_samples_a_short_job_at_its_end() {
 
 case_runs_without_a_cgroup_file_or_runner_name() {
   rm "$scratch/cgroup/memory.stat"
-  RUNNER_JITCONFIG=$(printf '{".runner":"%s"}' "$(printf '{}' | base64 -w0)" | base64 -w0)
+  unset BACKMESH_RUNNER_NAME
   run_job run
   check 'exits 0' '((status == 0))'
   check 'starts the runner' '[[ -e $scratch/runner-env ]]'
