@@ -243,7 +243,7 @@ Linux x64, checked 2026-11-18:
 | [Blacksmith](https://www.blacksmith.sh/pricing)                                      | 0.004 (listed x64 rate)      | not listed separately        | 3,000 free minutes a month                                   |
 | [Depot](https://depot.dev/pricing)                                                   | 0.006                        | not listed on the main page  | Plans from $20 a month with 2,000 minutes                    |
 | [Namespace](https://namespace.so/pricing)                                            | 0.002 prepaid, 0.003 overage | 0.004 prepaid, 0.006 overage | 4 GB and 8 GB shapes; more memory costs more                 |
-| Self-hosted on spot VMs ([backmesh cost inputs](/cost/), 2026-11-13)                 | n/a                          | about 0.0005 to 0.0019       | Plus a fixed control plane and a VM boot per job             |
+| Self-hosted on spot VMs ([backmesh cost inputs](/cost/), 2026-11-13)                 | n/a                          | about 0.0005 to 0.0019       | Plus fixed always-on VMs and a VM boot per job               |
 
 Managed services run the machines for you, and their minutes bill like
 GitHub's. Self-hosted runners in your own cloud use your account's spot

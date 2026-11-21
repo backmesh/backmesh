@@ -8,7 +8,7 @@ sidebar:
 150,000 minutes a month of 4-vCPU Linux jobs cost $1,800 on GitHub-hosted
 runners at list price, and about $191–$365 on backmesh at spot prices on
 2026-11-13, depending on the cloud and the VM type a job gets. backmesh's
-figure includes its control plane and leaves out disks and VM boots, so it's a
+figure includes one org's always-on VMs and leaves out disks and VM boots, so it's a
 floor. backmesh's core features are free; your clouds bill you for the VMs.
 
 ## The inputs
@@ -103,11 +103,12 @@ pulls the runner's image after it, about 90 seconds more.
 1. Count your jobs' minutes a month at each size.
 2. Run `backmesh install --org <org> --plan`, with `--runners <cloud>` for each
    cloud to compare. It prints each of those clouds' `backmesh-4` spot and
-   on-demand prices and the control plane's monthly cost, without changing
+   on-demand prices and the always-on VMs' monthly cost, without changing
    anything. Other sizes scale with their vCPUs:
    `backmesh-8` costs about twice `backmesh-4`.
-3. Multiply each size's minutes by its price ÷ 60, add the control plane once,
-   and add a boot per job if you run many short jobs.
+3. Multiply each size's minutes by its price ÷ 60, add the always-on VMs once
+   (each org's listener VM once per org), and add a boot per job if you run
+   many short jobs.
 
 Once jobs run, [`backmesh status`](/status/) shows each org's month-to-date
 runner cost by cloud.
