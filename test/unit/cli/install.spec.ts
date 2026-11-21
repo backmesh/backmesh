@@ -659,6 +659,14 @@ describe('install', () => {
     await expect(install(asked, refused.deps)).rejects.toThrow(
       "aws's role connection wasn't made: credentials new failed: ops lacks iam:CreateRole (CLOUD_RIGHTS_MISSING). Run install again",
     );
+    // GCP's propagation retry is GCP's alone.
+    const aws = failing(
+      '{"error":{"code":"CLOUD_RIGHTS_MISSING","message":"invalid_target"}}\n',
+    );
+    await expect(install(asked, aws.deps)).rejects.toThrow(
+      "aws's role connection wasn't made: credentials new failed: invalid_target",
+    );
+    expect(aws.calls.filter((c) => c.includes('--apply'))).toHaveLength(1);
   });
 
   // GCP refuses a token at a workload identity provider it made seconds
