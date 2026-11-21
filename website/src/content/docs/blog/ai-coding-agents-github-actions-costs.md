@@ -243,7 +243,7 @@ Linux x64, checked 2026-11-18:
 | [Blacksmith](https://www.blacksmith.sh/pricing)                                      | 0.004 (listed x64 rate)      | not listed separately        | 3,000 free minutes a month                                   |
 | [Depot](https://depot.dev/pricing)                                                   | 0.006                        | not listed on the main page  | Plans from $20 a month with 2,000 minutes                    |
 | [Namespace](https://namespace.so/pricing)                                            | 0.002 prepaid, 0.003 overage | 0.004 prepaid, 0.006 overage | 4 GB and 8 GB shapes; more memory costs more                 |
-| Self-hosted on spot VMs ([backmesh cost inputs](/cost/), 2026-11-13)                 | n/a                          | about 0.0005 to 0.0019       | Plus a fixed control plane and a VM boot per job             |
+| Self-hosted on spot VMs ([backmesh cost inputs](/cost/), 2026-11-13)                 | n/a                          | about 0.0005 to 0.0019       | Plus fixed always-on VMs and a VM boot per job               |
 
 Managed services run the machines for you, and their minutes bill like
 GitHub's. Self-hosted runners in your own cloud use your account's spot
@@ -320,11 +320,11 @@ mid-run, skipped as drafts or stopped by a failed lint, and each costs one
 - Total: 99,000 minutes, or 99,000 × $0.012 = $1,188 on GitHub's 4-core
   runners.
 
-The same 99,000 minutes on backmesh, using the spot prices and control plane
+The same 99,000 minutes on backmesh, using the spot prices and always-on VM
 costs from backmesh's [cost inputs](/cost/) (2026-11-13). Jobs: 1,500 × 3 × 5 + 1,500 × 3
 × 1 = 27,000, each paying one boot.
 
-| Cloud | Spot $/h      | 99,000 min of compute | 27,000 boots | Control plane | Month     |
+| Cloud | Spot $/h      | 99,000 min of compute | 27,000 boots | Always-on VMs | Month     |
 | ----- | ------------- | --------------------- | ------------ | ------------- | --------- |
 | AWS   | 0.0497–0.07   | $82–$116              | $11–$16      | $86           | $179–$217 |
 | Azure | 0.0318–0.0381 | $52–$63               | $14–$20      | $111          | $178–$194 |

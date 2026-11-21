@@ -8,7 +8,7 @@ sidebar:
 150,000 minutes a month of 4-vCPU Linux jobs cost $1,800 on GitHub-hosted
 runners at list price, and about $191–$365 on backmesh at spot prices on
 2026-11-13, depending on the cloud and the VM type a job gets. backmesh's
-figure includes its control plane and leaves out disks and VM boots, so it's a
+figure includes one org's always-on VMs and leaves out disks and VM boots, so it's a
 floor. backmesh's core features are free; your clouds bill you for the VMs.
 
 ## The inputs
@@ -28,18 +28,22 @@ floor. backmesh's core features are free; your clouds bill you for the VMs.
 | Azure | `westus2`     | `Standard_D4ads_v5` 0.0381, `Standard_D4as_v5` 0.0318, `Standard_D4s_v5` 0.0355  |
 | GCP   | `us-central1` | `n2-standard-4` 0.1165, `n2d-standard-4` 0.0899                                  |
 
-- **The control plane:** two always-on VMs with their disks and public
-  addresses, about $86 a month on AWS, $111 on Azure and $74 on GCP. An idle
-  installation pays only this, since runners have no VM while idle.
+- **The always-on VMs:** the control plane's VM and one listener VM for each
+  org, with their disks and public addresses. For one org that's about $86 a
+  month on AWS ($69 + $17), $111 on Azure ($79 + $32) and $74 on GCP ($59 +
+  $15); each further org adds its listener VM. On Azure, a region that doesn't
+  offer your subscription the first sizes takes others, from $101 to $151 for
+  one org ([Azure](/azure/)). An idle installation pays only this, since
+  runners have no VM while idle.
 
 ## How it's computed
 
 GitHub-hosted: 150,000 minutes × $0.012 = $1,800.
 
-backmesh, for each cloud: the control plane plus 150,000 minutes at the
+backmesh, for each cloud: one org's always-on VMs plus 150,000 minutes at the
 cheapest and at the most expensive type's spot price, $/h ÷ 60 a minute.
 
-| Cloud | Spot $/h      | Per 1,000 minutes | 150,000 minutes | Control plane | Month     |
+| Cloud | Spot $/h      | Per 1,000 minutes | 150,000 minutes | Always-on VMs | Month     |
 | ----- | ------------- | ----------------- | --------------- | ------------- | --------- |
 | AWS   | 0.0497–0.07   | $0.83–$1.17       | $124–$175       | $86           | $210–$261 |
 | Azure | 0.0318–0.0381 | $0.53–$0.64       | $80–$95         | $111          | $191–$206 |
@@ -99,11 +103,12 @@ pulls the runner's image after it, about 90 seconds more.
 1. Count your jobs' minutes a month at each size.
 2. Run `backmesh install --org <org> --plan`, with `--runners <cloud>` for each
    cloud to compare. It prints each of those clouds' `backmesh-4` spot and
-   on-demand prices and the control plane's monthly cost, without changing
+   on-demand prices and the always-on VMs' monthly cost, without changing
    anything. Other sizes scale with their vCPUs:
    `backmesh-8` costs about twice `backmesh-4`.
-3. Multiply each size's minutes by its price ÷ 60, add the control plane once,
-   and add a boot per job if you run many short jobs.
+3. Multiply each size's minutes by its price ÷ 60, add the always-on VMs once
+   (each org's listener VM once per org), and add a boot per job if you run
+   many short jobs.
 
 Once jobs run, [`backmesh status`](/status/) shows each org's month-to-date
 runner cost by cloud.

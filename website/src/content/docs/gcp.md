@@ -78,7 +78,7 @@ These are catalog prices in `us-central1`, spot in the lowest zone, for a
 | `n2d-standard-4` | 0.0899   | 0.169         |
 
 Other sizes scale with their vCPUs. Each job also pays for its VM's boot and its
-100 GB disk. The control plane costs about $74 a month. At those prices, 150,000
-minutes a month of `backmesh-4` jobs cost at least $299–$365 with the control
-plane, before disks, boots and runners started ahead of jobs; see [the
+100 GB disk. The control plane and one org's listener VM cost about $74 a
+month. At those prices, 150,000 minutes a month of `backmesh-4` jobs cost at
+least $299–$365 with one org's always-on VMs, before disks, boots and runners started ahead of jobs; see [the
 costs](/#cost). Spot prices change by the hour.
