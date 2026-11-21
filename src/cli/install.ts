@@ -603,7 +603,8 @@ export async function connectClouds(
             env,
           );
         } catch (error) {
-          if (!INVALID_TARGET.test(String(error))) throw error;
+          if (cloud !== 'gcp' || !INVALID_TARGET.test(String(error)))
+            throw error;
           const ms = PROPAGATION_WAITS_MS[i];
           if (ms === undefined) {
             throw new Error(
