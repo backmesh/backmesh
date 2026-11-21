@@ -234,9 +234,11 @@ function setUp({
       ? [listenerVm('acme', VM.acme!)]
       : host === 'lost'
         ? [
+            // Whatever size its install took there.
             listenerVm('acme', VM.acme!, {
               state: 'failed',
               region: 'us-east-2',
+              vmType: 't3.medium',
             }),
           ]
         : []),
@@ -1681,7 +1683,7 @@ describe('upgrade', () => {
       }
     });
 
-    it('creates a lost VM again from the Secret, where it was, and reads it there', async () => {
+    it('creates a lost VM again from the Secret, where it was and at its size, and reads it there', async () => {
       const { deps, calls, lines, hosts } = setUp({
         ...current,
         host: 'lost',
@@ -1693,7 +1695,7 @@ describe('upgrade', () => {
       expect(moves).toEqual([
         expect.stringMatching(
           new RegExp(
-            `^vm \\S+ --id ${id} --credentials bm-aws --region us-east-2 --vm-type t3.small --secret backmesh-acme --wait$`,
+            `^vm \\S+ --id ${id} --credentials bm-aws --region us-east-2 --vm-type t3.medium --secret backmesh-acme --wait$`,
           ),
         ),
         `start ${id}`,

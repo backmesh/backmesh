@@ -685,6 +685,7 @@ describe('rotateKey', () => {
           org: 'acme',
           cloud: 'aws',
           region: 'us-east-1',
+          vmType: 't3.small',
           lost: false,
           others: [],
         },

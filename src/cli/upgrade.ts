@@ -50,7 +50,7 @@ import {
   createListenerVm,
   createVm,
   LISTENER_VM_MONTHLY_USD,
-  LISTENER_VM_TYPE,
+  LISTENER_VM_TYPES,
   listenerVmId,
   rollListenerVm,
   startListener,
@@ -387,10 +387,8 @@ export async function upgrade(
     Cloud | undefined;
   const moving = planned.filter((p) => p.listener.deployment);
   if (moving.length && cloud) {
-    const [type, usd] = [
-      LISTENER_VM_TYPE[cloud],
-      LISTENER_VM_MONTHLY_USD[cloud],
-    ];
+    const type = LISTENER_VM_TYPES[cloud][0]!;
+    const usd = LISTENER_VM_MONTHLY_USD[type]!;
     print(
       moving.length === 1
         ? `${moving[0]!.org}'s listener moves from ${CONTROL_POOL} to its own ${type} VM, about $${usd} a month, and ${CONTROL_POOL}, about the same, is deleted.`
@@ -711,11 +709,17 @@ async function revive(
   deps.print(
     `${org}'s listener VM ${vm.id} is gone; creating ${id} on ${cloud} ${vm.region}.`,
   );
-  // The Secret holds every value the listener reads.
+  // The Secret holds every value the listener reads; the size is the lost
+  // VM's, which install read its region offers.
   await createListenerVm(
     org,
     id,
-    { cloud, region: vm.region, credentials },
+    {
+      cloud,
+      region: vm.region,
+      credentials,
+      vmType: vm.vmType ?? LISTENER_VM_TYPES[cloud][0]!,
+    },
     { exec, runLong: deps.runLong },
   );
   await answering(exec, { org, vm: id }, deps.wait);
@@ -789,10 +793,16 @@ async function moveToVm(
       );
     }
     vm = listenerVmId(identity.install);
+    // `bm-control`'s own size, the first, which its region took.
     await createVm(
       org,
       vm,
-      { cloud, region: pool.region, credentials },
+      {
+        cloud,
+        region: pool.region,
+        credentials,
+        vmType: LISTENER_VM_TYPES[cloud][0]!,
+      },
       deps.runLong,
     );
   }

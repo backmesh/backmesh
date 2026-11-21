@@ -36,18 +36,40 @@ import {
 export const LISTENER_VM_IMAGE =
   'mirror.gcr.io/library/docker:29-cli@sha256:34507eb5069d8be82c95dd3b6987d4250fd5fee49b82e2509b7d7a7030740d6d';
 // About $15–32 a month each with its disk and address: the listener needs
-// about half a vCPU and 512 MiB, as it had on `bm-control`. `t3.small` and
-// `e2-small` burst above their baseline, billing a busy listener's surplus.
-// Each is linux/amd64, as anycloud's VMs require.
-export const LISTENER_VM_TYPE: Record<Cloud, string> = {
-  aws: 't3.small',
-  gcp: 'e2-small',
-  azure: 'Standard_B2s',
+// about half a vCPU and 512 MiB, as it had on `bm-control`. `t3.small`,
+// `e2-small` and Azure's B-series burst above their baseline, billing a busy
+// listener's surplus. Each is linux/amd64, as anycloud's VMs require. On
+// Azure a new listener takes the first size its region offers the
+// subscription (`vm-sizes.ts`): some offers refuse `Standard_B2s` in every
+// region and offer the Bsv2 series. Each is 2 vCPUs: the B2als_v2 and B2ls_v2
+// have B2s's 4 GiB, the others 8, the cheapest first after B2s, and the
+// control plane's own D-series last, so a region that takes the control
+// plane mostly takes a listener too.
+export const LISTENER_VM_TYPES: Record<Cloud, readonly string[]> = {
+  aws: ['t3.small'],
+  gcp: ['e2-small'],
+  azure: [
+    'Standard_B2s',
+    'Standard_B2als_v2',
+    'Standard_B2ls_v2',
+    'Standard_B2as_v2',
+    'Standard_B2s_v2',
+    'Standard_D2as_v5',
+    'Standard_D2s_v5',
+  ],
 };
-export const LISTENER_VM_MONTHLY_USD: Record<Cloud, number> = {
-  aws: 17,
-  gcp: 15,
-  azure: 32,
+// Each size's $/month with its disk and address: Azure's at eastus's
+// pay-as-you-go Linux price (Retail Prices API, 2026-11-21), and $2.
+export const LISTENER_VM_MONTHLY_USD: Record<string, number> = {
+  't3.small': 17,
+  'e2-small': 15,
+  Standard_B2s: 32,
+  Standard_B2als_v2: 29,
+  Standard_B2ls_v2: 32,
+  Standard_B2as_v2: 57,
+  Standard_B2s_v2: 63,
+  Standard_D2as_v5: 65,
+  Standard_D2s_v5: 72,
 };
 
 // Every value the org's Secret may hold (`secretValues`).
@@ -87,6 +109,8 @@ export interface ListenerVm {
   org: string;
   cloud: string | null;
   region: string | null;
+  // Its size, which a VM created in its place keeps.
+  vmType: string | null;
   // The VM ended, such as when anycloud found its host gone (`vm.md`, Repair
   // limits) or someone terminated it, and the org's Secret is still there.
   lost: boolean;
@@ -144,6 +168,7 @@ export async function listListenerVms(api: AnycloudApi): Promise<ListenerVm[]> {
         org: orgOfListener(name)!,
         cloud: vm!.cloudProvider?.toLowerCase() ?? null,
         region: vm!.region,
+        vmType: [vm!.vmType ?? []].flat()[0] ?? null,
         lost: !running.length,
         others: running.slice(1).map(({ id }) => id),
       };
@@ -207,6 +232,7 @@ export interface ListenerPlacement {
   cloud: Cloud;
   region: string;
   credentials: string;
+  vmType: string;
 }
 
 export interface ListenerVmDeps {
@@ -239,7 +265,7 @@ export const createVm = (
   runLong([
     ...['vm', LISTENER_VM_IMAGE, '--id', id],
     ...['--credentials', where.credentials, '--region', where.region],
-    ...['--vm-type', LISTENER_VM_TYPE[where.cloud]],
+    ...['--vm-type', where.vmType],
     ...['--secret', listenerName(org), '--wait'],
   ]);
 

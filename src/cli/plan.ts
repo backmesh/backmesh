@@ -38,8 +38,13 @@ export interface InstallPlan {
     monthlyUsd: number;
   } | null;
   // Azure's: the regions install tries, in order, for the always-on VMs it
-  // creates, each offering every size (`vm-sizes.ts`); absent elsewhere.
-  alwaysOnRegions?: string[];
+  // creates, with the size each takes there, the first of its sizes the
+  // region offers (`vm-sizes.ts`); absent elsewhere.
+  alwaysOnRegions?: {
+    region: string;
+    managementVm?: string;
+    listenerVm?: string;
+  }[];
   // Each runner cloud's regions, fixed (`RUNNER_REGIONS`, `regions.ts`) and
   // account-allowed; hashed with the classes' regions, so another account
   // or placement is another plan.

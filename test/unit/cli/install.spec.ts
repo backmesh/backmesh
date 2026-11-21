@@ -2743,7 +2743,7 @@ describe('install', () => {
 // where `restricted` says the subscription may not create it.
 function skus(restricted: Record<string, string[]>) {
   return JSON.stringify(
-    ['Standard_D2s_v5', 'Standard_B2s'].flatMap((name) =>
+    Object.keys(FAMILY).flatMap((name) =>
       RUNNER_REGIONS.azure.map((location) => ({
         name,
         family: FAMILY[name],
@@ -2764,10 +2764,49 @@ function skus(restricted: Record<string, string[]>) {
 }
 const FAMILY: Record<string, string> = {
   Standard_D2s_v5: 'standardDSv5Family',
+  Standard_D2as_v5: 'standardDASv5Family',
+  Standard_D2s_v4: 'standardDSv4Family',
   Standard_B2s: 'standardBSFamily',
+  Standard_B2als_v2: 'standardBasv2Family',
+  Standard_B2ls_v2: 'standardBsv2Family',
+  Standard_B2as_v2: 'standardBasv2Family',
+  Standard_B2s_v2: 'standardBsv2Family',
 };
-// The outside org's sponsorship subscription.
-const SPONSORSHIP = { Standard_B2s: ['eastus', 'eastus2', 'westus2'] };
+const LISTENER_SIZES = [
+  'Standard_B2s',
+  'Standard_B2als_v2',
+  'Standard_B2ls_v2',
+  'Standard_B2as_v2',
+  'Standard_B2s_v2',
+  'Standard_D2as_v5',
+  'Standard_D2s_v5',
+];
+// Install's one read: the control plane's sizes, then the listener's
+// others.
+const SKU_QUERY = `[?${[
+  'Standard_D2s_v5',
+  'Standard_D2as_v5',
+  'Standard_D2s_v4',
+  ...LISTENER_SIZES.slice(0, 5),
+]
+  .map((s) => `name=='${s}'`)
+  .join(
+    ' || ',
+  )}].{name:name,family:family,locations:locations,restrictions:restrictions}`;
+const CONTROL_SIZES = [
+  'Standard_D2s_v5',
+  'Standard_D2as_v5',
+  'Standard_D2s_v4',
+];
+// Each of `sizes` refused in `regions`.
+const refusedAll = (sizes: readonly string[], regions: readonly string[]) =>
+  Object.fromEntries(sizes.map((size) => [size, [...regions]]));
+// A subscription refused every listener size in three regions.
+const SPONSORSHIP = refusedAll(LISTENER_SIZES, [
+  'eastus',
+  'eastus2',
+  'westus2',
+]);
 
 describe("install's always-on VM sizes on Azure", () => {
   const binary = Object.fromEntries(
@@ -2844,47 +2883,103 @@ describe("install's always-on VM sizes on Azure", () => {
     // One read for every region: each `az vm list-skus` downloads Azure's
     // whole catalog, which one per region at once starved a hosted runner.
     expect(commands.filter((c) => c.startsWith('az vm list-skus'))).toEqual([
-      "az vm list-skus --all --resource-type virtualMachines --query [?name=='Standard_D2s_v5' || name=='Standard_B2s'].{name:name,family:family,locations:locations,restrictions:restrictions} --output json",
+      `az vm list-skus --all --resource-type virtualMachines --query ${SKU_QUERY} --output json`,
     ]);
     expect(lines.filter((l) => l.startsWith("Azure won't create"))).toEqual([
-      expect.stringContaining(
-        '(Standard_B2s) in eastus for this subscription: NotAvailableForSubscription',
-      ),
+      "Azure won't create acme's listener VM in eastus for this subscription in any of its sizes: Standard_B2s (NotAvailableForSubscription), Standard_B2als_v2 (NotAvailableForSubscription), Standard_B2ls_v2 (NotAvailableForSubscription), Standard_B2as_v2 (NotAvailableForSubscription), Standard_B2s_v2 (NotAvailableForSubscription), Standard_D2as_v5 (NotAvailableForSubscription), Standard_D2s_v5 (NotAvailableForSubscription).",
     ]);
     expect(plan).toMatchObject({
       controlPlane: { region: 'centralus', exists: false },
       listener: { region: 'centralus', vmType: 'Standard_B2s' },
-      alwaysOnRegions: [
-        'centralus',
-        'northcentralus',
-        'southcentralus',
-        'westcentralus',
-        'westus',
-        'westus3',
-      ],
     });
+    expect(plan.alwaysOnRegions?.map((r) => r.region)).toEqual([
+      'centralus',
+      'northcentralus',
+      'southcentralus',
+      'westcentralus',
+      'westus',
+      'westus3',
+    ]);
     expect(worker.calls).toEqual([]);
   });
 
-  it('names every restricted size', async () => {
-    const { deps, lines } = azure({ Standard_D2s_v5: ['eastus'] });
+  it('names every VM a region offers none of its sizes', async () => {
+    const { deps, lines } = azure(refusedAll(CONTROL_SIZES, ['eastus']));
     await planned(eastus, deps);
     expect(lines.filter((l) => l.startsWith("Azure won't create"))).toEqual([
-      expect.stringContaining('(Standard_D2s_v5) in eastus'),
-      expect.stringContaining('(Standard_B2s) in eastus'),
+      expect.stringContaining("the control plane's VM in eastus"),
+      expect.stringContaining("acme's listener VM in eastus"),
     ]);
   });
 
-  it('stops before any sign-in when no region offers every size', async () => {
-    const { deps, worker } = azure({ Standard_D2s_v5: RUNNER_REGIONS.azure });
+  it('stops before any sign-in when no region offers a VM any of its sizes', async () => {
+    const { deps, worker } = azure(
+      refusedAll(CONTROL_SIZES, RUNNER_REGIONS.azure),
+    );
     const error = await install({ ...eastus, plan: true }, deps).catch(
       (e: unknown) => e as Error,
     );
     expect(error).toBeInstanceOf(UsageError);
     expect((error as Error).message).toMatch(
-      /\(Standard_D2s_v5\) in eastus .*NotAvailableForSubscription[\s\S]*No Azure region install tries/,
+      /control plane's VM in eastus .*: Standard_D2s_v5 \(NotAvailableForSubscription\)[\s\S]*No Azure region install tries/,
     );
     expect(worker.calls).toEqual([]);
+  });
+
+  it("takes the listener's next size where Azure refuses Standard_B2s in every region, as some offers do", async () => {
+    const { deps, lines, calls } = azure({
+      ...refusedAll(LISTENER_SIZES, []),
+      Standard_B2s: RUNNER_REGIONS.azure,
+    });
+    const { plan, run } = await planned(eastus, deps);
+    expect(plan).toMatchObject({
+      controlPlane: { region: 'eastus', managementVm: 'Standard_D2s_v5' },
+      listener: {
+        region: 'eastus',
+        vmType: 'Standard_B2als_v2',
+        monthlyUsd: 29,
+      },
+    });
+    expect(plan.alwaysOnRegions?.[0]).toEqual({
+      region: 'eastus',
+      managementVm: 'Standard_D2s_v5',
+      listenerVm: 'Standard_B2als_v2',
+    });
+    expect(lines).toContain(
+      "Always on: acme's listener VM (Standard_B2als_v2) on azure eastus, about $29 a month with its disk and address.",
+    );
+    await run();
+    expect(steps(calls)).toEqual([
+      'cluster create backmesh --cloud azure --region eastus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
+      expect.stringContaining(
+        '--region eastus --vm-type Standard_B2als_v2 --secret backmesh-acme --wait',
+      ),
+    ]);
+  });
+
+  it("takes the control plane's next size where Azure refuses Standard_D2s_v5, and checks that size's family quota", async () => {
+    const { deps, lines } = azure(
+      { Standard_D2s_v5: RUNNER_REGIONS.azure },
+      { families: { centralus: { standardDASv5Family: [0, 0] } } },
+    );
+    const { plan } = await planned(
+      { ...options, controlPlane: 'azure:centralus' },
+      deps,
+    );
+    expect(lines).toContain(
+      "Azure's standardDASv5Family quota in centralus has 0 vCPUs free (limit 0), under the 2 for the control plane's VM (Standard_D2as_v5).",
+    );
+    expect(plan).toMatchObject({
+      controlPlane: {
+        region: 'northcentralus',
+        managementVm: 'Standard_D2as_v5',
+        monthlyUsd: 72,
+      },
+      listener: { region: 'northcentralus', vmType: 'Standard_B2s' },
+    });
+    expect(lines).toContain(
+      "Always on: the control plane's VM (Standard_D2as_v5) on azure northcentralus, about $72 a month with its disk and address.",
+    );
   });
 
   it("skips a region without its sizes' family quota, reading each region's usage once", async () => {
@@ -2906,10 +3001,13 @@ describe("install's always-on VM sizes on Azure", () => {
     expect(lines).toContain(
       "Azure's standardDSv5Family quota in centralus has 0 vCPUs free (limit 0), under the 2 for the control plane's VM (Standard_D2s_v5).",
     );
-    expect(plan).toMatchObject({
-      controlPlane: { region: 'southcentralus' },
-      alwaysOnRegions: ['southcentralus', 'westcentralus', 'westus', 'westus3'],
-    });
+    expect(plan.controlPlane.region).toBe('southcentralus');
+    expect(plan.alwaysOnRegions?.map((r) => r.region)).toEqual([
+      'southcentralus',
+      'westcentralus',
+      'westus',
+      'westus3',
+    ]);
     const reads = commands.filter((c) => c.startsWith('az vm list-usage'));
     expect(reads).toHaveLength(new Set(reads).size);
   });
@@ -2942,7 +3040,9 @@ describe("install's always-on VM sizes on Azure", () => {
     expect(lines).toContain(
       "Azure's vCPU quotas couldn't be read in northcentralus, so the plan takes them to have room for the control plane's VM and acme's listener VM.",
     );
-    expect(plan.alwaysOnRegions).toContain('northcentralus');
+    expect(plan.alwaysOnRegions?.map((r) => r.region)).toContain(
+      'northcentralus',
+    );
   });
 
   it('stops before any sign-in, naming the quota, when no region has room', async () => {
@@ -3066,8 +3166,12 @@ describe("install's always-on VM sizes on Azure", () => {
     expect(plan).toMatchObject({
       controlPlane: { region: 'northcentralus' },
       listener: { region: 'northcentralus' },
-      alwaysOnRegions: ['northcentralus'],
+      alwaysOnRegions: [{ region: 'northcentralus' }],
     });
+    // One region's sizes alone, which Azure filters.
+    expect(commands.filter((c) => c.startsWith('az vm list-skus'))).toEqual([
+      `az vm list-skus --all --location northcentralus --resource-type virtualMachines --query ${SKU_QUERY} --output json`,
+    ]);
     expect(lines).toContain(
       'Install resumes the control plane backmesh-1763553600000-x7k2p9 in azure northcentralus.',
     );
@@ -3181,7 +3285,7 @@ describe("install's always-on VM sizes on Azure", () => {
     // A slow catalog read answers the second time.
     const { plan } = await planned(eastus, set.deps);
     expect(timeouts).toEqual([180_000, 180_000]);
-    expect(plan.alwaysOnRegions?.[0]).toBe('centralus');
+    expect(plan.alwaysOnRegions?.[0]?.region).toBe('centralus');
     const stopped = async (twice: Error[]) => {
       failures = twice;
       const error = (await install({ ...eastus, plan: true }, set.deps).catch(
@@ -3193,7 +3297,7 @@ describe("install's always-on VM sizes on Azure", () => {
     expect(
       await stopped([failed({ killed: true }), failed({ killed: true })]),
     ).toBe(
-      "Azure's VM sizes couldn't be read with `az vm list-skus` (it timed out after 3 minutes, twice), so the plan can't tell which region this subscription may create the control plane's VM (Standard_D2s_v5) and acme's listener VM (Standard_B2s) in. Check that `az` answers, then run install again.",
+      "Azure's VM sizes couldn't be read with `az vm list-skus` (it timed out after 3 minutes, twice), so the plan can't tell which region this subscription may create the control plane's VM and acme's listener VM in. Check that `az` answers, then run install again.",
     );
     expect(
       await stopped([
@@ -3229,7 +3333,7 @@ describe("install's always-on VM sizes on Azure", () => {
     expect(plan).toMatchObject({
       controlPlane: { cloud: 'aws', exists: true },
       listener: { cloud: 'azure', region: 'centralus' },
-      alwaysOnRegions: ['centralus'],
+      alwaysOnRegions: [{ region: 'centralus', listenerVm: 'Standard_B2s' }],
     });
     expect(lines.some((l) => l.startsWith('If Azure has no capacity'))).toBe(
       false,

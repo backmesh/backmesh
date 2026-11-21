@@ -152,6 +152,7 @@ describe('listListenerVms', () => {
       org: { l: 'acme', q: 'beta', z: 'zeta' }[id[4]!],
       cloud: 'aws',
       region: 'us-east-1',
+      vmType: 't3.small',
       lost,
       others: [],
     });
@@ -303,7 +304,12 @@ describe('the VM commands', () => {
     await createListenerVm(
       'acme',
       'bml-l8u5e-abc123',
-      { cloud: 'gcp', region: 'us-east1', credentials: 'bm-gcp-000001' },
+      {
+        cloud: 'gcp',
+        region: 'us-east1',
+        credentials: 'bm-gcp-000001',
+        vmType: 'e2-small',
+      },
       { exec, runLong: run },
     );
     expect(calls).toEqual([
@@ -325,7 +331,12 @@ describe('the VM commands', () => {
       createListenerVm(
         'acme',
         'bml-l8u5e-abc123',
-        { cloud: 'aws', region: 'us-east-1', credentials: 'bm-aws' },
+        {
+          cloud: 'aws',
+          region: 'us-east-1',
+          credentials: 'bm-aws',
+          vmType: 't3.small',
+        },
         { exec, runLong: run },
       ),
     ).rejects.toThrow(
