@@ -1,7 +1,8 @@
 // The sizes of the always-on VMs install creates on Azure, read before any
 // sign-in through the user's `az`: a subscription may be refused a size in
 // a region (`NotAvailableForSubscription`, as sponsorship and trial offers
-// are), or have no quota for its family (a new subscription's
+// are, some in every region), so each VM takes the first of its sizes the
+// region offers, or have no quota for that size's family (a new subscription's
 // `standardDSv5Family` may be 0), which `cluster create` and `vm` otherwise
 // find only after the GitHub sign-in and the App install. AWS and GCP have
 // no such per-account restriction: every account may launch `t3` and `e2`
@@ -14,11 +15,20 @@ import { usageNamed, type Usage } from '../runners/quota.js';
 export interface AlwaysOn {
   // Such as "the control plane's VM".
   what: string;
-  size: string;
+  // In the order it takes them.
+  sizes: readonly string[];
+}
+
+// A region install may create the always-on VMs in, with each one's size
+// there, in `vms`' order.
+export interface AlwaysOnRegion {
+  region: string;
+  sizes: string[];
 }
 
 // Each always-on size's vCPUs: t3.large and t3.small, e2-standard-2 and
-// e2-small, Standard_D2s_v5 and Standard_B2s.
+// e2-small, and every Azure size install takes (`MANAGEMENT_VMS`,
+// `LISTENER_VM_TYPES`).
 export const ALWAYS_ON_VCPUS = 2;
 
 interface Sku {
@@ -49,48 +59,76 @@ const refused = (skus: readonly Sku[], size: string, region: string) => {
   return restriction && (restriction.reasonCode ?? 'restricted');
 };
 
+// A region's sizes for the VMs, and why it can't take them: one line per
+// VM it offers no size, or per quota without room.
+interface Fit {
+  sizes: string[];
+  reasons: { name?: string; line: string }[];
+}
+
+interface Sized {
+  what: string;
+  size: string;
+}
+
+// Its quota's usage name, such as `standardDSv5Family`.
+const familyOf = (skus: readonly Sku[], size: string) =>
+  skus.find((s) => same(s.name ?? '')(size))?.family;
+
+// The vCPUs free in the quota `name`; Infinity when `usage` doesn't name
+// it, as such a quota passes.
+const free = (usage: readonly Usage[], name: string) => {
+  const found = usageNamed(usage, name);
+  const left = found && found.limit - found.current;
+  return left === undefined || !Number.isFinite(left) ? Infinity : left;
+};
+
 // The quotas in `usage` without room for `vms`, one line each: an
 // on-demand VM counts against its family's vCPUs and the regional ones
-// (`cores`). A quota `usage` doesn't name passes.
+// (`cores`).
 const short = (
   skus: readonly Sku[],
-  vms: readonly AlwaysOn[],
+  vms: readonly Sized[],
   region: string,
   usage: readonly Usage[],
 ) => {
-  const need = new Map<string, AlwaysOn[]>([['cores', [...vms]]]);
+  const need = new Map<string, Sized[]>([['cores', [...vms]]]);
   for (const vm of vms) {
-    const family = skus.find((s) => same(s.name ?? '')(vm.size))?.family;
+    const family = familyOf(skus, vm.size);
     if (family) need.set(family, [...(need.get(family) ?? []), vm]);
   }
   return [...need].flatMap(([name, mine]) => {
-    const found = usageNamed(usage, name);
-    const free = found && found.limit - found.current;
+    const left = free(usage, name);
     const vcpus = mine.length * ALWAYS_ON_VCPUS;
-    if (free === undefined || !Number.isFinite(free) || free >= vcpus) {
-      return [];
-    }
+    if (left >= vcpus) return [];
     const what = mine.map((vm) => `${vm.what} (${vm.size})`).join(' and ');
     return [
       {
         name,
-        line: `Azure's ${name} quota in ${region} has ${Math.max(free, 0)} vCPUs free (limit ${found!.limit}), under the ${vcpus} for ${what}.`,
+        line: `Azure's ${name} quota in ${region} has ${Math.max(left, 0)} vCPUs free (limit ${usageNamed(usage, name)!.limit}), under the ${vcpus} for ${what}.`,
       },
     ];
   });
 };
 
-// Every region's entries for `vms`' sizes, projected to what `refused`
+// The entries for `vms`' sizes in `regions`, projected to what `refused`
 // reads. One call: each `az vm list-skus` downloads Azure's whole catalog,
 // and one per region at once starved a GitHub-hosted runner. That download
-// can take minutes, so it gets three, and a second try.
-const readSkus = (vms: readonly AlwaysOn[], command: RunCommand) => {
+// can take minutes, so it gets three, and a second try. One region's
+// alone is filtered by Azure, and quicker.
+const readSkus = (
+  vms: readonly AlwaysOn[],
+  regions: readonly string[],
+  command: RunCommand,
+) => {
+  const sizes = [...new Set(vms.flatMap((vm) => vm.sizes))];
   const read = () =>
     command(
       [
         ...['az', 'vm', 'list-skus', '--all'],
+        ...(regions.length === 1 ? ['--location', regions[0]!] : []),
         ...['--resource-type', 'virtualMachines', '--query'],
-        `[?${vms.map((vm) => `name=='${vm.size}'`).join(' || ')}].{name:name,family:family,locations:locations,restrictions:restrictions}`,
+        `[?${sizes.map((size) => `name=='${size}'`).join(' || ')}].{name:name,family:family,locations:locations,restrictions:restrictions}`,
         ...['--output', 'json'],
       ],
       undefined,
@@ -100,8 +138,9 @@ const readSkus = (vms: readonly AlwaysOn[], command: RunCommand) => {
 };
 
 /**
- * Where install creates `vms`: the first of `candidates` offering every
- * size with quota for it in `usage` (when given: a resumed control plane's
+ * Where install creates `vms`, each at the first of its sizes the region
+ * offers: the first of `candidates` offering each VM a size, with quota for
+ * them in `usage` (when given: a resumed control plane's
  * VM may count there already), and with `fallback` (a new control plane)
  * the passing regions after it, which install tries in turn when Azure
  * refuses the create for capacity or quota. `advice` ends the error when
@@ -121,54 +160,81 @@ export async function alwaysOnRegions(
   },
   command: RunCommand,
   report: { print: (line: string) => void },
-): Promise<string[]> {
+): Promise<AlwaysOnRegion[]> {
   const region = candidates[0]!;
-  const what = vms.map((vm) => `${vm.what} (${vm.size})`).join(' and ');
-  const all = await readSkus(vms, command).catch((cause: unknown) => {
-    // `execFile`'s error: killed at the timeout, or az's own last line.
-    const { killed, stderr, message } = cause as {
-      killed?: boolean;
-      stderr?: string;
-      message?: string;
-    };
-    const reason = killed
-      ? 'it timed out after 3 minutes, twice'
-      : (stderr?.split('\n').findLast((line) => line.trim()) ??
-        String(message ?? cause).split('\n')[0]);
-    throw new UsageError(
-      `Azure's VM sizes couldn't be read with \`az vm list-skus\` (${reason}), so the plan can't tell which region this subscription may create ${what} in. Check that \`az\` answers, then run install again.`,
-      { cause },
-    );
-  });
+  const what = vms.map((vm) => vm.what).join(' and ');
+  const all = await readSkus(vms, candidates, command).catch(
+    (cause: unknown) => {
+      // `execFile`'s error: killed at the timeout, or az's own last line.
+      const { killed, stderr, message } = cause as {
+        killed?: boolean;
+        stderr?: string;
+        message?: string;
+      };
+      const reason = killed
+        ? 'it timed out after 3 minutes, twice'
+        : (stderr?.split('\n').findLast((line) => line.trim()) ??
+          String(message ?? cause).split('\n')[0]);
+      throw new UsageError(
+        `Azure's VM sizes couldn't be read with \`az vm list-skus\` (${reason}), so the plan can't tell which region this subscription may create ${what} in. Check that \`az\` answers, then run install again.`,
+        { cause },
+      );
+    },
+  );
   // Why each candidate can't take `vms`, one line each; none when it can.
   // A region whose usage can't be read passes, as `cluster create` finds
   // out.
   const unread: string[] = [];
-  const why = async (r: string) => {
-    const sizes = vms.flatMap((vm) => {
-      const reason = refused(all, vm.size, r);
-      return reason
-        ? [
+  const why = async (r: string): Promise<Fit> => {
+    const offered = vms.map((vm) =>
+      vm.sizes.filter((size) => !refused(all, size, r)),
+    );
+    const none = vms.flatMap((vm, i) =>
+      offered[i]!.length
+        ? []
+        : [
             {
-              line: `Azure won't create ${vm.what} (${vm.size}) in ${r} for this subscription: ${reason}.`,
+              line: `Azure won't create ${vm.what} in ${r} for this subscription in any of its sizes: ${vm.sizes.map((size) => `${size} (${refused(all, size, r)})`).join(', ')}.`,
             },
-          ]
-        : [];
+          ],
+    );
+    if (none.length) return { sizes: [], reasons: none };
+    const read = usage && (await usage(r).catch(() => undefined));
+    if (usage && !read) unread.push(r);
+    // Each VM's first offered size whose family has room beside the VMs
+    // before it, else its first, whose quota `short` names.
+    const taken = new Map<string, number>();
+    const sizes = offered.map((mine) => {
+      const room = (size: string) => {
+        const family = familyOf(all, size);
+        return (
+          !read ||
+          !family ||
+          free(read, family) - (taken.get(family) ?? 0) >= ALWAYS_ON_VCPUS
+        );
+      };
+      const size = mine.find(room) ?? mine[0]!;
+      const family = familyOf(all, size);
+      if (family) {
+        taken.set(family, (taken.get(family) ?? 0) + ALWAYS_ON_VCPUS);
+      }
+      return size;
     });
-    if (sizes.length || !usage) return sizes;
-    const read = await usage(r).catch(() => undefined);
-    if (!read) unread.push(r);
-    return read ? short(all, vms, r, read) : [];
+    const sized = vms.map((vm, i) => ({ what: vm.what, size: sizes[i]! }));
+    return { sizes, reasons: read ? short(all, sized, r, read) : [] };
   };
-  const reasons: { name?: string; line: string }[][] = [];
-  for (const r of candidates) reasons.push(await why(r));
+  const results: Fit[] = [];
+  for (const r of candidates) results.push(await why(r));
+  const reasons = results.map((result) => result.reasons);
   const lines = reasons[0]!.map(({ line }) => line);
   if (unread.length) {
     lines.push(
       `Azure's vCPU quotas couldn't be read in ${unread.join(', ')}, so the plan takes them to have room for ${vms.map((vm) => vm.what).join(' and ')}.`,
     );
   }
-  const passing = candidates.filter((_, i) => !reasons[i]!.length);
+  const passing = candidates.flatMap((r, i) =>
+    reasons[i]!.length ? [] : [{ region: r, sizes: results[i]!.sizes }],
+  );
   if (!passing.length) {
     const quotas = [
       ...new Set(reasons.flat().flatMap(({ name }) => name ?? [])),
@@ -176,19 +242,12 @@ export async function alwaysOnRegions(
     throw new UsageError(
       [
         ...lines,
-        `No Azure region install tries (${candidates.join(', ')}) offers this subscription ${what}${quotas.length ? ' with quota for it' : ''}. ${advice}${quotas.length ? ` Or raise Azure's ${quotas.join(' and ')} vCPU quota in ${candidates.length > 1 ? 'one of those regions' : region}.` : ''}`,
+        `No Azure region install tries (${candidates.join(', ')}) offers this subscription a size for ${what}${quotas.length ? ' with quota for it' : ''}. ${advice}${quotas.length ? ` Or raise Azure's ${quotas.join(' and ')} vCPU quota in ${candidates.length > 1 ? 'one of those regions' : region}.` : ''}`,
       ].join('\n'),
     );
   }
   lines.forEach((line) => report.print(line));
-  const [first, ...rest] = passing;
-  if (!fallback) return [first!];
-  if (rest.length) {
-    report.print(
-      `If Azure has no capacity or quota for the control plane's VM in ${first} when install creates it, install tries ${rest.join(', ')}, in turn.`,
-    );
-  }
-  return passing;
+  return fallback ? passing : passing.slice(0, 1);
 }
 
 /** `region` first, then backmesh's other US regions when it's one of them. */

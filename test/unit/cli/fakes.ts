@@ -100,6 +100,7 @@ export const listenerVm = (
     startedAt = 0,
     cloudProvider = 'AWS',
     region = 'us-east-1',
+    vmType = 't3.small',
   } = {},
 ) => ({
   id,
@@ -108,6 +109,7 @@ export const listenerVm = (
   startedAt,
   cloudProvider,
   region,
+  vmType,
   secretNames: [`backmesh-${org}`],
 });
 

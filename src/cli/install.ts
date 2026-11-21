@@ -82,7 +82,7 @@ import { runnerGroupName } from '../github/runner-group.js';
 import {
   createListenerVm,
   LISTENER_VM_MONTHLY_USD,
-  LISTENER_VM_TYPE,
+  LISTENER_VM_TYPES,
   listenerVmId,
 } from './listener-vm.js';
 import {
@@ -102,6 +102,7 @@ import {
   candidateRegions,
   noCapacity,
   type AlwaysOn,
+  type AlwaysOnRegion,
 } from './vm-sizes.js';
 import { checkOwn, namedControlPlane } from './named-control-plane.js';
 import {
@@ -209,20 +210,25 @@ export const noGpuLine = (
     : `${where(cloud, regions)} ${regions.length > 1 ? 'offer' : 'offers'} no ${GPU_TYPES[cloud].join(' or ')}, so ${cloud} gets no GPU labels.`;
 
 // The management VM: AWS's is backmesh's sizing; GCP's the nearest size
-// _(inference)_. Azure's is the size anycloud qualifies the management VM
-// on.
-const MANAGEMENT_VM: Record<Cloud, string> = {
-  aws: 't3.large',
-  gcp: 'e2-standard-2',
-  azure: 'Standard_D2s_v5',
+// _(inference)_. Azure's first is the size anycloud qualifies the
+// management VM on; a region that doesn't offer it the subscription
+// (`vm-sizes.ts`) takes the same 2 vCPUs and 8 GiB on AMD, or a generation
+// back.
+const MANAGEMENT_VMS: Record<Cloud, readonly string[]> = {
+  aws: ['t3.large'],
+  gcp: ['e2-standard-2'],
+  azure: ['Standard_D2s_v5', 'Standard_D2as_v5', 'Standard_D2s_v4'],
 };
-// It, its disk and public address, $/month: with each org's listener VM
-// (`LISTENER_VM_MONTHLY_USD`), the installation's whole floor, since runners
-// have no VM while idle.
-const MANAGEMENT_MONTHLY_USD: Record<Cloud, number> = {
-  aws: 69,
-  gcp: 59,
-  azure: 79,
+// It, its disk and public address, $/month, Azure's at westus2's
+// pay-as-you-go Linux price (Retail Prices API, 2026-11-21): with each org's
+// listener VM (`LISTENER_VM_MONTHLY_USD`), the installation's whole floor,
+// since runners have no VM while idle.
+const MANAGEMENT_MONTHLY_USD: Record<string, number> = {
+  't3.large': 69,
+  'e2-standard-2': 59,
+  Standard_D2s_v5: 79,
+  Standard_D2as_v5: 72,
+  Standard_D2s_v4: 79,
 };
 
 export interface InstallOptions {
@@ -645,16 +651,16 @@ export async function connectClouds(
 // for capacity or quota, by the ID its progress names (`[<time>] Creating cluster
 // <name> (ID: <id>)`, never `Resuming`), is deleted: its resource group and
 // checkpoint bucket, not the subscription's shared `anycloud-storage`. It's
-// then tried in the plan's next region (`alwaysOnRegions`).
+// then tried in the plan's next region (`alwaysOnRegions`), at its size
+// there.
 async function bootstrapCluster(
   controlPlane: CloudTarget,
-  regions: readonly string[],
+  regions: readonly { region: string; size: string }[],
   deps: InstallDeps,
 ) {
   const { cloud } = controlPlane;
-  const size = MANAGEMENT_VM[cloud];
   for (let i = 0; ; i++) {
-    const region = regions[i]!;
+    const { region, size } = regions[i]!;
     let out: string;
     try {
       out = await deps.runLong([
@@ -718,10 +724,10 @@ async function bootstrapCluster(
             { cause },
           );
         });
-      const next = regions[i + 1];
+      const next = regions[i + 1]?.region;
       if (!next) {
         throw new Error(
-          `Azure has no capacity or quota for the control plane's VM (${size}) in ${regions.join(', ')} now. Install deleted what it started; run it again later.`,
+          `Azure has no capacity or quota for the control plane's VM in ${regions.map((r) => `${r.region} (${r.size})`).join(', ')} now. Install deleted what it started; run it again later.`,
           { cause: error },
         );
       }
@@ -1242,21 +1248,19 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   // The always-on VMs this run creates there: on Azure, in the first region
   // that offers this subscription every size, and on a capacity refusal the
   // next (`vm-sizes.ts`).
-  const alwaysOn: AlwaysOn[] = [
-    ...(listeners
-      ? []
-      : [
-          { what: "the control plane's VM", size: MANAGEMENT_VM[placed.cloud] },
-        ]),
-    ...(current
-      ? []
-      : [
-          {
-            what: `${options.org}'s listener VM`,
-            size: LISTENER_VM_TYPE[placed.cloud],
-          },
-        ]),
-  ];
+  const controlVm: AlwaysOn | undefined = listeners
+    ? undefined
+    : { what: "the control plane's VM", sizes: MANAGEMENT_VMS[placed.cloud] };
+  const listenerVm: AlwaysOn | undefined = current
+    ? undefined
+    : {
+        what: `${options.org}'s listener VM`,
+        sizes: LISTENER_VM_TYPES[placed.cloud],
+      };
+  const alwaysOn = [controlVm, listenerVm].filter((vm) => !!vm);
+  // `vm`'s size in `r`: the one the plan read there on Azure.
+  const sizeIn = (r: AlwaysOnRegion | undefined, vm: AlwaysOn) =>
+    r?.sizes[alwaysOn.indexOf(vm)] ?? vm.sizes[0]!;
   // The control plane named `backmesh` that `cluster create` would
   // resume: this machine's own, or the one `--control-plane-id` names, and
   // on Azure in its own region.
@@ -1297,6 +1301,24 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
           note,
         )
       : undefined;
+  if (regions && regions.length > 1) {
+    const [first, ...rest] = regions;
+    const monthly = (vm: AlwaysOn) =>
+      vm === controlVm ? MANAGEMENT_MONTHLY_USD : LISTENER_VM_MONTHLY_USD;
+    // A later region's sizes where they aren't the first's.
+    const other = (r: AlwaysOnRegion) => {
+      const sizes = alwaysOn.flatMap((vm) => {
+        const size = sizeIn(r, vm);
+        return size === sizeIn(first, vm)
+          ? []
+          : [`${vm.what} ${size}, about $${monthly(vm)[size]} a month`];
+      });
+      return sizes.length ? `${r.region} (${sizes.join('; ')})` : r.region;
+    };
+    note.print(
+      `If Azure has no capacity or quota for the control plane's VM in ${first!.region} when install creates it, install tries ${rest.map(other).join(', ')}, in turn.`,
+    );
+  }
   // AWS's always-on VMs count against the region's standard on-demand
   // vCPUs, which a new account may have under them. The plan compares the
   // limit, not the free vCPUs: Service Quotas reads no usage. GCP's e2
@@ -1317,16 +1339,18 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       );
     } else if (limit < vcpus) {
       throw new UsageError(
-        `AWS allows ${limit} on-demand vCPUs in ${placed.region}, under the ${vcpus} for ${alwaysOn.map((vm) => `${vm.what} (${vm.size})`).join(' and ')}: raise ${quotaToRaise('aws', [placed.region], 'onDemand')}.`,
+        `AWS allows ${limit} on-demand vCPUs in ${placed.region}, under the ${vcpus} for ${alwaysOn.map((vm) => `${vm.what} (${vm.sizes[0]})`).join(' and ')}: raise ${quotaToRaise('aws', [placed.region], 'onDemand')}.`,
       );
     }
   }
-  let place = regions ? { ...placed, region: regions[0]! } : placed;
+  let place = regions ? { ...placed, region: regions[0]!.region } : placed;
   const controlPlane = listeners ? placement.controlPlane : place;
   const { connections } = placement;
   // A re-run for an org already on it agrees to nothing new.
   const orgs = (listeners ?? []).map((l) => orgOfListener(l.name)!);
   const sharedWith = orgs.includes(options.org.toLowerCase()) ? [] : orgs;
+  const managementVm = controlVm && sizeIn(regions?.[0], controlVm);
+  const listenerType = listenerVm && sizeIn(regions?.[0], listenerVm);
   const plan: InstallPlan = {
     org: options.org.toLowerCase(),
     orgId,
@@ -1336,20 +1360,26 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     controlPlane: {
       cloud: controlPlane.cloud,
       region: controlPlane.region,
-      managementVm: MANAGEMENT_VM[controlPlane.cloud],
-      monthlyUsd: MANAGEMENT_MONTHLY_USD[controlPlane.cloud],
+      ...(managementVm && {
+        managementVm,
+        monthlyUsd: MANAGEMENT_MONTHLY_USD[managementVm]!,
+      }),
       exists: !!listeners,
       sharedWith,
     },
-    listener: current
+    listener: !listenerType
       ? null
       : {
           cloud: place.cloud,
           region: place.region,
-          vmType: LISTENER_VM_TYPE[place.cloud],
-          monthlyUsd: LISTENER_VM_MONTHLY_USD[place.cloud],
+          vmType: listenerType,
+          monthlyUsd: LISTENER_VM_MONTHLY_USD[listenerType]!,
         },
-    alwaysOnRegions: regions,
+    alwaysOnRegions: regions?.map((r) => ({
+      region: r.region,
+      ...(controlVm && { managementVm: sizeIn(r, controlVm) }),
+      ...(listenerVm && { listenerVm: sizeIn(r, listenerVm) }),
+    })),
     runners: runners.map((target) => ({
       cloud: target.cloud,
       regions: regionsOf(target.cloud),
@@ -1395,7 +1425,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   ui.print(labelsLine(plan.classes, placement.controlPlane.cloud));
   if (!plan.controlPlane.exists) {
     ui.print(
-      `Always on: the control plane's VM (${MANAGEMENT_VM[controlPlane.cloud]}) on ${controlPlane.cloud} ${controlPlane.region}, about $${MANAGEMENT_MONTHLY_USD[controlPlane.cloud]} a month with its disk and address.`,
+      `Always on: the control plane's VM (${plan.controlPlane.managementVm}) on ${controlPlane.cloud} ${controlPlane.region}, about $${plan.controlPlane.monthlyUsd} a month with its disk and address.`,
     );
   }
   if (plan.listener) {
@@ -1545,7 +1575,18 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     );
     const created = await bootstrapCluster(
       controlPlane,
-      (!plan.controlPlane.exists && regions) || [controlPlane.region],
+      (!plan.controlPlane.exists &&
+        plan.alwaysOnRegions?.map((r) => ({
+          region: r.region,
+          size: r.managementVm!,
+        }))) || [
+        {
+          region: controlPlane.region,
+          size:
+            plan.controlPlane.managementVm ??
+            MANAGEMENT_VMS[controlPlane.cloud][0]!,
+        },
+      ],
       deps,
     );
     url = created.url;
@@ -1704,10 +1745,14 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     ui.print(
       `Creating ${options.org}'s listener VM on ${place.cloud} ${place.region}.`,
     );
+    // The size the plan read in its region.
+    const vmType =
+      plan.alwaysOnRegions?.find((r) => r.region === place.region)
+        ?.listenerVm ?? plan.listener!.vmType;
     await createListenerVm(
       options.org,
       vm,
-      { ...place, credentials: named(place).credentials },
+      { ...place, credentials: named(place).credentials, vmType },
       { exec, runLong: deps.runLong },
     );
     await answering(exec, { org: options.org, vm }, deps.wait);
