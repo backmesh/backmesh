@@ -312,8 +312,8 @@ describe('backmesh CLI', () => {
   it('shows --public-repos and --no-public-repos in install and upgrade help', async () => {
     for (const command of ['install', 'upgrade']) {
       const { stdout } = await run(command, '--help');
-      expect(stdout).toContain('--public-repos');
-      expect(stdout).toContain('--no-public-repos');
+      expect(stdout).toMatch(/^\s+--public-repos\s/m);
+      expect(stdout).toMatch(/^\s+--no-public-repos\s/m);
     }
   });
 
