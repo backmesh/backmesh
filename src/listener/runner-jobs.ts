@@ -339,9 +339,11 @@ export function anycloudRunnerJobs(
         // which the /mnt bind below overlaps and admission refuses.
         noCheckpoint: true,
         id,
-        // The runner's start-up timings count from here.
+        // The runner's name is its Job's ID: runner-job reads the cache
+        // Secret's file by it. Its start-up timings count from here.
         env: {
           RUNNER_JITCONFIG: jitConfig,
+          BACKMESH_RUNNER_NAME: id,
           BACKMESH_SUBMITTED_AT: String(Date.now()),
         },
         ...(secrets && { secrets }),

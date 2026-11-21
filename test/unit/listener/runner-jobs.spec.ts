@@ -88,6 +88,8 @@ describe('anycloudRunnerJobs', () => {
       id: 'bmabc12-a4-00000000',
       env: {
         RUNNER_JITCONFIG: 'jit',
+        // The cache's token file is named after it.
+        BACKMESH_RUNNER_NAME: 'bmabc12-a4-00000000',
         BACKMESH_SUBMITTED_AT: '1793880000000',
       },
       hostDocker: true,

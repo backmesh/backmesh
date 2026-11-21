@@ -31,6 +31,8 @@ type Permissions = Record<string, string>;
 type Step = {
   id?: string;
   name?: string;
+  uses?: string;
+  with?: Record<string, string>;
   if?: string;
   run?: string;
   env?: Record<string, string>;
@@ -1476,5 +1478,62 @@ setInterval(() => {}, 1000);
         `^add result\\.json\n.* commit .*\npush --force-with-lease=refs/heads/run/n1:${'b'.repeat(40)} origin HEAD:refs/heads/run/n1\n$`,
       ),
     );
+  });
+});
+
+// e2e-labels.yml's warm hit: the next job restores what a job saved, which
+// its runner uploads after the job.
+describe("e2e-labels.yml's cache warm hit", () => {
+  const { jobs } = read('e2e-labels.yml');
+  const step = jobs['cache-restore']!.steps!.at(-1)!;
+  // The restore writes the blob on its `$HIT`th call; the token file says
+  // `$STATE` and `$BUCKET`.
+  const restore = (env: Record<string, string>) => {
+    const dir = mkdtempSync(join(tmpdir(), 'warm-'));
+    const result = runStep(`cd ${dir}\n${step.run!}`, {
+      env: { SAVED_TO: 'b-east', STATE: 'ready', BUCKET: 'b-east', ...env },
+      commands: {
+        node: 'echo x >>calls; if [[ $(wc -l <calls) == "${HIT:-0}" ]]; then mkdir -p warm; echo blob >warm/blob; fi',
+        jq: 'case $2 in .state) echo "$STATE" ;; .bucket) echo "$BUCKET" ;; *) echo "{}" ;; esac',
+        sleep: ':',
+      },
+    });
+    const calls = existsSync(join(dir, 'calls'))
+      ? readFileSync(join(dir, 'calls'), 'utf8').split('\n').length - 1
+      : 0;
+    return { ...result, calls };
+  };
+
+  it('runs after the save, on the same label', () => {
+    expect(jobs['cache-restore']!.needs).toBe('cache-save');
+    expect(jobs['cache-restore']!['runs-on']).toBe(
+      jobs['cache-save']!['runs-on'],
+    );
+    expect(step.env).toMatchObject({
+      SAVED_TO: '${{ needs.cache-save.outputs.bucket }}',
+      INPUT_KEY: jobs['cache-save']!.steps!.find(
+        (s) => s.uses === './cache/save',
+      )!.with!.key,
+    });
+  });
+
+  it('passes on a hit, retrying while the upload lands', () => {
+    expect(restore({ HIT: '3' })).toMatchObject({ status: 0, calls: 3 });
+  });
+
+  it('fails when the save never lands, or without a ready token', () => {
+    const missed = restore({});
+    expect(missed.status).toBe(1);
+    expect(missed.calls).toBe(20);
+    expect(missed.stdout).toContain(
+      '::error::the save never reached the bucket',
+    );
+    expect(restore({ STATE: 'off' })).toMatchObject({ status: 1, calls: 1 });
+  });
+
+  it("only notes a runner in another region, whose bucket can't hold the save", () => {
+    const elsewhere = restore({ BUCKET: 'b-west' });
+    expect(elsewhere).toMatchObject({ status: 0, calls: 1 });
+    expect(elsewhere.stdout).toContain('::notice::');
   });
 });
