@@ -1485,55 +1485,86 @@ setInterval(() => {}, 1000);
 // its runner uploads after the job.
 describe("e2e-labels.yml's cache warm hit", () => {
   const { jobs } = read('e2e-labels.yml');
-  const step = jobs['cache-restore']!.steps!.at(-1)!;
-  // The restore writes the blob on its `$HIT`th call; the token file says
-  // `$STATE` and `$BUCKET`.
-  const restore = (env: Record<string, string>) => {
+  const save = jobs['cache-save']!.steps!;
+  const steps = jobs['cache-restore']!.steps!;
+  const named = (prefix: string) =>
+    steps.find((s) => s.name?.startsWith(prefix))!;
+  const run = (
+    step: Step,
+    env: Record<string, string>,
+    commands: Record<string, string> = {},
+  ) => {
     const dir = mkdtempSync(join(tmpdir(), 'warm-'));
+    const out = join(dir, 'output');
     const result = runStep(`cd ${dir}\n${step.run!}`, {
-      env: { SAVED_TO: 'b-east', STATE: 'ready', BUCKET: 'b-east', ...env },
-      commands: {
-        node: 'echo x >>calls; if [[ $(wc -l <calls) == "${HIT:-0}" ]]; then mkdir -p warm; echo blob >warm/blob; fi',
-        jq: 'case $2 in .state) echo "$STATE" ;; .bucket) echo "$BUCKET" ;; *) echo "{}" ;; esac',
-        sleep: ':',
-      },
+      env: { GITHUB_OUTPUT: out, ...env },
+      commands: { sleep: 'echo x >>sleeps', ...commands },
     });
-    const calls = existsSync(join(dir, 'calls'))
-      ? readFileSync(join(dir, 'calls'), 'utf8').split('\n').length - 1
-      : 0;
-    return { ...result, calls };
+    const count = (file: string) =>
+      existsSync(join(dir, file))
+        ? readFileSync(join(dir, file), 'utf8').split('\n').length - 1
+        : 0;
+    const output = existsSync(out) ? readFileSync(out, 'utf8') : '';
+    return {
+      ...result,
+      output,
+      calls: count('calls'),
+      sleeps: count('sleeps'),
+    };
   };
+  // The token file says `$STATE`, or `pending` for its first `$PENDING` reads.
+  const ready = (env: Record<string, string>) =>
+    run(named('The cache token'), env, {
+      jq: `case $2 in
+        .state) echo x >>reads; if (($(wc -l <reads) <= \${PENDING:-0})); then echo pending; else echo "$STATE"; fi ;;
+        .bucket) echo b-east ;; *) echo "{}" ;; esac`,
+    });
+  // The restore writes the blob on its `$HIT`th call.
+  const restore = (env: Record<string, string>) =>
+    run(named('The next job'), env, {
+      node: 'echo x >>calls; if [[ $(wc -l <calls) == "${HIT:-0}" ]]; then mkdir -p warm; echo blob >warm/blob; fi',
+    });
 
-  it('runs after the save, on the same label', () => {
+  it('restores after the save, on the same label, from its bucket', () => {
     expect(jobs['cache-restore']!.needs).toBe('cache-save');
     expect(jobs['cache-restore']!['runs-on']).toBe(
       jobs['cache-save']!['runs-on'],
     );
-    expect(step.env).toMatchObject({
-      SAVED_TO: '${{ needs.cache-save.outputs.bucket }}',
-      INPUT_KEY: jobs['cache-save']!.steps!.find(
-        (s) => s.uses === './cache/save',
-      )!.with!.key,
+    expect(named('The next job').env!.INPUT_KEY).toBe(
+      save.find((s) => s.uses === './cache/save')!.with!.key,
+    );
+    // Both wait for the token before any action reads it.
+    expect(save[1]!.run).toBe(named('The cache token').run);
+    expect(save.at(-1)!.run).toContain('_backmesh-cache/*/plan.json');
+  });
+
+  it("waits for a pending token, and fails on one that isn't ready", () => {
+    expect(ready({ STATE: 'ready', PENDING: '3' })).toMatchObject({
+      status: 0,
+      sleeps: 3,
+      output: 'bucket=b-east\n',
+    });
+    expect(ready({ STATE: 'off' }).status).toBe(1);
+    expect(ready({ STATE: 'pending' })).toMatchObject({
+      status: 1,
+      sleeps: 60,
     });
   });
 
-  it('passes on a hit, retrying while the upload lands', () => {
-    expect(restore({ HIT: '3' })).toMatchObject({ status: 0, calls: 3 });
+  it("fails a runner in another region, whose bucket can't hold the save", () => {
+    const step = named('The runner reads');
+    expect(run(step, { SAVED_TO: 'b-east', BUCKET: 'b-east' }).status).toBe(0);
+    const elsewhere = run(step, { SAVED_TO: 'b-east', BUCKET: 'b-west' });
+    expect(elsewhere.status).toBe(1);
+    expect(elsewhere.stdout).toContain('another region');
   });
 
-  it('fails when the save never lands, or without a ready token', () => {
+  it('passes on a hit, retrying while the upload lands, and fails without one', () => {
+    expect(restore({ HIT: '3' })).toMatchObject({ status: 0, calls: 3 });
     const missed = restore({});
-    expect(missed.status).toBe(1);
-    expect(missed.calls).toBe(20);
+    expect(missed).toMatchObject({ status: 1, calls: 20 });
     expect(missed.stdout).toContain(
       '::error::the save never reached the bucket',
     );
-    expect(restore({ STATE: 'off' })).toMatchObject({ status: 1, calls: 1 });
-  });
-
-  it("only notes a runner in another region, whose bucket can't hold the save", () => {
-    const elsewhere = restore({ BUCKET: 'b-west' });
-    expect(elsewhere).toMatchObject({ status: 0, calls: 1 });
-    expect(elsewhere.stdout).toContain('::notice::');
   });
 });
