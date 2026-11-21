@@ -510,6 +510,13 @@ const signInRequired = (error: unknown) => {
   }
 };
 
+// GCP refuses a token at a workload identity provider it made seconds before
+// (`invalid_target`) until the provider propagates, which takes up to about
+// two minutes. A re-run of `--apply` adopts the provider it made, so the step
+// runs again after each wait.
+const INVALID_TARGET = /\binvalid_target\b/;
+const PROPAGATION_WAITS_MS = [10_000, 20_000, 30_000, 60_000];
+
 // Step 3, on the hosted API after step 5: each cloud's role connection,
 // whose trust names the hosted API's issuer, so it can't come before
 // `cluster create`. anycloud's `credentials new --role --apply` makes the
@@ -582,28 +589,48 @@ export async function connectClouds(
     deps.ui.print(
       `Connecting ${cloud} with a role connection in ${SIGNED_IN[cloud]} ${account}, through your ${LOGINS[cloud][0][0]} CLI.`,
     );
-    const out = await deps
-      .runLong(
-        [
-          ...args,
-          '--role',
-          '--apply',
-          ...accountArgs(cloud, account),
-          '--json',
-        ],
-        env,
-      )
-      .catch((error: unknown) => {
-        const login = signInRequired(error);
-        const again =
-          'Run install again; the control plane stays and is reused.';
-        throw new Error(
-          login
-            ? `${cloud}'s CLI needs a sign-in: run \`${login}\`. ${again}`
-            : `${cloud}'s role connection wasn't made: ${error instanceof Error ? error.message : String(error)}. ${again}`,
-          { cause: error },
-        );
-      });
+    const apply = async (): Promise<string> => {
+      for (let i = 0; ; i++) {
+        try {
+          return await deps.runLong(
+            [
+              ...args,
+              '--role',
+              '--apply',
+              ...accountArgs(cloud, account),
+              '--json',
+            ],
+            env,
+          );
+        } catch (error) {
+          if (cloud !== 'gcp' || !INVALID_TARGET.test(String(error)))
+            throw error;
+          const ms = PROPAGATION_WAITS_MS[i];
+          if (ms === undefined) {
+            throw new Error(
+              `GCP still refused the new role's token after ${PROPAGATION_WAITS_MS.reduce((a, b) => a + b) / 60_000} minutes: ${(error as Error).message}`,
+              { cause: error },
+            );
+          }
+          deps.ui.print(
+            `GCP doesn't take the new role's token yet, as a new workload identity provider takes a minute or two to propagate; trying again in ${ms / 1000}s.`,
+          );
+          await (deps.wait ?? ((t) => new Promise((r) => setTimeout(r, t))))(
+            ms,
+          );
+        }
+      }
+    };
+    const out = await apply().catch((error: unknown) => {
+      const login = signInRequired(error);
+      const again = 'Run install again; the control plane stays and is reused.';
+      throw new Error(
+        login
+          ? `${cloud}'s CLI needs a sign-in: run \`${login}\`. ${again}`
+          : `${cloud}'s role connection wasn't made: ${error instanceof Error ? error.message : String(error)}. ${again}`,
+        { cause: error },
+      );
+    });
     const saved = JSON.parse(out.trim().split('\n').at(-1) ?? '{}') as {
       account?: string;
     };

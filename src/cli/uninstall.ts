@@ -21,6 +21,7 @@ import {
   finishCleanup,
   refreshCleanupToken,
   signInForCleanup,
+  LiveInstalls,
   type Cleanup,
 } from './worker.js';
 import { removeFromGitHub } from './cleanup.js';
@@ -283,6 +284,9 @@ async function drainListener(
 export interface UninstallResult {
   // Each org removed from GitHub, and whether its App installation went.
   orgs: { org: string; appRemoved: boolean }[];
+  // Orgs whose GitHub side was skipped, as the Worker refused a keyless
+  // cleanup while another install of the org was live.
+  githubSkipped?: string[];
   // The control plane, when it answered.
   apiUrl?: string;
   clusterId?: string;
@@ -512,13 +516,37 @@ async function removeOrg(
   clusterId: string | undefined,
   deps: UninstallDeps,
   keepApp = false,
-) {
+): Promise<
+  UninstallResult['orgs'][number] | { skipped: string; left?: string }
+> {
   const { ui } = deps;
   const worker = workerDeps(deps, ui.print);
-  const cleanup = await signInForCleanup(org, installKey, worker);
-  const login = cleanup.org.login;
+  // Without a key, as when install failed before its listener started, the
+  // Worker refuses the sign-in while another install of the org is live.
+  // When this machine's control plane goes, only the org's GitHub side is
+  // skipped: the control plane is deleted all the same.
+  let cleanup: Cleanup | undefined;
+  let refused: LiveInstalls | undefined;
+  try {
+    cleanup = await signInForCleanup(org, installKey, worker);
+  } catch (error) {
+    if (!(plane?.whole && error instanceof LiveInstalls)) throw error;
+    refused = error;
+  }
+  const login = cleanup?.org.login ?? org;
+  // A refused cleanup names no org ID: GitHub's, which a rate limit can
+  // stop, costs only the cache buckets, never the control plane's deletion.
+  const orgId =
+    cleanup?.org.id ??
+    (await readOrgId(org, deps.fetch, deps.env).catch((error: unknown) => {
+      ui.print(
+        `${error instanceof Error ? error.message : String(error)} So ${org}'s cache buckets (named bm-cache-<id>-<region>) weren't deleted with this install; delete them in each cloud's console.`,
+      );
+      return undefined;
+    }));
   // This org's runner groups on this control plane (`isOurRunnerGroup`).
-  const tag = clusterId ? installTag(clusterId, cleanup.org.id) : undefined;
+  const tag =
+    clusterId && orgId !== undefined ? installTag(clusterId, orgId) : undefined;
   const groups = tag ? `backmesh-${tag}-*` : 'backmesh-*-*';
   if (plane) {
     // An org's other listener VMs go before the drain, so none takes a job
@@ -542,7 +570,23 @@ async function removeOrg(
     }
     if (plane.whole) await removeOthers(plane, deps);
   }
-  const { token, live = [] } = await cleanupTokenNow(cleanup, deps);
+  // Refused: with no listener ever run, nothing of this install is at
+  // GitHub; a listener's runner groups are left for the org's owner to
+  // delete, as `uninstall --org` would remove the App a live install uses.
+  if (refused) {
+    const live = `${refused.live.length === 1 ? 'install' : 'installs'} ${refused.live.map((l) => `${l.install} (last token ${l.last_token_at})`).join(', ')} of ${login} ${refused.live.length === 1 ? 'is' : 'are'} live`;
+    if (listener) {
+      return {
+        skipped: login,
+        left: `backmesh.com refused ${login}'s GitHub cleanup without this install's key while ${live}. This machine's control plane and its cloud side are deleted; delete this install's runner groups ${groups} and their runners in ${login}'s Actions settings.`,
+      };
+    }
+    ui.print(
+      `No listener of this install ever ran, so nothing of it is at ${login}'s GitHub. backmesh.com refused a GitHub cleanup without its key while ${live}, whose runners and App stay.`,
+    );
+    return { skipped: login };
+  }
+  const { token, live = [] } = await cleanupTokenNow(cleanup!, deps);
   // Another install of the org is live: only this one's part goes.
   const installOnly = live.length > 0;
   if (token) {
@@ -576,8 +620,8 @@ async function removeOrg(
   // install uses it.
   const app =
     !installOnly &&
-    cleanup.cleanup_id &&
-    (await finishCleanup(cleanup.cleanup_id, worker, keepApp).catch(
+    cleanup!.cleanup_id &&
+    (await finishCleanup(cleanup!.cleanup_id, worker, keepApp).catch(
       (cause: unknown) => {
         throw new Error(
           `backmesh couldn't remove its GitHub App from ${login}: ${cause instanceof Error ? cause.message : String(cause)}. Run \`backmesh uninstall --org ${login}\` again.`,
@@ -792,9 +836,18 @@ export async function uninstall(
   );
 
   const removed: UninstallResult['orgs'] = [];
+  const githubSkipped: string[] = [];
+  // What a refused cleanup left at GitHub, which fails the run once the
+  // cloud side is deleted.
+  const githubLeft: string[] = [];
   const clusterId = plane?.clusterId ?? gone?.clusterId;
   for (const org of orgs) {
-    removed.push(await removeOrg(org, plane, clusterId, deps, options.keepApp));
+    const done = await removeOrg(org, plane, clusterId, deps, options.keepApp);
+    if (!('skipped' in done)) removed.push(done);
+    else {
+      githubSkipped.push(done.skipped);
+      if (done.left) githubLeft.push(done.left);
+    }
   }
 
   // An older Worker ignores --keep-app and removes the App anyway; said once
@@ -818,7 +871,7 @@ export async function uninstall(
   }
   if (plane) {
     await deleteCloudSide(plane, deps);
-    if (!removed.length) {
+    if (!removed.length && !githubSkipped.length) {
       ui.print(
         "No listener named an org, so nothing was removed from GitHub. Run `backmesh uninstall --org <org>` to remove backmesh's runners and App from an org.",
       );
@@ -872,9 +925,11 @@ export async function uninstall(
       );
     }
   }
+  if (githubLeft.length) throw new Error(githubLeft.join(' '));
   keptApp();
   return {
     orgs: removed,
+    ...(githubSkipped.length && { githubSkipped }),
     ...(plane
       ? {
           apiUrl: plane.url,

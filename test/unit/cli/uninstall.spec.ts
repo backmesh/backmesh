@@ -1,3 +1,18 @@
+// backmesh.com's refusal of a keyless cleanup while install i2 is live.
+const refusing = () =>
+  fakeWorker({
+    cleanups: [
+      Response.json(
+        {
+          error:
+            'backmesh install i2 (last token 2026-11-20T23:23:06.465Z) of acme got a token in the last hour, so a control plane may still run there.',
+          live: [{ install: 'i2', last_token_at: '2026-11-20T23:23:06.465Z' }],
+        },
+        { status: 409 },
+      ),
+    ],
+  });
+
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -1054,6 +1069,106 @@ describe('uninstall', () => {
       cloud: 'deleted',
     });
     expect(lines.some((line) => line.includes('i2'))).toBe(true);
+  });
+
+  // An install that failed before its listener started (rc.9's e2e): the
+  // control plane answers, but no listener holds a key, so the cleanup's
+  // sign-in is keyless, and the Worker refuses it while another install of
+  // the org is live. The control plane goes all the same.
+  it.each([
+    ['before its Secret', []],
+    ['after its Secret', ['acme']],
+  ])(
+    'deletes the control plane of an install that failed %s, when GitHub refuses the keyless cleanup',
+    async (_, secrets) => {
+      const worker = refusing();
+      const { deps, calls, lines, requests } = setUp({
+        listener: false,
+        secrets,
+        worker,
+      });
+
+      const result = await uninstall(scripted, deps);
+
+      expect(changes(calls)).toEqual([
+        'POST /v1/installs/cleanup',
+        'api access remove --service-account backmesh-acme',
+        'api access remove --service backmesh-acme',
+        // A Secret goes with the control plane.
+        'node-pool delete np-1',
+        'node-pool delete np-2',
+        DELETE_HOSTED,
+      ]);
+      // The cache buckets, by the org's ID from GitHub.
+      expect(requests).toContain(
+        'DELETE /v1/credentials/bm-aws/buckets/bm-cache-l8u5e-us-east-2?region=us-east-2',
+      );
+      expect(lines).toContain(
+        "No listener of this install ever ran, so nothing of it is at acme's GitHub. backmesh.com refused a GitHub cleanup without its key while install i2 (last token 2026-11-20T23:23:06.465Z) of acme is live, whose runners and App stay.",
+      );
+      expect(lines.join('\n')).not.toMatch(/uninstall --org/);
+      expect(result).toMatchObject({
+        orgs: [],
+        githubSkipped: ['acme'],
+        cloud: 'deleted',
+      });
+    },
+  );
+
+  it("deletes the control plane of a lost listener's install when GitHub refuses the keyless cleanup, then names its runner groups and fails", async () => {
+    const { deps, calls } = setUp({
+      lost: true,
+      runners: ['bmabc12-a4-x'],
+      worker: refusing(),
+    });
+    await expect(uninstall(scripted, deps)).rejects.toThrow(
+      "backmesh.com refused acme's GitHub cleanup without this install's key while install i2 (last token 2026-11-20T23:23:06.465Z) of acme is live. This machine's control plane and its cloud side are deleted; delete this install's runner groups backmesh-l8u5e-* and their runners in acme's Actions settings.",
+    );
+    expect(changes(calls)).toEqual([
+      'POST /v1/installs/cleanup',
+      'api access remove --service backmesh-acme',
+      'node-pool delete np-1',
+      'node-pool delete np-2',
+      DELETE_HOSTED,
+    ]);
+    expect(calls).toContain('terminate bmabc12-a4-x');
+  });
+
+  it("deletes the control plane when GitHub refuses the keyless cleanup and the org's ID can't be read, leaving the cache buckets", async () => {
+    const { deps, calls, lines, requests } = setUp({
+      listener: false,
+      secrets: [],
+      worker: refusing(),
+    });
+    const fetch = deps.fetch!;
+    deps.fetch = async (url, init) =>
+      String(url) === 'https://api.github.com/orgs/acme'
+        ? new Response('{}', { status: 502 })
+        : fetch(url, init);
+    await uninstall(scripted, deps);
+    expect(calls).toContain(DELETE_HOSTED);
+    expect(requests.some((r) => r.includes('/buckets/bm-cache'))).toBe(false);
+    expect(lines).toContain(
+      "GitHub didn't return acme's ID (HTTP 502). Retry in a minute. So acme's cache buckets (named bm-cache-<id>-<region>) weren't deleted with this install; delete them in each cloud's console.",
+    );
+  });
+
+  it('still refuses before any change when another org keeps the control plane', async () => {
+    const worker = fakeWorker({
+      cleanups: [
+        Response.json(
+          { error: 'live', live: [{ install: 'i2', last_token_at: 'x' }] },
+          { status: 409 },
+        ),
+      ],
+    });
+    const { deps, calls } = setUp({
+      orgs: ['beta'],
+      secrets: ['acme', 'beta'],
+      worker,
+    });
+    await expect(uninstall(scripted, deps)).rejects.toThrow('live');
+    expect(changes(calls)).toEqual(['POST /v1/installs/cleanup']);
   });
 
   it('with --keep-app, deletes everything else and asks the Worker to keep the App', async () => {

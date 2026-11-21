@@ -47,7 +47,12 @@ hour may still be serving jobs. With a control plane configured on this
 machine, `uninstall` removes only this installation: its listener, its scale
 sets, runners and `backmesh-` runner groups, and its control plane. The App,
 the other installation's runners and the shared `backmesh` group's scale sets
-stay, and `uninstall` names the other installation. Without a control plane
+stay, and `uninstall` names the other installation. Without its listener,
+as after an install that failed, `uninstall` has no key to say which
+installation it is, so backmesh.com refuses the token. It still deletes the
+control plane and its cloud side. If no listener ever ran, nothing of the
+installation is at GitHub. Otherwise it names the installation's runner groups
+for you to delete in the org's Actions settings, and exits non-zero. Without a control plane
 configured, backmesh.com refuses the token and nothing changes. If the other
 installation's control plane is gone too, run `uninstall --org <org>` an hour
 after its last token to remove the rest.

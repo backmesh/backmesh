@@ -375,8 +375,8 @@ export function signInForCleanup(
       deps,
       `as an owner of ${org}, so backmesh removes itself from ${org}`,
     );
-    return withSignIn(deps, org, () =>
-      call(
+    return withSignIn(deps, org, async () => {
+      const answer = await call(
         deps,
         '/v1/installs/cleanup',
         cleanupSchema,
@@ -393,9 +393,27 @@ export function signInForCleanup(
           }),
         },
         CLEANUP_MS,
-      ),
-    );
+      );
+      const live = cleanupTokenSchema.shape.live.safeParse(
+        (answer.body as { live?: unknown } | undefined)?.live,
+      ).data;
+      if (answer.status === 409 && live?.length) {
+        throw new LiveInstalls(answer.error!, live);
+      }
+      return answer;
+    });
   });
+}
+
+// The Worker's refusal of a keyless cleanup while another install of the
+// org got a token in the last hour.
+export class LiveInstalls extends Error {
+  constructor(
+    message: string,
+    readonly live: { install: string; last_token_at: string }[],
+  ) {
+    super(message);
+  }
 }
 
 async function cleanupCall<T>(
