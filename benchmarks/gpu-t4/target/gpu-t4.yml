@@ -1,0 +1,26 @@
+# The GPU time-to-runner benchmark's job (benchmarks/gpu-t4/README.md):
+# pushed as .github/workflows/gpu-t4.yml on a throwaway gpu-t4-bench branch,
+# one empty commit a sample. It reads the VM's own instance metadata, so each
+# sample names the type, zone, lifecycle and launch time that served it.
+name: GPU T4 bench
+
+on:
+  push:
+    branches: [gpu-t4-bench]
+
+permissions: {}
+
+jobs:
+  t4:
+    runs-on: backmesh-gpu-t4
+    timeout-minutes: 15
+    steps:
+      - name: Instance
+        run: |
+          t=$(curl -fsS -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' http://169.254.169.254/latest/api/token)
+          md() { curl -fsS -H "X-aws-ec2-metadata-token: $t" "http://169.254.169.254/latest/$1"; }
+          doc=$(md dynamic/instance-identity/document)
+          echo "::notice title=Instance::type=$(jq -r .instanceType <<<"$doc") zone=$(jq -r .availabilityZone <<<"$doc") lifecycle=$(md meta-data/instance-life-cycle) pending=$(jq -r .pendingTime <<<"$doc") runner=$RUNNER_NAME"
+
+      - name: GPU
+        run: nvidia-smi -L
