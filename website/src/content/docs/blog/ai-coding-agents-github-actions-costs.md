@@ -258,8 +258,8 @@ GitHub announced a $0.002 a minute fee for self-hosted runners in December
 
 backmesh runs each job on its own spot VM in your account and deletes it when
 the job ends. It's free and open source under Apache-2.0. It runs Linux
-x86-64 jobs in private repositories only, with no macOS, Windows or Arm
-runners. When spot reclaims were a run's only failures, it reruns the failed
+x86-64 jobs only, with no macOS, Windows or Arm runners, in private
+repositories unless you turn on [public repositories](/public-repos/). When spot reclaims were a run's only failures, it reruns the failed
 jobs, preferring an on-demand runner, at most twice ([FAQ](/faq/)).
 
 ## Boot time and many short pushes

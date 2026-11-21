@@ -30,7 +30,8 @@ GitHub Actions runners.
 **How does backmesh compare with GitHub-hosted runners?** A workflow changes
 only its `runs-on`. Its jobs run on spot VMs in your accounts. In our [build
 benchmarks](/benchmarks/), builds ran up to 2× faster and 5× cheaper, and your cloud credits apply. Each job waits for its VM to boot, and only
-Linux x86-64 jobs in private repositories can use the runners.
+Linux x86-64 jobs can use the runners, in private repositories unless you
+turn on [public repositories](/public-repos/).
 
 **Which clouds does backmesh run on?** AWS, Google Cloud (GCP) and Azure. One installation can use
 several, and each [label](/labels/) runs in exactly one cloud: `backmesh-4` in
@@ -50,7 +51,7 @@ $0.052 a minute. `backmesh-gpu-t4` costs about $0.0046 a minute on AWS spot
 and $0.0029 on Azure spot, and `backmesh-gpu-od-t4` $0.0088 on demand: 6 to 18
 times less, before disks and boots. See [Cost](/cost/#gpu).
 
-**Can public repositories use backmesh?** Not yet. Only private repositories can use the runners. In a public repository, anyone can open a pull request whose workflow runs on a runner, and a runner's VM can reach your other instances in its cloud network. Support waits for runners with a network of their own.
+**Can public repositories use backmesh?** Yes, with `--public-repos` on install or upgrade. Pull requests from forks then run only on `backmesh-public-2` and `-4`, and read the cache without saving to it. Their VMs share your runners' cloud network, so GitHub's "Require approval for all external contributors" setting is required. See [Public repositories](/public-repos/).
 
 **Will my `ubuntu-latest` jobs work on backmesh?** Most do with only a new `runs-on`. The
 image is Ubuntu 24.04, has no systemd or swap, and lacks some of GitHub's
@@ -160,7 +161,8 @@ again.
 
 See the [security model](/security/): what runs where, the GitHub App's
 permissions, what its key can do, and the one trust level that jobs from
-every repository share.
+every repository share. For public repositories, see
+[Public repositories](/public-repos/).
 
 ## What does it cost?
 

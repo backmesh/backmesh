@@ -7,6 +7,7 @@ export const sidebar = [
       'labels',
       'runner-image',
       'cache',
+      'public-repos',
       'from-ubuntu-latest',
       'status',
       'upgrade',

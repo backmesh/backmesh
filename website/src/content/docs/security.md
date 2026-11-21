@@ -210,10 +210,11 @@ reruns and cancels included, stops once it's revoked.
 ## Which jobs run
 
 Each installation's runners join its own runner group, `backmesh-` and a short
-ID, which `backmesh status` names. The group doesn't allow public repositories,
-so only private repositories can use the runners. backmesh adds no fork or
-actor policy of its own; GitHub's fork pull request settings decide whether a
-fork's workflow runs, and after whose approval.
+ID, which `backmesh status` names. The group doesn't allow public repositories
+unless the install has [`--public-repos`](/public-repos/), which keeps forks'
+pull requests on `backmesh-public-*` labels. backmesh adds no actor policy of
+its own; GitHub's fork pull request settings decide whether a fork's workflow
+runs, and after whose approval.
 
 ## What a job can reach
 

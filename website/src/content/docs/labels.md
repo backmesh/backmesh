@@ -35,6 +35,10 @@ gets its own VM of its label's size, which is deleted when the job ends:
 A job has its whole VM, less what the VM's own system and Docker use. Sizes
 aren't configurable.
 
+With [`--public-repos`](/public-repos/), the control plane's cloud also gets
+`backmesh-public-2` and `backmesh-public-4`: spot VMs, without KVM, and the
+only labels pull requests from a public repository's forks may use.
+
 ## One cloud or several
 
 The control plane's cloud has the plain labels, `backmesh-2` to
