@@ -44,10 +44,10 @@ sponsorship and trial ones, refuse a size in a region
 region, so each VM takes the first of its sizes that your subscription may
 create in the region:
 
-| VM            | vCPU | Sizes, in order                                                                                                                                     |
-| ------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Control plane | 2    | `Standard_D2s_v5`, `Standard_D2as_v5`, `Standard_D2s_v4`: 8 GiB                                                                                     |
-| Listener      | 2    | `Standard_B2s`, `Standard_B2als_v2`, `Standard_B2ls_v2`: 4 GiB; `Standard_B2as_v2`, `Standard_B2s_v2`, `Standard_D2as_v5`, `Standard_D2s_v5`: 8 GiB |
+| VM            | vCPU | Sizes, in order                                                                                                                                                        |
+| ------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Control plane | 2    | `Standard_D2s_v5`, `Standard_D2as_v5`, `Standard_D2s_v4`: 8 GiB                                                                                                        |
+| Listener      | 2    | `Standard_B2s`, `Standard_B2als_v2`, `Standard_B2ls_v2`: 4 GiB; `Standard_B2as_v2`, `Standard_B2s_v2`, `Standard_D2as_v5`, `Standard_D2s_v5`, `Standard_D2s_v4`: 8 GiB |
 
 Before any sign-in, the plan reads `az vm list-skus` for those sizes, and
 prints the size each VM takes and its price. A region that offers one of them
@@ -102,8 +102,9 @@ Family vCPUs", 0 on most new subscriptions; request at least 4 under
 [Quotas](https://portal.azure.com/#view/Microsoft_Azure_Capacity/QuotaMenuBlade/~/myQuotas)
 in the portal. The always-on VMs count against their size's family quota too,
 such as "Standard DSv5 Family vCPUs" and "Standard BS Family vCPUs", or
-"Standard BSv2 Family vCPUs" for `Standard_B2ls_v2`, which the plan checks
-before any sign-in. [More](/faq/#installing).
+"Standard BASv2 Family vCPUs" for `Standard_B2als_v2`, the listener's size on
+a subscription refused `Standard_B2s`. The plan checks them before any
+sign-in, and takes a VM's next size when its family has no room. [More](/faq/#installing).
 
 ## Cost
 
@@ -119,11 +120,12 @@ These are catalog prices in `westus2`, spot in the lowest zone, for a
 Other sizes scale with their vCPUs. Each job also pays for its VM's boot and its
 100 GB disk. The always-on VMs cost about $111 a month: $79 for the control
 plane's VM and $32 for each org's listener VM, with their disks and addresses,
-at their first sizes. Another size costs, in `eastus` on 2026-11-21: $72 for
+at their first sizes. Another size costs, in `westus2` on 2026-11-21: $72 for
 `Standard_D2as_v5` and $79 for `Standard_D2s_v4`; for the listener, $29 for
 `Standard_B2als_v2`, $32 for `Standard_B2ls_v2`, $57 for `Standard_B2as_v2`,
 $63 for `Standard_B2s_v2`, $65 for `Standard_D2as_v5` and $72 for
-`Standard_D2s_v5`. The plan prints the sizes and prices it picks.
+`Standard_D2s_v5` or `Standard_D2s_v4`. The plan prints the sizes and prices
+it picks.
 At those prices, 150,000 minutes a month of `backmesh-4` jobs cost at least
 $191–$206 with one org's always-on VMs, before disks, boots and runners started ahead of
 jobs; see [the

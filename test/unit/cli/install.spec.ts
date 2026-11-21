@@ -2780,6 +2780,7 @@ const LISTENER_SIZES = [
   'Standard_B2s_v2',
   'Standard_D2as_v5',
   'Standard_D2s_v5',
+  'Standard_D2s_v4',
 ];
 // Install's one read: the control plane's sizes, then the listener's
 // others.
@@ -2801,7 +2802,7 @@ const CONTROL_SIZES = [
 // Each of `sizes` refused in `regions`.
 const refusedAll = (sizes: readonly string[], regions: readonly string[]) =>
   Object.fromEntries(sizes.map((size) => [size, [...regions]]));
-// A subscription refused every listener size in three regions.
+// A subscription refused every size install takes in three regions.
 const SPONSORSHIP = refusedAll(LISTENER_SIZES, [
   'eastus',
   'eastus2',
@@ -2886,7 +2887,8 @@ describe("install's always-on VM sizes on Azure", () => {
       `az vm list-skus --all --resource-type virtualMachines --query ${SKU_QUERY} --output json`,
     ]);
     expect(lines.filter((l) => l.startsWith("Azure won't create"))).toEqual([
-      "Azure won't create acme's listener VM in eastus for this subscription in any of its sizes: Standard_B2s (NotAvailableForSubscription), Standard_B2als_v2 (NotAvailableForSubscription), Standard_B2ls_v2 (NotAvailableForSubscription), Standard_B2as_v2 (NotAvailableForSubscription), Standard_B2s_v2 (NotAvailableForSubscription), Standard_D2as_v5 (NotAvailableForSubscription), Standard_D2s_v5 (NotAvailableForSubscription).",
+      "Azure won't create the control plane's VM in eastus for this subscription in any of its sizes: Standard_D2s_v5 (NotAvailableForSubscription), Standard_D2as_v5 (NotAvailableForSubscription), Standard_D2s_v4 (NotAvailableForSubscription).",
+      "Azure won't create acme's listener VM in eastus for this subscription in any of its sizes: Standard_B2s (NotAvailableForSubscription), Standard_B2als_v2 (NotAvailableForSubscription), Standard_B2ls_v2 (NotAvailableForSubscription), Standard_B2as_v2 (NotAvailableForSubscription), Standard_B2s_v2 (NotAvailableForSubscription), Standard_D2as_v5 (NotAvailableForSubscription), Standard_D2s_v5 (NotAvailableForSubscription), Standard_D2s_v4 (NotAvailableForSubscription).",
     ]);
     expect(plan).toMatchObject({
       controlPlane: { region: 'centralus', exists: false },
@@ -2901,15 +2903,6 @@ describe("install's always-on VM sizes on Azure", () => {
       'westus3',
     ]);
     expect(worker.calls).toEqual([]);
-  });
-
-  it('names every VM a region offers none of its sizes', async () => {
-    const { deps, lines } = azure(refusedAll(CONTROL_SIZES, ['eastus']));
-    await planned(eastus, deps);
-    expect(lines.filter((l) => l.startsWith("Azure won't create"))).toEqual([
-      expect.stringContaining("the control plane's VM in eastus"),
-      expect.stringContaining("acme's listener VM in eastus"),
-    ]);
   });
 
   it('stops before any sign-in when no region offers a VM any of its sizes', async () => {
@@ -2957,40 +2950,62 @@ describe("install's always-on VM sizes on Azure", () => {
     ]);
   });
 
-  it("takes the control plane's next size where Azure refuses Standard_D2s_v5, and checks that size's family quota", async () => {
-    const { deps, lines } = azure(
-      { Standard_D2s_v5: RUNNER_REGIONS.azure },
-      { families: { centralus: { standardDASv5Family: [0, 0] } } },
-    );
-    const { plan } = await planned(
-      { ...options, controlPlane: 'azure:centralus' },
-      deps,
-    );
-    expect(lines).toContain(
-      "Azure's standardDASv5Family quota in centralus has 0 vCPUs free (limit 0), under the 2 for the control plane's VM (Standard_D2as_v5).",
-    );
+  it("takes the control plane's next size where Azure refuses Standard_D2s_v5", async () => {
+    const { deps, lines } = azure({
+      Standard_D2s_v5: RUNNER_REGIONS.azure,
+    });
+    const { plan } = await planned(eastus, deps);
     expect(plan).toMatchObject({
       controlPlane: {
-        region: 'northcentralus',
+        region: 'centralus',
         managementVm: 'Standard_D2as_v5',
         monthlyUsd: 72,
       },
-      listener: { region: 'northcentralus', vmType: 'Standard_B2s' },
+      listener: { region: 'centralus', vmType: 'Standard_B2s' },
     });
     expect(lines).toContain(
-      "Always on: the control plane's VM (Standard_D2as_v5) on azure northcentralus, about $72 a month with its disk and address.",
+      "Always on: the control plane's VM (Standard_D2as_v5) on azure centralus, about $72 a month with its disk and address.",
     );
   });
 
-  it("skips a region without its sizes' family quota, reading each region's usage once", async () => {
+  it("names a later region's sizes where they differ, and creates the listener at its size there", async () => {
+    const { deps, lines, calls } = azure({
+      Standard_B2s: ['eastus', 'eastus2', 'westus2', 'northcentralus'],
+    });
+    refusedIn(deps, calls, 'centralus');
+    const { plan, run } = await planned(eastus, deps);
+    expect(plan.alwaysOnRegions?.slice(0, 2)).toEqual([
+      {
+        region: 'centralus',
+        managementVm: 'Standard_D2s_v5',
+        listenerVm: 'Standard_B2s',
+      },
+      {
+        region: 'northcentralus',
+        managementVm: 'Standard_D2s_v5',
+        listenerVm: 'Standard_B2als_v2',
+      },
+    ]);
+    expect(lines).toContain(
+      "If Azure has no capacity or quota for the control plane's VM in centralus when install creates it, install tries northcentralus (acme's listener VM Standard_B2als_v2, about $29 a month), southcentralus, westcentralus, westus, westus3, in turn.",
+    );
+    await run();
+    expect(steps(calls).at(-1)).toContain(
+      '--region northcentralus --vm-type Standard_B2als_v2 --secret backmesh-acme --wait',
+    );
+  });
+
+  it("takes each VM's next offered size where its family has no quota, reading each region's usage once", async () => {
     // A new subscription: no DSv5 quota in centralus, and the B-series one
-    // used up in northcentralus.
-    const { deps, lines, commands } = azure(
+    // used up.
+    const { deps, commands } = azure(
       {},
       {
         families: {
-          centralus: { standardDSv5Family: [0, 0] },
-          northcentralus: { standardBSFamily: [10, 9] },
+          centralus: {
+            standardDSv5Family: [0, 0],
+            standardBSFamily: [10, 9],
+          },
         },
       },
     );
@@ -2998,16 +3013,11 @@ describe("install's always-on VM sizes on Azure", () => {
       { ...options, controlPlane: 'azure:centralus' },
       deps,
     );
-    expect(lines).toContain(
-      "Azure's standardDSv5Family quota in centralus has 0 vCPUs free (limit 0), under the 2 for the control plane's VM (Standard_D2s_v5).",
-    );
-    expect(plan.controlPlane.region).toBe('southcentralus');
-    expect(plan.alwaysOnRegions?.map((r) => r.region)).toEqual([
-      'southcentralus',
-      'westcentralus',
-      'westus',
-      'westus3',
-    ]);
+    expect(plan.alwaysOnRegions?.[0]).toEqual({
+      region: 'centralus',
+      managementVm: 'Standard_D2as_v5',
+      listenerVm: 'Standard_B2als_v2',
+    });
     const reads = commands.filter((c) => c.startsWith('az vm list-usage'));
     expect(reads).toHaveLength(new Set(reads).size);
   });
@@ -3050,7 +3060,14 @@ describe("install's always-on VM sizes on Azure", () => {
       {},
       {
         families: Object.fromEntries(
-          RUNNER_REGIONS.azure.map((r) => [r, { standardDSv5Family: [0, 0] }]),
+          RUNNER_REGIONS.azure.map((r) => [
+            r,
+            {
+              standardDSv5Family: [0, 0],
+              standardDASv5Family: [0, 0],
+              standardDSv4Family: [0, 0],
+            },
+          ]),
         ),
       },
     );
@@ -3335,6 +3352,8 @@ describe("install's always-on VM sizes on Azure", () => {
       listener: { cloud: 'azure', region: 'centralus' },
       alwaysOnRegions: [{ region: 'centralus', listenerVm: 'Standard_B2s' }],
     });
+    // Its VM isn't read, so the plan names no size for it.
+    expect(plan.controlPlane).not.toHaveProperty('managementVm');
     expect(lines.some((l) => l.startsWith('If Azure has no capacity'))).toBe(
       false,
     );

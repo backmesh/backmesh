@@ -166,6 +166,7 @@ function setUp({
   host = 'vm',
   // acme's listener's `/status` beyond its defaults.
   body = {},
+  poolType = 't3.small',
 }: {
   cacheBuckets?: string[];
   catalog?: typeof CATALOG.aws;
@@ -183,6 +184,8 @@ function setUp({
   rotatingFrom?: string;
   host?: 'vm' | 'lost' | 'deployment' | 'both';
   body?: object;
+  // `bm-control`'s Node's size.
+  poolType?: string;
 } = {}) {
   const envOf = (org: string, mine: boolean): Record<string, string> => ({
     ORG: org,
@@ -347,6 +350,7 @@ function setUp({
               allowPrivilegedJobs: false,
               cloudProvider: 'AWS',
               region: 'us-east-2',
+              vmTypes: [poolType],
             },
           ]
         : [],
@@ -1589,6 +1593,21 @@ describe('upgrade', () => {
         orgs: [{ org: 'acme', moves: true }],
       });
       expect(mutations(plan.calls)).toEqual([]);
+    });
+
+    it("moves a listener to a VM of bm-control's own size", async () => {
+      const { deps, calls, lines } = setUp({
+        version: RELEASE.anycloud,
+        host: 'deployment',
+        poolType: 't3.medium',
+      });
+      await upgrade(deps);
+      expect(mutations(calls)).toContainEqual(
+        expect.stringContaining(' --vm-type t3.medium '),
+      );
+      expect(lines).toContain(
+        "acme's listener moves from bm-control to its own t3.medium VM and bm-control, about the same, is deleted.",
+      );
     });
 
     it('finishes a move that stopped after making the VM: reads the Deployment, then rolls the VM it made', async () => {

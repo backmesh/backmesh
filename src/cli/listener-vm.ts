@@ -43,8 +43,8 @@ export const LISTENER_VM_IMAGE =
 // subscription (`vm-sizes.ts`): some offers refuse `Standard_B2s` in every
 // region and offer the Bsv2 series. Each is 2 vCPUs: the B2als_v2 and B2ls_v2
 // have B2s's 4 GiB, the others 8, the cheapest first after B2s, and the
-// control plane's own D-series last, so a region that takes the control
-// plane mostly takes a listener too.
+// control plane's own sizes last, so a region that takes the control plane
+// takes a listener too.
 export const LISTENER_VM_TYPES: Record<Cloud, readonly string[]> = {
   aws: ['t3.small'],
   gcp: ['e2-small'],
@@ -56,9 +56,10 @@ export const LISTENER_VM_TYPES: Record<Cloud, readonly string[]> = {
     'Standard_B2s_v2',
     'Standard_D2as_v5',
     'Standard_D2s_v5',
+    'Standard_D2s_v4',
   ],
 };
-// Each size's $/month with its disk and address: Azure's at eastus's
+// Each size's $/month with its disk and address: Azure's at westus2's
 // pay-as-you-go Linux price (Retail Prices API, 2026-11-21), and $2.
 export const LISTENER_VM_MONTHLY_USD: Record<string, number> = {
   't3.small': 17,
@@ -70,6 +71,7 @@ export const LISTENER_VM_MONTHLY_USD: Record<string, number> = {
   Standard_B2s_v2: 63,
   Standard_D2as_v5: 65,
   Standard_D2s_v5: 72,
+  Standard_D2s_v4: 72,
 };
 
 // Every value the org's Secret may hold (`secretValues`).

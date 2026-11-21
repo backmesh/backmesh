@@ -23,8 +23,10 @@ export interface InstallPlan {
   controlPlane: {
     cloud: string;
     region: string;
-    managementVm: string;
-    monthlyUsd: number;
+    // A new one's VM; absent for an existing one, whose size the plan
+    // doesn't read.
+    managementVm?: string;
+    monthlyUsd?: number;
     // Read from this machine's control plane when it has one; a new one
     // otherwise, and install checks again once `cluster create` resumes it.
     exists: boolean;

@@ -59,14 +59,33 @@ const refused = (skus: readonly Sku[], size: string, region: string) => {
   return restriction && (restriction.reasonCode ?? 'restricted');
 };
 
+// A region's sizes for the VMs, and why it can't take them: one line per
+// VM it offers no size, or per quota without room.
+interface Fit {
+  sizes: string[];
+  reasons: { name?: string; line: string }[];
+}
+
 interface Sized {
   what: string;
   size: string;
 }
 
+// Its quota's usage name, such as `standardDSv5Family`.
+const familyOf = (skus: readonly Sku[], size: string) =>
+  skus.find((s) => same(s.name ?? '')(size))?.family;
+
+// The vCPUs free in the quota `name`; Infinity when `usage` doesn't name
+// it, as such a quota passes.
+const free = (usage: readonly Usage[], name: string) => {
+  const found = usageNamed(usage, name);
+  const left = found && found.limit - found.current;
+  return left === undefined || !Number.isFinite(left) ? Infinity : left;
+};
+
 // The quotas in `usage` without room for `vms`, one line each: an
 // on-demand VM counts against its family's vCPUs and the regional ones
-// (`cores`). A quota `usage` doesn't name passes.
+// (`cores`).
 const short = (
   skus: readonly Sku[],
   vms: readonly Sized[],
@@ -75,21 +94,18 @@ const short = (
 ) => {
   const need = new Map<string, Sized[]>([['cores', [...vms]]]);
   for (const vm of vms) {
-    const family = skus.find((s) => same(s.name ?? '')(vm.size))?.family;
+    const family = familyOf(skus, vm.size);
     if (family) need.set(family, [...(need.get(family) ?? []), vm]);
   }
   return [...need].flatMap(([name, mine]) => {
-    const found = usageNamed(usage, name);
-    const free = found && found.limit - found.current;
+    const left = free(usage, name);
     const vcpus = mine.length * ALWAYS_ON_VCPUS;
-    if (free === undefined || !Number.isFinite(free) || free >= vcpus) {
-      return [];
-    }
+    if (left >= vcpus) return [];
     const what = mine.map((vm) => `${vm.what} (${vm.size})`).join(' and ');
     return [
       {
         name,
-        line: `Azure's ${name} quota in ${region} has ${Math.max(free, 0)} vCPUs free (limit ${found!.limit}), under the ${vcpus} for ${what}.`,
+        line: `Azure's ${name} quota in ${region} has ${Math.max(left, 0)} vCPUs free (limit ${usageNamed(usage, name)!.limit}), under the ${vcpus} for ${what}.`,
       },
     ];
   });
@@ -169,12 +185,12 @@ export async function alwaysOnRegions(
   // A region whose usage can't be read passes, as `cluster create` finds
   // out.
   const unread: string[] = [];
-  const sizesIn = (r: string) =>
-    vms.map((vm) => vm.sizes.find((size) => !refused(all, size, r)));
-  const why = async (r: string) => {
-    const sizes = sizesIn(r);
+  const why = async (r: string): Promise<Fit> => {
+    const offered = vms.map((vm) =>
+      vm.sizes.filter((size) => !refused(all, size, r)),
+    );
     const none = vms.flatMap((vm, i) =>
-      sizes[i]
+      offered[i]!.length
         ? []
         : [
             {
@@ -182,23 +198,43 @@ export async function alwaysOnRegions(
             },
           ],
     );
-    if (none.length || !usage) return none;
-    const read = await usage(r).catch(() => undefined);
-    if (!read) unread.push(r);
+    if (none.length) return { sizes: [], reasons: none };
+    const read = usage && (await usage(r).catch(() => undefined));
+    if (usage && !read) unread.push(r);
+    // Each VM's first offered size whose family has room beside the VMs
+    // before it, else its first, whose quota `short` names.
+    const taken = new Map<string, number>();
+    const sizes = offered.map((mine) => {
+      const room = (size: string) => {
+        const family = familyOf(all, size);
+        return (
+          !read ||
+          !family ||
+          free(read, family) - (taken.get(family) ?? 0) >= ALWAYS_ON_VCPUS
+        );
+      };
+      const size = mine.find(room) ?? mine[0]!;
+      const family = familyOf(all, size);
+      if (family) {
+        taken.set(family, (taken.get(family) ?? 0) + ALWAYS_ON_VCPUS);
+      }
+      return size;
+    });
     const sized = vms.map((vm, i) => ({ what: vm.what, size: sizes[i]! }));
-    return read ? short(all, sized, r, read) : [];
+    return { sizes, reasons: read ? short(all, sized, r, read) : [] };
   };
-  const reasons: { name?: string; line: string }[][] = [];
-  for (const r of candidates) reasons.push(await why(r));
+  const results: Fit[] = [];
+  for (const r of candidates) results.push(await why(r));
+  const reasons = results.map((result) => result.reasons);
   const lines = reasons[0]!.map(({ line }) => line);
   if (unread.length) {
     lines.push(
       `Azure's vCPU quotas couldn't be read in ${unread.join(', ')}, so the plan takes them to have room for ${vms.map((vm) => vm.what).join(' and ')}.`,
     );
   }
-  const passing = candidates
-    .filter((_, i) => !reasons[i]!.length)
-    .map((r) => ({ region: r, sizes: sizesIn(r).map((size) => size!) }));
+  const passing = candidates.flatMap((r, i) =>
+    reasons[i]!.length ? [] : [{ region: r, sizes: results[i]!.sizes }],
+  );
   if (!passing.length) {
     const quotas = [
       ...new Set(reasons.flat().flatMap(({ name }) => name ?? [])),
@@ -211,14 +247,7 @@ export async function alwaysOnRegions(
     );
   }
   lines.forEach((line) => report.print(line));
-  const [first, ...rest] = passing;
-  if (!fallback) return [first!];
-  if (rest.length) {
-    report.print(
-      `If Azure has no capacity or quota for the control plane's VM in ${first!.region} when install creates it, install tries ${rest.map((r) => r.region).join(', ')}, in turn.`,
-    );
-  }
-  return passing;
+  return fallback ? passing : passing.slice(0, 1);
 }
 
 /** `region` first, then backmesh's other US regions when it's one of them. */

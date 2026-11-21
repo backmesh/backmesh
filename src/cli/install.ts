@@ -219,7 +219,7 @@ const MANAGEMENT_VMS: Record<Cloud, readonly string[]> = {
   gcp: ['e2-standard-2'],
   azure: ['Standard_D2s_v5', 'Standard_D2as_v5', 'Standard_D2s_v4'],
 };
-// It, its disk and public address, $/month, Azure's at eastus's
+// It, its disk and public address, $/month, Azure's at westus2's
 // pay-as-you-go Linux price (Retail Prices API, 2026-11-21): with each org's
 // listener VM (`LISTENER_VM_MONTHLY_USD`), the installation's whole floor,
 // since runners have no VM while idle.
@@ -1301,6 +1301,24 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
           note,
         )
       : undefined;
+  if (regions && regions.length > 1) {
+    const [first, ...rest] = regions;
+    const monthly = (vm: AlwaysOn) =>
+      vm === controlVm ? MANAGEMENT_MONTHLY_USD : LISTENER_VM_MONTHLY_USD;
+    // A later region's sizes where they aren't the first's.
+    const other = (r: AlwaysOnRegion) => {
+      const sizes = alwaysOn.flatMap((vm) => {
+        const size = sizeIn(r, vm);
+        return size === sizeIn(first, vm)
+          ? []
+          : [`${vm.what} ${size}, about $${monthly(vm)[size]} a month`];
+      });
+      return sizes.length ? `${r.region} (${sizes.join('; ')})` : r.region;
+    };
+    note.print(
+      `If Azure has no capacity or quota for the control plane's VM in ${first!.region} when install creates it, install tries ${rest.map(other).join(', ')}, in turn.`,
+    );
+  }
   // AWS's always-on VMs count against the region's standard on-demand
   // vCPUs, which a new account may have under them. The plan compares the
   // limit, not the free vCPUs: Service Quotas reads no usage. GCP's e2
@@ -1331,9 +1349,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   // A re-run for an org already on it agrees to nothing new.
   const orgs = (listeners ?? []).map((l) => orgOfListener(l.name)!);
   const sharedWith = orgs.includes(options.org.toLowerCase()) ? [] : orgs;
-  const managementVm = controlVm
-    ? sizeIn(regions?.[0], controlVm)
-    : MANAGEMENT_VMS[controlPlane.cloud][0]!;
+  const managementVm = controlVm && sizeIn(regions?.[0], controlVm);
   const listenerType = listenerVm && sizeIn(regions?.[0], listenerVm);
   const plan: InstallPlan = {
     org: options.org.toLowerCase(),
@@ -1344,8 +1360,10 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     controlPlane: {
       cloud: controlPlane.cloud,
       region: controlPlane.region,
-      managementVm,
-      monthlyUsd: MANAGEMENT_MONTHLY_USD[managementVm]!,
+      ...(managementVm && {
+        managementVm,
+        monthlyUsd: MANAGEMENT_MONTHLY_USD[managementVm]!,
+      }),
       exists: !!listeners,
       sharedWith,
     },
@@ -1562,7 +1580,12 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
           region: r.region,
           size: r.managementVm!,
         }))) || [
-        { region: controlPlane.region, size: plan.controlPlane.managementVm },
+        {
+          region: controlPlane.region,
+          size:
+            plan.controlPlane.managementVm ??
+            MANAGEMENT_VMS[controlPlane.cloud][0]!,
+        },
       ],
       deps,
     );

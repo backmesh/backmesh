@@ -387,12 +387,12 @@ export async function upgrade(
     Cloud | undefined;
   const moving = planned.filter((p) => p.listener.deployment);
   if (moving.length && cloud) {
-    const type = LISTENER_VM_TYPES[cloud][0]!;
-    const usd = LISTENER_VM_MONTHLY_USD[type]!;
+    const type = poolVmType(installation.pool!, cloud);
+    const usd = LISTENER_VM_MONTHLY_USD[type];
     print(
       moving.length === 1
-        ? `${moving[0]!.org}'s listener moves from ${CONTROL_POOL} to its own ${type} VM, about $${usd} a month, and ${CONTROL_POOL}, about the same, is deleted.`
-        : `${moving.map((p) => p.org).join(', ')}'s listeners move from ${CONTROL_POOL} to ${type} VMs of their own: about $${usd * moving.length} a month in all, instead of ${CONTROL_POOL}'s one Node at about $${usd}, which is deleted.`,
+        ? `${moving[0]!.org}'s listener moves from ${CONTROL_POOL} to its own ${type} VM${usd ? `, about $${usd} a month,` : ''} and ${CONTROL_POOL}, about the same, is deleted.`
+        : `${moving.map((p) => p.org).join(', ')}'s listeners move from ${CONTROL_POOL} to ${type} VMs of their own${usd ? `: about $${usd * moving.length} a month in all, instead of ${CONTROL_POOL}'s one Node at about $${usd}` : `, instead of ${CONTROL_POOL}'s one Node of that size`}, which is deleted.`,
     );
   }
   // A change in the runners needs consent, as several orgs' moves do; a
@@ -726,6 +726,11 @@ async function revive(
   return { name, vm: { ...vm, id, lost: false } };
 }
 
+// A listener moving off `bm-control` takes its Node's size, which its
+// region took.
+const poolVmType = (pool: NodePool, cloud: Cloud) =>
+  pool.vmTypes[0] ?? LISTENER_VM_TYPES[cloud][0]!;
+
 /**
  * Moves an org's listener from its Deployment on `bm-control` to its own VM,
  * in `bm-control`'s cloud and region. The Secret gets the VM's values and the
@@ -793,7 +798,6 @@ async function moveToVm(
       );
     }
     vm = listenerVmId(identity.install);
-    // `bm-control`'s own size, the first, which its region took.
     await createVm(
       org,
       vm,
@@ -801,7 +805,7 @@ async function moveToVm(
         cloud,
         region: pool.region,
         credentials,
-        vmType: LISTENER_VM_TYPES[cloud][0]!,
+        vmType: poolVmType(pool, cloud),
       },
       deps.runLong,
     );
