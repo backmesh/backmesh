@@ -15,7 +15,7 @@ permissions:
 
 # On backmesh-4, except a fork's pull request, which runs on backmesh-public-4:
 # the confined class this public repository's install has for forks
-# (`--public-repos`; test/unit/workflows.spec.ts checks every workflow). Their image has
+# (`--public-repos`; test/unit/workflows.spec.ts checks every workflow). backmesh's runner image has
 # no yarn, which setup-node's yarn cache needs, so each job installs it, with
 # no cache: a cold install is about 10 s.
 jobs:

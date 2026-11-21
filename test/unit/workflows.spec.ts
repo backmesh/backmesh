@@ -195,7 +195,7 @@ describe('the workflows', () => {
     "run %s's pull request on backmesh-public-4 in ci.yml and GitHub's runners elsewhere",
     (_, context) => {
       const jobs = onPullRequest.flatMap((f) => started(f, context));
-      expect(jobs.length).toBeGreaterThan(0);
+      expect(jobs.some(({ job }) => job.startsWith('ci.yml '))).toBe(true);
       for (const { job, runsOn } of jobs) {
         if (job.startsWith('ci.yml '))
           expect(runsOn, job).toBe('backmesh-public-4');
@@ -226,6 +226,7 @@ describe('the workflows', () => {
 
   it('keep a same-repository pull request on backmesh', () => {
     const jobs = onPullRequest.flatMap((f) => started(f, SAME_REPO));
+    expect(jobs.length).toBeGreaterThan(0);
     for (const { job, runsOn } of jobs) expect(runsOn, job).toBe('backmesh-4');
   });
 });
