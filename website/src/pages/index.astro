@@ -120,7 +120,7 @@ const aws = clouds.find((c) => c.cloud === 'AWS')!;
 const faq = [
   {
     q: 'Will backmesh work for my jobs?',
-    short: 'Linux x86-64 only. Private repos only.',
+    short: 'Linux x86-64 only. Public repos with --public-repos.',
     points: [
       'No macOS, Windows or Arm runners.',
       "Each job waits for its VM to boot: about 30 s on AWS, 60–70 s on GCP and Azure. Starting runners ahead of predicted jobs, and your agent's cue, mostly hide it.",

@@ -184,5 +184,6 @@ jobs:
       - run: make test
 ```
 
-Only private repositories can use the runners. Moving jobs off
+Only private repositories can use the runners, unless you install with
+[`--public-repos`](/public-repos/). Moving jobs off
 `ubuntu-latest`? See [what differs](/from-ubuntu-latest/).

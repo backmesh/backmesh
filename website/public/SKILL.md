@@ -32,7 +32,12 @@ Or `brew install backmesh/tap/backmesh`. Then run `backmesh --version`.
 
 1. **Human:** confirm who owns the GitHub org. During install, the org owner
    enters a code on GitHub, and installs the App if it isn't on the org yet.
-   Only the org's private repositories can use the runners.
+   Only the org's private repositories can use the runners, unless install
+   has `--public-repos`. Never add `--public-repos` yourself: ask the human
+   first, and say it needs the org's GitHub setting "Require approval for all
+   external contributors" (Settings → Actions → General) and that forks'
+   jobs share the runners' cloud network. See
+   https://backmesh.com/public-repos/.
 2. Each cloud the human wants needs its CLI signed in: `aws`, `gcloud` with
    a project, or `az` with a subscription. The plan in section 3
    prints a fix for anything missing; ask the human to run it. The signed-in
