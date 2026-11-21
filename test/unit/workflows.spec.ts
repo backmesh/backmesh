@@ -13,10 +13,11 @@ import { join } from 'node:path';
 import { load } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 
-// A fork's pull request must never land on backmesh's own runners, read a
-// secret, take an environment or get a token that writes. Its workflow files are its own, so this is
-// defense in depth: the guard is the listener, which cancels a fork's run on
-// any label but backmesh-public-*.
+// A fork's pull request must never land on backmesh's private runners, read a
+// secret, take an environment or get a token that writes. ci.yml dogfoods the
+// public labels for forks; every other workflow sends them to GitHub's runners.
+// Its workflow files are its own, so this is defense in depth: the guard is the
+// listener, which cancels a fork's run on any label but backmesh-public-*.
 const DIR = '.github/workflows';
 const TRIGGERS = [
   'push',
@@ -191,12 +192,15 @@ describe('the workflows', () => {
     ['a fork', FORK],
     ['a deleted fork', GONE],
   ])(
-    "run %s's pull request on GitHub's runners only, with no secret, environment or write token",
+    "run %s's pull request on backmesh-public-4 in ci.yml and GitHub's runners elsewhere",
     (_, context) => {
       const jobs = onPullRequest.flatMap((f) => started(f, context));
       expect(jobs.length).toBeGreaterThan(0);
-      for (const { job, runsOn } of jobs)
-        expect(runsOn, job).toMatch(/^ubuntu-/);
+      for (const { job, runsOn } of jobs) {
+        if (job.startsWith('ci.yml '))
+          expect(runsOn, job).toBe('backmesh-public-4');
+        else expect(runsOn, job).toMatch(/^ubuntu-/);
+      }
     },
   );
 
@@ -220,15 +224,9 @@ describe('the workflows', () => {
     }
   });
 
-  // ci.yml dogfoods the public labels this public repository's install
-  // has (`--public-repos`).
   it('keep a same-repository pull request on backmesh', () => {
     const jobs = onPullRequest.flatMap((f) => started(f, SAME_REPO));
-    for (const { job, runsOn } of jobs) {
-      expect(runsOn, job).toBe(
-        job.startsWith('ci.yml ') ? 'backmesh-public-4' : 'backmesh-4',
-      );
-    }
+    for (const { job, runsOn } of jobs) expect(runsOn, job).toBe('backmesh-4');
   });
 });
 
