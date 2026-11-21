@@ -41,10 +41,16 @@ public, and the pull request's head is in another repository.
 
 ## What it doesn't do
 
-- **The public runners share your cloud network.** `backmesh-public-*` VMs
-  run in the same account, project or subscription and the same default
-  network as your other runners. A fork's job can reach your other instances
-  there whose firewall rules admit the network's range, and the internet.
+- **On AWS and GCP, the public runners share your cloud network.**
+  `backmesh-public-*` VMs run in the same account or project as your other
+  runners: on AWS in the default VPC, in the shared `anycloud-vm` security
+  group, and on GCP in the `default` network. A fork's job can reach your
+  other instances there whose rules admit the network's range. On GCP that
+  includes any instance covered by `default-allow-internal`, which a default
+  network has unless you removed it. On Azure each runner gets a VNet of its
+  own. On every cloud, a runner admits only SSH, with a key only backmesh's
+  control plane holds, so one job can't reach another's VM, and egress to the
+  internet is open. A separate network for runners is planned.
 - **They have the same metadata access as other runners.** No runner VM has
   a cloud identity: no IAM instance profile on AWS, no service account on GCP,
   no managed identity on Azure, so the metadata service hands out no cloud
@@ -56,10 +62,15 @@ public, and the pull request's head is in another repository.
   another label is idle when a fork's job asks for that label, the job starts
   there and runs until backmesh has read the run from GitHub, cancelled it
   and ended that runner.
-- **Runs started by `pull_request_target`, `issue_comment`, `workflow_run` or
-  other events aren't fork runs.** They run in your repository's context with
-  its secrets and a write token, on any label. Never check out or run a fork's
-  code in them on a backmesh label; GitHub's
+- **Events anyone can trigger aren't fork runs.** In a public repository,
+  anyone can start `issues`, `issue_comment`, `discussion` and
+  `pull_request_target` runs, and a `workflow_run` that follows a fork's run.
+  These run your default branch's workflow with its secrets and its
+  `GITHUB_TOKEN`, on any label, with no vCPU cap or runtime limit, and GitHub's
+  approval setting doesn't apply to them. Keep such jobs off backmesh labels,
+  put them on `backmesh-public-*`, or gate them with a job-level `if`, which
+  GitHub checks before it assigns a runner. Never check out or run a fork's
+  code in them; GitHub's
   [guidance](https://docs.github.com/en/actions/reference/security/secure-use)
   says the same for any runner.
 - **A job controls its own VM's Docker**, so it can be root on that VM, for
@@ -94,8 +105,9 @@ public, and the pull request's head is in another repository.
    The `event_name` check matters: on a push there is no pull request, and the
    comparison alone would pick `backmesh-public-4`.
 
-4. **Consider a cloud account, project or subscription of its own** for an
-   org with public repositories, with nothing else in its network.
+4. **Use a cloud account, project or subscription of its own** for an org
+   with public repositories, or keep nothing else in the runners' network,
+   until runners get a network of their own.
 
 ## Why ephemeral VMs help, and where they stop
 
@@ -104,5 +116,5 @@ request can persist on the machine and read the next job's secrets or poison
 its builds. backmesh gives every job a fresh VM that is deleted when the job
 ends, keeps forks on their own labels and off the cache's writes, and caps
 their vCPUs and runtime. What a fork's job can still do is use its VM for up
-to an hour: reach your cloud network and the internet, and read its cloud's
-metadata service.
+to an hour: reach the internet and, on AWS and GCP, your other instances in
+the runners' network, and read its cloud's metadata service.
