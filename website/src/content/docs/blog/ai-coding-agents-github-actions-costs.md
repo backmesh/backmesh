@@ -320,11 +320,11 @@ mid-run, skipped as drafts or stopped by a failed lint, and each costs one
 - Total: 99,000 minutes, or 99,000 × $0.012 = $1,188 on GitHub's 4-core
   runners.
 
-The same 99,000 minutes on backmesh, using the spot prices and control plane
+The same 99,000 minutes on backmesh, using the spot prices and always-on VM
 costs from backmesh's [cost inputs](/cost/) (2026-11-13). Jobs: 1,500 × 3 × 5 + 1,500 × 3
 × 1 = 27,000, each paying one boot.
 
-| Cloud | Spot $/h      | 99,000 min of compute | 27,000 boots | Control plane | Month     |
+| Cloud | Spot $/h      | 99,000 min of compute | 27,000 boots | Always-on VMs | Month     |
 | ----- | ------------- | --------------------- | ------------ | ------------- | --------- |
 | AWS   | 0.0497–0.07   | $82–$116              | $11–$16      | $86           | $179–$217 |
 | Azure | 0.0318–0.0381 | $52–$63               | $14–$20      | $111          | $178–$194 |

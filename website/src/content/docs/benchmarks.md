@@ -79,7 +79,7 @@ cheaper.
   on 2026-11-13, the same snapshot as the `backmesh-4` prices on the
   [cost page](/cost/). The disk is 100 GB of gp3 at
   4,000 IOPS and 500 MiB/s, about $0.0384 an hour. It leaves out backmesh's
-  control plane, about $86 a month on AWS.
+  always-on VMs, about $86 a month on AWS for one org.
 - **Ratios** compare the unrounded runtimes and costs, so a ratio can differ
   slightly from one worked out from the rounded figures shown.
 - **Caches.** Neither side used a build cache, except setup-node's default npm

@@ -28,18 +28,22 @@ floor. backmesh's core features are free; your clouds bill you for the VMs.
 | Azure | `westus2`     | `Standard_D4ads_v5` 0.0381, `Standard_D4as_v5` 0.0318, `Standard_D4s_v5` 0.0355  |
 | GCP   | `us-central1` | `n2-standard-4` 0.1165, `n2d-standard-4` 0.0899                                  |
 
-- **The control plane:** two always-on VMs with their disks and public
-  addresses, about $86 a month on AWS, $111 on Azure and $74 on GCP. An idle
-  installation pays only this, since runners have no VM while idle.
+- **The always-on VMs:** the control plane's VM and one listener VM for each
+  org, with their disks and public addresses. For one org that's about $86 a
+  month on AWS ($69 + $17), $111 on Azure ($79 + $32) and $74 on GCP ($59 +
+  $15); each further org adds its listener VM. On Azure, a region that doesn't
+  offer your subscription the first sizes takes others, from $101 to $151 for
+  one org ([Azure](/azure/)). An idle installation pays only this, since
+  runners have no VM while idle.
 
 ## How it's computed
 
 GitHub-hosted: 150,000 minutes × $0.012 = $1,800.
 
-backmesh, for each cloud: the control plane plus 150,000 minutes at the
+backmesh, for each cloud: one org's always-on VMs plus 150,000 minutes at the
 cheapest and at the most expensive type's spot price, $/h ÷ 60 a minute.
 
-| Cloud | Spot $/h      | Per 1,000 minutes | 150,000 minutes | Control plane | Month     |
+| Cloud | Spot $/h      | Per 1,000 minutes | 150,000 minutes | Always-on VMs | Month     |
 | ----- | ------------- | ----------------- | --------------- | ------------- | --------- |
 | AWS   | 0.0497–0.07   | $0.83–$1.17       | $124–$175       | $86           | $210–$261 |
 | Azure | 0.0318–0.0381 | $0.53–$0.64       | $80–$95         | $111          | $191–$206 |

@@ -159,8 +159,8 @@ GitHub's Linux 4-core runner costs $0.012 a minute
 backmesh's [cost page](/cost/) prices a 4-vCPU, 16 GiB spot VM in one region
 per cloud, from its catalog on 2026-11-13: AWS `us-east-2` $0.0497 to $0.07
 an hour, Azure `westus2` $0.0318 to $0.0381, GCP `us-central1` $0.0899 to
-$0.1165. Its control plane adds about $86 a month on AWS, $111 on Azure and
-$74 on GCP.
+$0.1165. Its control plane and one org's listener VM add about $86 a month on AWS,
+$111 on Azure and $74 on GCP.
 
 At those prices, a month of 4-vCPU jobs costs:
 
@@ -202,11 +202,11 @@ To run your own minutes and sizes, use the [cost calculator](/calculator/).
 Any self-hosted runner that registers with your GitHub org and runs in your
 cloud account puts CI on your cloud bill. Three free, open-source options:
 
-| Option                                                                                           | Where it runs          | What you operate                                             |
-| ------------------------------------------------------------------------------------------------ | ---------------------- | ------------------------------------------------------------ |
-| [Actions Runner Controller](https://github.com/actions/actions-runner-controller)                | Any Kubernetes cluster | The cluster and its node pools                               |
-| [terraform-aws-github-runner](https://github.com/github-aws-runners/terraform-aws-github-runner) | AWS                    | Terraform, Lambda functions and queues                       |
-| [backmesh](https://github.com/backmesh/backmesh)                                                 | AWS, GCP and Azure     | Two always-on VMs it installs (t3.large and t3.small on AWS) |
+| Option                                                                                           | Where it runs          | What you operate                                                            |
+| ------------------------------------------------------------------------------------------------ | ---------------------- | --------------------------------------------------------------------------- |
+| [Actions Runner Controller](https://github.com/actions/actions-runner-controller)                | Any Kubernetes cluster | The cluster and its node pools                                              |
+| [terraform-aws-github-runner](https://github.com/github-aws-runners/terraform-aws-github-runner) | AWS                    | Terraform, Lambda functions and queues                                      |
+| [backmesh](https://github.com/backmesh/backmesh)                                                 | AWS, GCP and Azure     | A control plane VM and a listener VM per org (t3.large and t3.small on AWS) |
 
 Commercial runner managers that run machines in your own cloud account
 include RunsOn and WarpBuild BYOC. Check each one's supported clouds and

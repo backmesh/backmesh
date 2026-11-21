@@ -173,8 +173,10 @@ Premium adds Slack monitoring, logs and runtime history; see
 Install prints what they cost before it creates anything.
 
 **Before any job runs:** runners have no VM while idle, so an idle installation
-pays only for the control plane's two VMs: about $86 a month on AWS, $74
-on GCP and $111 on Azure, with their disks and public addresses. Each job's VM
+pays only for its always-on VMs, the control plane's and one listener VM per
+org, with their disks and public addresses: for one org about $86 a month on
+AWS, $74 on GCP and $111 on Azure, or up to $151 on Azure when a region doesn't
+offer your subscription the first sizes. Each job's VM
 bills from its boot until the job ends, so every job also pays for its boot:
 about 30 seconds on AWS and 60 to 70 seconds on GCP and Azure. A runner
 started ahead of predicted jobs that no job takes bills for its boot and a short
