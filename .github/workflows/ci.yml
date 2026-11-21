@@ -13,13 +13,14 @@ concurrency:
 permissions:
   contents: read
 
-# On backmesh's own runners, except a fork's pull request, which runs on
-# GitHub's (test/unit/workflows.spec.ts checks every workflow). Their image has
+# On backmesh-4, except a fork's pull request, which runs on backmesh-public-4:
+# the confined class this public repository's install has for forks
+# (`--public-repos`; test/unit/workflows.spec.ts checks every workflow). backmesh's runner image has
 # no yarn, which setup-node's yarn cache needs, so each job installs it, with
 # no cache: a cold install is about 10 s.
 jobs:
   verify:
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.BACKMESH_RUNS_ON || 'backmesh-public-4' }}
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'backmesh-public-4' || vars.BACKMESH_RUNS_ON || 'backmesh-4' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -42,7 +43,7 @@ jobs:
 
   # The release's binaries: the darwin signatures and a linux-x64 smoke test.
   binary:
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.BACKMESH_RUNS_ON || 'backmesh-public-4' }}
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'backmesh-public-4' || vars.BACKMESH_RUNS_ON || 'backmesh-4' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -69,7 +70,7 @@ jobs:
   # The website: an Astro build of website/, then its link check. No secrets;
   # website.yml deploys it from main.
   website:
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.BACKMESH_RUNS_ON || 'backmesh-public-4' }}
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'backmesh-public-4' || vars.BACKMESH_RUNS_ON || 'backmesh-4' }}
     defaults:
       run:
         working-directory: website
