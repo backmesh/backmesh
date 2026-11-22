@@ -464,6 +464,19 @@ case_gives_up_on_a_restorer_that_never_finishes() {
     'grep -Eqx "backmesh cache: auto took [0-9]+ ms: no cache token within 1 s, so it restored nothing" "$scratch/out"'
 }
 
+case_prints_no_timing_when_it_restored_nothing() {
+  local dir=$scratch/auto
+  mkdir -p "$dir"
+  echo $((${EPOCHREALTIME/./} / 1000)) >"$dir/ready"
+  echo 'backmesh cache: auto skipped: the cache is off for this runner (FORBIDDEN)' >"$dir/lines"
+  : >"$dir/done"
+  BACKMESH_AUTO_STATE=$dir AUTO_WAIT=1 bash "$scratch/started-hook.sh" >"$scratch/out" 2>&1
+  status=$?
+  check 'exits 0' '((status == 0))'
+  check 'prints the restorer'"'"'s line' 'grep -q "cache is off" "$scratch/out"'
+  check 'and no timing line' '! grep -q "auto took" "$scratch/out"'
+}
+
 case_says_when_restores_outlast_the_wait() {
   local dir=$scratch/auto
   mkdir -p "$dir"
