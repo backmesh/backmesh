@@ -1,28 +1,75 @@
-name: bench
+name: builds
 on:
   push:
-    branches: [bench]
+    branches: ['builds/**']
 permissions:
   contents: read
+# run.ts writes this file to each round's branch with the label for runs-on.
+# Each job checks out this repository first, so the runner finds the workflow
+# file and gives the job backmesh's automatic caches, then the project into
+# `project`. No step caches anything itself.
+defaults:
+  run:
+    working-directory: project
 jobs:
-  typescript:
-    runs-on: ${{ vars.BENCH_RUNNER }}
+  docker:
+    runs-on: __LABEL__
     steps:
+      # backmesh's start-up marks, and on AWS the VM's region and type.
+      - &marks
+        name: Marks
+        working-directory: .
+        run: |
+          cat "${BACKMESH_JOB_MARKS:-/dev/null}"; echo "nproc $(nproc)"
+          imds=http://169.254.169.254/latest
+          [[ -n ${BACKMESH_JOB_MARKS:-} ]] || exit 0
+          t=$(curl -sfm 2 -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' $imds/api/token) || exit 0
+          echo "region aws $(curl -sfm 2 -H "X-aws-ec2-metadata-token: $t" $imds/meta-data/placement/region)"
+          echo "vm $(curl -sfm 2 -H "X-aws-ec2-metadata-token: $t" $imds/meta-data/instance-type)"
       - uses: actions/checkout@v5
-        with: { repository: microsoft/TypeScript, ref: v5.6.3 }
+      - uses: actions/checkout@v5
+        with: { repository: grafana/k6, ref: v0.54.0, path: project }
+      - run: docker build -t bench .
+  rust:
+    runs-on: __LABEL__
+    steps:
+      - *marks
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with: { repository: BurntSushi/ripgrep, ref: 14.1.1, path: project }
+      - run: cargo build --release --locked
+  typescript:
+    runs-on: __LABEL__
+    steps:
+      - *marks
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with: { repository: microsoft/TypeScript, ref: v5.6.3, path: project }
       - uses: actions/setup-node@v5
-        with: { node-version: 22 }
+        with: { node-version: 22, package-manager-cache: false }
       - run: npm ci --no-audit --no-fund
       - run: npx hereby local
-  rust:
-    runs-on: ${{ vars.BENCH_RUNNER }}
+  python:
+    runs-on: __LABEL__
     steps:
+      - *marks
       - uses: actions/checkout@v5
-        with: { repository: BurntSushi/ripgrep, ref: 14.1.1 }
-      - run: cargo build --release --locked
-  docker:
-    runs-on: ${{ vars.BENCH_RUNNER }}
+      - uses: actions/checkout@v5
+        with: { repository: pydantic/pydantic, ref: v2.11.7, path: project }
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.12' }
+      - uses: astral-sh/setup-uv@v7
+        with: { version: 0.13.9, enable-cache: false }
+      - run: uv sync --frozen
+      - run: uv run --frozen pytest -q -p no:cacheprovider tests/test_main.py tests/test_types.py tests/test_json_schema.py
+  go:
+    runs-on: __LABEL__
     steps:
+      - *marks
       - uses: actions/checkout@v5
-        with: { repository: grafana/k6, ref: v0.54.0 }
-      - run: docker build -t bench .
+      - uses: actions/checkout@v5
+        with: { repository: cli/cli, ref: v2.62.0, path: project }
+      - uses: actions/setup-go@v6
+        with: { go-version-file: project/go.mod, cache: false }
+      - run: go build ./...
+      - run: go test ./pkg/cmd/pr/...
