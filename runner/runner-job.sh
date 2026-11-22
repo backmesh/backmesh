@@ -250,9 +250,9 @@ auto_wait=10
 auto_save_min=60
 
 # The job-started hook: waits for the restorer's `done` in
-# $BACKMESH_AUTO_STATE, at most auto_wait s, then prints its lines and where
-# the time went: the token's wait from the restorer's `ready`, in epoch ms,
-# then the restores. Past the deadline a token still pending starts nothing
+# $BACKMESH_AUTO_STATE, at most auto_wait s, then prints its lines and, unless
+# it restored nothing, where the time went: the token's wait from the
+# restorer's `ready`, in epoch ms, then the restores. Past the deadline a token still pending starts nothing
 # (`gave-up`). Marks the wait's end, `restore_waited`: from `job_received`,
 # the wait and the timings table's few milliseconds.
 log_auto() { printf 'backmesh cache: auto %s\n' "$1"; }
@@ -272,6 +272,8 @@ auto_restores() {
   fi
   token=$((ready - start / 1000)) && ((token > 0)) || token=0
   if [[ -e $dir/done ]]; then
+    # The cache off, or nothing to restore: its lines say so.
+    grep -q '^backmesh cache: auto restored ' "$dir/lines" 2>/dev/null || return 0
     log_auto "took $total ms: $token ms for the cache token, $((total - token)) ms restoring"
   else
     log_auto "took $total ms: $token ms for the cache token, then the restores went on past the hook"

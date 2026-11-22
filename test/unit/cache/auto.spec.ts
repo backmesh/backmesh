@@ -406,6 +406,26 @@ describe('the saver', () => {
     expect(members).toContain('bin/node');
   });
 
+  it('leaves a tool whose upload failed out of the record', async () => {
+    const r = await runner();
+    const b = bucket();
+    await r.vm();
+    const node = await setupTool(r);
+    const put = b.store.put;
+    b.store.put = async (key, body) => {
+      if (key.includes('bm-auto-tool') && !key.endsWith('/claim'))
+        throw new Error('503');
+      return put(key, body);
+    };
+    const { record, logs } = await save(r, b, join(node, 'bin'));
+    expect(record.tools).toEqual([]);
+    expect(logs).toContainEqual(
+      expect.stringMatching(
+        /^result=failed key=bm-auto-tool-ubuntu24-node-22\.23\.5-x64 /,
+      ),
+    );
+  });
+
   it('stores nothing for a container: job, and its next run restores nothing', async () => {
     const r = await runner();
     const b = bucket();

@@ -89,6 +89,7 @@ export async function saveJob(s: SaveJob): Promise<JobRecord> {
     }
     return false;
   };
+  // Whether the entry saved.
   const put = async (key: string, dir: string, members: Member[]) => {
     const id = newUploadId();
     const prefix = `${s.own}e/${esc(key)}/${entryVersion([dir])}/${id}/`;
@@ -105,11 +106,13 @@ export async function saveJob(s: SaveJob): Promise<JobRecord> {
         out,
       );
       s.log(`result=${result} key=${key}${detail}`);
+      return result === 'saved';
     } catch (error) {
       // One entry's failure leaves the others and the record.
       s.log(
         `result=failed key=${key} error=${JSON.stringify(String(error)).slice(0, 300)}`,
       );
+      return false;
     } finally {
       await rm(out, { recursive: true, force: true });
     }
@@ -144,10 +147,7 @@ export async function saveJob(s: SaveJob): Promise<JobRecord> {
       const changed = await changedAfter(dir, members, marker.ctimeMs);
       if (changed)
         s.log(`result=changed key=${key} file=${JSON.stringify(changed)}`);
-      else {
-        await put(key, dir, members);
-        record.tools.push(t);
-      }
+      else if (await put(key, dir, members)) record.tools.push(t);
     }
     const locks = await installedLocks(f.GITHUB_WORKSPACE);
     for (const pm of PMS) {

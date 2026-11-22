@@ -72,9 +72,9 @@ change:
 
 The runner restores what the same job, or the same matrix leg, used in its
 last run, while GitHub sets up the job. Set up runner shows a line for each
-restore, or why there was none, and the time the restores took. A job's first
-run, and a new matrix leg, restore nothing. The saves upload after the job,
-after `backmesh/cache`'s own.
+restore, or why there was none, and how long the job waited for them. A
+job's first run, and a new matrix leg, restore nothing. The saves upload after
+the job, after `backmesh/cache`'s own.
 
 **Stepping aside.** The automatic cache skips a package manager that the job
 caches itself: an `actions/cache` or `backmesh/cache` step whose `path` names
