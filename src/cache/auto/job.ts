@@ -78,10 +78,12 @@ export const factsSchema = z.object({
 export type Facts = z.infer<typeof factsSchema>;
 
 // What the restorer found, for the saver: the record, and each package
-// manager's entry, with when it was made.
+// manager's entry, with when it was made and when it landed (epoch ms).
 export interface Restored {
   record?: { data: JobRecord; ref: RefLabel; at: number };
-  deps: Partial<Record<Pm, { ref: RefLabel; key: string; at: number }>>;
+  deps: Partial<
+    Record<Pm, { ref: RefLabel; key: string; at: number; landed: number }>
+  >;
 }
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
