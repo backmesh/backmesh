@@ -27,7 +27,13 @@ import { z } from 'zod';
 
 import { NeedsPlan, PlanChanged, UsageError } from './errors.js';
 import { hashPlan, type UpgradePlan } from './plan.js';
-import { checkHosted, checkPinned, hostedApi } from './prerequisites.js';
+import {
+  checkHosted,
+  checkPinned,
+  hostedApi,
+  LOGINS,
+  regionEnv,
+} from './prerequisites.js';
 import {
   changed,
   changeLines,
@@ -47,7 +53,7 @@ import {
   listenerVmId,
   startListener,
 } from './listener-vm.js';
-import type { Cloud } from '../runners/classes.js';
+import type { Cloud, CloudTarget } from '../runners/classes.js';
 import { keyFrom, type SignInCheck } from './github-sign-in.js';
 import {
   clusterIdOf,
@@ -62,12 +68,17 @@ import {
 } from './installation.js';
 import { readApiVersion, readListener, type StatusReport } from './status.js';
 import {
+  applyRole,
   classesOf,
+  listedAccount,
+  type Listed,
   noGpuLine,
   noKvmLine,
   planRegions,
   PUBLIC_REPOS_LINE,
   runnerClouds,
+  signInRequired,
+  SIGNED_IN,
   takesRegions,
 } from './install.js';
 import { parseRoutes } from '../listener/routes.js';
@@ -251,6 +262,8 @@ export async function upgrade(
   // read until a run without them has done that.
   const read = [];
   const revived: string[] = [];
+  // Every org's runner clouds, by connection, for their role setup.
+  const connections = new Map<string, CloudTarget>();
   for (const found of installation.orgs) {
     const { why, read: first } = await stalled(found, exec);
     if (why && planOnly) {
@@ -293,7 +306,19 @@ export async function upgrade(
     }
     const home = homeOf(routes);
     read.push({ listener, running, org, targets, home });
+    for (const target of all) {
+      if (!connections.has(target.credentials)) {
+        connections.set(target.credentials, target);
+      }
+    }
   }
+  const roles = await roleConnections([...connections.values()], run);
+  for (const { cloud, credentials, account } of roles) {
+    print(
+      `${cloud}'s role connection ${credentials} in ${SIGNED_IN[cloud]} ${account}: upgrade re-applies its setup through your ${LOGINS[cloud][0][0]} CLI, for this release's runner permissions.`,
+    );
+  }
+  if (!planOnly) await reapplyRoles(roles, deps);
   // Each org's classes, planned again with the pinned catalog's types,
   // before any listener changes.
   const catalogs = anycloudRunners(run);
@@ -355,6 +380,11 @@ export async function upgrade(
   const upgradePlan: UpgradePlan = {
     anycloud: { from, to: release.anycloud },
     images: { runner: release.runnerImage, listener: release.listenerImage },
+    roles: roles.map(({ cloud, credentials, account }) => ({
+      cloud,
+      credentials,
+      account,
+    })),
     orgs: planned.map(({ org, running, changes, classes }) => ({
       org,
       current: fingerprint(running),
@@ -377,6 +407,7 @@ export async function upgrade(
   const cancelled = (then: string) => {
     const done = [
       ...(apiUpgraded ? ['the control plane updated'] : []),
+      ...(roles.length ? ['the role setup re-applied'] : []),
       ...revived.map((org) => `${org}'s listener started again`),
     ];
     return done.length
@@ -666,4 +697,46 @@ async function connectionOf(cloud: Cloud, url: string, deps: UpgradeDeps) {
     await deps.run(['credentials', 'list', '--json']),
   ) as { name: string }[];
   return installConnection(cloud, clusterIdOf(url), listed)?.name;
+}
+
+// The runner clouds' role connections, with their accounts; a key
+// connection, as our CI's override has, has no setup to re-apply.
+async function roleConnections(targets: CloudTarget[], run: RunAnycloud) {
+  const listed = JSON.parse(
+    await run(['credentials', 'list', '--json']),
+  ) as Listed[];
+  return targets.flatMap((target) => {
+    const entry = listed.find((e) => e.name === target.credentials);
+    const account = entry && listedAccount(target.cloud, entry);
+    return account ? [{ ...target, account }] : [];
+  });
+}
+
+// A release's runners can need new permissions, as anycloud 0.1.81's VM Job
+// network does, and the control plane serves the role setup that grants
+// them, so upgrade re-applies each one right after the control plane moves,
+// before any listener rolls, and on every run. anycloud converges the cloud
+// side and saves the same connection again. The AWS stack's region is
+// install's: the runners' first region, unless the user set one.
+async function reapplyRoles(
+  roles: Awaited<ReturnType<typeof roleConnections>>,
+  deps: UpgradeDeps,
+) {
+  for (const role of roles) {
+    const { cloud, account } = role;
+    const where = `${SIGNED_IN[cloud]} ${account}`;
+    await applyRole(role, account, regionEnv(role, deps.env), deps).catch(
+      (error: unknown) => {
+        const login = signInRequired(error);
+        const again =
+          "This release's runners need its role setup; run `backmesh upgrade` again.";
+        throw new Error(
+          login
+            ? `${cloud}'s CLI needs a sign-in to ${where}: run \`${login}\`. ${again}`
+            : `${cloud}'s role setup in ${where} wasn't re-applied: ${error instanceof Error ? error.message : String(error)}. ${again}`,
+          { cause: error },
+        );
+      },
+    );
+  }
 }

@@ -103,6 +103,9 @@ export const hashPlan = (plan: object) =>
 export interface UpgradePlan {
   anycloud: { from: string; to: string };
   images: { runner: string; listener: string };
+  // The runner clouds' role connections, whose setup it re-applies (no
+  // consent: the release needs it).
+  roles: { cloud: string; credentials: string; account: string }[];
   orgs: {
     org: string;
     // The listener it read (`fingerprint`), and what changes in its runners.

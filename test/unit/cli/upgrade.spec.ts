@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { StatusReport } from '../../../src/cli/status.js';
+import { StepFailed } from '../../../src/anycloud/binary.js';
 import { GitHubError } from '../../../src/app/github.js';
 import { NeedsPlan, PlanChanged, UsageError } from '../../../src/cli/errors.js';
 import { PUBLIC_REPOS_LINE } from '../../../src/cli/install.js';
@@ -400,7 +401,7 @@ const ROLL = `roll ${VM.acme}`;
 const rolledAny = (calls: string[]) => calls.some((c) => c.startsWith('roll '));
 const mutations = (calls: string[]) =>
   calls.filter((c) =>
-    /^(api upgrade|api status --watch|api access|api token rotate|vm |roll |start )/.test(
+    /^(api upgrade|api status --watch|api access|api token rotate|credentials new|vm |roll |start )/.test(
       c,
     ),
   );
@@ -1556,6 +1557,125 @@ describe('upgrade', () => {
       expect(result.listeners).toEqual([
         { org: 'acme', image: RELEASE.listenerImage, rolled: true },
       ]);
+    });
+  });
+
+  describe("the runner clouds' role setup", () => {
+    const awsAndGcp = JSON.stringify(
+      planClasses(
+        [
+          { cloud: 'aws', region: 'us-east-2', credentials: 'bm-aws' },
+          { cloud: 'gcp', region: 'us-central1', credentials: 'bm-gcp' },
+        ],
+        catalogs({ aws: CATALOG.aws, gcp: CATALOG.gcp }),
+        'aws',
+      ).classes,
+    );
+    // Role connections, as `credentials list --json` shows them, and each
+    // re-apply's environment.
+    const withRoles = (over: Parameters<typeof setUp>[0] = {}) => {
+      const set = setUp({ runners: awsAndGcp, ...over });
+      const run = set.deps.run;
+      const envs: Record<string, NodeJS.ProcessEnv | undefined> = {};
+      const answer = async (args: string[], env?: NodeJS.ProcessEnv) => {
+        if (args.join(' ') === 'credentials list --json') {
+          await run(args);
+          return JSON.stringify([
+            {
+              name: 'bm-aws',
+              kind: 'role',
+              roleArn: 'arn:aws:iam::111122223333:role/anycloud-role',
+            },
+            {
+              name: 'bm-gcp',
+              kind: 'role',
+              serviceAccountEmail:
+                'anycloud-role@proj-1.iam.gserviceaccount.com',
+            },
+          ]);
+        }
+        if (args[0] === 'credentials' && args[1] === 'new') {
+          envs[args[2]!] = env;
+          await run(args);
+          const account = args[2] === 'bm-aws' ? '111122223333' : 'proj-1';
+          return JSON.stringify({ name: args[2], account });
+        }
+        return run(args);
+      };
+      set.deps.run = set.deps.runLong = answer;
+      return { ...set, envs };
+    };
+    const REAPPLIED = [
+      'credentials new bm-aws --provider aws --role --apply --json',
+      'credentials new bm-gcp --provider gcp --role --apply --project-id proj-1 --json',
+    ];
+
+    it('re-applies each role connection right after the API moves, before any roll', async () => {
+      const { deps, calls, envs, lines } = withRoles();
+      await upgrade(deps);
+      expect(mutations(calls)).toEqual([
+        'api upgrade --sign-in-apps 5622376',
+        'api status --watch --json',
+        ...REAPPLIED,
+        ROLL,
+      ]);
+      // The AWS stack's region, as install's.
+      expect(envs['bm-aws']).toEqual({ AWS_REGION: 'us-east-2' });
+      expect(lines).toEqual(
+        expect.arrayContaining([
+          "aws's role connection bm-aws in account 111122223333: upgrade re-applies its setup through your aws CLI, for this release's runner permissions.",
+          "gcp's role connection bm-gcp in project proj-1: upgrade re-applies its setup through your gcloud CLI, for this release's runner permissions.",
+        ]),
+      );
+    });
+
+    it('re-applies it on a re-run with the API already current', async () => {
+      const { deps, calls } = withRoles({
+        version: RELEASE.anycloud,
+        image: RELEASE.listenerImage,
+        runnerImage: RELEASE.runnerImage,
+      });
+      await upgrade(deps);
+      expect(mutations(calls)).toEqual(REAPPLIED);
+    });
+
+    it('names it in the plan, which changes nothing', async () => {
+      const { deps, calls, lines } = withRoles({
+        version: RELEASE.anycloud,
+        image: RELEASE.listenerImage,
+      });
+      const plan = await upgrade(deps, { plan: true });
+      expect(plan).toMatchObject({
+        roles: [
+          { cloud: 'aws', credentials: 'bm-aws', account: '111122223333' },
+          { cloud: 'gcp', credentials: 'bm-gcp', account: 'proj-1' },
+        ],
+      });
+      expect(lines).toContain(
+        "aws's role connection bm-aws in account 111122223333: upgrade re-applies its setup through your aws CLI, for this release's runner permissions.",
+      );
+      expect(mutations(calls)).toEqual([]);
+    });
+
+    it('skips a key connection, as our CI has', async () => {
+      const { deps, calls } = setUp({ runners: awsAndGcp });
+      await upgrade(deps);
+      expect(calls.some((c) => c.startsWith('credentials new'))).toBe(false);
+    });
+
+    it('stops before any roll when a re-apply fails, saying to run upgrade again', async () => {
+      const { deps, calls } = withRoles();
+      const run = deps.runLong;
+      deps.run = deps.runLong = async (args, env) => {
+        if (args[2] !== 'bm-gcp') return run(args, env);
+        calls.push(args.join(' '));
+        const stdout = `${JSON.stringify({ actionRequired: { command: 'gcloud auth login' } })}\n`;
+        throw new StepFailed(args, stdout, '', { cause: new Error('exit') });
+      };
+      await expect(upgrade(deps)).rejects.toThrow(
+        "gcp's CLI needs a sign-in to project proj-1: run `gcloud auth login`. This release's runners need its role setup; run `backmesh upgrade` again.",
+      );
+      expect(rolledAny(calls)).toBe(false);
     });
   });
 });

@@ -29,9 +29,18 @@ It plans each org's labels again from the release's catalog, with each
 cloud's [regions](/install/#regions) recomputed the same way install's are —
 the fixed candidate list, narrowed to what your account allows — never kept
 from an earlier run, so a region that's added or an account policy that
-changes reaches an existing org on its next `upgrade`. It reads nothing
-through your cloud CLI, so it needs no cloud sign-in. To add a cloud, run
+changes reaches an existing org on its next `upgrade`. To add a cloud, run
 `backmesh install`.
+
+Right after the control plane updates, and before any listener restarts,
+`upgrade` re-applies the role setup of each cloud your runners use, through
+your signed-in cloud CLI, as install made it: a release's runners can need
+rights the role doesn't have yet. So `upgrade` needs each runner cloud's CLI
+signed in to the account, project or subscription install used, and `--plan`
+names each one. It runs on every `upgrade`, and changes nothing when the role
+already matches. If it stops there, sign in as it says and run
+`backmesh upgrade` again; runners that start before it finishes can fail to
+launch, and their jobs get new runners once it has.
 
 Pass `--runners <cloud>` (repeatable) to list every cloud the runners keep: a
 cloud you leave out is removed. Its labels stop taking jobs, its runners

@@ -44,7 +44,9 @@ the control-plane tools its release pins into `~/.backmesh` and checks their
 SHA-256 digest, so it needs network access to GitHub's release downloads.
 
 Install creates the control plane and each cloud's role through your signed-in
-cloud CLI, as you, so that identity needs the rights to create them:
+cloud CLI, as you, so that identity needs the rights to create them;
+`backmesh upgrade` re-applies each role the same way, to grant what a new
+release's runners need:
 
 - **AWS:** a CloudFormation stack with an IAM role and OIDC provider, plus
   `ec2:DescribeInstances`, `ec2:DescribeVolumes` and `ec2:ModifyVolume`, which

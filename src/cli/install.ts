@@ -480,7 +480,7 @@ const roleLeft = (cloud: Cloud, apiUrl: string) =>
       'the anycloud-role deployment and resource group, the custom role, and its role assignment',
   })[cloud];
 
-type Listed = {
+export type Listed = {
   name: string;
   kind?: string;
   roleArn?: string;
@@ -490,7 +490,7 @@ type Listed = {
 
 // A saved role connection's account, as `credentials list --json` shows
 // its identifiers; undefined for a key connection (our CI's override).
-const listedAccount = (cloud: Cloud, entry: Listed) => {
+export const listedAccount = (cloud: Cloud, entry: Listed) => {
   if (entry.kind !== 'role') return undefined;
   if (cloud === 'aws') return entry.roleArn?.split(':')[4];
   if (cloud === 'gcp') {
@@ -503,7 +503,7 @@ const listedAccount = (cloud: Cloud, entry: Listed) => {
 
 // `--apply --json`'s refusals: a signed-out cloud CLI's `actionRequired`
 // names the login command.
-const signInRequired = (error: unknown) => {
+export const signInRequired = (error: unknown) => {
   if (!(error instanceof StepFailed)) return undefined;
   try {
     const { actionRequired } = JSON.parse(
@@ -521,6 +521,49 @@ const signInRequired = (error: unknown) => {
 // runs again after each wait.
 const INVALID_TARGET = /\binvalid_target\b/;
 const PROPAGATION_WAITS_MS = [10_000, 20_000, 30_000, 60_000];
+
+// `credentials new <name> --role --apply --json` through the user's cloud
+// CLI, in `account`: install's setup, and upgrade's re-apply, which anycloud
+// converges on the same cloud side and saves again as a no-op. Returns the
+// account the CLI applied in.
+export async function applyRole(
+  { cloud, credentials }: Pick<CloudTarget, 'cloud' | 'credentials'>,
+  account: string,
+  env: NodeJS.ProcessEnv,
+  deps: Pick<InstallDeps, 'runLong' | 'wait'> & {
+    print: (line: string) => void;
+  },
+): Promise<string | undefined> {
+  for (let i = 0; ; i++) {
+    try {
+      const out = await deps.runLong(
+        [
+          ...['credentials', 'new', credentials, '--provider', cloud],
+          ...['--role', '--apply', ...accountArgs(cloud, account), '--json'],
+        ],
+        env,
+      );
+      return (
+        JSON.parse(out.trim().split('\n').at(-1) ?? '{}') as {
+          account?: string;
+        }
+      ).account;
+    } catch (error) {
+      if (cloud !== 'gcp' || !INVALID_TARGET.test(String(error))) throw error;
+      const ms = PROPAGATION_WAITS_MS[i];
+      if (ms === undefined) {
+        throw new Error(
+          `GCP still refused the new role's token after ${PROPAGATION_WAITS_MS.reduce((a, b) => a + b) / 60_000} minutes: ${(error as Error).message}`,
+          { cause: error },
+        );
+      }
+      deps.print(
+        `GCP doesn't take the new role's token yet, as a new workload identity provider takes a minute or two to propagate; trying again in ${ms / 1000}s.`,
+      );
+      await (deps.wait ?? ((t) => new Promise((r) => setTimeout(r, t))))(ms);
+    }
+  }
+}
 
 // Step 3, on the hosted API after step 5: each cloud's role connection,
 // whose trust names the hosted API's issuer, so it can't come before
@@ -594,39 +637,10 @@ export async function connectClouds(
     deps.ui.print(
       `Connecting ${cloud} with a role connection in ${SIGNED_IN[cloud]} ${account}, through your ${LOGINS[cloud][0][0]} CLI.`,
     );
-    const apply = async (): Promise<string> => {
-      for (let i = 0; ; i++) {
-        try {
-          return await deps.runLong(
-            [
-              ...args,
-              '--role',
-              '--apply',
-              ...accountArgs(cloud, account),
-              '--json',
-            ],
-            env,
-          );
-        } catch (error) {
-          if (cloud !== 'gcp' || !INVALID_TARGET.test(String(error)))
-            throw error;
-          const ms = PROPAGATION_WAITS_MS[i];
-          if (ms === undefined) {
-            throw new Error(
-              `GCP still refused the new role's token after ${PROPAGATION_WAITS_MS.reduce((a, b) => a + b) / 60_000} minutes: ${(error as Error).message}`,
-              { cause: error },
-            );
-          }
-          deps.ui.print(
-            `GCP doesn't take the new role's token yet, as a new workload identity provider takes a minute or two to propagate; trying again in ${ms / 1000}s.`,
-          );
-          await (deps.wait ?? ((t) => new Promise((r) => setTimeout(r, t))))(
-            ms,
-          );
-        }
-      }
-    };
-    const out = await apply().catch((error: unknown) => {
+    const made = await applyRole(target, account, env, {
+      ...deps,
+      print: deps.ui.print,
+    }).catch((error: unknown) => {
       const login = signInRequired(error);
       const again = 'Run install again; the control plane stays and is reused.';
       throw new Error(
@@ -636,10 +650,7 @@ export async function connectClouds(
         { cause: error },
       );
     });
-    const saved = JSON.parse(out.trim().split('\n').at(-1) ?? '{}') as {
-      account?: string;
-    };
-    if (saved.account !== account) await wrongAccount(saved.account);
+    if (made !== account) await wrongAccount(made);
   }
 }
 
