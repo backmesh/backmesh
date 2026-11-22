@@ -244,8 +244,9 @@ cache_upload_limit=480
 cache_copy_every=2
 # The automatic caches: the job-started
 # hook's wait for the restores, and the least time left for the save. The
-# token comes when anycloud next delivers the runner's Secret, up to 30 s
-# after the listener saves it at JobStarted, so a later one is given up.
+# listener saves the token about 1 s after it hears of the job's start, from
+# the REST jobs list about 2 s after it or from JobStarted, and anycloud
+# delivers it within about 2 s; a later one is given up.
 auto_wait=10
 auto_save_min=60
 
