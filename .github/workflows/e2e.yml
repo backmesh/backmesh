@@ -717,8 +717,14 @@ jobs:
           fi
           left+=($(gcloud iam workload-identity-pools list --location=global --format='value(name.basename())' \
             | sed -n "s/^$ANYCLOUD_ROLE_POOL\$/pool:&/p"))
-          left+=($(gcloud iam service-accounts list --filter="email~^$ANYCLOUD_ROLE_SERVICE_ACCOUNT@" --format='value(email)' \
-            | named service-account:))
+          # IAM's list keeps a just-deleted account for a while, so give the
+          # role connection's teardown up to 2 minutes to show.
+          for _ in {1..12}; do
+            role_left=$(gcloud iam service-accounts list --filter="email~^$ANYCLOUD_ROLE_SERVICE_ACCOUNT@" --format='value(email)')
+            [[ -z $role_left ]] && break
+            sleep 10
+          done
+          left+=($(named service-account: <<<"$role_left"))
           # Grants to the run's accounts, deleted ones included, and, unless
           # the guard found an earlier run's, of the custom role.
           custom=projects/$project/roles/$ANYCLOUD_ROLE_CUSTOM_ROLE
