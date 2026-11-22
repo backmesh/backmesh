@@ -29,8 +29,8 @@ for (const f of files)
 const latest = all.at(-1);
 if (!latest) throw new Error('no results');
 
-const s = (v: number | null) =>
-  v === null ? 'n/a' : v < 10 ? `${v.toFixed(1)} s` : `${Math.round(v)} s`;
+// Whole seconds: GitHub's times and the kernel's start are no finer.
+const s = (v: number | null) => (v === null ? 'n/a' : `${Math.round(v)} s`);
 const row = (cells: string[]) => `| ${cells.join(' | ')} |`;
 const head = (cells: string[]) =>
   [row(cells), row(cells.map(() => '---'))].join('\n');
@@ -180,7 +180,8 @@ ${runs}
 
 ### By version
 
-Medians over every build's jobs.
+Medians over every build's jobs, so they mix the builds: compare a label
+across versions only while bench.yml's builds are the same.
 
 ${trend}
 

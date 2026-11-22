@@ -53,8 +53,12 @@ export interface Results {
 // planner, has its earlier pieces count 0.
 export const SEGMENTS = [
   ['listener', 'Queued to runner submitted', 'submitted'],
-  ['vm', 'VM launched and booted', 'vm_booted'],
-  ['container', 'Docker installed, runner image pulled', 'container_started'],
+  ['vm', 'VM launched (submitted to kernel start)', 'vm_booted'],
+  [
+    'container',
+    'OS boot, Docker install, image pull, container start',
+    'container_started',
+  ],
   ['runner', 'Runner connected to GitHub', 'runner_listening'],
   ['assigned', 'GitHub assigned the job', 'startedAt'],
   ['setUpJob', 'Set up job (actions downloaded)', 'job_received'],
