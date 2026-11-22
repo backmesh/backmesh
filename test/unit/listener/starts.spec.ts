@@ -25,7 +25,9 @@ const rest = (fields: Partial<GateJob> = {}): GateJob => ({
   ...fields,
 });
 
-function starts(list: () => Promise<GateJob[]> | GateJob[] = () => []) {
+function starts(
+  list: (run: WorkflowRun) => Promise<GateJob[]> | GateJob[] = () => [],
+) {
   let now = 0;
   const reads: WorkflowRun[] = [];
   const started: { route: Route; job: JobMessage; startedAt: number }[] = [];
@@ -34,7 +36,7 @@ function starts(list: () => Promise<GateJob[]> | GateJob[] = () => []) {
   const watch = new Starts({
     jobs: async (run) => {
       reads.push(run);
-      return list();
+      return list(run);
     },
     waiting: (route, runner) => route.code === 'a4' && waiting.has(runner),
     started: (route, job, startedAt) => {
@@ -183,10 +185,11 @@ describe('Starts', () => {
       status: 429,
       response: { headers: { 'retry-after': '30' } },
     });
-    const s = starts(() => {
+    const s = starts(({ runId }) => {
       if (fail) throw fail;
-      return [rest()];
+      return [rest({ runnerName: `bmabc12-a4-0000000${runId}` })];
     });
+    s.waiting.add('bmabc12-a4-00000001').add('bmabc12-a4-00000002');
     s.watch.observe(ROUTE, assignedJob({ workflowRunId: 1 }));
     s.watch.observe(ROUTE, assignedJob({ workflowRunId: 2 }));
     await s.watch.poll();

@@ -93,9 +93,11 @@ export interface CacheDeps {
 interface Runner {
   name: string;
   savedAt: number;
-  // `at`: when the listener heard JobStarted.
-  job?: { route: Route; message: JobMessage; at: number };
-  // Its first `ready` save is logged, with the time from JobStarted.
+  // `at`: when the listener heard of the start; `rest`: GitHub's start, when
+  // the REST jobs list told it before JobStarted (`starts.ts`).
+  job?: { route: Route; message: JobMessage; at: number; rest?: number };
+  // Its first `ready` save is logged, with the time from hearing of the
+  // start, from which source, and how long after GitHub's start that was.
   ready?: true;
   grants?: { region: string; bucket: string; refs: Refs };
   next?: number;
@@ -155,11 +157,19 @@ export class CacheTokens {
     await this.remove(runner.name);
   }
 
-  started(route: Route, message: JobMessage): void {
+  // Whether a runner of this listener's is still waiting for its job.
+  waiting(name: string): boolean {
+    const runner = this.runners.get(name);
+    return runner !== undefined && runner.job === undefined;
+  }
+
+  // At JobStarted, or the REST jobs list's start first, `rest` its time;
+  // whichever comes second mints nothing.
+  started(route: Route, message: JobMessage, rest?: number): void {
     const runner = this.runners.get(message.runnerName);
     // Another listener's, one with no Secret, or a redelivery.
     if (!runner || runner.job) return;
-    runner.job = { route, message, at: this.now() };
+    runner.job = { route, message, at: this.now(), rest };
     void this.mint(runner);
   }
 
@@ -286,11 +296,15 @@ export class CacheTokens {
       runner.next = this.now() + RENEW_MS;
       if (!runner.ready) {
         runner.ready = true;
+        const { at, rest } = runner.job!;
+        const start = rest ?? m.runnerAssignTime;
         // The runner's restores wait for this.
         this.deps.log({
           msg: 'cache token ready',
           runner: runner.name,
-          ms: this.now() - runner.job!.at,
+          ms: this.now() - at,
+          source: rest === undefined ? 'JobStarted' : 'jobs list',
+          heard: start === null ? null : at - start,
         });
       }
     } catch (error) {

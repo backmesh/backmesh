@@ -369,7 +369,15 @@ describe('CacheTokens', () => {
     expect(flaky.mints).toHaveLength(3);
     expect(
       flaky.logs.filter((entry) => entry.msg === 'cache token ready'),
-    ).toEqual([{ msg: 'cache token ready', runner: name, ms: 30_000 }]);
+    ).toEqual([
+      {
+        msg: 'cache token ready',
+        runner: name,
+        ms: 30_000,
+        source: 'JobStarted',
+        heard: null,
+      },
+    ]);
   });
 
   it('keeps a Secret deleted when its Job ends during a mint', async () => {
