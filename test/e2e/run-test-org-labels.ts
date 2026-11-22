@@ -95,8 +95,9 @@ const url = await runOnTestOrg(
     matrix,
     ref,
     nonce,
-    // The label jobs' 10 minutes each, after a fresh install's first boots.
-    timeoutMs: 60 * 60_000,
+    // The label jobs and the warm-hit chain, up to 10 jobs in series,
+    // 10 minutes each, after a fresh install's first boots.
+    timeoutMs: 120 * 60_000,
   },
 );
 console.log(`${url} passed`);

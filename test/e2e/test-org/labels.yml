@@ -58,77 +58,171 @@ jobs:
       ref: ${{ needs.read.outputs.ref }}
 
   # The cache's warm hit: a save uploads after its job, from the runner, so
-  # only the next job's restore shows it landed; every release before v0.5.3
+  # only a later job's restore shows it landed; every release before v0.5.3
   # lost every one. Here, not in e2e-labels.yml: a job in another
-  # repository's reusable workflow only reads the cache, so this one saves
-  # as a push to a run/<nonce> branch does in a customer's repository.
-  # Each region has its own bucket, so a restore whose runner landed in
-  # another region than the save's fails too: rerun it.
-  cache-save:
+  # repository's reusable workflow only reads the cache, so these save as a
+  # push to a run/<nonce> branch does in a customer's repository. Each
+  # region has its own bucket, which only that region's runners read, and
+  # a label's runners land in any of its regions: each job in turn restores
+  # if an earlier one saved to its region's bucket, or else saves there.
+  # One job more than a cloud's regions (regions.ts) always hits.
+  warm-1:
     needs: read
     runs-on: ${{ fromJson(needs.read.outputs.matrix).include[0].label }}
     timeout-minutes: 10
     permissions:
       contents: read
-    outputs:
-      bucket: ${{ steps.bucket.outputs.bucket }}
-    steps:
+    outputs: &warm-outputs
+      saved: ${{ steps.warm.outputs.saved }}
+      hit: ${{ steps.warm.outputs.hit }}
+    steps: &warm
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: backmesh/backmesh
           ref: ${{ needs.read.outputs.ref }}
       - name: The cache token is ready
         id: bucket
-        run: &ready |
+        run: |
           file=/run/anycloud-secrets/_bm-cache-$RUNNER_NAME/BACKMESH_CACHE
           # The action gives a token pending past 20 s up for the whole job.
           for _ in $(seq 60); do [[ $(jq -r .state "$file") == pending ]] || break; sleep 1; done
           [[ $(jq -r .state "$file") == ready ]] || { echo "::error::the cache token isn't ready: $(jq -c '{state, reason}' "$file")"; exit 1; }
           echo "bucket=$(jq -r .bucket "$file")" >>"$GITHUB_OUTPUT"
-      - run: mkdir warm && head -c 100000 /dev/urandom >warm/blob
-      - uses: ./cache/save
+      # An earlier job's runner uploads after its job, so a restore tries
+      # for 5 minutes.
+      - name: The job restores an earlier job's save to its bucket, or saves there
+        id: warm
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          BUCKET: ${{ steps.bucket.outputs.bucket }}
+          INPUT_PATH: warm
+          INPUT_KEY: e2e-warm-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          saved=$(jq -c '[.[].outputs.saved // empty | fromjson[]]' <<<"$NEEDS")
+          if jq -e --arg b "$BUCKET" 'any(. == $b)' <<<"$saved" >/dev/null; then
+            for _ in $(seq 20); do
+              node cache/dist/restore.mjs
+              [[ -s warm/blob ]] && { echo hit=true >>"$GITHUB_OUTPUT"; exit 0; }
+              sleep 15
+            done
+            echo "::error::the save never reached $BUCKET: the runner's upload after the job failed"
+            exit 1
+          fi
+          echo "saved=$(jq -c --arg b "$BUCKET" '. + [$b]' <<<"$saved")" >>"$GITHUB_OUTPUT"
+          mkdir warm && head -c 100000 /dev/urandom >warm/blob
+      - if: ${{ steps.warm.outputs.hit != 'true' }}
+        uses: ./cache/save
         with:
           path: warm
           key: e2e-warm-${{ github.run_id }}-${{ github.run_attempt }}
       - name: The save left a plan for the runner, not GitHub's cache
+        if: ${{ steps.warm.outputs.hit != 'true' }}
         run: ls "$GITHUB_WORKSPACE"/../../_backmesh-cache/*/plan.json
 
-  cache-restore:
-    needs: [read, cache-save]
+  warm-2:
+    needs: [read, warm-1]
+    if: ${{ needs.warm-1.outputs.hit != 'true' }}
     runs-on: ${{ fromJson(needs.read.outputs.matrix).include[0].label }}
     timeout-minutes: 10
     permissions:
       contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: backmesh/backmesh
-          ref: ${{ needs.read.outputs.ref }}
-      - name: The cache token is ready
-        id: bucket
-        run: *ready
-      - name: The runner reads the save's bucket
-        env:
-          SAVED_TO: ${{ needs.cache-save.outputs.bucket }}
-          BUCKET: ${{ steps.bucket.outputs.bucket }}
-        run: |
-          [[ $BUCKET == "$SAVED_TO" ]] || { echo "::error::the save went to $SAVED_TO and this runner reads $BUCKET, another region's: rerun the jobs"; exit 1; }
-      # The save's runner uploads after its job, so this tries for 5 minutes.
-      - name: The next job restores the save
-        env:
-          INPUT_PATH: warm
-          INPUT_KEY: e2e-warm-${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          for _ in $(seq 20); do
-            node cache/dist/restore.mjs
-            [[ -s warm/blob ]] && exit 0
-            sleep 15
-          done
-          echo "::error::the save never reached the bucket: the runner's upload after the job failed"
-          exit 1
+    outputs: *warm-outputs
+    steps: *warm
+
+  warm-3:
+    needs: [read, warm-2]
+    if: ${{ needs.warm-2.outputs.hit != 'true' }}
+    runs-on: ${{ fromJson(needs.read.outputs.matrix).include[0].label }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs: *warm-outputs
+    steps: *warm
+
+  warm-4:
+    needs: [read, warm-3]
+    if: ${{ needs.warm-3.outputs.hit != 'true' }}
+    runs-on: ${{ fromJson(needs.read.outputs.matrix).include[0].label }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs: *warm-outputs
+    steps: *warm
+
+  warm-5:
+    needs: [read, warm-4]
+    if: ${{ needs.warm-4.outputs.hit != 'true' }}
+    runs-on: ${{ fromJson(needs.read.outputs.matrix).include[0].label }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs: *warm-outputs
+    steps: *warm
+
+  warm-6:
+    needs: [read, warm-5]
+    if: ${{ needs.warm-5.outputs.hit != 'true' }}
+    runs-on: ${{ fromJson(needs.read.outputs.matrix).include[0].label }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs: *warm-outputs
+    steps: *warm
+
+  warm-7:
+    needs: [read, warm-6]
+    if: ${{ needs.warm-6.outputs.hit != 'true' }}
+    runs-on: ${{ fromJson(needs.read.outputs.matrix).include[0].label }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs: *warm-outputs
+    steps: *warm
+
+  warm-8:
+    needs: [read, warm-7]
+    if: ${{ needs.warm-7.outputs.hit != 'true' }}
+    runs-on: ${{ fromJson(needs.read.outputs.matrix).include[0].label }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs: *warm-outputs
+    steps: *warm
+
+  warm-9:
+    needs: [read, warm-8]
+    if: ${{ needs.warm-8.outputs.hit != 'true' }}
+    runs-on: ${{ fromJson(needs.read.outputs.matrix).include[0].label }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs: *warm-outputs
+    steps: *warm
+
+  warm-10:
+    needs: [read, warm-9]
+    if: ${{ needs.warm-9.outputs.hit != 'true' }}
+    runs-on: ${{ fromJson(needs.read.outputs.matrix).include[0].label }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs: *warm-outputs
+    steps: *warm
 
   result:
-    needs: [read, labels, cache-save, cache-restore]
+    needs:
+      - read
+      - labels
+      - warm-1
+      - warm-2
+      - warm-3
+      - warm-4
+      - warm-5
+      - warm-6
+      - warm-7
+      - warm-8
+      - warm-9
+      - warm-10
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -137,8 +231,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - env:
-          # The first of the label, save and restore jobs that didn't succeed.
-          CONCLUSION: ${{ needs.labels.result != 'success' && needs.labels.result || needs.cache-save.result != 'success' && needs.cache-save.result || needs.cache-restore.result }}
+          # The label jobs', then success on a warm hit: the warm jobs
+          # after it are skipped, and none before it failed.
+          CONCLUSION: ${{ needs.labels.result != 'success' && needs.labels.result || contains(needs.*.outputs.hit, 'true') && 'success' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'failure' }}
           URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           jq -n --arg conclusion "$CONCLUSION" --arg url "$URL" '{$conclusion, $url}' >result.json

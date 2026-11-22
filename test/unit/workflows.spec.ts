@@ -14,6 +14,7 @@ import { load } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 
 import { deriveRefs } from '../../src/listener/cache.js';
+import { RUNNER_REGIONS } from '../../src/runners/regions.js';
 
 // A fork's pull request must never land on backmesh's private runners, read a
 // secret, take an environment or get a token that writes. ci.yml dogfoods the
@@ -1477,9 +1478,12 @@ setInterval(() => {}, 1000);
     );
     const called = labels().jobs.labels!.uses!.replace(/@main$/, '');
     expect(own(`${called}@refs/heads/main`)).toBeUndefined();
-    expect(labels().jobs['cache-save']).toBeDefined();
-    expect(labels().jobs['cache-restore']).toBeDefined();
-    expect(read('e2e-labels.yml').jobs['cache-save']).toBeUndefined();
+    expect(labels().jobs['warm-1']).toBeDefined();
+    expect(
+      Object.keys(read('e2e-labels.yml').jobs).filter((j) =>
+        j.startsWith('warm'),
+      ),
+    ).toEqual([]);
   });
 
   it("pushes result.json to the same branch whatever the label jobs did, but doesn't re-create a deleted one", () => {
@@ -1488,14 +1492,13 @@ setInterval(() => {}, 1000);
     expect(job.needs).toEqual([
       'read',
       'labels',
-      'cache-save',
-      'cache-restore',
+      ...Object.keys(labels().jobs).filter((j) => j.startsWith('warm-')),
     ]);
     expect(job.permissions).toEqual({ contents: 'write' });
     const step = job.steps!.find((s) => s.run?.includes('result.json'))!;
     expect(step.env).toMatchObject({
       CONCLUSION:
-        "${{ needs.labels.result != 'success' && needs.labels.result || needs.cache-save.result != 'success' && needs.cache-save.result || needs.cache-restore.result }}",
+        "${{ needs.labels.result != 'success' && needs.labels.result || contains(needs.*.outputs.hit, 'true') && 'success' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'failure' }}",
     });
     const dir = mkdtempSync(join(tmpdir(), 'result-'));
     const out = runStep(`cd ${dir}\n${step.run!}`, {
@@ -1520,14 +1523,16 @@ setInterval(() => {}, 1000);
   });
 });
 
-// The test org's warm hit: the next job restores what a job saved, which
-// its runner uploads after the job.
+// The test org's warm hit: a later job restores what a job saved, which
+// its runner uploads after the job. Each region has its own bucket and a
+// label's runners land in any of its regions, so the jobs run in turn until
+// one lands where an earlier one saved.
 describe("labels.yml's cache warm hit", () => {
   const { jobs } = load(
     readFileSync('test/e2e/test-org/labels.yml', 'utf8'),
   ) as Workflow;
-  const save = jobs['cache-save']!.steps!;
-  const steps = jobs['cache-restore']!.steps!;
+  const warm = Object.keys(jobs).filter((j) => j.startsWith('warm-'));
+  const steps = jobs['warm-1']!.steps!;
   const named = (prefix: string) =>
     steps.find((s) => s.name?.startsWith(prefix))!;
   const run = (
@@ -1549,6 +1554,7 @@ describe("labels.yml's cache warm hit", () => {
     return {
       ...result,
       output,
+      blob: existsSync(join(dir, 'warm/blob')),
       calls: count('calls'),
       sleeps: count('sleeps'),
     };
@@ -1560,23 +1566,53 @@ describe("labels.yml's cache warm hit", () => {
         .state) echo x >>reads; if (($(wc -l <reads) <= \${PENDING:-0})); then echo pending; else echo "$STATE"; fi ;;
         .bucket) echo b-east ;; *) echo "{}" ;; esac`,
     });
-  // The restore writes the blob on its `$HIT`th call.
-  const restore = (env: Record<string, string>) =>
-    run(named('The next job'), env, {
-      node: 'echo x >>calls; if [[ $(wc -l <calls) == "${HIT:-0}" ]]; then mkdir -p warm; echo blob >warm/blob; fi',
-    });
+  // The job in `bucket` after jobs that saved to `saved`; the restore writes
+  // the blob on its `$HIT`th call.
+  const restore = (bucket: string, saved: string[][], hit = 0) =>
+    run(
+      named('The job restores'),
+      {
+        BUCKET: bucket,
+        HIT: String(hit),
+        NEEDS: JSON.stringify({
+          read: { outputs: { matrix: '{}' } },
+          ...Object.fromEntries(
+            saved.map((s, i) => [
+              `warm-${i + 1}`,
+              { outputs: { saved: JSON.stringify(s) } },
+            ]),
+          ),
+        }),
+      },
+      {
+        node: 'echo x >>calls; if [[ $(wc -l <calls) == "$HIT" ]]; then mkdir -p warm; echo blob >warm/blob; fi',
+      },
+    );
 
-  it('restores after the save, on the same label, from its bucket', () => {
-    expect(jobs['cache-restore']!.needs).toEqual(['read', 'cache-save']);
-    expect(jobs['cache-restore']!['runs-on']).toBe(
-      jobs['cache-save']!['runs-on'],
+  it('runs in turn on the same label, one job more than any cloud has regions', () => {
+    expect(warm).toHaveLength(
+      Math.max(...Object.values(RUNNER_REGIONS).map((r) => r.length)) + 1,
     );
-    expect(named('The next job').env!.INPUT_KEY).toBe(
-      save.find((s) => s.uses === './cache/save')!.with!.key,
-    );
-    // Both wait for the token before any action reads it.
-    expect(save[1]!.run).toBe(named('The cache token').run);
-    expect(save.at(-1)!.run).toContain('_backmesh-cache/*/plan.json');
+    expect(jobs['warm-1']!.needs).toBe('read');
+    for (const [i, name] of warm.entries()) {
+      const job = jobs[name]!;
+      expect(job['runs-on']).toBe(jobs['warm-1']!['runs-on']);
+      expect(job.steps).toEqual(steps);
+      expect(job.outputs).toEqual({
+        saved: '${{ steps.warm.outputs.saved }}',
+        hit: '${{ steps.warm.outputs.hit }}',
+      });
+      if (i === 0) continue;
+      expect(job.needs).toEqual(['read', warm[i - 1]]);
+      expect(job.if).toBe(`\${{ needs.${warm[i - 1]}.outputs.hit != 'true' }}`);
+    }
+    // A save keys and restores the same entry, and leaves the runner a plan.
+    const save = steps.find((s) => s.uses === './cache/save')!;
+    expect(named('The job restores').env!.INPUT_KEY).toBe(save.with!.key);
+    expect(named('The job restores').env!.INPUT_PATH).toBe(save.with!.path);
+    expect(save.if).toBe("${{ steps.warm.outputs.hit != 'true' }}");
+    expect(steps.at(-1)!.if).toBe(save.if);
+    expect(steps.at(-1)!.run).toContain('_backmesh-cache/*/plan.json');
   });
 
   it("waits for a pending token, and fails on one that isn't ready", () => {
@@ -1592,20 +1628,31 @@ describe("labels.yml's cache warm hit", () => {
     });
   });
 
-  it("fails a runner in another region, whose bucket can't hold the save", () => {
-    const step = named('The runner reads');
-    expect(run(step, { SAVED_TO: 'b-east', BUCKET: 'b-east' }).status).toBe(0);
-    const elsewhere = run(step, { SAVED_TO: 'b-east', BUCKET: 'b-west' });
-    expect(elsewhere.status).toBe(1);
-    expect(elsewhere.stdout).toContain('another region');
+  it('saves in a region no earlier job saved to, adding its bucket', () => {
+    expect(restore('b-east', [])).toMatchObject({
+      status: 0,
+      calls: 0,
+      blob: true,
+      output: 'saved=["b-east"]\n',
+    });
+    expect(restore('b-west', [['b-east']])).toMatchObject({
+      status: 0,
+      calls: 0,
+      blob: true,
+      output: 'saved=["b-east","b-west"]\n',
+    });
   });
 
-  it('passes on a hit, retrying while the upload lands, and fails without one', () => {
-    expect(restore({ HIT: '3' })).toMatchObject({ status: 0, calls: 3 });
-    const missed = restore({});
-    expect(missed).toMatchObject({ status: 1, calls: 20 });
-    expect(missed.stdout).toContain(
-      '::error::the save never reached the bucket',
-    );
+  it('restores in a region an earlier job saved to, retrying while the upload lands, and fails without one', () => {
+    expect(
+      restore('b-east', [['b-east'], ['b-east', 'b-west']], 3),
+    ).toMatchObject({
+      status: 0,
+      calls: 3,
+      output: 'hit=true\n',
+    });
+    const missed = restore('b-east', [['b-east']]);
+    expect(missed).toMatchObject({ status: 1, calls: 20, output: '' });
+    expect(missed.stdout).toContain('::error::the save never reached b-east');
   });
 });
