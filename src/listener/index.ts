@@ -6,6 +6,7 @@ import { hostname } from 'node:os';
 import { anycloudApi } from '../anycloud/client.js';
 import { ActionsClient } from '../github/actions-client.js';
 import type { Note, WorkflowRun } from '../github/checks.js';
+import { RateBudget, watchRate } from '../github/rate-budget.js';
 import {
   cacheRun,
   gateGitHub,
@@ -143,6 +144,9 @@ const listening = control.listen(async (signal) => {
   if (standby) return void (await stopped());
   await waitForToken(tokens, log, signal);
   const octokit = installationOctokit(tokens, fetch);
+  // Every response's rate limit, for the reads that can wait.
+  const budget = new RateBudget();
+  watchRate(octokit, budget);
   const actions = new ActionsClient({
     org,
     octokit,
@@ -207,6 +211,7 @@ const listening = control.listen(async (signal) => {
   // GitHub's late JobStarted.
   const starts = new Starts({
     jobs: runJobs(octokit),
+    budget,
     waiting: (route, runner) =>
       codeOf(install, runner) === route.code && cache.waiting(runner),
     started: (route, job, startedAt) => cache.started(route, job, startedAt),

@@ -12,15 +12,15 @@
 //
 // The cost: each read is conditional on the run's last ETag, and a 304
 // doesn't count against the installation's hourly limit. Every read counts
-// toward GitHub's secondary limits, so at most 60 a minute, 5 at once.
-// Reads stop while the installation has less than RESERVE of its hourly
-// limit left, for the listener's own reads (a run read per job's token, the
-// planner's 300 an hour, the retry's and gate's).
+// toward GitHub's secondary limits, so at most 60 a minute, 5 at once. Reads
+// wait while the installation's budget holds them (`rate-budget.ts`): a
+// pause GitHub asked for, or the hour's reserve reached.
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import type { WorkflowRun } from '../github/checks.js';
+import type { RateBudget } from '../github/rate-budget.js';
 import type { Log } from '../github/retry.js';
-import type { GateJob, RunJobs } from '../github/runs.js';
+import type { RunJobs } from '../github/runs.js';
 import type { JobMessage } from '../github/types.js';
 import type { Route } from './routes.js';
 
@@ -28,14 +28,14 @@ const EVERY_MS = 2_000;
 const WATCH_MS = 90_000;
 const PER_MS = 60 / 60_000;
 const AT_ONCE = 5;
-// What's kept of the hourly limit: 1,500 of 5,000, 2,500 of 12,500.
-const RESERVE = (limit: number) => Math.max(1_500, limit * 0.2);
-// A 403 or 429 without a retry-after or a reset.
-const PAUSE_MS = 60_000;
+const READ_TIMEOUT_MS = 10_000;
+// A run's failed reads (a 5xx, a network error) wait 4, 8, 16, then 30 s.
+const RETRY_MAX_MS = 30_000;
 const HOUR = 3_600_000;
 
 export interface StartsDeps {
-  jobs(run: WorkflowRun, etag?: string): Promise<RunJobs>;
+  jobs(run: WorkflowRun, etag?: string, signal?: AbortSignal): Promise<RunJobs>;
+  budget: Pick<RateBudget, 'heldUntil' | 'remaining'>;
   // Whether `runner` is one of `route`'s still waiting for its job.
   waiting(route: Route, runner: string): boolean;
   // `startedAt`: GitHub's, from the list.
@@ -48,6 +48,8 @@ interface Watched {
   route: Route;
   job: JobMessage;
   at: number;
+  // The run attempt and head SHA the list first named it with.
+  attempt?: string;
 }
 
 interface Run {
@@ -55,6 +57,7 @@ interface Run {
   jobs: Map<string, Watched>;
   next: number;
   etag?: string;
+  failures: number;
 }
 
 // The hour's counts, logged as `job start reads`.
@@ -70,11 +73,10 @@ export class Starts {
   private readonly runs = new Map<string, Run>();
   private tokens = AT_ONCE;
   private filledAt: number;
-  private pausedUntil = -Infinity;
+  private heldLogged: number | undefined;
   private polling = false;
   private counts = noCounts();
   private countedAt: number;
-  private remaining: number | undefined;
 
   constructor(private readonly deps: StartsDeps) {
     this.filledAt = this.countedAt = this.now();
@@ -107,10 +109,13 @@ export class Starts {
           },
           jobs: new Map(),
           next: this.now(),
+          failures: 0,
         };
         this.runs.set(key, run);
       }
-      run.jobs.set(job.jobId, { route, job, at: this.now() });
+      // A redelivery keeps the job's window.
+      if (!run.jobs.has(job.jobId))
+        run.jobs.set(job.jobId, { route, job, at: this.now() });
     } else if (
       job.messageType === 'JobStarted' ||
       job.messageType === 'JobCompleted'
@@ -139,7 +144,7 @@ export class Starts {
         this.deps.log({
           msg: 'job start reads',
           ...this.counts,
-          remaining: this.remaining ?? null,
+          remaining: this.deps.budget.remaining ?? null,
         });
         this.counts = noCounts();
         this.countedAt = now;
@@ -156,10 +161,22 @@ export class Starts {
         if (run.jobs.size === 0) this.runs.delete(key);
         else if (run.next <= now) due.push(run);
       }
+      if (due.length === 0) return;
+      const held = this.deps.budget.heldUntil();
+      if (held !== undefined) {
+        if (held !== this.heldLogged)
+          this.deps.log({
+            msg: 'job start reads paused',
+            seconds: Math.ceil((held - now) / 1000),
+            remaining: this.deps.budget.remaining ?? null,
+          });
+        this.heldLogged = held;
+        return;
+      }
       due.sort((a, b) => a.next - b.next);
       const reads: Promise<void>[] = [];
       for (const run of due) {
-        if (now < this.pausedUntil || this.tokens < 1) break;
+        if (this.tokens < 1) break;
         this.tokens -= 1;
         run.next = now + EVERY_MS;
         reads.push(this.read(run));
@@ -170,54 +187,51 @@ export class Starts {
     }
   }
 
-  private pause(until: number, why: Record<string, unknown>) {
-    if (until <= this.pausedUntil) return;
-    this.pausedUntil = until;
-    this.deps.log({
-      msg: 'job start reads paused',
-      seconds: Math.ceil((until - this.now()) / 1000),
-      ...why,
-    });
-  }
-
   private async read(run: Run): Promise<void> {
     let listed: RunJobs;
     this.counts.reads++;
     try {
-      listed = await this.deps.jobs(run.run, run.etag);
-    } catch (error) {
+      listed = await this.deps.jobs(
+        run.run,
+        run.etag,
+        AbortSignal.timeout(READ_TIMEOUT_MS),
+      );
+      run.failures = 0;
+    } catch {
+      // A refusal for the rate limit holds the budget; anything else backs
+      // this run off.
       this.counts.failed++;
-      const until = pauseUntil(error, this.now());
-      if (until !== undefined) this.pause(until, { error: String(error) });
+      run.failures++;
+      run.next = Math.max(
+        run.next,
+        this.now() + Math.min(RETRY_MAX_MS, EVERY_MS * 2 ** run.failures),
+      );
       return;
-    }
-    const { rate } = listed;
-    if (rate) {
-      this.remaining = rate.remaining;
-      if (rate.remaining < RESERVE(rate.limit))
-        this.pause(Math.max(rate.reset, this.now() + PAUSE_MS), {
-          remaining: rate.remaining,
-          limit: rate.limit,
-        });
     }
     run.etag = listed.etag;
     if (!listed.jobs) {
       this.counts.unchanged++;
       return;
     }
+    // Those still watched once the list answered: a JobStarted heard
+    // meanwhile has started its job.
     const watched = [...run.jobs.values()];
     for (const w of watched) {
       const name = w.job.jobDisplayName;
       const named = listed.jobs.filter((job) => job.name === name);
-      // A name two jobs share can't say which one started; JobStarted can.
+      const [job] = named;
+      // A name two jobs share can't say which one started, nor a run moved
+      // to another attempt which job was assigned; JobStarted can.
+      w.attempt ??= job?.attempt;
       if (
+        !job ||
         named.length !== 1 ||
-        watched.filter((o) => o.job.jobDisplayName === name).length !== 1
+        watched.filter((o) => o.job.jobDisplayName === name).length !== 1 ||
+        job.attempt !== w.attempt
       ) {
         run.jobs.delete(w.job.jobId);
         continue;
       }
-      const [job] = named as [GateJob];
       if (job.done) run.jobs.delete(w.job.jobId);
       if (job.done || !job.runnerName || job.startedAt === null) continue;
       run.jobs.delete(w.job.jobId);
@@ -234,17 +248,4 @@ export class Starts {
       }
     }
   }
-}
-
-// When a refused read's 403 or 429 lets reads start again.
-function pauseUntil(error: unknown, now: number): number | undefined {
-  const { status, response } = error as {
-    status?: number;
-    response?: { headers?: Record<string, string | undefined> };
-  };
-  if (status !== 403 && status !== 429) return undefined;
-  const after = Number(response?.headers?.['retry-after']);
-  if (after > 0) return now + after * 1000;
-  const reset = Number(response?.headers?.['x-ratelimit-reset']) * 1000;
-  return reset > now ? reset : now + PAUSE_MS;
 }
