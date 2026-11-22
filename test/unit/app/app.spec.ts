@@ -178,12 +178,10 @@ describe('anycloudControl', () => {
     expect(await anycloud.issueServiceToken('backmesh-acme')).toBe('acsvc_1');
     expect(await anycloud.rotateServiceToken('backmesh-acme')).toBe('acsvc_2');
     await anycloud.removeService('backmesh-acme');
-    await anycloud.removeServiceAccount('backmesh-acme');
     expect(calls).toEqual([
       ['api', 'access', 'add', '--service', 'backmesh-acme', '--json'],
       ['api', 'token', 'rotate', '--service', 'backmesh-acme', '--json'],
       ['api', 'access', 'remove', '--service', 'backmesh-acme'],
-      ['api', 'access', 'remove', '--service-account', 'backmesh-acme'],
     ]);
   });
 

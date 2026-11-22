@@ -19,7 +19,7 @@ vi.mock('../../../src/cli/upgrade.js', async (original) => {
 
 // The control plane's listeners, for `logs`.
 const ACME = { name: 'backmesh-acme', vm: 'bml-l8u5e-abc123' };
-let listeners: { name: string; vm?: string; deployment?: string }[] = [ACME];
+let listeners: { name: string; vm: string }[] = [ACME];
 
 async function run(...argv: string[]) {
   const output = { stdout: '', stderr: '' };
@@ -101,24 +101,6 @@ describe('backmesh CLI', () => {
       'exec',
       'bml-l8u5e-abc123',
       'docker logs --tail 1000 --follow backmesh-listener',
-    ]);
-    // One `upgrade` hasn't moved off its Deployment yet.
-    listeners = [{ name: 'backmesh-beta', deployment: 'backmesh-beta' }];
-    expect((await run('logs')).streamLogs).toHaveBeenCalledWith([
-      'logs',
-      'backmesh-beta',
-    ]);
-    // Mid-move, the Deployment still runs.
-    listeners = [
-      {
-        name: 'backmesh-beta',
-        vm: 'bml-q2w3e-abc123',
-        deployment: 'backmesh-beta',
-      },
-    ];
-    expect((await run('logs')).streamLogs).toHaveBeenCalledWith([
-      'logs',
-      'backmesh-beta',
     ]);
     listeners = [ACME, { name: 'backmesh-beta', vm: 'bml-q2w3e-abc123' }];
     const several = await run('logs');

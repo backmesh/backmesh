@@ -5,7 +5,6 @@ import {
   installTag,
   listenerName,
   orgOfListener,
-  readControlPool,
   readInstallation,
   readOrgId,
 } from '../../../src/cli/installation.js';
@@ -136,81 +135,9 @@ describe('the installation’s identity', () => {
   });
 });
 
-describe('readControlPool (invariant 3)', () => {
-  const pool = (id: string, name: string) => ({
-    id,
-    name,
-    state: 'running',
-    allowPrivilegedJobs: false,
-  });
-  const deployment = (name: string, nodePoolId: string, managed = false) => ({
-    id: name,
-    name,
-    nodePoolId,
-    managed,
-    deletedAt: null,
-  });
-  const read = (deployments: object[]) =>
-    readControlPool(
-      fakeApi({
-        'GET /v1/node-pools': {
-          nodePools: [pool('p1', 'bm-control'), pool('p2', 'web')],
-        },
-        'GET /v1/deployments': { deployments },
-        'GET /v1/workloads': [],
-      }).api,
-    );
-
-  it('admits every org’s listener on bm-control and nothing else', async () => {
-    const control = await read([
-      deployment('backmesh-beta', 'p1'),
-      deployment('backmesh-acme', 'p1'),
-    ]);
-    expect(control.listeners.map((d) => d.name)).toEqual([
-      'backmesh-acme',
-      'backmesh-beta',
-    ]);
-    expect(control.problems).toEqual([]);
-  });
-
-  it('flags another Deployment there, and a listener elsewhere', async () => {
-    const control = await read([
-      deployment('backmesh-acme', 'p1'),
-      deployment('web', 'p1'),
-      deployment('backmesh-beta', 'p1', true),
-      deployment('backmesh-gamma', 'p2'),
-    ]);
-    expect(control.listeners.map((d) => d.name)).toEqual(['backmesh-acme']);
-    expect(control.problems).toEqual([
-      'A Deployment named backmesh-gamma runs outside bm-control, on node pool p2',
-      'bm-control runs more than the listeners: Deployment web, Deployment backmesh-beta (managed)',
-    ]);
-  });
-});
-
 describe('readInstallation', () => {
-  it("lists each org's listener on its VM, one still on bm-control, and one mid-move with both", async () => {
-    const deployment = (name: string) => ({
-      id: `dep-${name}`,
-      name,
-      nodePoolId: 'p1',
-      managed: false,
-      deletedAt: null,
-    });
+  it("lists each org's listener on its VM, and an org with two", async () => {
     const { api } = fakeApi({
-      'GET /v1/node-pools': {
-        nodePools: [
-          {
-            id: 'p1',
-            name: 'bm-control',
-            state: 'running',
-            allowPrivilegedJobs: false,
-          },
-        ],
-      },
-      'GET /v1/deployments': {
-        deployments: [deployment('backmesh-beta'), deployment('backmesh-zeta')],
-      },
       'GET /v1/workloads': [
         listenerVm('acme', 'bml-l8u5e-abc123'),
         listenerVm('acme', 'bml-l8u5e-def456'),
@@ -221,12 +148,9 @@ describe('readInstallation', () => {
     expect(problems).toEqual([
       'acme has more than one listener VM: bml-l8u5e-abc123, bml-l8u5e-def456; two listeners contend for its runner group, so terminate all but one',
     ]);
-    expect(
-      orgs.map(({ name, vm, deployment }) => [name, vm?.id, deployment?.id]),
-    ).toEqual([
-      ['backmesh-acme', 'bml-l8u5e-abc123', undefined],
-      ['backmesh-beta', undefined, 'dep-backmesh-beta'],
-      ['backmesh-zeta', 'bml-q2w3e-abc123', 'dep-backmesh-zeta'],
+    expect(orgs.map(({ name, vm }) => [name, vm.id])).toEqual([
+      ['backmesh-acme', 'bml-l8u5e-abc123'],
+      ['backmesh-zeta', 'bml-q2w3e-abc123'],
     ]);
   });
 });

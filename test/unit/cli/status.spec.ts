@@ -11,7 +11,6 @@ import {
   versionMismatch,
 } from './fakes.js';
 import { formatJobs } from '../../../src/listener/status.js';
-import { runnerGroupName } from '../../../src/github/runner-group.js';
 import {
   installTag,
   AHEAD_CONTROL_PLANE,
@@ -21,17 +20,6 @@ import { planClasses } from '../../../src/runners/classes.js';
 import { CATALOG, catalogs } from '../runners/fixtures.js';
 
 const NOW = new Date('2026-11-05T12:00:00Z');
-
-const pool = (id: string, name: string) => ({
-  id,
-  name,
-  state: 'running',
-  allowPrivilegedJobs: false,
-  capacity: { readyVmCount: 1, startingVmCount: 0 },
-  minVmCount: 1,
-  maxVmCount: 1,
-  lastError: null,
-});
 
 const RUNNER_IMAGE = 'ghcr.io/backmesh/backmesh-runner@sha256:aa';
 // Install's classes for aws:us-east-2.
@@ -150,12 +138,8 @@ function setUp({
   listener = probed(LISTENER.status) as string | Error,
   // Other orgs' listeners on the same control plane, by name.
   others = {},
-  // Listeners still on `bm-control`, by name, that `upgrade` moves.
-  legacy = [] as string[],
   // Listeners whose VM anycloud found gone.
   lost = [] as string[],
-  // Legacy listeners with the VM a stopped move made.
-  moving = [] as string[],
   version = '0.1.72',
   org,
   // The control plane's quota status, or its refusal.
@@ -164,9 +148,7 @@ function setUp({
   workloads?: object[];
   listener?: string | Error;
   others?: Record<string, string | Error>;
-  legacy?: string[];
   lost?: string[];
-  moving?: string[];
   version?: string;
   org?: string;
   quota?: object | Response;
@@ -175,33 +157,16 @@ function setUp({
     'backmesh-acme': listener,
     ...others,
   };
-  const vms = Object.keys(listeners)
-    .filter((name) => !legacy.includes(name) || moving.includes(name))
-    .map((name) =>
-      listenerVm(name.slice(9), vmOf(name), {
-        state: lost.includes(name) ? 'failed' : 'running',
-      }),
-    );
+  const vms = Object.keys(listeners).map((name) =>
+    listenerVm(name.slice(9), vmOf(name), {
+      state: lost.includes(name) ? 'failed' : 'running',
+    }),
+  );
   const { api, requests } = fakeApi(
     {
       'GET /v1/quota/status': quota,
-      'GET /v1/node-pools': {
-        nodePools: legacy.length
-          ? [pool('p1', 'bm-control'), pool('p3', 'web')]
-          : [pool('p3', 'web')],
-      },
       'GET /v1/workloads': [...workloads, ...vms],
       'GET /v1/secrets': Object.keys(listeners).map((name) => ({ name })),
-      'GET /v1/deployments': {
-        deployments: legacy.map((name) => ({
-          id: `dep-${name}`,
-          name,
-          nodePoolId: 'p1',
-          managed: false,
-          deletedAt: null,
-          image: LISTENER_IMAGE,
-        })),
-      },
       'GET /v1/workload-costs': {
         totalCost: 12.5,
         byProvider: { AWS: { cost: 12.5 } },
@@ -213,11 +178,9 @@ function setUp({
         ? quota.clone()
         : undefined,
   );
-  // `anycloud exec <VM or Deployment> …` answers as that org's listener.
+  // `anycloud exec <VM> …` answers as that org's listener.
   const { exec, calls } = fakeExec((id) => {
-    const name = Object.keys(listeners).find(
-      (n) => vmOf(n) === id || `dep-${n}` === id,
-    )!;
+    const name = Object.keys(listeners).find((n) => vmOf(n) === id)!;
     return listeners[name] ?? '';
   });
   return {
@@ -476,55 +439,7 @@ describe('status', () => {
     );
   });
 
-  it('warns when bm-control runs anything but the listener (invariant 3)', async () => {
-    const { read } = setUp({
-      workloads: [{ id: 'job1', workloadType: 'job', nodePoolId: 'p1' }],
-      legacy: ['backmesh-acme'],
-    });
-    expect((await read()).warnings).toEqual([
-      'bm-control runs more than the listeners: workload job1',
-      "acme's listener still runs on bm-control; `backmesh upgrade` moves it to its own VM.",
-    ]);
-  });
-
-  it('reads a listener still on bm-control in its Pod, and names its runner group from its Deployment', async () => {
-    const { read, calls } = setUp({
-      listener: probed(LISTENER.status, 'acme', {
-        BACKMESH_LISTENER_IMAGE: undefined,
-        BACKMESH_RUNNER_GROUP: undefined,
-        ANYCLOUD_API_TOKEN: undefined,
-      }),
-      legacy: ['backmesh-acme'],
-    });
-    const report = await read();
-    expect(calls[0]![0]).toBe('dep-backmesh-acme');
-    expect(calls[0]![1]).toMatch(/^node -e /);
-    expect(report.orgs[0]).toMatchObject({
-      deployment: 'backmesh-acme',
-      runnerGroup: runnerGroupName(
-        report.orgs[0]!.session!.slice(3),
-        'dep-backmesh-acme',
-      ),
-      listener: { image: LISTENER_IMAGE },
-    });
-    expect(formatStatus(report)).toContain(
-      'Listener: Deployment backmesh-acme on bm-control',
-    );
-  });
-
-  it('reads a listener mid-move in its Pod, and names the VM the move made', async () => {
-    const { read, calls } = setUp({
-      legacy: ['backmesh-acme'],
-      moving: ['backmesh-acme'],
-    });
-    const report = await read();
-    expect(calls.map(([id]) => id)).toEqual(['dep-backmesh-acme']);
-    expect(formatStatus(report)).toContain(
-      'Listener: Deployment backmesh-acme on bm-control, moving to VM bml-l8u5e-acme00',
-    );
-  });
-
-  it("says a standby listener that can't reach the control plane, without blaming its token", async () => {
+  it("says a listener that can't reach the control plane, without blaming its token", async () => {
     const report = await setUp({
       listener: probed({
         ...LISTENER.status,
@@ -536,15 +451,6 @@ describe('status', () => {
     }).read();
     expect(report.warnings).toEqual([
       "acme: the listener hasn't reached the control plane since 2026-11-05 11:00Z: TypeError: fetch failed.",
-    ]);
-  });
-
-  it('says a listener left in standby takes no jobs until `backmesh upgrade`', async () => {
-    const report = await setUp({
-      listener: probed(LISTENER.status, 'acme', { BACKMESH_STANDBY: '1' }),
-    }).read();
-    expect(report.warnings).toEqual([
-      "acme's listener is in standby and takes no jobs: its move off bm-control didn't finish. Run `backmesh upgrade`.",
     ]);
   });
 

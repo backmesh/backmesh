@@ -8,7 +8,6 @@ import { GitHubError } from '../../../src/app/github.js';
 import { NeedsPlan, PlanChanged, UsageError } from '../../../src/cli/errors.js';
 import { PUBLIC_REPOS_LINE } from '../../../src/cli/install.js';
 import { upgrade, type UpgradeDeps } from '../../../src/cli/upgrade.js';
-import { runnerGroupName } from '../../../src/github/runner-group.js';
 import { parseRoutes } from '../../../src/listener/routes.js';
 import { planClasses } from '../../../src/runners/classes.js';
 import { awsInRegions, CATALOG, catalogs } from '../runners/fixtures.js';
@@ -150,8 +149,6 @@ function setUp({
   listener,
   // A second org's listener on the same control plane.
   beta = false,
-  // beta's listener is still a Deployment on `bm-control` too.
-  betaMoves = false,
   // The listener's BACKMESH_RUNNERS; null: one from before VM Jobs.
   runners = RUNNERS as string | null,
   // The install region's catalog.
@@ -160,18 +157,14 @@ function setUp({
   rotatingFrom,
   // bm-aws's cache buckets, when an install made them.
   cacheBuckets,
-  // Where acme's listener runs: its VM, a VM anycloud found gone, still
-  // a Deployment on `bm-control` (one from before its VM), or that
-  // Deployment with the VM a stopped move made, its listener not started.
+  // acme's listener's VM, or a VM anycloud found gone.
   host = 'vm',
   // acme's listener's `/status` beyond its defaults.
   body = {},
-  poolType = 't3.small',
 }: {
   cacheBuckets?: string[];
   catalog?: typeof CATALOG.aws;
   beta?: boolean;
-  betaMoves?: boolean;
   runners?: string | null;
   installs?: (Response | Error)[];
   listener?: 'down' | 'no-key';
@@ -182,10 +175,8 @@ function setUp({
   watch?: string;
   keyStatus?: Response | Error | (Response | Error)[];
   rotatingFrom?: string;
-  host?: 'vm' | 'lost' | 'deployment' | 'both';
+  host?: 'vm' | 'lost';
   body?: object;
-  // `bm-control`'s Node's size.
-  poolType?: string;
 } = {}) {
   const envOf = (org: string, mine: boolean): Record<string, string> => ({
     ORG: org,
@@ -200,28 +191,20 @@ function setUp({
         }),
     ...(runners !== null && { BACKMESH_RUNNERS: runners }),
     ...(rotatingFrom && { BACKMESH_ROTATING_FROM: rotatingFrom }),
-    // A Deployment's image is its own, and it has no runner group or token.
-    ...(!(mine ? host === 'deployment' || host === 'both' : betaMoves) && {
-      BACKMESH_LISTENER_IMAGE: mine ? image : OLD_LISTENER,
-      BACKMESH_RUNNER_GROUP: GROUP,
-      ANYCLOUD_API_TOKEN: TOKEN,
-    }),
+    BACKMESH_LISTENER_IMAGE: mine ? image : OLD_LISTENER,
+    BACKMESH_RUNNER_GROUP: GROUP,
+    ANYCLOUD_API_TOKEN: TOKEN,
   });
   const hosts = new Map<string, Host>();
-  const onDeployment = host === 'deployment' || host === 'both';
-  const acmeId = onDeployment ? 'dep-acme' : VM.acme!;
-  hosts.set(acmeId, {
+  hosts.set(VM.acme!, {
     org: 'acme',
     env: host === 'lost' ? undefined : envOf('acme', true),
     up: host !== 'lost' && listener !== 'down',
     stuck: listener === 'down',
     body: { ...LISTENING, ...body },
   });
-  if (host === 'both') {
-    hosts.set(VM.acme!, { org: 'acme', up: false, body: LISTENING });
-  }
   if (beta) {
-    hosts.set(betaMoves ? 'dep-beta' : VM.beta!, {
+    hosts.set(VM.beta!, {
       org: 'beta',
       env: envOf('beta', false),
       up: true,
@@ -233,31 +216,15 @@ function setUp({
     ...(host === 'lost' && { 'backmesh-acme': envOf('acme', true) }),
   };
   const workloads: object[] = [
-    ...(host === 'vm' || host === 'both'
-      ? [listenerVm('acme', VM.acme!)]
-      : host === 'lost'
-        ? [
-            // Whatever size its install took there.
-            listenerVm('acme', VM.acme!, {
-              state: 'failed',
-              region: 'us-east-2',
-              vmType: 't3.medium',
-            }),
-          ]
-        : []),
-    ...(beta && !betaMoves ? [listenerVm('beta', VM.beta!)] : []),
-  ];
-  const deployment = (org: string) => ({
-    id: `dep-${org}`,
-    name: `backmesh-${org}`,
-    managed: false,
-    nodePoolId: 'np-1',
-    deletedAt: null as number | null,
-    image: org === 'acme' ? image : OLD_LISTENER,
-  });
-  const deployments = [
-    ...(onDeployment ? [deployment('acme')] : []),
-    ...(beta && betaMoves ? [deployment('beta')] : []),
+    host === 'vm'
+      ? listenerVm('acme', VM.acme!)
+      : // Whatever size its install took there.
+        listenerVm('acme', VM.acme!, {
+          state: 'failed',
+          region: 'us-east-2',
+          vmType: 't3.medium',
+        }),
+    ...(beta ? [listenerVm('beta', VM.beta!)] : []),
   ];
   const binary = fakeBinary({
     'vm-types aws us-east-2': JSON.stringify(catalog),
@@ -302,9 +269,6 @@ function setUp({
       });
       workloads.push(listenerVm(org, id));
     }
-    if (args[0] === 'deployment' && args[1] === 'delete') {
-      for (const d of deployments) if (d.id === args[2]) d.deletedAt = 1;
-    }
     return out;
   };
   // Hooks a test sets: a roll's values that fail, a start that fails.
@@ -317,7 +281,7 @@ function setUp({
     const refused = refusal();
     if (refused) return new Error('Client/API version mismatch.');
     const target = hosts.get(id);
-    if (!target) return new Error(`Workload or Deployment not found`);
+    if (!target) return new Error(`Workload not found`);
     const values = rolledValues(command);
     if (values) {
       calls.push(`roll ${id}`);
@@ -340,22 +304,6 @@ function setUp({
     return JSON.stringify({ code: 200, env: target.env, body: target.body });
   });
   const routes = {
-    'GET /v1/node-pools': {
-      nodePools: deployments.length
-        ? [
-            {
-              id: 'np-1',
-              name: 'bm-control',
-              state: 'running',
-              allowPrivilegedJobs: false,
-              cloudProvider: 'AWS',
-              region: 'us-east-2',
-              vmTypes: [poolType],
-            },
-          ]
-        : [],
-    },
-    'GET /v1/deployments': () => ({ deployments }),
     'GET /v1/workloads': () => workloads,
     'GET /v1/secrets': () =>
       Object.keys(secrets).map((name) => ({
@@ -452,7 +400,7 @@ const ROLL = `roll ${VM.acme}`;
 const rolledAny = (calls: string[]) => calls.some((c) => c.startsWith('roll '));
 const mutations = (calls: string[]) =>
   calls.filter((c) =>
-    /^(api upgrade|api status --watch|api access|api token rotate|deployment|node-pool|vm |roll |start )/.test(
+    /^(api upgrade|api status --watch|api access|api token rotate|vm |roll |start )/.test(
       c,
     ),
   );
@@ -992,12 +940,10 @@ describe('upgrade', () => {
             .split(' ')[2]!,
         ).values.BACKMESH_RUNNERS,
       );
-    // Anything but a read of the control pool, or the listener's roll.
+    // Anything but a read, or the listener's roll.
     const controlPlaneChanges = (calls: string[], requests: string[]) => [
       ...mutations(calls).filter((c) => !c.startsWith('roll ')),
-      ...requests.filter(
-        (r) => /node-pools|cluster/.test(r) && !r.startsWith('GET '),
-      ),
+      ...requests.filter((r) => /cluster/.test(r) && !r.startsWith('GET ')),
     ];
 
     it('shows the removal in the plan, and changes nothing', async () => {
@@ -1548,143 +1494,6 @@ describe('upgrade', () => {
       runnerImage: RELEASE.runnerImage,
       cacheBuckets: ['bm-cache-l8u5e-us-east-2'],
     };
-
-    it('moves a listener off bm-control: its VM first, the Deployment stopped before it starts, then bm-control goes', async () => {
-      const { deps, calls, requests, lines, hosts } = setUp({
-        version: RELEASE.anycloud,
-        host: 'deployment',
-      });
-      const result = await upgrade(deps);
-      const moves = mutations(calls);
-      const id = /--id (bml-l8u5e-[a-z0-9]{6})/.exec(moves.join('\n'))?.[1];
-      expect(moves).toEqual([
-        'api access add --service backmesh-acme --json',
-        expect.stringMatching(
-          new RegExp(
-            `^vm \\S+ --id ${id} --credentials bm-aws --region us-east-2 --vm-type t3.small --secret backmesh-acme --wait$`,
-          ),
-        ),
-        // In standby while the Deployment still runs, then taking jobs.
-        `roll ${id}`,
-        'deployment delete dep-acme',
-        `roll ${id}`,
-        'api access remove --service-account backmesh-acme',
-        'node-pool delete np-1',
-      ]);
-      // Read in its Pod, where it still was.
-      expect(calls.indexOf('status dep-acme')).toBeGreaterThanOrEqual(0);
-      // Its runner group keeps the Deployment's name, so its scale sets
-      // stay; the new token is the one just issued.
-      const values = secretOf('acme', {
-        BACKMESH_RUNNER_GROUP: runnerGroupName('l8u5e', 'dep-acme'),
-        ANYCLOUD_API_TOKEN: 'acapi_issued',
-      });
-      expect(saved(requests)).toEqual([values]);
-      expect(hosts.get(id!)!.env).toEqual(values);
-      expect(lines).toContain(
-        "acme's listener moves from bm-control to its own t3.small VM, about $17 a month, and bm-control, about the same, is deleted.",
-      );
-      expect(result.listeners).toEqual([
-        { org: 'acme', image: RELEASE.listenerImage, rolled: true },
-      ]);
-      // The plan names the move.
-      const plan = setUp({ version: RELEASE.anycloud, host: 'deployment' });
-      expect(await upgrade(plan.deps, { plan: true })).toMatchObject({
-        orgs: [{ org: 'acme', moves: true }],
-      });
-      expect(mutations(plan.calls)).toEqual([]);
-    });
-
-    it("moves a listener to a VM of bm-control's own size", async () => {
-      const { deps, calls, lines } = setUp({
-        version: RELEASE.anycloud,
-        host: 'deployment',
-        poolType: 't3.medium',
-      });
-      await upgrade(deps);
-      expect(mutations(calls)).toContainEqual(
-        expect.stringContaining(' --vm-type t3.medium '),
-      );
-      expect(lines).toContain(
-        "acme's listener moves from bm-control to its own t3.medium VM and bm-control, about the same, is deleted.",
-      );
-    });
-
-    it('finishes a move that stopped after making the VM: reads the Deployment, then rolls the VM it made', async () => {
-      const { deps, calls, hosts } = setUp({
-        version: RELEASE.anycloud,
-        host: 'both',
-      });
-      await upgrade(deps);
-      expect(calls).toContain('status dep-acme');
-      expect(mutations(calls)).toEqual([
-        'api access add --service backmesh-acme --json',
-        `roll ${VM.acme}`,
-        'deployment delete dep-acme',
-        `roll ${VM.acme}`,
-        'api access remove --service-account backmesh-acme',
-        'node-pool delete np-1',
-      ]);
-      expect(hosts.get(VM.acme!)!.env).toMatchObject({
-        BACKMESH_RUNNER_GROUP: runnerGroupName('l8u5e', 'dep-acme'),
-      });
-    });
-
-    it("keeps the Deployment running when the VM's listener can't use its token in standby", async () => {
-      const { deps, calls, hooks, hosts } = setUp({
-        version: RELEASE.anycloud,
-        host: 'deployment',
-      });
-      hooks.roll = (values) => {
-        // The control plane refuses the new token.
-        if (values.BACKMESH_STANDBY) {
-          for (const [id, h] of hosts) {
-            if (id.startsWith('bml-')) {
-              h.body = {
-                ...h.body,
-                anycloud: {
-                  since: '2026-11-18T06:00:00.000Z',
-                  error: 'HTTP 401: {}',
-                },
-              };
-            }
-          }
-        }
-        return false;
-      };
-      await expect(upgrade(deps)).rejects.toThrow(
-        /can't use the control plane \(HTTP 401: \{\}\), so its Deployment keeps running/,
-      );
-      expect(calls.filter((c) => c.startsWith('deployment'))).toEqual([]);
-      expect(calls).not.toContain('node-pool delete np-1');
-    });
-
-    it('takes a listener a stopped move left in standby out of it, with nothing else to change', async () => {
-      const { deps, calls, hosts } = setUp({ ...current });
-      const acme = hosts.get(VM.acme!)!;
-      acme.env = { ...acme.env, BACKMESH_STANDBY: '1' };
-      await upgrade(deps);
-      // The move's last step too.
-      expect(mutations(calls)).toEqual([
-        ROLL,
-        'api access remove --service-account backmesh-acme',
-      ]);
-      expect(acme.env).not.toHaveProperty('BACKMESH_STANDBY');
-    });
-
-    it('asks before moving several orgs, with the VMs’ total cost', async () => {
-      const { deps, calls, lines } = setUp({
-        version: RELEASE.anycloud,
-        host: 'deployment',
-        beta: true,
-        betaMoves: true,
-      });
-      await expect(upgrade(deps)).rejects.toThrow(NeedsPlan);
-      expect(lines).toContain(
-        "acme, beta's listeners move from bm-control to t3.small VMs of their own: about $34 a month in all, instead of bm-control's one Node at about $17, which is deleted.",
-      );
-      expect(mutations(calls)).toEqual([]);
-    });
 
     it('refuses --plan and --plan-id while a listener must start again first, changing nothing', async () => {
       for (const host of ['lost', 'vm'] as const) {
