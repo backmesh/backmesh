@@ -36,13 +36,13 @@ import {
 
 const secs = (since: number) => `${((Date.now() - since) / 1000).toFixed(1)} s`;
 
-// The token file once `ready`; undefined when it's missing or `off`, or
+// The token file once `ready` or `off`; undefined when it's missing, or
 // still `pending` once the job-started hook gave up on it.
 async function ready(path: string, state: string) {
   for (;;) {
     const file = await read(path).catch(() => undefined);
-    if (!file || file.state === 'off') return undefined;
-    if (file.state === 'ready') return file;
+    if (!file) return undefined;
+    if (file.state !== 'pending') return file;
     if (existsSync(join(state, 'gave-up'))) return undefined;
     await sleep(200);
   }
@@ -118,7 +118,8 @@ async function restoreAll(
   const { prefixes } = file;
   const key = recordKey(file.job!);
   const found = await findEntry(store, prefixes, RECORD_VERSION, key, []);
-  if (!found || found.key !== key) return;
+  if (!found || found.key !== key)
+    return say('found no record of this job yet: its save writes one');
   const body = await (await store.get(`${found.prefix}${RECORD_FILE}`)).json();
   const parsed = recordSchema.safeParse(body);
   if (!parsed.success)
@@ -129,7 +130,12 @@ async function restoreAll(
     ref: found.ref,
     at: createdAt(found.prefix),
   };
-  if (record.off || record.container) return;
+  if (record.container)
+    return say('skipped: a container: job runs in its own image');
+  if (record.off)
+    return say(
+      'skipped: the job opts out, or its workflow file is not in its repository',
+    );
   const targets: Target[] = record.tools.map((t) => ({
     what: `${t.tool} ${t.version}`,
     key: toolKey(env.ImageOS ?? 'linux', t),
@@ -165,8 +171,9 @@ async function restoreAll(
   );
 }
 
-// Writes `lines` for the job-started hook to print, `restored.json` for the
-// saver, then `done`, into `state`. Never throws.
+// Writes `lines` for the job-started hook to print, `ready` with when the
+// token came (epoch ms) for its timing line, `restored.json` for the saver,
+// then `done`, into `state`. Never throws.
 export async function restore(
   tokenPath: string,
   state: string,
@@ -181,7 +188,10 @@ export async function restore(
   const restored: Restored = { deps: {} };
   try {
     const file = await ready(tokenPath, state);
-    if (file?.job)
+    if (file) await writeFile(join(state, 'ready'), String(Date.now()));
+    if (file?.state === 'off')
+      await say(`skipped: the cache is off for this runner (${file.reason})`);
+    else if (file?.job)
       await restoreAll(
         file,
         storeOf(tokensFrom(tokenPath, file)),

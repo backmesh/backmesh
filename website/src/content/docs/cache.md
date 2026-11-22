@@ -72,8 +72,9 @@ change:
 
 The runner restores what the same job, or the same matrix leg, used in its
 last run, while GitHub sets up the job. Set up runner shows a line for each
-restore. A job's first run, and a new matrix leg, restore nothing. The saves
-upload after the job, after `backmesh/cache`'s own.
+restore, or why there was none, and the time the restores took. A job's first
+run, and a new matrix leg, restore nothing. The saves upload after the job,
+after `backmesh/cache`'s own.
 
 **Stepping aside.** The automatic cache skips a package manager that the job
 caches itself: an `actions/cache` or `backmesh/cache` step whose `path` names
@@ -132,5 +133,8 @@ as `actions/cache` also requires, and GNU `cp` (coreutils) to save.
   automatic cache, reads only its base's and the default branch's caches, and
   saves nothing: `backmesh/cache` prints `not saved (read-only ref)`. Define a
   job that saves in the calling repository's own workflow files.
+- The automatic restores wait for the job's cache token, which can reach the
+  runner up to 30 seconds after the job starts. A job waits for it at most 10
+  seconds, then starts without its automatic caches.
 - Keys starting with `bm-auto-` are reserved for the automatic cache.
 - The upload's result is in the runner Job's log, not the job's log.

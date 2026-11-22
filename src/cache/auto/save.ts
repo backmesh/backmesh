@@ -133,14 +133,21 @@ export async function saveJob(s: SaveJob): Promise<JobRecord> {
       const marker = await lstat(`${dir}.complete`).catch(() => undefined);
       if (!marker || !(await lstat(dir).catch(() => undefined))?.isDirectory())
         continue;
-      record.tools.push(t);
+      // One it can't save stays out of the record: the next job would only
+      // miss it.
       const key = toolKey(s.imageOs, t);
-      if (await held(key, dir)) continue;
+      if (await held(key, dir)) {
+        record.tools.push(t);
+        continue;
+      }
       const members = await membersOf(dir, ['.'], (n) => SHIMS.has(n));
       const changed = await changedAfter(dir, members, marker.ctimeMs);
       if (changed)
         s.log(`result=changed key=${key} file=${JSON.stringify(changed)}`);
-      else await put(key, dir, members);
+      else {
+        await put(key, dir, members);
+        record.tools.push(t);
+      }
     }
     const locks = await installedLocks(f.GITHUB_WORKSPACE);
     for (const pm of PMS) {

@@ -434,13 +434,18 @@ case_waits_for_the_automatic_restores_and_prints_them() {
   local dir=$scratch/auto
   mkdir -p "$dir"
   echo "job_started ${EPOCHREALTIME/./}" >"$scratch/marks"
-  { sleep 0.5; echo 'backmesh cache: auto restored node 22.23.5 (own)' >"$dir/lines"; : >"$dir/done"; } &
+  { sleep 0.2; echo $((${EPOCHREALTIME/./} / 1000)) >"$dir/ready"; sleep 0.3
+    echo 'backmesh cache: auto restored node 22.23.5 (own)' >"$dir/lines"; : >"$dir/done"; } &
   BACKMESH_AUTO_STATE=$dir BACKMESH_JOB_MARKS=$scratch/marks AUTO_WAIT=5 bash "$scratch/started-hook.sh" >"$scratch/out" 2>&1
   status=$?
   wait
   check 'exits 0' '((status == 0))'
   check 'prints the restorer'"'"'s line' 'grep -qx "backmesh cache: auto restored node 22.23.5 (own)" "$scratch/out"'
   check 'leaves a pending token to the restorer' '[[ ! -e $dir/gave-up ]]'
+  check 'then one line of where the time went' \
+    'grep -Eq "^backmesh cache: auto took ([0-9]+) ms: ([0-9]+) ms for the cache token, ([0-9]+) ms restoring$" "$scratch/out"'
+  check 'its token wait the restorer'"'"'s, its total the hook'"'"'s' \
+    'sed -En "s/^backmesh cache: auto took ([0-9]+) ms: ([0-9]+) ms .* ([0-9]+) ms restoring$/\1 \2 \3/p" "$scratch/out" | awk "{ exit !(\$1 >= 450 && \$1 < 3000 && \$2 >= 150 && \$2 < 1500 && \$3 >= 250 && \$2 + \$3 <= \$1 + 1) }"'
   check 'marks the job, the wait for the restorer and the hook'"'"'s end, in order' \
     '[[ $(awk "{ print \$1 }" "$scratch/marks" | paste -sd" ") == "job_started job_received restore_waited hook_done" ]]'
   check 'the wait lasting until the restorer was done' \
@@ -455,6 +460,23 @@ case_gives_up_on_a_restorer_that_never_finishes() {
   check 'exits 0' '((status == 0))'
   check 'within its deadline' '((SECONDS - start <= 3))'
   check 'tells the restorer to start nothing more' '[[ -e $dir/gave-up ]]'
+  check 'and says so, with the time it took' \
+    'grep -Eqx "backmesh cache: auto took [0-9]+ ms: no cache token within 1 s, so it restored nothing" "$scratch/out"'
+}
+
+case_says_when_restores_outlast_the_wait() {
+  local dir=$scratch/auto
+  mkdir -p "$dir"
+  echo $((${EPOCHREALTIME/./} / 1000)) >"$dir/ready"
+  BACKMESH_AUTO_STATE=$dir AUTO_WAIT=1 bash "$scratch/started-hook.sh" >"$scratch/out" 2>&1
+  status=$?
+  check 'exits 0' '((status == 0))'
+  check 'says the restores go on without the hook' \
+    'grep -Eqx "backmesh cache: auto took [0-9]+ ms: [0-9]+ ms for the cache token, then the restores went on past the hook" "$scratch/out"'
+}
+
+case_waits_at_most_10_s_for_the_restorer() {
+  check 'by default' '[[ $(source "$script" && echo "$auto_wait") == 10 ]]'
 }
 
 case_records_the_job_facts_for_the_save() {

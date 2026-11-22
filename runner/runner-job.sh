@@ -243,22 +243,39 @@ share_paths() {
 cache_upload_limit=480
 cache_copy_every=2
 # The automatic caches: the job-started
-# hook's wait for the restores, and the least time left for the save.
-auto_wait=30
+# hook's wait for the restores, and the least time left for the save. The
+# token comes when anycloud next delivers the runner's Secret, up to 30 s
+# after the listener saves it at JobStarted, so a later one is given up.
+auto_wait=10
 auto_save_min=60
 
 # The job-started hook: waits for the restorer's `done` in
-# $BACKMESH_AUTO_STATE, at most auto_wait s, then prints its lines. Past the
-# deadline a token still pending starts nothing (`gave-up`). Marks the
-# wait's end, `restore_waited`: from `job_received`, the wait and the
-# timings table's few milliseconds.
+# $BACKMESH_AUTO_STATE, at most auto_wait s, then prints its lines and where
+# the time went: the token's wait from the restorer's `ready`, in epoch ms,
+# then the restores. Past the deadline a token still pending starts nothing
+# (`gave-up`). Marks the wait's end, `restore_waited`: from `job_received`,
+# the wait and the timings table's few milliseconds.
+log_auto() { printf 'backmesh cache: auto %s\n' "$1"; }
 auto_restores() {
-  local dir=${BACKMESH_AUTO_STATE:-} end=$((SECONDS + auto_wait))
+  local dir=${BACKMESH_AUTO_STATE:-} start=${EPOCHREALTIME/./} end=$((SECONDS + auto_wait))
+  local ready total token
   [[ -n $dir && -d $dir ]] || return 0
   while [[ ! -e $dir/done ]] && ((SECONDS < end)); do sleep 0.2; done
   mark restore_waited
   [[ -e $dir/done ]] || : >"$dir/gave-up" || true
   cat "$dir/lines" 2>/dev/null || true
+  total=$(((${EPOCHREALTIME/./} - start) / 1000))
+  read -r ready 2>/dev/null <"$dir/ready" || ready=
+  if [[ ! $ready =~ ^[0-9]+$ ]]; then
+    log_auto "took $total ms: no cache token within $auto_wait s, so it restored nothing"
+    return 0
+  fi
+  token=$((ready - start / 1000)) && ((token > 0)) || token=0
+  if [[ -e $dir/done ]]; then
+    log_auto "took $total ms: $token ms for the cache token, $((total - token)) ms restoring"
+  else
+    log_auto "took $total ms: $token ms for the cache token, then the restores went on past the hook"
+  fi
 }
 
 # The job-completed hook: the job's facts for the save, which runs as root

@@ -230,7 +230,7 @@ describe('the automatic caches, from one job to the next', () => {
     expect(b.manifests()).toHaveLength(3);
   });
 
-  it('restores nothing for another matrix leg, which has no record yet', async () => {
+  it('restores nothing for another matrix leg, which has no record yet, and says so', async () => {
     const r = await runner();
     const b = bucket();
     await r.vm();
@@ -239,7 +239,9 @@ describe('the automatic caches, from one job to the next', () => {
     await r.vm();
     expect(
       await restoreJob(r, b, undefined, { ...JOB, name: 'test (20)' }),
-    ).toEqual([]);
+    ).toEqual([
+      'backmesh cache: auto found no record of this job yet: its save writes one',
+    ]);
     await expect(readdir(join(r.tools))).resolves.toEqual([]);
   });
 
@@ -308,6 +310,33 @@ describe('the automatic caches, from one job to the next', () => {
       JSON.parse(await readFile(join(r.state, 'restored.json'), 'utf8')),
     ).toEqual({ deps: {} });
     await expect(readFile(join(r.state, 'done'))).resolves.toBeDefined();
+    // The hook's timing line reads when the token came: it never did.
+    await expect(readFile(join(r.state, 'ready'))).rejects.toThrow();
+  });
+
+  it('notes when the token came, for the hook to time its wait', async () => {
+    const r = await runner();
+    const b = bucket();
+    await r.vm();
+    const before = Date.now();
+    await restoreJob(r, b);
+    const ready = Number(await readFile(join(r.state, 'ready'), 'utf8'));
+    expect(ready).toBeGreaterThanOrEqual(before);
+    expect(ready).toBeLessThanOrEqual(Date.now());
+  });
+
+  it('says why when the cache is off for the runner', async () => {
+    const r = await runner();
+    const b = bucket();
+    await r.vm();
+    await writeFile(
+      r.token,
+      JSON.stringify({ v: 1, state: 'off', reason: 'FORBIDDEN' }),
+    );
+    await restore(r.token, r.state, {}, () => b.store);
+    expect(await readFile(join(r.state, 'lines'), 'utf8')).toBe(
+      'backmesh cache: auto skipped: the cache is off for this runner (FORBIDDEN)\n',
+    );
   });
 
   it('ignores a record whose tool names a path outside the tool cache', async () => {
@@ -350,8 +379,9 @@ describe('the saver', () => {
       b,
       `${join(python, 'bin')}:${join(node, 'bin')}`,
     );
-    // Both stay in the record: the next job restores what it used.
-    expect(record.tools.map((t) => t.tool)).toEqual(['Python', 'node']);
+    // A tool it can't save stays out of the record: the next job would
+    // only miss it.
+    expect(record.tools.map((t) => t.tool)).toEqual(['node']);
     expect(logs).toContainEqual(
       expect.stringMatching(
         /^result=changed key=bm-auto-tool-ubuntu24-Python-3\.12\.16-x64 /,
@@ -392,10 +422,12 @@ describe('the saver', () => {
     });
     expect(b.manifests()).toHaveLength(1);
     await r.vm();
-    expect(await restoreJob(r, b)).toEqual([]);
+    expect(await restoreJob(r, b)).toEqual([
+      'backmesh cache: auto skipped: a container: job runs in its own image',
+    ]);
   });
 
-  it('saves only the record for a job that opts out, or whose workflow it cannot read', async () => {
+  it('saves only the record for a job that opts out, or whose workflow it cannot read, and its next run says why', async () => {
     for (const workflow of [
       WORKFLOW.replace(
         '    runs-on: backmesh-4',
@@ -417,7 +449,9 @@ describe('the saver', () => {
       });
       expect(b.manifests()).toHaveLength(1);
       await r.vm();
-      expect(await restoreJob(r, b)).toEqual([]);
+      expect(await restoreJob(r, b)).toEqual([
+        'backmesh cache: auto skipped: the job opts out, or its workflow file is not in its repository',
+      ]);
     }
   });
 
