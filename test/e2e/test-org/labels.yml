@@ -61,8 +61,9 @@ jobs:
   # only the next job's restore shows it landed; every release before v0.5.3
   # lost every one. Here, not in e2e-labels.yml: a job in another
   # repository's reusable workflow only reads the cache, so this one saves
-  # as a push to a run/<nonce> branch does in a customer's repository. Each region has its own bucket, so a restore whose runner
-  # landed in another region than the save's fails too: rerun it.
+  # as a push to a run/<nonce> branch does in a customer's repository.
+  # Each region has its own bucket, so a restore whose runner landed in
+  # another region than the save's fails too: rerun it.
   cache-save:
     needs: read
     runs-on: ${{ fromJson(needs.read.outputs.matrix).include[0].label }}

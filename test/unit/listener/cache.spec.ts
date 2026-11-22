@@ -42,6 +42,18 @@ describe('deriveRefs', () => {
           run({ headBranch: branch }),
         ).own,
       ).toBe(`refs/heads/${branch}`);
+    // A schedule or a dispatch on its branch, and a reusable workflow of its
+    // own repository on a branch push.
+    for (const event of ['schedule', 'workflow_dispatch'])
+      expect(deriveRefs(job(event, 'refs/heads/feature'), run()).own).toBe(
+        'refs/heads/feature',
+      );
+    expect(
+      deriveRefs(
+        job('push', 'refs/heads/feature', '.github/workflows/build.yml'),
+        run(),
+      ).own,
+    ).toBe('refs/heads/feature');
   });
 
   it("gives a pull request its merge ref and its base, and a fork's no write", () => {
