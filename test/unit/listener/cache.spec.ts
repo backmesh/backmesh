@@ -34,6 +34,26 @@ describe('deriveRefs', () => {
       own: 'refs/heads/feature',
       default: 'refs/heads/main',
     });
+    // A branch with a slash, and the default branch.
+    for (const branch of ['feature/x', 'main'])
+      expect(
+        deriveRefs(
+          job('push', `refs/heads/${branch}`),
+          run({ headBranch: branch }),
+        ).own,
+      ).toBe(`refs/heads/${branch}`);
+    // A schedule or a dispatch on its branch, and a reusable workflow of its
+    // own repository on a branch push.
+    for (const event of ['schedule', 'workflow_dispatch'])
+      expect(deriveRefs(job(event, 'refs/heads/feature'), run()).own).toBe(
+        'refs/heads/feature',
+      );
+    expect(
+      deriveRefs(
+        job('push', 'refs/heads/feature', '.github/workflows/build.yml'),
+        run(),
+      ).own,
+    ).toBe('refs/heads/feature');
   });
 
   it("gives a pull request its merge ref and its base, and a fork's no write", () => {
@@ -74,6 +94,8 @@ describe('deriveRefs', () => {
     });
   });
 
+  // Another repository's reusable workflow: its ref is the workflow's, not
+  // the run's, and the run's head branch may be a tag's name.
   it('writes nothing for other events, other repositories, or a branch the run does not name', () => {
     const readOnly = { default: 'refs/heads/main' };
     expect(

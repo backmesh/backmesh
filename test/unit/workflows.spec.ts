@@ -13,6 +13,8 @@ import { join } from 'node:path';
 import { load } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 
+import { deriveRefs } from '../../src/listener/cache.js';
+
 // A fork's pull request must never land on backmesh's private runners, read a
 // secret, take an environment or get a token that writes. ci.yml dogfoods the
 // public labels for forks; every other workflow sends them to GitHub's runners.
@@ -1449,14 +1451,51 @@ setInterval(() => {}, 1000);
     });
   });
 
+  // GitHub names a job by the workflow file that defines it: a reusable
+  // workflow from another repository gets the cache read-only.
+  it('saves to the cache in labels.yml itself, on its run/<nonce> branch', () => {
+    const path = '.github/workflows/labels.yml';
+    const own = (jobWorkflowRef: string) =>
+      deriveRefs(
+        {
+          eventName: 'push',
+          jobWorkflowRef,
+          ownerName: 'backmesh-dryrun',
+          repositoryName: 'e2e',
+        },
+        {
+          repoId: 1,
+          path,
+          headBranch: 'run/n1',
+          headRepository: 'backmesh-dryrun/e2e',
+          pullRequests: [],
+          defaultBranch: 'main',
+        },
+      ).own;
+    expect(own(`backmesh-dryrun/e2e/${path}@refs/heads/run/n1`)).toBe(
+      'refs/heads/run/n1',
+    );
+    const called = labels().jobs.labels!.uses!.replace(/@main$/, '');
+    expect(own(`${called}@refs/heads/main`)).toBeUndefined();
+    expect(labels().jobs['cache-save']).toBeDefined();
+    expect(labels().jobs['cache-restore']).toBeDefined();
+    expect(read('e2e-labels.yml').jobs['cache-save']).toBeUndefined();
+  });
+
   it("pushes result.json to the same branch whatever the label jobs did, but doesn't re-create a deleted one", () => {
     const job = labels().jobs.result!;
     expect(job.if).toBe('${{ always() }}');
-    expect(job.needs).toEqual(['read', 'labels']);
+    expect(job.needs).toEqual([
+      'read',
+      'labels',
+      'cache-save',
+      'cache-restore',
+    ]);
     expect(job.permissions).toEqual({ contents: 'write' });
     const step = job.steps!.find((s) => s.run?.includes('result.json'))!;
     expect(step.env).toMatchObject({
-      CONCLUSION: '${{ needs.labels.result }}',
+      CONCLUSION:
+        "${{ needs.labels.result != 'success' && needs.labels.result || needs.cache-save.result != 'success' && needs.cache-save.result || needs.cache-restore.result }}",
     });
     const dir = mkdtempSync(join(tmpdir(), 'result-'));
     const out = runStep(`cd ${dir}\n${step.run!}`, {
@@ -1481,10 +1520,12 @@ setInterval(() => {}, 1000);
   });
 });
 
-// e2e-labels.yml's warm hit: the next job restores what a job saved, which
+// The test org's warm hit: the next job restores what a job saved, which
 // its runner uploads after the job.
-describe("e2e-labels.yml's cache warm hit", () => {
-  const { jobs } = read('e2e-labels.yml');
+describe("labels.yml's cache warm hit", () => {
+  const { jobs } = load(
+    readFileSync('test/e2e/test-org/labels.yml', 'utf8'),
+  ) as Workflow;
   const save = jobs['cache-save']!.steps!;
   const steps = jobs['cache-restore']!.steps!;
   const named = (prefix: string) =>
@@ -1526,7 +1567,7 @@ describe("e2e-labels.yml's cache warm hit", () => {
     });
 
   it('restores after the save, on the same label, from its bucket', () => {
-    expect(jobs['cache-restore']!.needs).toBe('cache-save');
+    expect(jobs['cache-restore']!.needs).toEqual(['read', 'cache-save']);
     expect(jobs['cache-restore']!['runs-on']).toBe(
       jobs['cache-save']!['runs-on'],
     );
