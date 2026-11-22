@@ -62,26 +62,19 @@ describe('runJobs', () => {
     runner_name: runner,
     status: runner ? 'in_progress' : 'queued',
     started_at: runner ? '2026-11-22T15:49:15Z' : null,
+    run_attempt: 2,
+    head_sha: 'abc',
   });
-  const rate = {
-    'x-ratelimit-remaining': '4000',
-    'x-ratelimit-limit': '5000',
-    'x-ratelimit-reset': '1795366800',
-  };
 
-  it("reads a run's jobs on its last ETag, every page past one, with the rate limit", async () => {
+  it("reads a run's jobs on its last ETag, and a run past one page in full with none", async () => {
     const { fetch, calls } = fakeGitHub({
       [`GET ${RUNS}/jobs`]: [
-        json(
-          200,
-          { total_count: 1, jobs: [job('a')] },
-          { etag: '"e1"', ...rate },
-        ),
-        () => new Response(null, { status: 304, headers: rate }),
+        json(200, { total_count: 1, jobs: [job('a')] }, { etag: '"e1"' }),
+        () => new Response(null, { status: 304 }),
         json(
           200,
           { total_count: 101, jobs: [job('a', 'bmabc12-a4-00000001')] },
-          { etag: '"e2"', ...rate },
+          { etag: '"e2"' },
         ),
         json(
           200,
@@ -92,7 +85,6 @@ describe('runJobs', () => {
       ],
     });
     const read = runJobs(octokitFor(fetch));
-    const limit = { remaining: 4000, limit: 5000, reset: 1_795_366_800_000 };
 
     expect(await read(RUN)).toEqual({
       etag: '"e1"',
@@ -103,19 +95,16 @@ describe('runJobs', () => {
           runnerName: '',
           startedAt: null,
           done: false,
+          attempt: '2:abc',
         },
       ],
-      rate: limit,
     });
     expect(calls[0]!.headers.get('if-none-match')).toBeNull();
-    expect(await read(RUN, '"e1"')).toEqual({
-      etag: '"e1"',
-      jobs: undefined,
-      rate: limit,
-    });
+    expect(await read(RUN, '"e1"')).toEqual({ etag: '"e1"', jobs: undefined });
     expect(calls[1]!.headers.get('if-none-match')).toBe('"e1"');
+    // The first page's ETag can't say the second didn't change.
     const paged = await read(RUN, '"e1"');
-    expect(paged.etag).toBe('"e2"');
+    expect(paged.etag).toBeUndefined();
     expect(paged.jobs!.map((j) => [j.name, j.runnerName, j.startedAt])).toEqual(
       [
         ['a', 'bmabc12-a4-00000001', Date.parse('2026-11-22T15:49:15Z')],
