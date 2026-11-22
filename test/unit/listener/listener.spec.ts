@@ -93,6 +93,11 @@ describe('runListener', () => {
           observe: (route, job) =>
             void calls.push(`gate ${route.label} ${job.jobId}`),
         },
+        // Hears each job for its start ahead of JobStarted.
+        starts: {
+          observe: (route, job) =>
+            void calls.push(`starts ${route.label} ${job.jobId}`),
+        },
         routes: [ROUTE],
         owner: 'pod',
         log: (line) => void logs.push(line),
@@ -115,8 +120,11 @@ describe('runListener', () => {
       'poll after 0',
       'acquire 10,11',
       'gate backmesh-4 job-0',
+      'starts backmesh-4 job-0',
       'gate backmesh-4 job-1',
+      'starts backmesh-4 job-1',
       'gate backmesh-4 job-2',
+      'starts backmesh-4 job-2',
       'reconcile',
       'ack 1',
       'poll after 1',

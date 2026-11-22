@@ -270,6 +270,33 @@ describe('CacheTokens', () => {
     expect(t.mints).toHaveLength(1);
   });
 
+  it("mints once for a job's start from the REST list then its JobStarted, or the other way, and logs which came first", async () => {
+    for (const restFirst of [true, false]) {
+      const t = tokens();
+      await t.cache.prepare(name);
+      expect(t.cache.waiting(name)).toBe(true);
+      expect(t.cache.waiting('bmabc12-a4-00000009')).toBe(false);
+      t.clock.set(5_000);
+      const message = { ...started(name), runnerAssignTime: 2_000 };
+      if (restFirst) t.cache.started(route, message, 4_000);
+      t.cache.started(route, message);
+      if (!restFirst) t.cache.started(route, message, 4_000);
+      expect(t.cache.waiting(name)).toBe(false);
+      await t.settle();
+      expect(t.mints).toHaveLength(1);
+      expect(t.logs).toEqual([
+        {
+          msg: 'cache token ready',
+          runner: name,
+          ms: 0,
+          source: restFirst ? 'jobs list' : 'JobStarted',
+          // From GitHub's start of the job to the listener hearing it.
+          heard: restFirst ? 1_000 : 3_000,
+        },
+      ]);
+    }
+  });
+
   it('renews every 10 minutes until 10 minutes after JobCompleted, then deletes the Secret when the Job ends', async () => {
     const t = tokens();
     await t.cache.prepare(name);
