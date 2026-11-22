@@ -4935,9 +4935,9 @@ async function ready(path, state) {
     let file = await read(path).catch(() => {
       return;
     });
-    if (!file || file.state === "off")
+    if (!file)
       return;
-    if (file.state === "ready")
+    if (file.state !== "pending")
       return file;
     if (existsSync(join3(state, "gave-up")))
       return;
@@ -4973,7 +4973,7 @@ async function restoreOne(store, prefixes, t, restored) {
 async function restoreAll(file, store, env, restored, say) {
   let { prefixes } = file, key = recordKey(file.job), found = await findEntry(store, prefixes, RECORD_VERSION, key, []);
   if (!found || found.key !== key)
-    return;
+    return say("found no record of this job yet: its save writes one");
   let body = await (await store.get(`${found.prefix}${RECORD_FILE}`)).json(), parsed = recordSchema.safeParse(body);
   if (!parsed.success)
     return say("ignored its job record, which it could not read");
@@ -4982,8 +4982,10 @@ async function restoreAll(file, store, env, restored, say) {
     data: record,
     ref: found.ref,
     at: createdAt(found.prefix)
-  }, record.off || record.container)
-    return;
+  }, record.container)
+    return say("skipped: a container: job runs in its own image");
+  if (record.off)
+    return say("skipped: the job opts out, or its workflow file is not in its repository");
   let targets = record.tools.map((t) => ({
     what: `${t.tool} ${t.version}`,
     key: toolKey(env.ImageOS ?? "linux", t),
@@ -5018,7 +5020,11 @@ async function restore(tokenPath, state, env = process.env, storeOf = openStore)
   }, restored = { deps: {} };
   try {
     let file = await ready(tokenPath, state);
-    if (file?.job)
+    if (file)
+      await writeFile3(join3(state, "ready"), String(Date.now()));
+    if (file?.state === "off")
+      await say(`skipped: the cache is off for this runner (${file.reason})`);
+    else if (file?.job)
       await restoreAll(file, storeOf(tokensFrom(tokenPath, file)), env, restored, say);
   } catch (error) {
     await say(`failed: ${String(error).slice(0, 200)}`);
@@ -5246,9 +5252,9 @@ async function saveJob(s) {
     try {
       await s.store.put(`${prefix}claim`, new Blob([]));
       let { result, detail } = await putEntry(s.store, prefix, key, dir, members, now, out);
-      s.log(`result=${result} key=${key}${detail}`);
+      return s.log(`result=${result} key=${key}${detail}`), result === "saved";
     } catch (error) {
-      s.log(`result=failed key=${key} error=${JSON.stringify(String(error)).slice(0, 300)}`);
+      return s.log(`result=failed key=${key} error=${JSON.stringify(String(error)).slice(0, 300)}`), !1;
     } finally {
       await rm3(out, { recursive: !0, force: !0 });
     }
@@ -5266,15 +5272,16 @@ async function saveJob(s) {
         return;
       }))?.isDirectory())
         continue;
-      record.tools.push(t);
       let key = toolKey(s.imageOs, t);
-      if (await held(key, dir))
+      if (await held(key, dir)) {
+        record.tools.push(t);
         continue;
+      }
       let members = await membersOf(dir, ["."], (n) => SHIMS.has(n)), changed = await changedAfter(dir, members, marker.ctimeMs);
       if (changed)
         s.log(`result=changed key=${key} file=${JSON.stringify(changed)}`);
-      else
-        await put(key, dir, members);
+      else if (await put(key, dir, members))
+        record.tools.push(t);
     }
     let locks = await installedLocks(f.GITHUB_WORKSPACE);
     for (let pm of PMS) {
