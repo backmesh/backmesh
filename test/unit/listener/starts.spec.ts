@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { GateJob } from '../../../src/github/runs.js';
+import type { GateJob, RunJobs } from '../../../src/github/runs.js';
 import type { JobMessage } from '../../../src/github/types.js';
 import type { WorkflowRun } from '../../../src/github/checks.js';
 import { Starts } from '../../../src/listener/starts.js';
@@ -25,18 +25,30 @@ const rest = (fields: Partial<GateJob> = {}): GateJob => ({
   ...fields,
 });
 
+const RATE = { remaining: 5_000, limit: 5_000, reset: 3_600_000 };
+
+// `list` answers each read: its jobs, with an ETag and a full rate limit,
+// or a whole answer.
 function starts(
-  list: (run: WorkflowRun) => Promise<GateJob[]> | GateJob[] = () => [],
+  list: (
+    run: WorkflowRun,
+    etag?: string,
+  ) => Promise<GateJob[] | RunJobs> | GateJob[] | RunJobs = () => [],
 ) {
   let now = 0;
   const reads: WorkflowRun[] = [];
+  const etags: (string | undefined)[] = [];
   const started: { route: Route; job: JobMessage; startedAt: number }[] = [];
   const logs: Record<string, unknown>[] = [];
   const waiting = new Set([RUNNER]);
   const watch = new Starts({
-    jobs: async (run) => {
+    jobs: async (run, etag) => {
       reads.push(run);
-      return list(run);
+      etags.push(etag);
+      const answer = await list(run, etag);
+      return Array.isArray(answer)
+        ? { etag: `"${reads.length}"`, jobs: answer, rate: RATE }
+        : answer;
     },
     waiting: (route, runner) => route.code === 'a4' && waiting.has(runner),
     started: (route, job, startedAt) => {
@@ -49,6 +61,7 @@ function starts(
   return {
     watch,
     reads,
+    etags,
     started,
     logs,
     waiting,
@@ -76,7 +89,7 @@ describe('Starts', () => {
     expect(s.reads).toHaveLength(1);
   });
 
-  it('reads a run once per round for all its jobs, every 2 s, until each starts or 2 minutes pass', async () => {
+  it('reads a run once per round for all its jobs, every 2 s, until each starts or 90 s pass', async () => {
     let jobs: GateJob[] = [
       rest({ name: 'a', runnerName: '', startedAt: null }),
       rest({ name: 'b', runnerName: '', startedAt: null }),
@@ -94,11 +107,11 @@ describe('Starts', () => {
     await s.watch.poll();
     expect(s.reads).toHaveLength(2);
     expect(s.started.map((x) => x.job.jobId)).toEqual(['a']);
-    // `b` is still read, up to 2 minutes after its JobAssigned.
-    s.at(120_000);
+    // `b` is still read, up to 90 s after its JobAssigned.
+    s.at(90_000);
     await s.watch.poll();
     expect(s.reads).toHaveLength(3);
-    s.at(122_001);
+    s.at(92_001);
     await s.watch.poll();
     expect(s.reads).toHaveLength(3);
   });
@@ -164,20 +177,80 @@ describe('Starts', () => {
     expect(s.reads).toEqual([]);
   });
 
-  it('reads at most 10 runs at once and 30 a minute', async () => {
+  it('reads at most 5 runs at once and 60 a minute', async () => {
     const s = starts(() => [rest({ runnerName: '', startedAt: null })]);
     for (let run = 1; run <= 40; run++)
       s.watch.observe(ROUTE, assignedJob({ workflowRunId: run }));
     await s.watch.poll();
-    expect(s.reads).toHaveLength(10);
-    // Refilled at one read each 2 s, oldest-due run first.
+    expect(s.reads).toHaveLength(5);
+    // Refilled at one read a second, oldest-due run first.
+    s.at(1_000);
+    await s.watch.poll();
+    expect(s.reads).toHaveLength(6);
+    expect(s.reads[5]!.runId).toBe(6);
+    for (let t = 2_000; t <= 60_000; t += 1_000) {
+      s.at(t);
+      await s.watch.poll();
+    }
+    expect(s.reads).toHaveLength(5 + 60);
+  });
+
+  it('reads each run conditionally on its last ETag, and a 304 starts nothing', async () => {
+    let answer: GateJob[] | RunJobs = [
+      rest({ runnerName: '', startedAt: null }),
+    ];
+    const s = starts(() => answer);
+    s.watch.observe(ROUTE, assignedJob());
+    await s.watch.poll();
+    answer = { etag: '"1"', jobs: undefined, rate: RATE };
     s.at(2_000);
     await s.watch.poll();
-    expect(s.reads).toHaveLength(11);
-    expect(s.reads[10]!.runId).toBe(11);
-    s.at(60_000);
+    expect(s.started).toEqual([]);
+    answer = [rest()];
+    s.at(4_000);
     await s.watch.poll();
-    expect(s.reads.length).toBeLessThanOrEqual(10 + 30);
+    expect(s.etags).toEqual([undefined, '"1"', '"1"']);
+    expect(s.started).toHaveLength(1);
+    // The hour's counts.
+    s.watch.observe(ROUTE, assignedJob({ jobId: 'late' }));
+    s.watch.observe(
+      ROUTE,
+      message('JobStarted', { jobId: 'late', runnerName: RUNNER }),
+    );
+    s.at(3_600_000);
+    await s.watch.poll();
+    expect(s.logs).toEqual([
+      {
+        msg: 'job start reads',
+        reads: 3,
+        unchanged: 1,
+        failed: 0,
+        fromList: 1,
+        fromJobStarted: 1,
+        remaining: 5_000,
+      },
+    ]);
+  });
+
+  it('stops reading while the installation has less than its reserve left, until the reset', async () => {
+    const s = starts(() => ({
+      etag: undefined,
+      jobs: [rest({ runnerName: '', startedAt: null })],
+      rate: { remaining: 1_499, limit: 5_000, reset: 600_000 },
+    }));
+    s.watch.observe(ROUTE, assignedJob());
+    await s.watch.poll();
+    expect(s.logs).toEqual([
+      {
+        msg: 'job start reads paused',
+        seconds: 600,
+        remaining: 1_499,
+        limit: 5_000,
+      },
+    ]);
+    s.at(10_000);
+    await s.watch.poll();
+    expect(s.reads).toHaveLength(1);
   });
 
   it("pauses every read on GitHub's rate limit, until its retry-after", async () => {
