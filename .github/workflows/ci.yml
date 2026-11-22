@@ -17,7 +17,9 @@ permissions:
 # the confined class this public repository's install has for forks
 # (`--public-repos`; test/unit/workflows.spec.ts checks every workflow). backmesh's runner image has
 # no yarn, which setup-node's yarn cache needs, so each job installs it, with
-# no cache: a cold install is about 10 s.
+# no cache: a cold install is about 10 s. Through corepack, whose links in
+# Node's bin the automatic cache leaves out: `npm install --global` wrote
+# into Node's tool directory, so its automatic cache never saved Node.
 jobs:
   verify:
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'backmesh-public-4' || vars.BACKMESH_RUNS_ON || 'backmesh-4' }}
@@ -28,7 +30,7 @@ jobs:
         with:
           node-version: '22'
 
-      - run: npm install --global yarn@1.22.22
+      - run: corepack enable && corepack install --global yarn@1.22.22
 
       - run: yarn install --frozen-lockfile
 
@@ -51,7 +53,7 @@ jobs:
         with:
           node-version: '22'
 
-      - run: npm install --global yarn@1.22.22
+      - run: corepack enable && corepack install --global yarn@1.22.22
 
       - run: yarn install --frozen-lockfile
 
@@ -81,7 +83,7 @@ jobs:
         with:
           node-version: '22'
 
-      - run: npm install --global yarn@1.22.22
+      - run: corepack enable && corepack install --global yarn@1.22.22
 
       - run: yarn install --frozen-lockfile
 
