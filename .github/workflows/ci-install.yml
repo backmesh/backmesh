@@ -202,7 +202,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-east-1
           # The session can't refresh, and install's second --generate runs
-          # after cluster create; two hours covers both.
+          # after api create; two hours covers both.
           role-duration-seconds: 7200
           output-credentials: true
       - if: (inputs.mode == 'install' || inputs.mode == 'uninstall') && (contains(format(' {0} ', inputs.clouds), ' aws ') || startsWith(inputs.control-plane, 'aws:'))
@@ -538,7 +538,7 @@ jobs:
             anycloud status "$id" --json "${history[@]}" >"$RUNNER_TEMP/status.json" || { echo "::endgroup::"; continue; }
             jq --argjson full "$full" "$why"'def at: if . then . / 1000 | floor | todate else null end; {
               id: .workload.id, state: .workload.state, endReason: .workload.endReason,
-              lastAttemptEndReason: .workload.lastAttemptEndReason, deployment: .workload.deploymentId,
+              lastAttemptEndReason: .workload.lastAttemptEndReason,
               vmType: .workload.vmType, region: .workload.region,
               startedAt: (.workload.startedAt | at), completedAt: (.workload.completedAt | at),
               cleanedAt: (.workload.cleanedAt | at), cleanupError: .workload.cleanupError,

@@ -64,7 +64,7 @@ export function checkHosted(
 
 // The login each cloud needs, and the line that fixes a failed one. Azure's
 // also selects the subscription, which a login with none fails.
-// `cluster create` and the quota and region reads run through it, as the
+// `api create` and the quota and region reads run through it, as the
 // user.
 export const LOGINS: Record<Cloud, [string[], string]> = {
   aws: [

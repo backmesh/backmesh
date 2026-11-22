@@ -21,13 +21,9 @@ only scaling pauses. A listener whose VM is gone gets a new VM, from the
 settings the control plane keeps, and one that stopped is started again,
 both before upgrade plans anything, so `--plan` works only after a run
 without it; one whose token the control plane refuses, such as after a
-restore from an older backup, gets a new token. An install from before each
-listener had its own VM moves each org's listener onto one, keeping its
-runner group and labels; the old listener keeps running until the new one
-has checked its settings and token. If a move stops part way, running
-`upgrade` again finishes it. The old shared listener pool is deleted
-once it's empty. Moving one org asks nothing, since its VM costs about what
-the pool did; moving several asks, with their VMs' total.
+restore from an older backup, gets a new token. An install from before
+v0.5.0, whose listeners share one node, runs `upgrade` with backmesh v0.5.5
+first, which moves each listener to its own VM.
 
 It plans each org's labels again from the release's catalog, with each
 cloud's [regions](/install/#regions) recomputed the same way install's are —

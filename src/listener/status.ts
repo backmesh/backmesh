@@ -200,8 +200,7 @@ export const listenerStatusSchema = z.object({
 });
 export type ListenerStatus = z.infer<typeof listenerStatusSchema>;
 
-// `anycloud` is a refused token when the control plane answered 401; in
-// standby, any other failure to reach it is recorded too.
+// `anycloud` is a refused token when the control plane answered 401.
 export const tokenRefused = (anycloud: ListenerStatus['anycloud']) =>
   !!anycloud?.error.startsWith('HTTP 401');
 

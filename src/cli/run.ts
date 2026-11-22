@@ -49,11 +49,8 @@ export interface CliIo {
   readStatus?: (io: CliIo, org?: string) => Promise<StatusReport>;
   // Streams a workload's log to this terminal; resolves with the exit code.
   streamLogs?: (args: string[]) => Promise<number>;
-  // The control plane's listeners, for `logs`: each name and its VM, or a
-  // listener from before its VM's Deployment.
-  listeners?: (
-    io: CliIo,
-  ) => Promise<{ name: string; vm?: string; deployment?: string }[]>;
+  // The control plane's listeners, for `logs`: each name and its VM.
+  listeners?: (io: CliIo) => Promise<{ name: string; vm: string }[]>;
   cueDeps?: (io: CliIo) => CueDeps;
 }
 
@@ -227,10 +224,9 @@ async function realListeners(io: CliIo) {
     undefined,
     tokenRefresh(io.env, runAnycloud, url, reSignIn(io)),
   );
-  return (await readInstallation(api)).orgs.map(({ name, vm, deployment }) => ({
+  return (await readInstallation(api)).orgs.map(({ name, vm }) => ({
     name,
-    vm: vm?.id,
-    deployment: deployment?.name,
+    vm: vm.id,
   }));
 }
 
@@ -435,17 +431,13 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
               : `Pass --org <org> for that org's listener's log; this control plane runs ${listeners.length} listeners.`,
           );
         }
-        // A Deployment runs until `upgrade` has moved it. A VM's own log is
-        // anycloud's keepalive: the listener's is its container's.
-        exitCode = await (io.streamLogs ?? realLogs)(
-          listener.deployment
-            ? ['logs', listener.deployment, ...follow]
-            : [
-                'exec',
-                listener.vm!,
-                `docker logs --tail 1000 ${opts.follow ? '--follow ' : ''}backmesh-listener`,
-              ],
-        );
+        // A VM's own log is anycloud's keepalive: the listener's is its
+        // container's.
+        exitCode = await (io.streamLogs ?? realLogs)([
+          'exec',
+          listener.vm,
+          `docker logs --tail 1000 ${opts.follow ? '--follow ' : ''}backmesh-listener`,
+        ]);
       },
     );
 

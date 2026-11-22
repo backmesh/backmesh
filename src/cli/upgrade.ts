@@ -1,7 +1,7 @@
 // `backmesh upgrade`: the hosted API to this release's
 // anycloud and every org's listener to its images, one at a time, each on
-// its own VM: it creates a lost one again, moves one still on `bm-control`
-// to a VM, and gives one the control plane refuses a new service token.
+// its own VM: it creates a lost one again, and gives one the control plane
+// refuses a new service token.
 // There's no `--to`: it moves to the running CLI's own release.
 import type { RunAnycloud } from '../anycloud/binary.js';
 import { ANYCLOUD_PREVIOUS_VERSION } from '../anycloud/contract.generated.js';
@@ -12,9 +12,8 @@ import {
   type anycloudExec,
 } from '../anycloud/client.js';
 import type { FeatureTable } from '../anycloud/features.js';
-import { anycloudControl, type AnycloudControl } from '../app/anycloud.js';
+import { anycloudControl } from '../app/anycloud.js';
 import { OVERRIDE } from '../app/override.js';
-import { runnerGroupName } from '../github/runner-group.js';
 import type { Compatibility } from '../release/compatibility.js';
 import {
   API_URL_ENV,
@@ -39,37 +38,27 @@ import {
   rollListener,
   routesJson,
   runnerChanges,
-  secretValues,
   targetsOf,
-  type ListenerIdentity,
-  type Roll,
 } from './converge.js';
-import { STANDBY_ENV } from '../listener/env.js';
-import { listenerStatusSchema, tokenRefused } from '../listener/status.js';
+import { tokenRefused } from '../listener/status.js';
 import {
   createListenerVm,
-  createVm,
-  LISTENER_VM_MONTHLY_USD,
   LISTENER_VM_TYPES,
   listenerVmId,
-  rollListenerVm,
   startListener,
 } from './listener-vm.js';
 import type { Cloud } from '../runners/classes.js';
 import { keyFrom, type SignInCheck } from './github-sign-in.js';
 import {
   clusterIdOf,
-  CONTROL_POOL,
   installConnection,
   installTag,
-  listenerName,
   orgOfListener,
   readInstallation,
   readOrgId,
   readPublicRepos,
   publicReposWarning,
   type Listener,
-  type NodePool,
 } from './installation.js';
 import { readApiVersion, readListener, type StatusReport } from './status.js';
 import {
@@ -366,10 +355,9 @@ export async function upgrade(
   const upgradePlan: UpgradePlan = {
     anycloud: { from, to: release.anycloud },
     images: { runner: release.runnerImage, listener: release.listenerImage },
-    orgs: planned.map(({ org, listener, running, changes, classes }) => ({
+    orgs: planned.map(({ org, running, changes, classes }) => ({
       org,
       current: fingerprint(running),
-      moves: !!listener.deployment,
       changes,
       classes: classes.map(({ label, cloud, vmTypes, regions }) => ({
         label,
@@ -380,28 +368,11 @@ export async function upgrade(
     })),
   };
   const id = hashPlan(upgradePlan);
-  // Each org's own VM replaces `bm-control`'s one Node, which costs about
-  // the same as one: for one org, the move needs no consent, as an image
-  // doesn't; for several, the added VMs do (coordinator, 2026-11-18).
-  const cloud = installation.pool?.cloudProvider?.toLowerCase() as
-    Cloud | undefined;
-  const moving = planned.filter((p) => p.listener.deployment);
-  if (moving.length && cloud) {
-    const type = poolVmType(installation.pool!, cloud);
-    const usd = LISTENER_VM_MONTHLY_USD[type];
-    print(
-      moving.length === 1
-        ? `${moving[0]!.org}'s listener moves from ${CONTROL_POOL} to its own ${type} VM${usd ? `, about $${usd} a month,` : ''} and ${CONTROL_POOL}, about the same, is deleted.`
-        : `${moving.map((p) => p.org).join(', ')}'s listeners move from ${CONTROL_POOL} to ${type} VMs of their own${usd ? `: about $${usd * moving.length} a month in all, instead of ${CONTROL_POOL}'s one Node at about $${usd}` : `, instead of ${CONTROL_POOL}'s one Node of that size`}, which is deleted.`,
-    );
-  }
-  // A change in the runners needs consent, as several orgs' moves do; a
-  // release's images alone don't (owner, 2026-11-08).
+  // A change in the runners needs consent; a release's images alone don't
+  // (owner, 2026-11-08).
   const consent = planned.filter((p) => changed(p.changes));
-  const asks = consent.length > 0 || moving.length > 1;
-  const what = consent.length
-    ? 'changes your runners'
-    : 'gives several listeners VMs of their own';
+  const asks = consent.length > 0;
+  const what = 'changes your runners';
   // What already changed when the user says no.
   const cancelled = (then: string) => {
     const done = [
@@ -570,30 +541,6 @@ export async function upgrade(
       workerUrl: deps.env[API_URL_ENV],
     };
     const override = running.override ? OVERRIDE : undefined;
-    if (listener.deployment) {
-      print(`Moving ${org}'s listener from ${CONTROL_POOL} to its own VM.`);
-      await moveToVm(listener, {
-        org,
-        orgId,
-        identity: {
-          install: tag,
-          // Its runner group keeps its name, so its scale sets stay.
-          runnerGroup: runnerGroupName(tag, listener.deployment!.id),
-          apiUrl: url,
-          apiToken: await control.issueServiceToken(name),
-          override,
-        },
-        next,
-        url,
-        pool: installation.pool,
-        api,
-        exec,
-        control,
-        deps,
-      });
-      rolled.push({ org, image: release.listenerImage, rolled: true });
-      continue;
-    }
     // The control plane refuses its token, such as after a restore from an
     // older backup: a new one, which the roll writes.
     const apiToken =
@@ -603,10 +550,7 @@ export async function upgrade(
     // install.ts's re-run has its own roll condition (no image change to
     // weigh, since it refuses a listener on another release first); keep
     // both in step (converge.ts).
-    // A listener left in standby by a move that stopped after its
-    // Deployment's delete takes jobs only once rolled without it.
     const roll =
-      running.standby ||
       !!apiToken ||
       installKey !== running.installKey ||
       running.image !== release.listenerImage ||
@@ -628,7 +572,7 @@ export async function upgrade(
         name,
         org,
         orgId,
-        vm: listener.vm!.id,
+        vm: listener.vm.id,
         identity: {
           install: tag,
           runnerGroup: z.string().parse(running.runnerGroup),
@@ -644,14 +588,6 @@ export async function upgrade(
       { ...next, apiToken },
       { control, exec, again: 'upgrade', wait: deps.wait },
     );
-    // The last step of the move that left it in standby.
-    if (running.standby) await forgetServiceAccount(control, org, print);
-  }
-  // `bm-control` once no listener is left on it.
-  const left = (await readInstallation(api)).orgs.some((o) => o.deployment);
-  if (installation.pool && !left) {
-    print(`Deleting ${CONTROL_POOL}, which no listener uses now.`);
-    await run(['node-pool', 'delete', installation.pool.id]);
   }
   return {
     controlPlane: { from, to: release.anycloud, upgraded: apiUpgraded },
@@ -662,14 +598,13 @@ export async function upgrade(
 }
 
 // Why an org's listener on its VM must start again before upgrade can read
-// it: its VM is gone, or it doesn't answer. A Deployment is read where it is.
-// The read, when it answered, is the loop's.
+// it: its VM is gone, or it doesn't answer. The read, when it answered, is
+// the loop's.
 async function stalled(
   found: Listener,
   exec: AnycloudExec,
 ): Promise<{ why?: string; read?: Awaited<ReturnType<typeof readListener>> }> {
   const { vm } = found;
-  if (!vm || found.deployment) return {};
   if (vm.lost) return { why: `VM ${vm.id} is gone` };
   return readListener(exec, found).then(
     (read) => ({ read }),
@@ -688,8 +623,7 @@ async function revive(
   exec: AnycloudExec,
   deps: UpgradeDeps,
 ): Promise<Listener> {
-  const vm = found.vm!;
-  const { name } = found;
+  const { name, vm } = found;
   const org = orgOfListener(name)!;
   if (!vm.lost) {
     deps.print(`Starting ${org}'s listener on ${vm.id} again.`);
@@ -725,119 +659,6 @@ async function revive(
   await answering(exec, { org, vm: id }, deps.wait);
   return { name, vm: { ...vm, id, lost: false } };
 }
-
-// A listener moving off `bm-control` takes its Node's size, which its
-// region took.
-const poolVmType = (pool: NodePool, cloud: Cloud) =>
-  pool.vmTypes[0] ?? LISTENER_VM_TYPES[cloud][0]!;
-
-/**
- * Moves an org's listener from its Deployment on `bm-control` to its own VM,
- * in `bm-control`'s cloud and region. The Secret gets the VM's values and the
- * VM is created; its listener starts in standby, which checks its settings
- * and token and takes no jobs, while the Deployment still runs. Only once
- * it answers is the Deployment deleted and the VM's listener restarted to
- * take the jobs, so the org never has two listeners, and a move that fails
- * before then leaves the Deployment running. The ServiceAccount goes last.
- * A rerun after a failure finds the VM made and the Deployment there or
- * not.
- */
-async function moveToVm(
-  listener: Listener,
-  {
-    org,
-    orgId,
-    identity,
-    next,
-    url,
-    pool,
-    api,
-    exec,
-    control,
-    deps,
-  }: {
-    url: string;
-    // `bm-control`, where it runs.
-    pool: NodePool | undefined;
-    org: string;
-    orgId: number;
-    identity: ListenerIdentity;
-    next: Omit<Roll, 'apiToken'>;
-    api: AnycloudApi;
-    exec: AnycloudExec;
-    control: AnycloudControl;
-    deps: UpgradeDeps;
-  },
-) {
-  const { name, deployment } = listener;
-  const values = secretValues({ org, orgId, identity, ...next });
-  await control.saveSecret(name, values);
-  const stop = async () => {
-    await deps.run(['deployment', 'delete', deployment!.id]);
-    for (let i = 0; ; i++) {
-      const { deployments } = await api.listDeployments({ query: {} });
-      if (!deployments.some((d) => d.id === deployment!.id && !d.deletedAt))
-        return;
-      if (i === 60) {
-        throw new Error(
-          `${org}'s Deployment ${deployment!.name} didn't stop; run \`backmesh upgrade\` again.`,
-        );
-      }
-      await (deps.wait ?? ((ms) => new Promise((r) => setTimeout(r, ms))))(
-        5000,
-      );
-    }
-  };
-  let vm = listener.vm?.lost ? undefined : listener.vm?.id;
-  if (!vm) {
-    const cloud = pool?.cloudProvider?.toLowerCase() as Cloud | undefined;
-    const credentials = cloud && (await connectionOf(cloud, url, deps));
-    if (!pool?.region || !cloud || !credentials) {
-      throw new Error(
-        `${org}'s listener runs on a node pool upgrade can't read; run \`backmesh status\`, then upgrade again.`,
-      );
-    }
-    vm = listenerVmId(identity.install);
-    await createVm(
-      org,
-      vm,
-      {
-        cloud,
-        region: pool.region,
-        credentials,
-        vmType: poolVmType(pool, cloud),
-      },
-      deps.runLong,
-    );
-  }
-  await rollListenerVm(exec, vm, { ...values, [STANDBY_ENV]: '1' });
-  const { body } = await answering(exec, { org, vm }, deps.wait);
-  const failed = listenerStatusSchema.parse(body).anycloud;
-  if (failed) {
-    throw new Error(
-      `${org}'s listener on ${vm} can't use the control plane (${failed.error}), so its Deployment keeps running; run \`backmesh upgrade\` again.`,
-    );
-  }
-  await stop();
-  await rollListenerVm(exec, vm, values);
-  await answering(exec, { org, vm }, deps.wait);
-  await forgetServiceAccount(control, org, deps.print);
-}
-
-// A moved listener's ServiceAccount access entry, inert once its
-// Deployment is gone: no Pod holds its token.
-const forgetServiceAccount = (
-  control: AnycloudControl,
-  org: string,
-  print: (line: string) => void,
-) =>
-  control
-    .removeServiceAccount(listenerName(org))
-    .catch((error: unknown) =>
-      print(
-        `${org}'s old ${CONTROL_POOL} access entry wasn't removed (${error instanceof Error ? error.message : String(error)}); with its Deployment gone nothing holds its token.`,
-      ),
-    );
 
 // The connection install made for `cloud` on this control plane.
 async function connectionOf(cloud: Cloud, url: string, deps: UpgradeDeps) {

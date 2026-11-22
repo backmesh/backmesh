@@ -1,4 +1,4 @@
-// The GitHub sign-in anycloud needs for the control plane: `cluster create`
+// The GitHub sign-in anycloud needs for the control plane: `api create`
 // (its owner and DNS name), step 6's `api access add`, and the hosted API's
 // token exchange. backmesh's own device flow (`worker.ts`) makes it with the
 // backmesh GitHub App, so GitHub's consent screen names backmesh, and it's
@@ -25,7 +25,7 @@ const REJECTED = 'GitHub rejected the sign-in';
 
 // Why the hosted API would refuse `token`, or undefined. It exchanges only
 // the backmesh App's user token (`ghu_`, its `--sign-in-apps` list), so any
-// other would fail after `cluster create` has started billing. Another
+// other would fail after `api create` has started billing. Another
 // App's sign-in reaches only that App's installations; one that reaches
 // none yet can't be told apart, and the hosted API refuses it at its first
 // request.

@@ -35,7 +35,6 @@ import {
   tokenRefused,
 } from '../listener/status.js';
 import {
-  CONTROL_POOL,
   clusterIdOf,
   installTag,
   listenerName,
@@ -45,7 +44,6 @@ import {
   readPublicRepos,
   publicReposWarning,
   sessionOf,
-  type Deployment,
   type Listener,
 } from './installation.js';
 import { inListener } from './listener-vm.js';
@@ -53,13 +51,12 @@ import {
   API_TOKEN_ENV,
   LISTENER_IMAGE_ENV,
   RUNNER_GROUP_ENV,
-  STANDBY_ENV,
 } from '../listener/env.js';
 
 // The listener binds loopback only and its image has Node but no curl, so
-// `status`, `upgrade` and `uninstall` call it inside its container: through
-// `docker exec` on its VM, or in a Deployment's Pod. Prints the response's
-// code and JSON body, and the named variables of its environment.
+// `status`, `upgrade` and `uninstall` call it inside its container, through
+// `docker exec` on its VM. Prints the response's code and JSON body, and the
+// named variables of its environment.
 const execSchema = z.object({
   code: z.number().int(),
   body: z.unknown(),
@@ -68,10 +65,7 @@ const execSchema = z.object({
 
 export async function execListener(
   exec: AnycloudExec,
-  listener: {
-    vm?: { id: string; lost?: boolean; org?: string };
-    deployment?: Pick<Deployment, 'id'>;
-  },
+  { vm }: { vm: { id: string; lost?: boolean; org?: string } },
   path: string,
   {
     method = 'GET',
@@ -79,16 +73,12 @@ export async function execListener(
   }: { method?: 'GET' | 'POST'; env?: string[] } = {},
 ) {
   const script = `fetch("http://127.0.0.1:8080${path}", { method: "${method}" }).then(async (r) => console.log(JSON.stringify({ code: r.status, body: await r.json(), env: Object.fromEntries(${JSON.stringify(env)}.map((name) => [name, process.env[name]])) })))`;
-  // A Deployment runs until `upgrade` has moved it, even with its VM made.
-  const { vm, deployment } = listener;
-  if (!deployment && vm?.lost) {
+  if (vm.lost) {
     throw new Error(
       `its VM ${vm.id} is gone, and anycloud doesn't replace it; run \`backmesh upgrade\` to create another, or \`backmesh uninstall --org ${vm.org}\` to finish removing it`,
     );
   }
-  const { code, stdout, stderr } = deployment
-    ? await exec(deployment.id, `node -e '${script}'`)
-    : await exec(vm!.id, inListener(script));
+  const { code, stdout, stderr } = await exec(vm.id, inListener(script));
   if (code !== 0) {
     throw new Error(
       stderr.trim().split('\n').at(-1) || `its exec exited ${code}`,
@@ -109,7 +99,7 @@ export const readApiVersion = async (
 // ID, runner image, install key and override install gave it.
 export async function readListener(
   exec: AnycloudExec,
-  listener: Pick<Listener, 'vm' | 'deployment'>,
+  listener: Pick<Listener, 'vm'>,
 ) {
   const { body, env } = await execListener(exec, listener, '/status', {
     env: [
@@ -124,21 +114,13 @@ export async function readListener(
       LISTENER_IMAGE_ENV,
       RUNNER_GROUP_ENV,
       API_TOKEN_ENV,
-      STANDBY_ENV,
     ],
   });
   return {
-    // A Deployment's image is its own.
-    image: z
-      .string()
-      .parse(env[LISTENER_IMAGE_ENV] ?? listener.deployment?.image),
-    // A listener from before its VM has none: its Deployment's ID names it.
+    image: z.string().parse(env[LISTENER_IMAGE_ENV]),
     runnerGroup: env[RUNNER_GROUP_ENV],
-    // Its anycloud service token, absent before its VM.
+    // Its anycloud service token.
     apiToken: env[API_TOKEN_ENV],
-    // Started in standby by a move off `bm-control` that didn't finish: it
-    // takes no jobs until a roll without it.
-    standby: !!env[STANDBY_ENV],
     status: listenerStatusSchema.parse(body),
     // The listener doesn't start without it.
     org: z.string().parse(env.ORG),
@@ -195,7 +177,7 @@ export async function readStatus({
   // through its own session.
   const orgs = await Promise.all(
     listeners.map(async (entry) => {
-      const { name, vm, deployment } = entry;
+      const { name, vm } = entry;
       const login = orgOfListener(name)!;
       // The install key and service token stay out of the report, which
       // `--json` prints, and the classes are summed up per cloud.
@@ -210,11 +192,7 @@ export async function readStatus({
         }),
         (error: unknown) => ({ error: message(error) }),
       );
-      // Where it runs: the Deployment `upgrade` moves, with the VM a move
-      // that stopped made, else its VM.
-      const host = deployment
-        ? { deployment: deployment.name, ...(vm && { movingTo: vm.id }) }
-        : { vm: vm!.id, lost: vm!.lost };
+      const host = { vm: vm.id, lost: vm.lost };
       const org = 'org' in listener ? listener.org : login;
       // The tag needs the org's ID: the listener's, or GitHub's while it's
       // down. Neither failing here stops the other orgs' sections.
@@ -227,7 +205,7 @@ export async function readStatus({
         const tag = installTag(clusterId, orgId);
         runnerGroup =
           ('runnerGroup' in listener && listener.runnerGroup) ||
-          runnerGroupName(tag, deployment?.id ?? vm!.id);
+          runnerGroupName(tag, vm.id);
         const session = sessionOf(tag);
         const cost = await api.getWorkloadCostReport({
           query: { session, sessionExact: 'true', sinceMs: String(monthStart) },
@@ -270,11 +248,6 @@ export async function readStatus({
     );
   }
   for (const { org, listener, ...section } of orgs) {
-    if ('deployment' in section) {
-      warnings.push(
-        `${org}'s listener still runs on ${CONTROL_POOL}; \`backmesh upgrade\` moves it to its own VM.`,
-      );
-    }
     if ('costError' in section) {
       warnings.push(
         `${org}'s runner cost couldn't be read: ${section.costError}`,
@@ -292,15 +265,6 @@ export async function readStatus({
         tokenRefused(anycloud)
           ? `${org}: the control plane has refused the listener's service token since ${minute(anycloud.since)}, so it can't start runners; a restore from a backup older than the token does this. Run \`backmesh upgrade\` to issue it a new one.`
           : `${org}: the listener hasn't reached the control plane since ${minute(anycloud.since)}: ${anycloud.error}.`,
-      );
-    }
-    if (
-      'standby' in listener &&
-      listener.standby &&
-      !('deployment' in section)
-    ) {
-      warnings.push(
-        `${org}'s listener is in standby and takes no jobs: its move off ${CONTROL_POOL} didn't finish. Run \`backmesh upgrade\`.`,
       );
     }
     if (
@@ -467,9 +431,7 @@ export function formatStatus(report: StatusReport): string {
     const { org, session, runnerGroup, listener, cost } = section;
     lines.push(
       `${org}${session ? `, session ${session}` : ''}${runnerGroup ? `, runner group ${runnerGroup}` : ''}:`,
-      'vm' in section
-        ? `Listener VM: ${section.vm}${section.lost ? ' (gone)' : ''}`
-        : `Listener: Deployment ${section.deployment} on ${CONTROL_POOL}${section.movingTo ? `, moving to VM ${section.movingTo}` : ''}`,
+      `Listener VM: ${section.vm}${section.lost ? ' (gone)' : ''}`,
     );
     if ('status' in listener && !listener.status.installed) {
       lines.push(`Listener: waiting for the App's installation on ${org}`);

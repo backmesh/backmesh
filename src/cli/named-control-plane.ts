@@ -1,4 +1,4 @@
-// The control plane named `backmesh` that `cluster create` would resume,
+// The control plane named `backmesh` that `api create` would resume,
 // read before any sign-in through the user's own cloud CLI. anycloud finds
 // it by its `anycloud_cluster_name` tag (`seed/*.ts`'s `findByName`): in the
 // AWS account's region, Azure's whole subscription or GCP's whole project,
@@ -80,7 +80,7 @@ const PARSE: Record<
     ),
 };
 
-/** The control plane named `name` that `cluster create` on `cloud` in `region` would resume, if one exists. Two of them stop install, as `cluster create` would. */
+/** The control plane named `name` that `api create` on `cloud` in `region` would resume, if one exists. Two of them stop install, as `api create` would. */
 export async function namedControlPlane(
   name: string,
   cloud: Cloud,

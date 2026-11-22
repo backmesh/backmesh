@@ -86,7 +86,7 @@ async function call<T>(
 // secret.
 export const GITHUB_APP_CLIENT_ID = 'Iv23li6e0q0gl3GOQ9ny';
 // The App's ID, the one App whose user tokens the hosted API exchanges,
-// and the flag of `cluster create` and `api upgrade` that names it.
+// and the flag of `api create` and `api upgrade` that names it.
 export const GITHUB_APP_ID = '5622376';
 export const GITHUB_APPS_FLAG = '--sign-in-apps';
 // A sign-in waits this long for someone to enter a code, with a fresh code

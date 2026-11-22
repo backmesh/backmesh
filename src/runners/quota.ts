@@ -86,7 +86,7 @@ const DEFAULT_VCPUS = 4;
 /**
  * Reads the region's limits through the user's own signed-in cloud CLI, for
  * install's plan before any credential exists on a control plane: anycloud's
- * `cluster create` reads no quota. backmesh links no cloud SDK.
+ * `api create` reads no quota. backmesh links no cloud SDK.
  */
 export async function readQuota(
   cloud: Cloud,

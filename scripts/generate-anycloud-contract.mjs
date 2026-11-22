@@ -15,10 +15,8 @@ const OPERATIONS = [
   // The cache.
   ...['mintStorageTokens', 'listBuckets', 'createBucket', 'deleteBucket'],
   ...['listBucketObjects', 'deleteBucketObject'],
-  ...['createNodePool', 'getQuotaStatus'],
-  ...['listNodePools', 'listWorkloads', 'getWorkloadCostReport'],
+  ...['getQuotaStatus', 'listWorkloads', 'getWorkloadCostReport'],
   ...['submitWorkload', 'getWorkloadStatus', 'terminateWorkload'],
-  'listDeployments',
 ];
 const OUT = 'src/anycloud/contract.generated.ts';
 
