@@ -262,7 +262,8 @@ auto_restores() {
   local dir=${BACKMESH_AUTO_STATE:-} start=${EPOCHREALTIME/./} end=$((SECONDS + auto_wait))
   local ready total token printed bg='; the dependency caches go on in the background'
   [[ -n $dir && -d $dir ]] || return 0
-  printf %s $((start / 1000)) >"$dir/started" || true
+  # Whole, through a rename, for the restorer's reads.
+  { printf %s $((start / 1000)) >"$dir/started.new" && mv -f "$dir/started.new" "$dir/started"; } || true
   while [[ ! -e $dir/tools-done && ! -e $dir/done ]] && ((SECONDS < end)); do sleep 0.2; done
   mark restore_waited
   [[ -e $dir/tools-done || -e $dir/done ]] || : >"$dir/gave-up" || true

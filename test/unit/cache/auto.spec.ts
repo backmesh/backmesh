@@ -453,11 +453,10 @@ describe('the automatic caches, from one job to the next', () => {
     await save(r, b, join(r.tools, 'none'));
     await r.vm();
     await writeFile(r.token, JSON.stringify({ v: 1, state: 'pending' }));
-    const running = restore(r.token, r.state, envOf(r), () => b.store, 300);
+    const running = restore(r.token, r.state, envOf(r), () => b.store, 600);
     // Past the limit, idle: no job yet.
-    await new Promise((ok) => setTimeout(ok, 500));
+    await new Promise((ok) => setTimeout(ok, 800));
     await started(r);
-    await new Promise((ok) => setTimeout(ok, 100));
     await readyToken(r);
     await running;
     expect(await linesOf(r)).toEqual([

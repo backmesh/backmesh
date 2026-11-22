@@ -4940,21 +4940,21 @@ async function ready(path, over) {
     await sleep2(200);
   }
 }
-async function restoreOne(c, t, commit, signal = c.stop) {
-  let started = Date.now();
+async function restoreOne(c, t, commit, signal) {
+  let started = Date.now(), store = c.storeOf(signal);
   if (existsSync(t.dir))
     return `gave way ${t.what}: a step made ${t.dir} first, at ${c.at()}`;
-  let match = await findEntry(c.store, c.prefixes, entryVersion([t.dir]), t.key, t.pm ? [lineOf(t.key)] : []);
+  let match = await findEntry(store, c.prefixes, entryVersion([t.dir]), t.key, t.pm ? [lineOf(t.key)] : []);
   if (!match || !t.pm && match.key !== t.key)
     return `missed ${t.what}`;
-  let manifest = await readManifest(c.store, match.prefix), staging = `${t.dir}.bm-${randomBytes(4).toString("hex")}`;
+  let manifest = await readManifest(store, match.prefix), staging = `${t.dir}.bm-${randomBytes(4).toString("hex")}`;
   try {
     await mkdir2(staging, { recursive: !0 }), await makeParents(staging, manifest.pieces.flatMap((p) => p.members).filter((m) => !m.startsWith("/") && !m.split("/").includes("..")));
-    let failed = (await Promise.allSettled(manifest.pieces.map((p) => restorePiece(c.store, match.prefix, p, staging, !1, signal)))).find((r) => r.status === "rejected");
+    let failed = (await Promise.allSettled(manifest.pieces.map((p) => restorePiece(store, match.prefix, p, staging, !1, signal)))).find((r) => r.status === "rejected");
     if (failed)
       throw failed.reason;
     if (!commit())
-      return `skipped ${t.what}: the job started without it`;
+      return "";
     if (t.pm)
       c.restored.deps[t.pm] = {
         ref: match.ref,
@@ -4980,11 +4980,26 @@ async function restoreOne(c, t, commit, signal = c.stop) {
   let older = match.key === t.key ? "" : ", an older lockfile", size = `${(manifest.bytes / 1e6).toFixed(0)} MB`, at = t.pm ? `, at ${c.at()}` : "";
   return `restored ${t.what} (${match.ref}${older})  ${size} in ${secs(started)}${at}`;
 }
+async function bounded(c, t, over, why) {
+  let end = new AbortController, committed = !1, settled = !1;
+  return (async () => {
+    while (!settled && !over())
+      await sleep2(200);
+    if (!settled && !committed)
+      end.abort();
+  })(), await restoreOne(c, t, () => !end.signal.aborted && (committed = !0), AbortSignal.any([c.stop, end.signal])).catch((error) => {
+    if (c.stop.aborted)
+      return `stopped ${t.what}: the job ended`;
+    if (end.signal.aborted)
+      return "";
+    return `failed ${t.what}: ${String(error).slice(0, 200)}`;
+  }).finally(() => settled = !0) || why();
+}
 async function restoreAll(file, c, env, say, toolsDone) {
-  let key = recordKey(file.job), found = await findEntry(c.store, c.prefixes, RECORD_VERSION, key, []);
+  let key = recordKey(file.job), store = c.storeOf(c.stop), found = await findEntry(store, c.prefixes, RECORD_VERSION, key, []);
   if (!found || found.key !== key)
     return say("found no record of this job yet: its save writes one");
-  let body = await (await c.store.get(`${found.prefix}${RECORD_FILE}`)).json(), parsed = recordSchema.safeParse(body);
+  let body = await (await store.get(`${found.prefix}${RECORD_FILE}`)).json(), parsed = recordSchema.safeParse(body);
   if (!parsed.success)
     return say("ignored its job record, which it could not read");
   let record = parsed.data;
@@ -4996,7 +5011,7 @@ async function restoreAll(file, c, env, say, toolsDone) {
     return say("skipped: a container: job runs in its own image");
   if (record.off)
     return say("skipped: the job opts out, or its workflow file is not in its repository");
-  let failed = (t) => (error) => `failed ${t.what}: ${String(error).slice(0, 200)}`, deps = [];
+  let deps = [];
   for (let d of record.deps) {
     if (record.aside.includes(d.pm))
       continue;
@@ -5009,14 +5024,8 @@ async function restoreAll(file, c, env, say, toolsDone) {
       key: d.key,
       dir: join3(env.HOME, PM_DIRS[d.pm]),
       pm: d.pm
-    }, end = new AbortController, committed = !1, settled = !1, one = restoreOne(c, t, () => !end.signal.aborted && (committed = !0), AbortSignal.any([c.stop, end.signal])).catch(failed(t)).finally(() => settled = !0), late = (async () => {
-      while (!settled && !c.expired())
-        await sleep2(200);
-      if (settled || committed)
-        return one;
-      return end.abort(), `gave up ${t.what}: still restoring at ${c.at()}`;
-    })();
-    deps.push(Promise.race([one, late]).then(say));
+    }, why = () => `gave up ${t.what}: still restoring at ${c.at()}`;
+    deps.push(bounded(c, t, c.expired, why).then(say));
   }
   for (let pm of record.aside)
     await say(`skipped ${pm}: the job caches ${PM_DIRS[pm]} itself`);
@@ -5025,11 +5034,11 @@ async function restoreAll(file, c, env, say, toolsDone) {
       what: `${tool.tool} ${tool.version}`,
       key: toolKey(env.ImageOS ?? "linux", tool),
       dir: toolDir(env.RUNNER_TOOL_CACHE, tool)
-    }, commit = () => !c.gaveUp();
-    await say(commit() ? await restoreOne(c, t, commit).catch(failed(t)) : `skipped ${t.what}: the job started without it`);
+    }, why = () => `skipped ${t.what}: the job started without it`;
+    await say(c.gaveUp() ? why() : await bounded(c, t, c.gaveUp, why));
   })), await toolsDone(), await Promise.all(deps);
 }
-async function restore(tokenPath, state, env = process.env, storeOf = openStore, limit = LIMIT, stop = new AbortController().signal) {
+async function restore(tokenPath, state, env = process.env, storeOf = (tokens, signal) => openStore(tokens, globalThis.fetch, signal), limit = LIMIT, stop = new AbortController().signal) {
   let began = Date.now(), say = async (text) => {
     let line = `backmesh cache: auto ${text}`;
     console.log(line), await appendFile(join3(state, "lines"), `${line}
@@ -5051,13 +5060,14 @@ async function restore(tokenPath, state, env = process.env, storeOf = openStore,
     let file = await ready(tokenPath, () => expired() || stop.aborted);
     if (file && file.state !== "pending")
       await writeFile3(join3(state, "ready"), String(Date.now()));
-    if (file?.state === "pending")
-      await say(`gave up: no cache token by ${at()}`);
-    else if (file?.state === "off")
+    if (file?.state === "pending") {
+      if (startedAt())
+        await say(stop.aborted ? "stopped: the job ended before its cache token came" : `gave up: no cache token by ${at()}`);
+    } else if (file?.state === "off")
       await say(`skipped: the cache is off for this runner (${file.reason})`);
     else if (file?.job) {
-      let c = {
-        store: storeOf(tokensFrom(tokenPath, file)),
+      let tokens = tokensFrom(tokenPath, file), c = {
+        storeOf: (signal) => storeOf(tokens, signal),
         prefixes: file.prefixes,
         restored,
         persist,
