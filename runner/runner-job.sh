@@ -243,32 +243,37 @@ share_paths() {
 cache_upload_limit=480
 cache_copy_every=2
 # The automatic caches: the job-started
-# hook's wait for the restores, and the least time left for the save. The
-# token comes when anycloud next delivers the runner's Secret, up to 30 s
-# after the listener saves it at JobStarted, so a later one is given up.
+# hook's wait for the tools' restores, and the least time left for the save.
+# GitHub tells the listener of a job's start, which mints its token, a median
+# 12 s into the job, so the dependency caches restore in the background.
 auto_wait=10
 auto_save_min=60
 
-# The job-started hook: waits for the restorer's `done` in
-# $BACKMESH_AUTO_STATE, at most auto_wait s, then prints its lines and, unless
-# it restored nothing, where the time went: the token's wait from the
-# restorer's `ready`, in epoch ms, then the restores. Past the deadline a token still pending starts nothing
-# (`gave-up`). Marks the wait's end, `restore_waited`: from `job_received`,
-# the wait and the timings table's few milliseconds.
+# The job-started hook: notes the job's start (`started`, epoch ms) in
+# $BACKMESH_AUTO_STATE for the restorer's lines, waits for its `tools-done`, at
+# most auto_wait s, then prints its lines so far and how many (`printed`), and,
+# unless it restored nothing, where the time went: the token's wait from the
+# restorer's `ready`, in epoch ms, then the restores. Past the deadline the job
+# starts without its tools (`gave-up`); the dependency caches go on either way.
+# Marks the wait's end, `restore_waited`: from `job_received`, the wait and the
+# timings table's few milliseconds.
 log_auto() { printf 'backmesh cache: auto %s\n' "$1"; }
 auto_restores() {
   local dir=${BACKMESH_AUTO_STATE:-} start=${EPOCHREALTIME/./} end=$((SECONDS + auto_wait))
-  local ready total token
+  local ready total token printed bg='; the dependency caches go on in the background'
   [[ -n $dir && -d $dir ]] || return 0
-  while [[ ! -e $dir/done ]] && ((SECONDS < end)); do sleep 0.2; done
+  printf %s $((start / 1000)) >"$dir/started" || true
+  while [[ ! -e $dir/tools-done && ! -e $dir/done ]] && ((SECONDS < end)); do sleep 0.2; done
   mark restore_waited
-  [[ -e $dir/done ]] || : >"$dir/gave-up" || true
-  cat "$dir/lines" 2>/dev/null || true
+  [[ -e $dir/tools-done || -e $dir/done ]] || : >"$dir/gave-up" || true
+  printed=$(wc -l 2>/dev/null <"$dir/lines") || printed=0
+  head -n "$printed" "$dir/lines" 2>/dev/null || true
+  echo "$printed" >"$dir/printed" || true
   total=$(((${EPOCHREALTIME/./} - start) / 1000))
   # The restorer writes it with no newline, at which `read` fails.
   ready=$(cat "$dir/ready" 2>/dev/null) || ready=
   if [[ ! $ready =~ ^[0-9]+$ ]]; then
-    log_auto "took $total ms: no cache token within $auto_wait s, so it restored nothing"
+    log_auto "took $total ms: no cache token within $auto_wait s, so the job starts without its tools; the dependency caches wait on for it in the background"
     return 0
   fi
   token=$((ready - start / 1000)) && ((token > 0)) || token=0
@@ -276,9 +281,21 @@ auto_restores() {
     # The cache off, or nothing to restore: its lines say so.
     grep -q '^backmesh cache: auto restored ' "$dir/lines" 2>/dev/null || return 0
     log_auto "took $total ms: $token ms for the cache token, $((total - token)) ms restoring"
+  elif [[ -e $dir/tools-done ]]; then
+    log_auto "took $total ms: $token ms for the cache token, $((total - token)) ms restoring tools$bg"
   else
-    log_auto "took $total ms: $token ms for the cache token, then the restores went on past the hook"
+    log_auto "took $total ms: $token ms for the cache token, then the job starts without its tools$bg"
   fi
+}
+
+# The job-completed hook: the restorer's lines since the job-started hook's,
+# such as the dependency caches' from the background.
+auto_lines() {
+  local dir=${BACKMESH_AUTO_STATE:-} printed
+  [[ -n $dir && -s $dir/lines ]] || return 0
+  printed=$(cat "$dir/printed" 2>/dev/null) || printed=0
+  [[ $printed =~ ^[0-9]+$ ]] || printed=0
+  tail -n "+$((printed + 1))" "$dir/lines" || true
 }
 
 # The job-completed hook: the job's facts for the save, which runs as root
@@ -329,7 +346,7 @@ upload_caches() {
 
 main() {
   local start=${EPOCHREALTIME/./}
-  if [[ "$*" == summary ]]; then job_facts; summary; return 0; fi
+  if [[ "$*" == summary ]]; then job_facts; auto_lines; summary; return 0; fi
   # `hook_done`: the job's steps start after the hook.
   if [[ "$*" == timings ]]; then timings; auto_restores; mark hook_done; return 0; fi
   if [[ "$*" != run ]]; then

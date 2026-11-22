@@ -2,7 +2,7 @@
 // saves, it uploads the tools and package-manager caches the job used that no
 // ref it reads holds, straight from their directories, then the job's record.
 import { lstat, readdir, readFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 import { entryVersion, esc, type Manifest, type RefLabel } from '../format.js';
 import type { Member } from '../pieces.js';
@@ -64,6 +64,24 @@ async function changedAfter(
     if (!info || info.ctimeMs > marker) return m.name;
   }
   return undefined;
+}
+
+// Yarn 1 keeps every version it ever fetched. Its entries are named for the
+// hash in their lockfile's `resolved`, so one no installed lockfile names is
+// left out of the save, with its temporary directory. One with no hash in its
+// name stays, as do all when the lockfiles name no hash.
+async function yarnUnused(workspace: string, locks: readonly string[]) {
+  const used = new Set<string>();
+  for (const l of locks.filter((l) => basename(l) === 'yarn.lock'))
+    for (const m of (await readFile(join(workspace, l), 'utf8')).matchAll(
+      /#([0-9a-f]{40})"/g,
+    ))
+      used.add(m[1]!);
+  return (name: string) => {
+    if (name === '.tmp') return true;
+    const hash = /^[^/]*-([0-9a-f]{40})(-integrity)?$/.exec(name)?.[1];
+    return !!hash && used.size > 0 && !used.has(hash);
+  };
 }
 
 // Saves what the job used and writes its record; returns the record.
@@ -172,7 +190,16 @@ export async function saveJob(s: SaveJob): Promise<JobRecord> {
         now - prior.at > 3 * DAY;
       const skip = await held(key, dir, refresh);
       // A walk of a large cache is slow: only when its size or files count.
-      const members = skip && prior && was ? [] : await membersOf(dir, ['.']);
+      const members =
+        skip && prior && was
+          ? []
+          : await membersOf(
+              dir,
+              ['.'],
+              pm === 'yarn'
+                ? await yarnUnused(f.GITHUB_WORKSPACE, locks)
+                : undefined,
+            );
       const bytes = members.reduce((sum, m) => sum + m.size, 0);
       const dep: JobRecord['deps'][number] = {
         pm,
@@ -181,7 +208,16 @@ export async function saveJob(s: SaveJob): Promise<JobRecord> {
       };
       record.deps.push(dep);
       if (skip) continue;
-      if (prior && prior.key !== key && bytes > 2 * dep.base) {
+      // Restored in the background from an older lockfile after the job's
+      // install, which then wrote nothing into it: it lacks the new packages.
+      // Date.now() is whole milliseconds; ctime isn't.
+      if (
+        prior &&
+        prior.key !== key &&
+        !(await changedAfter(dir, members, prior.landed + 1))
+      )
+        s.log(`result=stale key=${key}`);
+      else if (prior && prior.key !== key && bytes > 2 * dep.base) {
         dep.reset = true;
         s.log(`result=reset key=${key} bytes=${bytes} base=${dep.base}`);
       } else await put(key, dir, members);

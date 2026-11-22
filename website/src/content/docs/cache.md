@@ -68,13 +68,20 @@ change:
   made from the lockfiles the job installed. Jobs that install the same
   lockfiles share one cache. After a lockfile changes, the next run restores
   the cache saved for the previous lockfile, and the install downloads only
-  what's new.
+  what's new. Yarn 1's cache keeps every version it ever fetched; its save
+  holds only those the job's `yarn.lock` files name.
 
 The runner restores what the same job, or the same matrix leg, used in its
-last run, while GitHub sets up the job. Set up runner shows a line for each
-restore, or why there was none, and how long the job waited for them. A
-job's first run, and a new matrix leg, restore nothing. The saves upload after
-the job, after `backmesh/cache`'s own.
+last run. The tools restore while GitHub sets up the job, which waits for them
+at most 10 seconds. The package managers' caches restore in the background,
+for up to 2 minutes, as the job's first steps run; a step that makes the
+cache's directory first, such as an install that started before the restore
+finished, keeps its own. Set up runner shows a line for each restore, or why
+there was none, and how long the job waited for them; Complete runner shows
+the background restores', with when each landed. A job's first run, and a new
+matrix leg, restore nothing. The saves upload after the job, after
+`backmesh/cache`'s own. A package manager's cache restored from an older
+lockfile is saved again only if the job's install wrote into it.
 
 **Stepping aside.** The automatic cache skips a package manager that the job
 caches itself: an `actions/cache` or `backmesh/cache` step whose `path` names
@@ -133,8 +140,10 @@ as `actions/cache` also requires, and GNU `cp` (coreutils) to save.
   automatic cache, reads only its base's and the default branch's caches, and
   saves nothing: `backmesh/cache` prints `not saved (read-only ref)`. Define a
   job that saves in the calling repository's own workflow files.
-- The automatic restores wait for the job's cache token, which can reach the
-  runner up to 30 seconds after the job starts. A job waits for it at most 10
-  seconds, then starts without its automatic caches.
+- The automatic restores wait for the job's cache token, which reaches the
+  runner when GitHub tells backmesh the job started: a median 12 seconds into
+  the job, and sometimes 45. A job whose token takes over 10 seconds starts
+  without its tools, and an install that starts before its cache arrives
+  downloads everything.
 - Keys starting with `bm-auto-` are reserved for the automatic cache.
 - The upload's result is in the runner Job's log, not the job's log.
