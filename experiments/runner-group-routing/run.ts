@@ -15,8 +15,9 @@
 //
 // No runner ever starts: each session acquires the jobs it's offered, so
 // GitHub sends JobAssigned to the set that won, and the runs are then
-// cancelled. Cleanup deletes the sessions, scale sets and groups the run
-// recorded in STATE, outside the evidence, and checks they're gone.
+// cancelled. Cleanup cancels the runs and deletes the sessions, scale sets
+// and groups the run recorded in STATE, outside the evidence, carrying on
+// past a failed step, and checks the groups and scale sets are gone.
 //
 // Evidence: report.json in SPIKE_OUTPUT_DIR: each step's answer, the
 // org's plan, and every job message each session received. Never a token.
@@ -30,7 +31,8 @@ const ORG = 'backmesh-dryrun';
 const REPOS = { a: 'route-a', b: 'route-b' } as const;
 const CLIENT_ID = 'Iv23li6e0q0gl3GOQ9ny';
 const SIGN_IN_MS = 20 * 60_000;
-const ROUNDS = 2;
+// Runs per repository in each phase.
+const ROUNDS = { 'one-repo-each': 2, 'route-a-in-both': 5 };
 const WATCH_MS = 3 * 60_000;
 const API_VERSION = '6.0-preview';
 const SCALE_SETS = '_apis/runtime/runnerscalesets';
@@ -51,8 +53,11 @@ interface State {
   token: string;
   groups: Partial<Record<Side, number>>;
   scaleSets: Partial<Record<Side, number>>;
-  runs: { repo: string; id: number }[];
+  sessions: Partial<Record<Side, string>>;
+  runs: { repo: string; id: number; phase: string }[];
 }
+const keep = (state: State) =>
+  writeFileSync(STATE, JSON.stringify(state), { mode: 0o600 });
 
 mkdirSync(OUT, { recursive: true, mode: 0o700 });
 const report: Record<string, unknown> = { org: ORG, setName: SET_NAME };
@@ -181,6 +186,7 @@ async function actionsService(token: string) {
         url: `https://github.com/${ORG}`,
         runner_event: 'register',
       }),
+      signal: AbortSignal.timeout(30_000),
     },
   );
   if (!res.ok) throw new Error(`runner-registration answered ${res.status}`);
@@ -198,6 +204,13 @@ interface Session {
   messageQueueUrl: string;
   messageQueueAccessToken: string;
 }
+interface Seen {
+  side: Side;
+  job: Job;
+  // For a JobAvailable: whether this session's acquire got the job.
+  acquired?: boolean;
+  acquire?: { status: number; json: unknown };
+}
 interface Job {
   messageType: string;
   runnerRequestId: number;
@@ -214,8 +227,7 @@ async function watch(
   scaleSetId: number,
   session: Session,
   stop: { done: boolean },
-  seen: { side: Side; phase: string; job: Job; acquired?: unknown }[],
-  phase: () => string,
+  seen: Seen[],
 ) {
   let last = 0;
   while (!stop.done) {
@@ -251,7 +263,7 @@ async function watch(
         ? (JSON.parse(envelope.body) as Job[])
         : [];
     for (const job of jobs) {
-      const entry: (typeof seen)[number] = { side, phase: phase(), job };
+      const entry: Seen = { side, job };
       if (job.messageType === 'JobAvailable') {
         const acquire = await service(
           'POST',
@@ -259,7 +271,13 @@ async function watch(
           [job.runnerRequestId],
           session.messageQueueAccessToken,
         );
-        entry.acquired = acquire;
+        entry.acquire = acquire;
+        const granted = (acquire.json as { value?: unknown } | undefined)
+          ?.value;
+        entry.acquired =
+          acquire.status === 200 &&
+          Array.isArray(granted) &&
+          granted.includes(job.runnerRequestId);
       }
       seen.push(entry);
       log(`${side} got ${job.messageType} from ${job.repositoryName}`, entry);
@@ -270,7 +288,12 @@ async function watch(
   }
 }
 
-async function dispatch(token: string, state: State, repo: string) {
+async function dispatch(
+  token: string,
+  state: State,
+  repo: string,
+  phase: string,
+) {
   const before = Date.now();
   await gh(
     token,
@@ -294,8 +317,8 @@ async function dispatch(token: string, state: State, repo: string) {
         !state.runs.some((known) => known.id === r.id),
     );
     if (run) {
-      state.runs.push({ repo, id: run.id });
-      writeFileSync(STATE, JSON.stringify(state), { mode: 0o600 });
+      state.runs.push({ repo, id: run.id, phase });
+      keep(state);
       log(`dispatched ${repo}`, { run: run.html_url });
       return;
     }
@@ -303,68 +326,90 @@ async function dispatch(token: string, state: State, repo: string) {
   throw new Error(`no run appeared for the dispatch in ${repo}`);
 }
 
+// Each run on its own: one failed call doesn't leave the rest running.
 async function cancelRuns(token: string, state: State) {
   for (const { repo, id } of state.runs) {
-    const run = await gh(
-      token,
-      'GET',
-      `/repos/${ORG}/${repo}/actions/runs/${id}`,
-    );
-    if (run.status === 'completed') continue;
-    await gh(
-      token,
-      'POST',
-      `/repos/${ORG}/${repo}/actions/runs/${id}/force-cancel`,
-    ).catch((error: unknown) =>
-      log(`cancel ${repo} ${id} failed`, String(error)),
-    );
+    const path = `/repos/${ORG}/${repo}/actions/runs/${id}`;
+    try {
+      const run = await gh(token, 'GET', path);
+      if (run.status !== 'completed') {
+        await gh(token, 'POST', `${path}/force-cancel`);
+      }
+    } catch (error) {
+      log(`cancel ${repo} ${id} failed`, String(error));
+    }
   }
 }
 
+// Each step carries on past another's failure, to the check of what's left.
 async function cleanUp(state: State) {
   const { token } = state;
-  await cancelRuns(token, state);
-  const service = await actionsService(token);
+  let failed = false;
+  const step = async <T>(what: string, fn: () => Promise<T>) => {
+    try {
+      return await fn();
+    } catch (error) {
+      failed = true;
+      log(`${what} failed`, String(error));
+      return undefined;
+    }
+  };
+  await step('cancelling the runs', () => cancelRuns(token, state));
+  const service = await step('the Actions service', () =>
+    actionsService(token),
+  );
   for (const side of ['a', 'b'] as const) {
-    const id = state.scaleSets[side];
-    if (id === undefined) continue;
-    const res = await service('DELETE', `${SCALE_SETS}/${id}`);
-    log(`deleted scale set ${side}`, { id, status: res.status });
+    const set = state.scaleSets[side];
+    const session = state.sessions[side];
+    if (!service || set === undefined) continue;
+    if (session) {
+      await step(`deleting session ${side}`, () =>
+        service('DELETE', `${SCALE_SETS}/${set}/sessions/${session}`),
+      );
+    }
+    const res = await step(`deleting scale set ${side}`, () =>
+      service('DELETE', `${SCALE_SETS}/${set}`),
+    );
+    log(`deleted scale set ${side}`, { id: set, status: res?.status });
   }
   for (const side of ['a', 'b'] as const) {
     const id = state.groups[side];
     if (id === undefined) continue;
-    await gh(token, 'DELETE', `/orgs/${ORG}/actions/runner-groups/${id}`).catch(
-      (error: unknown) => log(`delete group ${side} failed`, String(error)),
+    await step(`deleting group ${side}`, () =>
+      gh(token, 'DELETE', `/orgs/${ORG}/actions/runner-groups/${id}`),
     );
   }
   // What's left, by ID.
-  const groups = (await gh(
-    token,
-    'GET',
-    `/orgs/${ORG}/actions/runner-groups?per_page=100`,
-  )) as {
-    runner_groups: { id: number; name: string }[];
-  };
-  const leftGroups = groups.runner_groups.filter((g) =>
-    Object.values(state.groups).includes(g.id),
+  const groups = await step('listing the groups', () =>
+    gh(token, 'GET', `/orgs/${ORG}/actions/runner-groups?per_page=100`),
   );
+  const leftGroups = (
+    (groups?.runner_groups ?? []) as { id: number; name: string }[]
+  ).filter((g) => Object.values(state.groups).includes(g.id));
   const leftSets: number[] = [];
   for (const id of Object.values(state.scaleSets)) {
-    const res = await service('GET', `${SCALE_SETS}/${id}`);
-    if (res.status === 200 && res.json?.id === id) leftSets.push(id);
+    const res = await step(`checking scale set ${id}`, () =>
+      service ? service('GET', `${SCALE_SETS}/${id}`) : Promise.reject(),
+    );
+    if (!res || (res.status === 200 && res.json?.id === id)) leftSets.push(id);
   }
   report.leftover = { groups: leftGroups, scaleSets: leftSets };
   log('left after cleanup', report.leftover);
-  if (leftGroups.length || leftSets.length) {
-    throw new Error('cleanup left groups or scale sets');
+  if (failed || leftGroups.length || leftSets.length) {
+    throw new Error('cleanup failed a step or left groups or scale sets');
   }
 }
 
 async function run() {
   const token = await signIn();
-  const state: State = { token, groups: {}, scaleSets: {}, runs: [] };
-  writeFileSync(STATE, JSON.stringify(state), { mode: 0o600 });
+  const state: State = {
+    token,
+    groups: {},
+    scaleSets: {},
+    sessions: {},
+    runs: [],
+  };
+  keep(state);
   const who = await gh(token, 'GET', '/user');
   const org = await gh(token, 'GET', `/orgs/${ORG}`);
   report.signedIn = who.login;
@@ -390,7 +435,7 @@ async function run() {
       },
     );
     state.groups[side] = group.id as number;
-    writeFileSync(STATE, JSON.stringify(state), { mode: 0o600 });
+    keep(state);
     const repos = await gh(
       token,
       'GET',
@@ -414,7 +459,12 @@ async function run() {
       'GET',
       `_apis/runtime/runnergroups/?groupName=${encodeURIComponent(GROUPS[side])}`,
     );
-    const groupId = ((groups.json.value as { id: number }[])[0] ?? {}).id;
+    // Without it the set would land in the Default group.
+    const groupId = (groups.json?.value as { id: number }[] | undefined)?.[0]
+      ?.id;
+    if (groupId === undefined) {
+      throw new Error(`the Actions service has no group ${GROUPS[side]}`);
+    }
     const created = await service('POST', SCALE_SETS, {
       name: SET_NAME,
       runnerGroupId: groupId,
@@ -435,7 +485,12 @@ async function run() {
     }
     scaleSetIds[side] = created.json.id as number;
     state.scaleSets[side] = scaleSetIds[side];
-    writeFileSync(STATE, JSON.stringify(state), { mode: 0o600 });
+    keep(state);
+    if (created.json.runnerGroupId !== groupId) {
+      throw new Error(
+        `scale set ${side} is in group ${String(created.json.runnerGroupId)}, not ${groupId}`,
+      );
+    }
     const session = await service(
       'POST',
       `${SCALE_SETS}/${scaleSetIds[side]}/sessions`,
@@ -445,35 +500,39 @@ async function run() {
     );
     if (session.status !== 200)
       throw new Error(`session ${side}: ${session.status}`);
-    opened.push({ side, session: session.json as unknown as Session });
+    const made = session.json as unknown as Session;
+    opened.push({ side, session: made });
+    state.sessions[side] = made.sessionId;
+    keep(state);
   }
   report.duplicateName = { created: true, scaleSetIds };
 
-  const seen: Parameters<typeof watch>[5] = [];
-  let phase = 'one-repo-each';
+  const seen: Seen[] = [];
   const stop = { done: false };
   const watchers = opened.map(({ side, session }) =>
-    watch(side, service, scaleSetIds[side], session, stop, seen, () => phase),
+    watch(side, service, scaleSetIds[side], session, stop, seen),
   );
   try {
     // Phase 1: each group allows only its own repository.
-    for (let i = 0; i < ROUNDS; i++) {
-      await dispatch(token, state, REPOS.a);
-      await dispatch(token, state, REPOS.b);
+    for (let i = 0; i < ROUNDS['one-repo-each']; i++) {
+      await dispatch(token, state, REPOS.a, 'one-repo-each');
+      await dispatch(token, state, REPOS.b, 'one-repo-each');
     }
     await sleep(WATCH_MS);
     await cancelRuns(token, state);
     await sleep(30_000);
 
     // Phase 2: group B also allows route-a.
-    phase = 'route-a-in-both';
     await gh(
       token,
       'PUT',
       `/orgs/${ORG}/actions/runner-groups/${state.groups.b}/repositories/${repoIds.a}`,
     );
     log('group b now also allows route-a');
-    for (let i = 0; i < ROUNDS + 1; i++) await dispatch(token, state, REPOS.a);
+    for (let i = 0; i < ROUNDS['route-a-in-both']; i++) {
+      await dispatch(token, state, REPOS.a, 'route-a-in-both');
+      await dispatch(token, state, REPOS.b, 'route-a-in-both');
+    }
     await sleep(WATCH_MS);
     await cancelRuns(token, state);
     await sleep(30_000);
@@ -487,17 +546,37 @@ async function run() {
         `${SCALE_SETS}/${scaleSetIds[side]}/sessions/${session.sessionId}`,
       );
     }
-    report.runs = state.runs.map(
-      ({ repo, id }) => `https://github.com/${ORG}/${repo}/actions/runs/${id}`,
-    );
     report.messages = seen;
-    // Per phase and repository: which side was offered and assigned the jobs.
+    // Per run: the sessions offered its job, the ones whose acquire got
+    // it, and the ones sent JobAssigned. A session won the job when both.
+    const sides = (id: number, test: (entry: Seen) => boolean) => [
+      ...new Set(
+        seen
+          .filter((e) => e.job.workflowRunId === id && test(e))
+          .map((e) => e.side),
+      ),
+    ];
+    const runs = state.runs.map(({ repo, id, phase }) => {
+      const acquiredBy = sides(id, (e) => e.acquired === true);
+      const assignedTo = sides(id, (e) => e.job.messageType === 'JobAssigned');
+      return {
+        run: `https://github.com/${ORG}/${repo}/actions/runs/${id}`,
+        repo,
+        phase,
+        offeredTo: sides(id, (e) => e.job.messageType === 'JobAvailable'),
+        acquiredBy,
+        assignedTo,
+        wonBy: acquiredBy.filter((side) => assignedTo.includes(side)),
+      };
+    });
+    report.runs = runs;
+    // Per phase and repository: how many jobs each outcome had.
     const summary: Record<string, Record<string, number>> = {};
-    for (const { side, phase: p, job } of seen) {
-      const key = `${p} ${job.repositoryName}`;
+    for (const { phase, repo, offeredTo, wonBy } of runs) {
+      const key = `${phase} ${repo}`;
+      const outcome = `offered ${offeredTo.join('+') || 'none'}, won ${wonBy.join('+') || 'none'}`;
       summary[key] ??= {};
-      const kind = `${job.messageType}@${side}`;
-      summary[key][kind] = (summary[key][kind] ?? 0) + 1;
+      summary[key][outcome] = (summary[key][outcome] ?? 0) + 1;
     }
     report.summary = summary;
     log('summary', summary);
