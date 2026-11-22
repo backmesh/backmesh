@@ -1039,10 +1039,17 @@ describe("e2e.yml's GCP sweep", () => {
 
   // gcloud's answers, by command; each list is filtered as the step asks
   // (checked), so each answer is what that filter would leave.
-  const run = (clusterId: string, left: Record<string, string> = {}) =>
+  // roleAccount lists until `roleGoneAfter` lists of it, if given; sleep is
+  // stubbed, so IAM's lag costs the test no time.
+  const run = (
+    clusterId: string,
+    left: Record<string, string> = {},
+    roleGoneAfter?: number,
+  ) =>
     runStep(sweep.run!, {
       env: { ...ROLE_IDS, CLUSTER_ID: clusterId, ORG_ID: '7' },
       commands: {
+        sleep: 'true',
         gcloud: `filter="name=anycloud-cluster-${ID} OR labels.anycloud_cluster=${ID} OR labels.anycloud_owner_api=e304b862e42fae86c367148fe8147c06"
 has() { local want=$1; shift; [[ " $* " == *" $want "* ]]; }
 case "$1 $2 $3" in
@@ -1054,7 +1061,10 @@ case "$1 $2 $3" in
   "iam service-accounts list")
     if has --filter=email~^anycloud- "$@"; then echo '${left.named ?? '[]'}'
     elif has "--filter=email~^anycloud-ba26a2c1754e69e04996@" "$@"; then printf '%s' '${left.account ?? ''}'
-    elif has "--filter=email~^bm-e2e-9-1@" "$@"; then printf '%s' '${left.roleAccount ?? ''}'
+    elif has "--filter=email~^bm-e2e-9-1@" "$@"; then
+      lists=$(dirname "$0")/role-lists; echo x >>"$lists"
+      ${roleGoneAfter === undefined ? '' : `(( $(wc -l <"$lists") > ${roleGoneAfter} )) && exit 0`}
+      printf '%s' '${left.roleAccount ?? ''}'
     else exit 7; fi ;;
   "iam workload-identity-pools list") printf '%s' '${left.pools ?? 'anycloud\n'}' ;;
   "projects get-iam-policy p-1") echo '${left.policy ?? '{"bindings":[{"role":"roles/viewer","members":["user:a@example.com"]}]}'}' ;;
@@ -1069,6 +1079,12 @@ esac`,
       expect(out.status, out.stdout + out.stderr).toBe(0);
       expect(out.stdout).not.toContain('::error');
     }
+  });
+
+  it("waits for IAM's list to drop the just-deleted role account", () => {
+    const out = run(ID, { roleAccount: `${ROLE_ACCOUNT}\n` }, 2);
+    expect(out.status, out.stdout + out.stderr).toBe(0);
+    expect(out.stdout).not.toContain('::error');
   });
 
   it('fails naming everything left of the installation and its role connection', () => {
