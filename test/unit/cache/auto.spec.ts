@@ -201,19 +201,37 @@ async function restoreJob(
   return linesOf(r);
 }
 
-// A bucket whose GETs of keys matching `held` wait for `open()`.
+// A bucket whose bodies of keys matching `held` stall until `open()`.
 function gated(b: Bucket, held: RegExp) {
   let open!: () => void;
   const gate = new Promise<void>((ok) => (open = ok));
   const store: Store = {
     ...b.store,
     get: async (key) => {
-      if (held.test(key)) await gate;
-      return b.store.get(key);
+      const res = await b.store.get(key);
+      if (!held.test(key)) return res;
+      const data = new Uint8Array(await res.arrayBuffer());
+      return new Response(
+        new ReadableStream({
+          async pull(c) {
+            await gate;
+            c.enqueue(data);
+            c.close();
+          },
+        }),
+      );
     },
   };
   return { store, open };
 }
+// Polls `check` for up to 2 s.
+async function eventually(check: () => Promise<boolean>) {
+  for (let i = 0; i < 400 && !(await check()); i++)
+    await new Promise((ok) => setTimeout(ok, 5));
+  return check();
+}
+const started = (r: Runner, at = Date.now()) =>
+  writeFile(join(r.state, 'started'), String(at));
 const exists = (path: string) =>
   readFile(path).then(
     () => true,
@@ -400,7 +418,54 @@ describe('the automatic caches, from one job to the next', () => {
     ).toEqual({});
   });
 
-  it('gives up a dependency cache still restoring at its limit, and leaves no directory', async () => {
+  it("gives up a dependency cache still restoring at its limit after the job's start, stops its download and leaves no directory", async () => {
+    const r = await runner();
+    const b = bucket();
+    await r.vm();
+    await yarnCache(r);
+    await save(r, b, join(r.tools, 'none'));
+    await r.vm();
+    await readyToken(r);
+    await started(r);
+    const g = gated(b, /bm-auto-yarn.*\.tar/);
+    await restore(r.token, r.state, envOf(r), () => g.store, 300);
+    expect(await linesOf(r)).toEqual([
+      expect.stringMatching(
+        /^backmesh cache: auto gave up yarn: still restoring at \+0\.[3-9] s$/,
+      ),
+    ]);
+    // The download stops, without its body ever ending, and its staging
+    // directory goes.
+    const yarn = join(r.home, '.cache', 'yarn');
+    expect(await eventually(async () => !(await readdir(yarn)).length)).toBe(
+      true,
+    );
+    expect(
+      JSON.parse(await readFile(join(r.state, 'restored.json'), 'utf8')).deps,
+    ).toEqual({});
+  });
+
+  it("counts its limit from the job's start, so a runner started early waits on for its job", async () => {
+    const r = await runner();
+    const b = bucket();
+    await r.vm();
+    await yarnCache(r);
+    await save(r, b, join(r.tools, 'none'));
+    await r.vm();
+    await writeFile(r.token, JSON.stringify({ v: 1, state: 'pending' }));
+    const running = restore(r.token, r.state, envOf(r), () => b.store, 300);
+    // Past the limit, idle: no job yet.
+    await new Promise((ok) => setTimeout(ok, 500));
+    await started(r);
+    await new Promise((ok) => setTimeout(ok, 100));
+    await readyToken(r);
+    await running;
+    expect(await linesOf(r)).toEqual([
+      expect.stringMatching(/^backmesh cache: auto restored yarn \(own\)/),
+    ]);
+  });
+
+  it('stops its restores when told to, and leaves no staging directory', async () => {
     const r = await runner();
     const b = bucket();
     await r.vm();
@@ -409,19 +474,23 @@ describe('the automatic caches, from one job to the next', () => {
     await r.vm();
     await readyToken(r);
     const g = gated(b, /bm-auto-yarn.*\.tar/);
-    await restore(r.token, r.state, envOf(r), () => g.store, 300);
-    expect(await linesOf(r)).toEqual([
-      expect.stringMatching(
-        /^backmesh cache: auto gave up yarn: still restoring at \+\d+\.\d s$/,
-      ),
-    ]);
-    // The download, let go, discards what it fetched.
-    g.open();
-    await new Promise((ok) => setTimeout(ok, 200));
-    expect(await readdir(join(r.home, '.cache', 'yarn'))).toEqual([]);
-    expect(
-      JSON.parse(await readFile(join(r.state, 'restored.json'), 'utf8')).deps,
-    ).toEqual({});
+    const stop = new AbortController();
+    const running = restore(
+      r.token,
+      r.state,
+      envOf(r),
+      () => g.store,
+      undefined,
+      stop.signal,
+    );
+    const yarn = join(r.home, '.cache', 'yarn');
+    await eventually(async () =>
+      (await readdir(yarn).catch(() => [])).some((n) => n.includes('.bm-')),
+    );
+    stop.abort();
+    await running;
+    expect(await readdir(yarn)).toEqual([]);
+    await expect(readFile(join(r.state, 'done'))).resolves.toBeDefined();
   });
 
   it('once the hook gave up, restores no tool, but waits on for the token for the dependency caches', async () => {
@@ -450,6 +519,7 @@ describe('the automatic caches, from one job to the next', () => {
     const b = bucket();
     await r.vm();
     await writeFile(r.token, JSON.stringify({ v: 1, state: 'pending' }));
+    await started(r);
     await restore(r.token, r.state, {}, () => b.store, 300);
     expect(await linesOf(r)).toEqual([
       expect.stringMatching(
@@ -767,6 +837,38 @@ describe('the saver, after a dependency cache restored in the background', () =>
 });
 
 describe("Yarn 1's save", () => {
+  const A = 'a'.repeat(40);
+  const B = 'b'.repeat(40);
+  const lock = (...hashes: string[]) =>
+    hashes
+      .map(
+        (h) =>
+          `x@${h.slice(0, 1)}:\n  resolved "https://registry.yarnpkg.com/x/-/x.tgz#${h}"\n`,
+      )
+      .join('');
+
+  // A restore one lockfile behind, landed after the install, which wrote
+  // nothing into it: saved under the new lockfile only if it holds every
+  // entry that lockfile names.
+  it.each([
+    ['saves it when it holds every entry', lock(A), /^result=saved /],
+    ['marks it stale when it lacks one', lock(A, B), /^result=stale /],
+  ])('%s the new lockfile names', async (_, next, result) => {
+    const r = await runner();
+    const b = bucket();
+    await r.vm();
+    await writeFile(join(r.ws, 'yarn.lock'), `# first\n${lock(A)}`);
+    const entry = join(r.home, '.cache', 'yarn', 'v6', `npm-x-1.0.0-${A}`);
+    await mkdir(entry, { recursive: true });
+    await writeFile(join(entry, 'f'), 'x');
+    await save(r, b, join(r.tools, 'none'));
+    await r.vm();
+    await writeFile(join(r.ws, 'yarn.lock'), next);
+    await restoreJob(r, b);
+    const { logs } = await save(r, b, join(r.tools, 'none'));
+    expect(logs[0]).toMatch(result);
+  });
+
   it('leaves out the entries no installed lockfile resolves', async () => {
     const r = await runner();
     const b = bucket();
