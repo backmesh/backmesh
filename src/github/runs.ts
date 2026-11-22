@@ -310,13 +310,81 @@ export function gateGitHub(octokit: Octokit): Omit<GateGitHub, 'forceCancel'> {
         octokit.rest.actions.listJobsForWorkflowRun,
         { owner, repo, run_id: runId, per_page: 100 },
       );
-      return jobs.map((job) => ({
-        name: job.name,
-        labels: job.labels,
-        runnerName: job.runner_name ?? null,
-        startedAt: job.started_at ? Date.parse(job.started_at) : null,
-        done: job.status === 'completed',
-      }));
+      return jobs.map(gateJob);
     },
   };
+}
+
+type ListedJob = Awaited<
+  ReturnType<Octokit['rest']['actions']['listJobsForWorkflowRun']>
+>['data']['jobs'][number];
+
+const gateJob = (job: ListedJob): GateJob => ({
+  name: job.name,
+  labels: job.labels,
+  runnerName: job.runner_name ?? null,
+  startedAt: job.started_at ? Date.parse(job.started_at) : null,
+  done: job.status === 'completed',
+});
+
+// The installation's primary rate limit, from a response's headers.
+export interface RateLimit {
+  remaining: number;
+  limit: number;
+  // Epoch ms.
+  reset: number;
+}
+
+export interface RunJobs {
+  etag: string | undefined;
+  // Undefined when unchanged since `etag` (a 304, which costs no request
+  // of the rate limit).
+  jobs: GateJob[] | undefined;
+  rate: RateLimit | undefined;
+}
+
+// A run's latest attempt's jobs, conditional on the last read's ETag.
+export function runJobs(octokit: Octokit) {
+  return async (
+    { owner, repo, runId }: WorkflowRun,
+    etag?: string,
+  ): Promise<RunJobs> => {
+    const params = { owner, repo, run_id: runId, per_page: 100 };
+    try {
+      const response = await octokit.rest.actions.listJobsForWorkflowRun({
+        ...params,
+        headers: etag ? { 'if-none-match': etag } : {},
+      });
+      let { jobs } = response.data;
+      // Past one page, every page.
+      if (response.data.total_count > jobs.length)
+        jobs = await octokit.paginate(
+          octokit.rest.actions.listJobsForWorkflowRun,
+          params,
+        );
+      return {
+        etag: response.headers.etag,
+        jobs: jobs.map(gateJob),
+        rate: rateOf(response.headers),
+      };
+    } catch (error) {
+      const { status, response } = error as {
+        status?: number;
+        response?: { headers?: Record<string, unknown> };
+      };
+      if (status !== 304) throw error;
+      return { etag, jobs: undefined, rate: rateOf(response?.headers) };
+    }
+  };
+}
+
+function rateOf(headers: Record<string, unknown> = {}): RateLimit | undefined {
+  const [remaining, limit, reset] = [
+    'x-ratelimit-remaining',
+    'x-ratelimit-limit',
+    'x-ratelimit-reset',
+  ].map((name) => Number(headers[name]));
+  return limit! > 0 && remaining! >= 0
+    ? { remaining: remaining!, limit: limit!, reset: reset! * 1000 }
+    : undefined;
 }

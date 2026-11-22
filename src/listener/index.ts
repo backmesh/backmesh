@@ -11,6 +11,7 @@ import {
   gateGitHub,
   recentRuns,
   runBranch,
+  runJobs,
   workflowFiles,
   workflowRuns,
 } from '../github/runs.js';
@@ -205,7 +206,7 @@ const listening = control.listen(async (signal) => {
   // A job's start from the REST jobs list, for its cache token, ahead of
   // GitHub's late JobStarted.
   const starts = new Starts({
-    jobs: gateGitHub(octokit).jobs,
+    jobs: runJobs(octokit),
     waiting: (route, runner) =>
       codeOf(install, runner) === route.code && cache.waiting(runner),
     started: (route, job, startedAt) => cache.started(route, job, startedAt),

@@ -4,10 +4,11 @@ import {
   gateGitHub,
   recentRuns,
   runBranch,
+  runJobs,
   workflowFiles,
   workflowRuns,
 } from '../../../src/github/runs.js';
-import { fakeGitHub, json, octokitFor } from './fake-github.js';
+import { empty, fakeGitHub, json, octokitFor } from './fake-github.js';
 
 const RUNS = 'https://api.github.com/repos/acme/app/actions/runs/7';
 const RUN = { owner: 'acme', repo: 'app', runId: 7 };
@@ -51,6 +52,83 @@ describe('workflowRuns', () => {
     ]);
     // Reads only: the rerun is the Worker's (`/v1/rerun`).
     expect(calls.every((c) => (c.method ?? 'GET') === 'GET')).toBe(true);
+  });
+});
+
+describe('runJobs', () => {
+  const job = (name: string, runner = '') => ({
+    name,
+    labels: ['backmesh-4'],
+    runner_name: runner,
+    status: runner ? 'in_progress' : 'queued',
+    started_at: runner ? '2026-11-22T15:49:15Z' : null,
+  });
+  const rate = {
+    'x-ratelimit-remaining': '4000',
+    'x-ratelimit-limit': '5000',
+    'x-ratelimit-reset': '1795366800',
+  };
+
+  it("reads a run's jobs on its last ETag, every page past one, with the rate limit", async () => {
+    const { fetch, calls } = fakeGitHub({
+      [`GET ${RUNS}/jobs`]: [
+        json(
+          200,
+          { total_count: 1, jobs: [job('a')] },
+          { etag: '"e1"', ...rate },
+        ),
+        () => new Response(null, { status: 304, headers: rate }),
+        json(
+          200,
+          { total_count: 101, jobs: [job('a', 'bmabc12-a4-00000001')] },
+          { etag: '"e2"', ...rate },
+        ),
+        json(
+          200,
+          { total_count: 101, jobs: [job('a', 'bmabc12-a4-00000001')] },
+          { link: `<${RUNS}/jobs?per_page=100&page=2>; rel="next"` },
+        ),
+        json(200, { total_count: 101, jobs: [job('b')] }),
+      ],
+    });
+    const read = runJobs(octokitFor(fetch));
+    const limit = { remaining: 4000, limit: 5000, reset: 1_795_366_800_000 };
+
+    expect(await read(RUN)).toEqual({
+      etag: '"e1"',
+      jobs: [
+        {
+          name: 'a',
+          labels: ['backmesh-4'],
+          runnerName: '',
+          startedAt: null,
+          done: false,
+        },
+      ],
+      rate: limit,
+    });
+    expect(calls[0]!.headers.get('if-none-match')).toBeNull();
+    expect(await read(RUN, '"e1"')).toEqual({
+      etag: '"e1"',
+      jobs: undefined,
+      rate: limit,
+    });
+    expect(calls[1]!.headers.get('if-none-match')).toBe('"e1"');
+    const paged = await read(RUN, '"e1"');
+    expect(paged.etag).toBe('"e2"');
+    expect(paged.jobs!.map((j) => [j.name, j.runnerName, j.startedAt])).toEqual(
+      [
+        ['a', 'bmabc12-a4-00000001', Date.parse('2026-11-22T15:49:15Z')],
+        ['b', '', null],
+      ],
+    );
+    expect(calls[4]!.url.searchParams.get('page')).toBe('2');
+    // Any other failure is the caller's.
+    await expect(
+      runJobs(
+        octokitFor(fakeGitHub({ [`GET ${RUNS}/jobs`]: empty(500) }).fetch),
+      )(RUN),
+    ).rejects.toMatchObject({ status: 500 });
   });
 });
 
