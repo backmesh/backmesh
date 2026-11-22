@@ -74,14 +74,15 @@ change:
 The runner restores what the same job, or the same matrix leg, used in its
 last run. The tools restore while GitHub sets up the job, which waits for them
 at most 10 seconds. The package managers' caches restore in the background,
-for up to 2 minutes, as the job's first steps run; a step that makes the
-cache's directory first, such as an install that started before the restore
-finished, keeps its own. Set up runner shows a line for each restore, or why
+for up to 2 minutes after the job starts, as its first steps run; a step that
+makes the cache's directory first, such as an install that started before the
+restore finished, keeps its own. Set up runner shows a line for each restore, or why
 there was none, and how long the job waited for them; Complete runner shows
 the background restores', with when each landed. A job's first run, and a new
 matrix leg, restore nothing. The saves upload after the job, after
 `backmesh/cache`'s own. A package manager's cache restored from an older
-lockfile is saved again only if the job's install wrote into it.
+lockfile is saved again only if the job's install wrote into it, or, for Yarn
+1, if it holds every package the new lockfile names.
 
 **Stepping aside.** The automatic cache skips a package manager that the job
 caches itself: an `actions/cache` or `backmesh/cache` step whose `path` names

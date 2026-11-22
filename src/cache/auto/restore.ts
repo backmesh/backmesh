@@ -4,17 +4,10 @@
 // record names at once, each into a staging directory renamed onto its
 // target. The job-started hook waits for the tools, which setup-* steps look
 // for at once; the dependency caches go on in the background, up to `limit`
-// after the restorer starts.
+// after the job starts.
 import { randomBytes } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import {
-  appendFile,
-  mkdir,
-  readFile,
-  rename,
-  rm,
-  writeFile,
-} from 'node:fs/promises';
+import { existsSync, readFileSync } from 'node:fs';
+import { appendFile, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
@@ -46,12 +39,12 @@ import {
 const LIMIT = 120_000;
 const secs = (since: number) => `${((Date.now() - since) / 1000).toFixed(1)} s`;
 
-// The token file once it isn't `pending` or the deadline passed; undefined
-// when it's missing.
-async function ready(path: string, deadline: number) {
+// The token file once it isn't `pending`, or the restorer gives up or
+// stops; undefined when it's missing.
+async function ready(path: string, over: () => boolean) {
   for (;;) {
     const file = await read(path).catch(() => undefined);
-    if (file?.state !== 'pending' || Date.now() >= deadline) return file;
+    if (file?.state !== 'pending' || over()) return file;
     await sleep(200);
   }
 }
@@ -71,22 +64,27 @@ interface Restoring {
   persist: () => Promise<void>;
   // The hook stopped waiting: the job's steps may be running.
   gaveUp: () => boolean;
+  // Past `limit` after the job started.
+  expired: () => boolean;
   // `+<s> s` since the job started.
-  at: () => Promise<string>;
+  at: () => string;
+  stop: AbortSignal;
 }
 
 // One directory: its status line's text. `commit`, just before the rename,
-// says whether the restore still counts. A dependency's entry goes into
+// says whether the restore still counts; `signal` ends its downloads. A
+// dependency's entry goes into
 // restored.json before its rename, so a restorer killed in between leaves
 // the saver its landing.
 async function restoreOne(
   c: Restoring,
   t: Target,
   commit: () => boolean,
+  signal = c.stop,
 ): Promise<string> {
   const started = Date.now();
   if (existsSync(t.dir))
-    return `gave way ${t.what}: a step made ${t.dir} first, at ${await c.at()}`;
+    return `gave way ${t.what}: a step made ${t.dir} first, at ${c.at()}`;
   const match = await findEntry(
     c.store,
     c.prefixes,
@@ -109,7 +107,7 @@ async function restoreOne(
     );
     const results = await Promise.allSettled(
       manifest.pieces.map((p) =>
-        restorePiece(c.store, match.prefix, p, staging, false),
+        restorePiece(c.store, match.prefix, p, staging, false, signal),
       ),
     );
     const failed = results.find((r) => r.status === 'rejected');
@@ -127,7 +125,10 @@ async function restoreOne(
     }
     try {
       // Fails on a directory a step made and wrote into since the check
-      // above, which keeps its files; replaces one still empty.
+      // above, which keeps its files. One still empty is replaced, and the
+      // step's later writes land in the restored cache: npm, Yarn and pnpm
+      // write into theirs by path. A job that caches the directory itself,
+      // such as with actions/cache, is skipped (aside.ts).
       await rename(staging, t.dir);
     } catch (error) {
       if (t.pm) {
@@ -136,7 +137,7 @@ async function restoreOne(
       }
       const code = (error as NodeJS.ErrnoException).code;
       if (code !== 'ENOTEMPTY' && code !== 'EEXIST') throw error;
-      return `gave way ${t.what}: a step made ${t.dir} first, at ${await c.at()}`;
+      return `gave way ${t.what}: a step made ${t.dir} first, at ${c.at()}`;
     }
     // setup-* takes a tool without it as missing.
     if (!t.pm) await writeFile(`${t.dir}.complete`, '');
@@ -145,7 +146,7 @@ async function restoreOne(
   }
   const older = match.key === t.key ? '' : ', an older lockfile';
   const size = `${(manifest.bytes / 1e6).toFixed(0)} MB`;
-  const at = t.pm ? `, at ${await c.at()}` : '';
+  const at = t.pm ? `, at ${c.at()}` : '';
   return `restored ${t.what} (${match.ref}${older})  ${size} in ${secs(started)}${at}`;
 }
 
@@ -153,7 +154,6 @@ async function restoreAll(
   file: ReadyFile,
   c: Restoring,
   env: NodeJS.ProcessEnv,
-  deadline: number,
   say: (text: string) => Promise<void>,
   toolsDone: () => Promise<void>,
 ) {
@@ -196,20 +196,25 @@ async function restoreAll(
       dir: join(env.HOME!, PM_DIRS[d.pm]),
       pm: d.pm,
     };
-    // Past the deadline, one not yet renamed is given up, and its download
-    // discarded when it ends; one being renamed is let finish.
-    let expired = false;
+    // Past the deadline, one not yet renamed is given up and its download
+    // ended; one being renamed is let finish.
+    const end = new AbortController();
     let committed = false;
-    const one = restoreOne(c, t, () => !expired && (committed = true)).catch(
-      failed(t),
-    );
-    const late = sleep(Math.max(0, deadline - Date.now()), undefined, {
-      ref: false,
-    }).then(async () => {
-      if (committed) return one;
-      expired = true;
-      return `gave up ${t.what}: still restoring at ${await c.at()}`;
-    });
+    let settled = false;
+    const one = restoreOne(
+      c,
+      t,
+      () => !end.signal.aborted && (committed = true),
+      AbortSignal.any([c.stop, end.signal]),
+    )
+      .catch(failed(t))
+      .finally(() => (settled = true));
+    const late = (async () => {
+      while (!settled && !c.expired()) await sleep(200);
+      if (settled || committed) return one;
+      end.abort();
+      return `gave up ${t.what}: still restoring at ${c.at()}`;
+    })();
     deps.push(Promise.race([one, late]).then(say));
   }
   for (const pm of record.aside)
@@ -243,9 +248,9 @@ export async function restore(
   env: NodeJS.ProcessEnv = process.env,
   storeOf: (tokens: Tokens) => Store = openStore,
   limit = LIMIT,
+  stop = new AbortController().signal,
 ): Promise<void> {
   const began = Date.now();
-  const deadline = began + limit;
   const say = async (text: string) => {
     const line = `backmesh cache: auto ${text}`;
     console.log(line);
@@ -262,20 +267,26 @@ export async function restore(
         await writeFile(`${path}.new`, JSON.stringify(restored));
         await rename(`${path}.new`, path);
       }));
-  // The hook notes the job's start; before it, the restorer's.
-  const at = async () => {
-    const started = await readFile(join(state, 'started'), 'utf8').catch(
-      () => '',
-    );
-    return `+${secs(Number(started) || began)}`;
+  // The hook notes the job's start (epoch ms). A runner can start well before
+  // its job, so the limit counts from it, and waits on until then.
+  let started: number | undefined;
+  const startedAt = () => {
+    try {
+      started ||= Number(readFileSync(join(state, 'started'), 'utf8'));
+    } catch {
+      // Not yet.
+    }
+    return started || undefined;
   };
+  const expired = () => Date.now() >= (startedAt() ?? Infinity) + limit;
+  const at = () => `+${secs(startedAt() ?? began)}`;
   const gaveUp = () => existsSync(join(state, 'gave-up'));
   try {
-    const file = await ready(tokenPath, deadline);
+    const file = await ready(tokenPath, () => expired() || stop.aborted);
     if (file && file.state !== 'pending')
       await writeFile(join(state, 'ready'), String(Date.now()));
     if (file?.state === 'pending')
-      await say(`gave up: no cache token by ${await at()}`);
+      await say(`gave up: no cache token by ${at()}`);
     else if (file?.state === 'off')
       await say(`skipped: the cache is off for this runner (${file.reason})`);
     else if (file?.job) {
@@ -286,9 +297,11 @@ export async function restore(
         restored,
         persist,
         gaveUp,
+        expired,
         at,
+        stop,
       };
-      await restoreAll(file, c, env, deadline, say, toolsDone);
+      await restoreAll(file, c, env, say, toolsDone);
     }
   } catch (error) {
     await say(`failed: ${String(error).slice(0, 200)}`);

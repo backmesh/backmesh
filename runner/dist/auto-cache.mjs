@@ -1,14 +1,7 @@
 // src/cache/auto/restore.ts
 import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
-import {
-  appendFile,
-  mkdir as mkdir2,
-  readFile as readFile3,
-  rename,
-  rm,
-  writeFile as writeFile3
-} from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
+import { appendFile, mkdir as mkdir2, rename, rm, writeFile as writeFile3 } from "node:fs/promises";
 import { join as join3 } from "node:path";
 import { setTimeout as sleep2 } from "node:timers/promises";
 
@@ -64,11 +57,11 @@ async function buildPiece(piece, cwd, dir) {
   await sh(`{ ${tar} || echo ${FAIL} >&2; } | { ${zstd} || echo ${FAIL} >&2; } >"$1"`, [out, cwd, list], "ignore").done;
 }
 var zstdCli;
-async function restorePiece(store, prefix, piece, workspace, absolute = !0) {
+async function restorePiece(store, prefix, piece, workspace, absolute = !0, signal) {
   zstdCli ??= spawnSync("zstd", ["--version"]).status === 0;
   let body = Readable.fromWeb((await store.get(`${prefix}${piece.name}`)).body), decode = piece.zstd && zstdCli ? "zstd -d -q -c" : "cat", { child, done } = sh(`{ ${decode} || echo ${FAIL} >&2; } | { tar -x ${absolute ? "-P " : ""}-C "$1" -f - || echo ${FAIL} >&2; cat >/dev/null; }`, [workspace], "pipe"), stages = piece.zstd && !zstdCli ? [body, createZstdDecompress(), child.stdin] : [body, child.stdin], failed = (await Promise.allSettled([
     done,
-    pipeline(stages)
+    pipeline(stages, { signal })
   ])).find((r) => r.status === "rejected");
   if (failed)
     throw failed.reason;
@@ -4937,27 +4930,27 @@ async function instances(store, ref, version, key) {
 
 // src/cache/auto/restore.ts
 var LIMIT = 120000, secs = (since) => `${((Date.now() - since) / 1000).toFixed(1)} s`;
-async function ready(path, deadline) {
+async function ready(path, over) {
   for (;; ) {
     let file = await read(path).catch(() => {
       return;
     });
-    if (file?.state !== "pending" || Date.now() >= deadline)
+    if (file?.state !== "pending" || over())
       return file;
     await sleep2(200);
   }
 }
-async function restoreOne(c, t, commit) {
+async function restoreOne(c, t, commit, signal = c.stop) {
   let started = Date.now();
   if (existsSync(t.dir))
-    return `gave way ${t.what}: a step made ${t.dir} first, at ${await c.at()}`;
+    return `gave way ${t.what}: a step made ${t.dir} first, at ${c.at()}`;
   let match = await findEntry(c.store, c.prefixes, entryVersion([t.dir]), t.key, t.pm ? [lineOf(t.key)] : []);
   if (!match || !t.pm && match.key !== t.key)
     return `missed ${t.what}`;
   let manifest = await readManifest(c.store, match.prefix), staging = `${t.dir}.bm-${randomBytes(4).toString("hex")}`;
   try {
     await mkdir2(staging, { recursive: !0 }), await makeParents(staging, manifest.pieces.flatMap((p) => p.members).filter((m) => !m.startsWith("/") && !m.split("/").includes("..")));
-    let failed = (await Promise.allSettled(manifest.pieces.map((p) => restorePiece(c.store, match.prefix, p, staging, !1)))).find((r) => r.status === "rejected");
+    let failed = (await Promise.allSettled(manifest.pieces.map((p) => restorePiece(c.store, match.prefix, p, staging, !1, signal)))).find((r) => r.status === "rejected");
     if (failed)
       throw failed.reason;
     if (!commit())
@@ -4977,17 +4970,17 @@ async function restoreOne(c, t, commit) {
       let code = error.code;
       if (code !== "ENOTEMPTY" && code !== "EEXIST")
         throw error;
-      return `gave way ${t.what}: a step made ${t.dir} first, at ${await c.at()}`;
+      return `gave way ${t.what}: a step made ${t.dir} first, at ${c.at()}`;
     }
     if (!t.pm)
       await writeFile3(`${t.dir}.complete`, "");
   } finally {
     await rm(staging, { recursive: !0, force: !0 });
   }
-  let older = match.key === t.key ? "" : ", an older lockfile", size = `${(manifest.bytes / 1e6).toFixed(0)} MB`, at = t.pm ? `, at ${await c.at()}` : "";
+  let older = match.key === t.key ? "" : ", an older lockfile", size = `${(manifest.bytes / 1e6).toFixed(0)} MB`, at = t.pm ? `, at ${c.at()}` : "";
   return `restored ${t.what} (${match.ref}${older})  ${size} in ${secs(started)}${at}`;
 }
-async function restoreAll(file, c, env, deadline, say, toolsDone) {
+async function restoreAll(file, c, env, say, toolsDone) {
   let key = recordKey(file.job), found = await findEntry(c.store, c.prefixes, RECORD_VERSION, key, []);
   if (!found || found.key !== key)
     return say("found no record of this job yet: its save writes one");
@@ -5016,13 +5009,13 @@ async function restoreAll(file, c, env, deadline, say, toolsDone) {
       key: d.key,
       dir: join3(env.HOME, PM_DIRS[d.pm]),
       pm: d.pm
-    }, expired = !1, committed = !1, one = restoreOne(c, t, () => !expired && (committed = !0)).catch(failed(t)), late = sleep2(Math.max(0, deadline - Date.now()), void 0, {
-      ref: !1
-    }).then(async () => {
-      if (committed)
+    }, end = new AbortController, committed = !1, settled = !1, one = restoreOne(c, t, () => !end.signal.aborted && (committed = !0), AbortSignal.any([c.stop, end.signal])).catch(failed(t)).finally(() => settled = !0), late = (async () => {
+      while (!settled && !c.expired())
+        await sleep2(200);
+      if (settled || committed)
         return one;
-      return expired = !0, `gave up ${t.what}: still restoring at ${await c.at()}`;
-    });
+      return end.abort(), `gave up ${t.what}: still restoring at ${c.at()}`;
+    })();
     deps.push(Promise.race([one, late]).then(say));
   }
   for (let pm of record.aside)
@@ -5036,8 +5029,8 @@ async function restoreAll(file, c, env, deadline, say, toolsDone) {
     await say(commit() ? await restoreOne(c, t, commit).catch(failed(t)) : `skipped ${t.what}: the job started without it`);
   })), await toolsDone(), await Promise.all(deps);
 }
-async function restore(tokenPath, state, env = process.env, storeOf = openStore, limit = LIMIT) {
-  let began = Date.now(), deadline = began + limit, say = async (text) => {
+async function restore(tokenPath, state, env = process.env, storeOf = openStore, limit = LIMIT, stop = new AbortController().signal) {
+  let began = Date.now(), say = async (text) => {
     let line = `backmesh cache: auto ${text}`;
     console.log(line), await appendFile(join3(state, "lines"), `${line}
 `).catch(() => {
@@ -5048,16 +5041,18 @@ async function restore(tokenPath, state, env = process.env, storeOf = openStore,
   }).then(async () => {
     let path = join3(state, "restored.json");
     await writeFile3(`${path}.new`, JSON.stringify(restored)), await rename(`${path}.new`, path);
-  }), at = async () => {
-    let started = await readFile3(join3(state, "started"), "utf8").catch(() => "");
-    return `+${secs(Number(started) || began)}`;
-  }, gaveUp = () => existsSync(join3(state, "gave-up"));
+  }), started, startedAt = () => {
+    try {
+      started ||= Number(readFileSync(join3(state, "started"), "utf8"));
+    } catch {}
+    return started || void 0;
+  }, expired = () => Date.now() >= (startedAt() ?? 1 / 0) + limit, at = () => `+${secs(startedAt() ?? began)}`, gaveUp = () => existsSync(join3(state, "gave-up"));
   try {
-    let file = await ready(tokenPath, deadline);
+    let file = await ready(tokenPath, () => expired() || stop.aborted);
     if (file && file.state !== "pending")
       await writeFile3(join3(state, "ready"), String(Date.now()));
     if (file?.state === "pending")
-      await say(`gave up: no cache token by ${await at()}`);
+      await say(`gave up: no cache token by ${at()}`);
     else if (file?.state === "off")
       await say(`skipped: the cache is off for this runner (${file.reason})`);
     else if (file?.job) {
@@ -5067,9 +5062,11 @@ async function restore(tokenPath, state, env = process.env, storeOf = openStore,
         restored,
         persist,
         gaveUp,
-        at
+        expired,
+        at,
+        stop
       };
-      await restoreAll(file, c, env, deadline, say, toolsDone);
+      await restoreAll(file, c, env, say, toolsDone);
     }
   } catch (error) {
     await say(`failed: ${String(error).slice(0, 200)}`);
@@ -5079,7 +5076,7 @@ async function restore(tokenPath, state, env = process.env, storeOf = openStore,
 }
 
 // src/cache/auto/save.ts
-import { lstat as lstat4, readdir as readdir4, readFile as readFile6, rm as rm3 } from "node:fs/promises";
+import { lstat as lstat4, readdir as readdir4, readFile as readFile5, rm as rm3 } from "node:fs/promises";
 import { basename as basename2, join as join6 } from "node:path";
 
 // src/cache/snapshot.ts
@@ -5089,7 +5086,7 @@ import {
   lstat as lstat2,
   mkdir as mkdir3,
   readdir as readdir2,
-  readFile as readFile4,
+  readFile as readFile3,
   rm as rm2,
   writeFile as writeFile4
 } from "node:fs/promises";
@@ -5154,7 +5151,7 @@ async function putEntry(store, prefix, key, cwd, members, at, out) {
 }
 
 // src/cache/auto/aside.ts
-import { lstat as lstat3, readdir as readdir3, readFile as readFile5 } from "node:fs/promises";
+import { lstat as lstat3, readdir as readdir3, readFile as readFile4 } from "node:fs/promises";
 import { join as join5 } from "node:path";
 var indent = (line) => line.length - line.trimStart().length, blank = (line) => !line.trim() || line.trimStart().startsWith("#");
 function under(lines, i) {
@@ -5243,7 +5240,7 @@ async function actionFiles(dir, depth = 0) {
   }
   return files;
 }
-var text = (path) => readFile5(path, "utf8").catch(() => {
+var text = (path) => readFile4(path, "utf8").catch(() => {
   return;
 });
 async function scanJob(workspace, repo, workflow, job, actions) {
@@ -5280,18 +5277,14 @@ async function changedAfter(dir, members, marker) {
   }
   return;
 }
-async function yarnUnused(workspace, locks) {
+async function yarnHashes(workspace, locks) {
   let used = /* @__PURE__ */ new Set;
   for (let l of locks.filter((l) => basename2(l) === "yarn.lock"))
-    for (let m of (await readFile6(join6(workspace, l), "utf8")).matchAll(/#([0-9a-f]{40})"/g))
+    for (let m of (await readFile5(join6(workspace, l), "utf8")).matchAll(/#([0-9a-f]{40})"/g))
       used.add(m[1]);
-  return (name) => {
-    if (name === ".tmp")
-      return !0;
-    let hash = /^[^/]*-([0-9a-f]{40})(-integrity)?$/.exec(name)?.[1];
-    return !!hash && used.size > 0 && !used.has(hash);
-  };
+  return used;
 }
+var yarnHash = (name) => /^([^/]*)-([0-9a-f]{40})(-integrity)?(\/|$)/.exec(name)?.[2];
 async function saveJob(s) {
   let now = s.now ?? Date.now(), f = s.facts, record = { v: 1, tools: [], deps: [], aside: [] }, held = async (key, dir, refresh = !1) => {
     let version = entryVersion([dir]), refs = /* @__PURE__ */ new Set([s.own, s.prefixes.base, s.prefixes.default]);
@@ -5351,14 +5344,23 @@ async function saveJob(s) {
         record.aside.push(pm);
         continue;
       }
-      let prior = s.restored.deps[pm], was = s.restored.record?.data.deps.find((d) => d.pm === pm), refresh = prior?.key === key && prior.ref === "own" && s.own === s.prefixes.default && now - prior.at > 3 * DAY, skip = await held(key, dir, refresh), members = skip && prior && was ? [] : await membersOf(dir, ["."], pm === "yarn" ? await yarnUnused(f.GITHUB_WORKSPACE, locks) : void 0), bytes = members.reduce((sum, m) => sum + m.size, 0), dep = {
+      let prior = s.restored.deps[pm], was = s.restored.record?.data.deps.find((d) => d.pm === pm), refresh = prior?.key === key && prior.ref === "own" && s.own === s.prefixes.default && now - prior.at > 3 * DAY, skip = await held(key, dir, refresh), used = pm === "yarn" ? await yarnHashes(f.GITHUB_WORKSPACE, locks) : /* @__PURE__ */ new Set, members = skip && prior && was ? [] : await membersOf(dir, ["."], pm === "yarn" ? (name) => {
+        let hash = yarnHash(name);
+        return name === ".tmp" || !!hash && used.size > 0 && !used.has(hash);
+      } : void 0), bytes = members.reduce((sum, m) => sum + m.size, 0), dep = {
         pm,
         key,
         base: prior && was ? was.base : bytes
       };
       if (record.deps.push(dep), skip)
         continue;
-      if (prior && prior.key !== key && !await changedAfter(dir, members, prior.landed + 1))
+      let stale = async () => {
+        if (!used.size)
+          return !await changedAfter(dir, members, prior.landed + 1);
+        let held = new Set(members.map((m) => yarnHash(m.name)));
+        return [...used].some((h) => !held.has(h));
+      };
+      if (prior && prior.key !== key && await stale())
         s.log(`result=stale key=${key}`);
       else if (prior && prior.key !== key && bytes > 2 * dep.base)
         dep.reset = !0, s.log(`result=reset key=${key} bytes=${bytes} base=${dep.base}`);
@@ -5390,10 +5392,10 @@ async function save(tokenPath, state, work, env = process.env) {
     let own = file.prefixes.own;
     if (!own)
       return log("result=read-only");
-    let facts = factsSchema.safeParse(JSON.parse(await readFile6(join6(state, "facts.json"), "utf8").catch(() => "null")));
+    let facts = factsSchema.safeParse(JSON.parse(await readFile5(join6(state, "facts.json"), "utf8").catch(() => "null")));
     if (!facts.success)
       return log("result=no-facts");
-    let restored = JSON.parse(await readFile6(join6(state, "restored.json"), "utf8").catch(() => '{"deps":{}}'));
+    let restored = JSON.parse(await readFile5(join6(state, "restored.json"), "utf8").catch(() => '{"deps":{}}'));
     await saveJob({
       store: openStore(tokensFrom(tokenPath, file)),
       prefixes: file.prefixes,
@@ -5413,9 +5415,12 @@ async function save(tokenPath, state, work, env = process.env) {
 
 // src/cache/auto/main.ts
 var [command, token, state, work] = process.argv.slice(2);
-if (command === "restore" && token && state)
-  await restore(token, state);
-else if (command === "save" && token && state && work)
+if (command === "restore" && token && state) {
+  let stop = new AbortController;
+  process.once("SIGTERM", () => {
+    stop.abort(), setTimeout(() => process.exit(143), 5000).unref();
+  }), await restore(token, state, process.env, void 0, void 0, stop.signal);
+} else if (command === "save" && token && state && work)
   await save(token, state, work);
 else
   console.error("Usage: auto-cache.mjs restore|save <token> <state> [<work>]"), process.exitCode = 2;

@@ -66,23 +66,19 @@ async function changedAfter(
   return undefined;
 }
 
-// Yarn 1 keeps every version it ever fetched. Its entries are named for the
-// hash in their lockfile's `resolved`, so one no installed lockfile names is
-// left out of the save, with its temporary directory. One with no hash in its
-// name stays, as do all when the lockfiles name no hash.
-async function yarnUnused(workspace: string, locks: readonly string[]) {
+// Yarn 1's cache entries are named for the hash in their lockfile's
+// `resolved`: the hashes the installed yarn.lock files name.
+async function yarnHashes(workspace: string, locks: readonly string[]) {
   const used = new Set<string>();
   for (const l of locks.filter((l) => basename(l) === 'yarn.lock'))
     for (const m of (await readFile(join(workspace, l), 'utf8')).matchAll(
       /#([0-9a-f]{40})"/g,
     ))
       used.add(m[1]!);
-  return (name: string) => {
-    if (name === '.tmp') return true;
-    const hash = /^[^/]*-([0-9a-f]{40})(-integrity)?$/.exec(name)?.[1];
-    return !!hash && used.size > 0 && !used.has(hash);
-  };
+  return used;
 }
+const yarnHash = (name: string) =>
+  /^([^/]*)-([0-9a-f]{40})(-integrity)?(\/|$)/.exec(name)?.[2];
 
 // Saves what the job used and writes its record; returns the record.
 export async function saveJob(s: SaveJob): Promise<JobRecord> {
@@ -189,17 +185,22 @@ export async function saveJob(s: SaveJob): Promise<JobRecord> {
         s.own === s.prefixes.default &&
         now - prior.at > 3 * DAY;
       const skip = await held(key, dir, refresh);
+      // Yarn 1 keeps every version it ever fetched: an entry no lockfile
+      // names is left out, with its temporary directory. One with no hash in
+      // its name stays, as do all when the lockfiles name no hash.
+      const used =
+        pm === 'yarn'
+          ? await yarnHashes(f.GITHUB_WORKSPACE, locks)
+          : new Set<string>();
+      const unused = (name: string) => {
+        const hash = yarnHash(name);
+        return name === '.tmp' || (!!hash && used.size > 0 && !used.has(hash));
+      };
       // A walk of a large cache is slow: only when its size or files count.
       const members =
         skip && prior && was
           ? []
-          : await membersOf(
-              dir,
-              ['.'],
-              pm === 'yarn'
-                ? await yarnUnused(f.GITHUB_WORKSPACE, locks)
-                : undefined,
-            );
+          : await membersOf(dir, ['.'], pm === 'yarn' ? unused : undefined);
       const bytes = members.reduce((sum, m) => sum + m.size, 0);
       const dep: JobRecord['deps'][number] = {
         pm,
@@ -209,13 +210,16 @@ export async function saveJob(s: SaveJob): Promise<JobRecord> {
       record.deps.push(dep);
       if (skip) continue;
       // Restored in the background from an older lockfile after the job's
-      // install, which then wrote nothing into it: it lacks the new packages.
-      // Date.now() is whole milliseconds; ctime isn't.
-      if (
-        prior &&
-        prior.key !== key &&
-        !(await changedAfter(dir, members, prior.landed + 1))
-      )
+      // install, so it may lack the new packages: Yarn 1's, if an entry its
+      // lockfiles name is missing; another's, if the install wrote nothing
+      // into it. Date.now() is whole milliseconds; ctime isn't.
+      const stale = async () => {
+        if (!used.size)
+          return !(await changedAfter(dir, members, prior!.landed + 1));
+        const held = new Set(members.map((m) => yarnHash(m.name)));
+        return [...used].some((h) => !held.has(h));
+      };
+      if (prior && prior.key !== key && (await stale()))
         s.log(`result=stale key=${key}`);
       else if (prior && prior.key !== key && bytes > 2 * dep.base) {
         dep.reset = true;

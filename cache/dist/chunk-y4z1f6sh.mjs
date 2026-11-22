@@ -51,11 +51,11 @@ async function buildPiece(piece, cwd, dir) {
   await sh(`{ ${tar} || echo ${FAIL} >&2; } | { ${zstd} || echo ${FAIL} >&2; } >"$1"`, [out, cwd, list], "ignore").done;
 }
 var zstdCli;
-async function restorePiece(store, prefix, piece, workspace, absolute = !0) {
+async function restorePiece(store, prefix, piece, workspace, absolute = !0, signal) {
   zstdCli ??= spawnSync("zstd", ["--version"]).status === 0;
   let body = Readable.fromWeb((await store.get(`${prefix}${piece.name}`)).body), decode = piece.zstd && zstdCli ? "zstd -d -q -c" : "cat", { child, done } = sh(`{ ${decode} || echo ${FAIL} >&2; } | { tar -x ${absolute ? "-P " : ""}-C "$1" -f - || echo ${FAIL} >&2; cat >/dev/null; }`, [workspace], "pipe"), stages = piece.zstd && !zstdCli ? [body, createZstdDecompress(), child.stdin] : [body, child.stdin], failed = (await Promise.allSettled([
     done,
-    pipeline(stages)
+    pipeline(stages, { signal })
   ])).find((r) => r.status === "rejected");
   if (failed)
     throw failed.reason;

@@ -147,6 +147,8 @@ export async function restorePiece(
   // Phase 1's names, relative to the workspace, may leave it; phase 2's
   // can't.
   absolute = true,
+  // Ends the download; `tar` then sees its input end.
+  signal?: AbortSignal,
 ): Promise<void> {
   zstdCli ??= spawnSync('zstd', ['--version']).status === 0;
   const body = Readable.fromWeb(
@@ -166,7 +168,7 @@ export async function restorePiece(
       : [body, child.stdin!];
   const results = await Promise.allSettled([
     done,
-    pipeline(stages as [Readable, NodeJS.WritableStream]),
+    pipeline(stages as [Readable, NodeJS.WritableStream], { signal }),
   ]);
   const failed = results.find((r) => r.status === 'rejected');
   if (failed) throw failed.reason;
