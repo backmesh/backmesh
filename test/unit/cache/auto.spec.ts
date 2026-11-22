@@ -491,6 +491,76 @@ describe('the automatic caches, from one job to the next', () => {
     await running;
     expect(await readdir(yarn)).toEqual([]);
     await expect(readFile(join(r.state, 'done'))).resolves.toBeDefined();
+    expect(await linesOf(r)).toEqual([
+      'backmesh cache: auto stopped yarn: the job ended',
+    ]);
+  });
+
+  it('says nothing when stopped on a runner that never got a job', async () => {
+    const r = await runner();
+    const b = bucket();
+    await r.vm();
+    await writeFile(r.token, JSON.stringify({ v: 1, state: 'pending' }));
+    const stop = new AbortController();
+    const running = restore(
+      r.token,
+      r.state,
+      {},
+      () => b.store,
+      undefined,
+      stop.signal,
+    );
+    await new Promise((ok) => setTimeout(ok, 50));
+    stop.abort();
+    await running;
+    expect(await linesOf(r)).toEqual([]);
+  });
+
+  it("ends a request stalled before its response, through the store's signal", async () => {
+    const r = await runner();
+    const b = bucket();
+    await r.vm();
+    await yarnCache(r);
+    await save(r, b, join(r.tools, 'none'));
+    await r.vm();
+    await readyToken(r);
+    await started(r);
+    // A piece's GET that never answers, until its signal ends it.
+    const storeOf = (_: unknown, signal?: AbortSignal): Store => ({
+      ...b.store,
+      get: (key) =>
+        /bm-auto-yarn.*\.tar/.test(key)
+          ? new Promise((_, fail) =>
+              signal?.addEventListener('abort', () => fail(signal.reason)),
+            )
+          : b.store.get(key),
+    });
+    await restore(r.token, r.state, envOf(r), storeOf, 300);
+    const yarn = join(r.home, '.cache', 'yarn');
+    expect(await eventually(async () => !(await readdir(yarn)).length)).toBe(
+      true,
+    );
+  });
+
+  it('ends a tool download once the hook gave up, and leaves no directory', async () => {
+    const r = await runner();
+    const b = bucket();
+    await r.vm();
+    await save(r, b, join(await setupTool(r), 'bin'));
+    await r.vm();
+    await readyToken(r);
+    const g = gated(b, /bm-auto-tool.*\.tar/);
+    const running = restore(r.token, r.state, envOf(r), () => g.store);
+    const version = join(r.tools, 'node', '22.23.5');
+    await eventually(async () =>
+      (await readdir(version).catch(() => [])).some((n) => n.includes('.bm-')),
+    );
+    await writeFile(join(r.state, 'gave-up'), '');
+    await running;
+    expect(await linesOf(r)).toEqual([
+      'backmesh cache: auto skipped node 22.23.5: the job started without it',
+    ]);
+    expect(await readdir(version)).toEqual([]);
   });
 
   it('once the hook gave up, restores no tool, but waits on for the token for the dependency caches', async () => {
