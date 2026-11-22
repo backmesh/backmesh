@@ -434,7 +434,8 @@ case_waits_for_the_automatic_restores_and_prints_them() {
   local dir=$scratch/auto
   mkdir -p "$dir"
   echo "job_started ${EPOCHREALTIME/./}" >"$scratch/marks"
-  { sleep 0.2; echo $((${EPOCHREALTIME/./} / 1000)) >"$dir/ready"; sleep 0.3
+  # As the restorer writes it: no newline.
+  { sleep 0.2; printf %s $((${EPOCHREALTIME/./} / 1000)) >"$dir/ready"; sleep 0.3
     echo 'backmesh cache: auto restored node 22.23.5 (own)' >"$dir/lines"; : >"$dir/done"; } &
   BACKMESH_AUTO_STATE=$dir BACKMESH_JOB_MARKS=$scratch/marks AUTO_WAIT=5 bash "$scratch/started-hook.sh" >"$scratch/out" 2>&1
   status=$?
@@ -467,7 +468,7 @@ case_gives_up_on_a_restorer_that_never_finishes() {
 case_prints_no_timing_when_it_restored_nothing() {
   local dir=$scratch/auto
   mkdir -p "$dir"
-  echo $((${EPOCHREALTIME/./} / 1000)) >"$dir/ready"
+  printf %s $((${EPOCHREALTIME/./} / 1000)) >"$dir/ready"
   echo 'backmesh cache: auto skipped: the cache is off for this runner (FORBIDDEN)' >"$dir/lines"
   : >"$dir/done"
   BACKMESH_AUTO_STATE=$dir AUTO_WAIT=1 bash "$scratch/started-hook.sh" >"$scratch/out" 2>&1
@@ -480,7 +481,7 @@ case_prints_no_timing_when_it_restored_nothing() {
 case_says_when_restores_outlast_the_wait() {
   local dir=$scratch/auto
   mkdir -p "$dir"
-  echo $((${EPOCHREALTIME/./} / 1000)) >"$dir/ready"
+  printf %s $((${EPOCHREALTIME/./} / 1000)) >"$dir/ready"
   BACKMESH_AUTO_STATE=$dir AUTO_WAIT=1 bash "$scratch/started-hook.sh" >"$scratch/out" 2>&1
   status=$?
   check 'exits 0' '((status == 0))'

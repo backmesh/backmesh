@@ -265,7 +265,8 @@ auto_restores() {
   [[ -e $dir/done ]] || : >"$dir/gave-up" || true
   cat "$dir/lines" 2>/dev/null || true
   total=$(((${EPOCHREALTIME/./} - start) / 1000))
-  read -r ready 2>/dev/null <"$dir/ready" || ready=
+  # The restorer writes it with no newline, at which `read` fails.
+  ready=$(cat "$dir/ready" 2>/dev/null) || ready=
   if [[ ! $ready =~ ^[0-9]+$ ]]; then
     log_auto "took $total ms: no cache token within $auto_wait s, so it restored nothing"
     return 0
