@@ -13,9 +13,10 @@
 // owner of ORG enters it. The token stays valid afterwards: the owner
 // revokes it at https://github.com/settings/apps/authorizations.
 //
-// No runner ever starts: each session acquires the jobs it's offered, so
-// GitHub sends JobAssigned to the set that won, and the runs are then
-// cancelled. Cleanup cancels the runs and deletes the sessions, scale sets
+// No runner ever starts. GitHub sends a job's JobAssigned to the one set it
+// routes the job to, without a JobAvailable first (run 45056147324); a
+// session that's offered a JobAvailable acquires it, so JobAssigned follows
+// on the set that won. The runs are then cancelled. Cleanup cancels the runs and deletes the sessions, scale sets
 // and groups the run recorded in STATE, outside the evidence, carrying on
 // past a failed step, and checks the groups and scale sets are gone.
 //
@@ -547,8 +548,8 @@ async function run() {
       );
     }
     report.messages = seen;
-    // Per run: the sessions offered its job, the ones whose acquire got
-    // it, and the ones sent JobAssigned. A session won the job when both.
+    // Per run: the sessions sent JobAssigned, which is the routing, and any
+    // offered a JobAvailable, with the ones whose acquire got it.
     const sides = (id: number, test: (entry: Seen) => boolean) => [
       ...new Set(
         seen
@@ -557,24 +558,26 @@ async function run() {
       ),
     ];
     const runs = state.runs.map(({ repo, id, phase }) => {
-      const acquiredBy = sides(id, (e) => e.acquired === true);
       const assignedTo = sides(id, (e) => e.job.messageType === 'JobAssigned');
+      const acquiredBy = sides(id, (e) => e.acquired === true);
       return {
         run: `https://github.com/${ORG}/${repo}/actions/runs/${id}`,
         repo,
         phase,
+        assignedTo,
         offeredTo: sides(id, (e) => e.job.messageType === 'JobAvailable'),
         acquiredBy,
-        assignedTo,
-        wonBy: acquiredBy.filter((side) => assignedTo.includes(side)),
       };
     });
     report.runs = runs;
     // Per phase and repository: how many jobs each outcome had.
     const summary: Record<string, Record<string, number>> = {};
-    for (const { phase, repo, offeredTo, wonBy } of runs) {
+    for (const { phase, repo, assignedTo, offeredTo } of runs) {
       const key = `${phase} ${repo}`;
-      const outcome = `offered ${offeredTo.join('+') || 'none'}, won ${wonBy.join('+') || 'none'}`;
+      const offered = offeredTo.length
+        ? `, offered ${offeredTo.join('+')}`
+        : '';
+      const outcome = `assigned ${assignedTo.join('+') || 'none'}${offered}`;
       summary[key] ??= {};
       summary[key][outcome] = (summary[key][outcome] ?? 0) + 1;
     }

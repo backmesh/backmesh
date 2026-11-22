@@ -35,9 +35,9 @@ The job log prints a device code. An owner of `backmesh-dryrun` enters it,
 then revokes the backmesh App's authorization at
 https://github.com/settings/apps/authorizations once the run is done.
 `report.json` in the evidence artifact has the plan, each step's answer,
-every job message per session, and per run the sessions offered its job, the
-ones whose acquire got it and the ones sent JobAssigned. `summary` counts
-these per phase and repository.
+every job message per session, and per run the sessions sent JobAssigned
+(GitHub assigns a job to one set without a JobAvailable first) and any offered
+a JobAvailable. `summary` counts these per phase and repository.
 
 ## How to read
 
@@ -47,11 +47,11 @@ these per phase and repository.
 - `duplicateName.created: true` means GitHub took the second scale set of the
   same name in another group. Otherwise the event has GitHub's refusal.
 - Routing by repository holds if, in `one-repo-each`, every route-a job is
-  `offered a, won a` and every route-b job `offered b, won b`. A job offered
-  to both sessions, or won by the other group's set, refutes it.
+  `assigned a` and every route-b job `assigned b`. A job assigned to the
+  other group's set, or offered to both, refutes it.
 - `route-a-in-both` shows what happens to a repository both groups allow:
-  route-a's jobs offered to one set, to both (and which acquire won), or to
-  neither. route-b's jobs are the control and should stay `offered b, won b`.
+  route-a's jobs assigned to one set (which), offered to both, or to
+  neither. route-b's jobs are the control and should stay `assigned b`.
 
 Delete this directory, and the two repositories, once the findings are
 recorded.
