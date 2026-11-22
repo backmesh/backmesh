@@ -1485,11 +1485,17 @@ setInterval(() => {}, 1000);
   it("pushes result.json to the same branch whatever the label jobs did, but doesn't re-create a deleted one", () => {
     const job = labels().jobs.result!;
     expect(job.if).toBe('${{ always() }}');
-    expect(job.needs).toEqual(['read', 'labels']);
+    expect(job.needs).toEqual([
+      'read',
+      'labels',
+      'cache-save',
+      'cache-restore',
+    ]);
     expect(job.permissions).toEqual({ contents: 'write' });
     const step = job.steps!.find((s) => s.run?.includes('result.json'))!;
     expect(step.env).toMatchObject({
-      CONCLUSION: '${{ needs.labels.result }}',
+      CONCLUSION:
+        "${{ needs.labels.result != 'success' && needs.labels.result || needs.cache-save.result != 'success' && needs.cache-save.result || needs.cache-restore.result }}",
     });
     const dir = mkdtempSync(join(tmpdir(), 'result-'));
     const out = runStep(`cd ${dir}\n${step.run!}`, {
@@ -1514,10 +1520,12 @@ setInterval(() => {}, 1000);
   });
 });
 
-// e2e-labels.yml's warm hit: the next job restores what a job saved, which
+// The test org's warm hit: the next job restores what a job saved, which
 // its runner uploads after the job.
-describe("e2e-labels.yml's cache warm hit", () => {
-  const { jobs } = read('e2e-labels.yml');
+describe("labels.yml's cache warm hit", () => {
+  const { jobs } = load(
+    readFileSync('test/e2e/test-org/labels.yml', 'utf8'),
+  ) as Workflow;
   const save = jobs['cache-save']!.steps!;
   const steps = jobs['cache-restore']!.steps!;
   const named = (prefix: string) =>
@@ -1559,7 +1567,7 @@ describe("e2e-labels.yml's cache warm hit", () => {
     });
 
   it('restores after the save, on the same label, from its bucket', () => {
-    expect(jobs['cache-restore']!.needs).toBe('cache-save');
+    expect(jobs['cache-restore']!.needs).toEqual(['read', 'cache-save']);
     expect(jobs['cache-restore']!['runs-on']).toBe(
       jobs['cache-save']!['runs-on'],
     );

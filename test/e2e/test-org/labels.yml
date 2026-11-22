@@ -4,7 +4,8 @@ name: labels
 # tests check. backmesh/backmesh's e2e.yml (run-test-org-labels.ts) pushes
 # run.json to a run/<nonce> branch with this repository's write deploy key;
 # its runners take jobs only from this org's repositories. This calls
-# e2e-labels.yml with run.json's matrix and ref, then pushes result.json to
+# e2e-labels.yml with run.json's matrix and ref, checks the cache's warm hit
+# with backmesh/backmesh's checkout at that ref, then pushes result.json to
 # the same branch, which e2e.yml reads back with the deploy key and then
 # deletes. GITHUB_TOKEN's push starts no workflow. A run/** push runs this
 # file only if it's in the pushed tree, so e2e.yml builds on this
@@ -56,8 +57,77 @@ jobs:
       matrix: ${{ needs.read.outputs.matrix }}
       ref: ${{ needs.read.outputs.ref }}
 
+  # The cache's warm hit: a save uploads after its job, from the runner, so
+  # only the next job's restore shows it landed; every release before v0.5.3
+  # lost every one. Here, not in e2e-labels.yml: a job in another
+  # repository's reusable workflow only reads the cache, so this one saves
+  # as a push to a run/<nonce> branch does in a customer's repository. Each region has its own bucket, so a restore whose runner
+  # landed in another region than the save's fails too: rerun it.
+  cache-save:
+    needs: read
+    runs-on: ${{ fromJson(needs.read.outputs.matrix).include[0].label }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      bucket: ${{ steps.bucket.outputs.bucket }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: backmesh/backmesh
+          ref: ${{ needs.read.outputs.ref }}
+      - name: The cache token is ready
+        id: bucket
+        run: &ready |
+          file=/run/anycloud-secrets/_bm-cache-$RUNNER_NAME/BACKMESH_CACHE
+          # The action gives a token pending past 20 s up for the whole job.
+          for _ in $(seq 60); do [[ $(jq -r .state "$file") == pending ]] || break; sleep 1; done
+          [[ $(jq -r .state "$file") == ready ]] || { echo "::error::the cache token isn't ready: $(jq -c '{state, reason}' "$file")"; exit 1; }
+          echo "bucket=$(jq -r .bucket "$file")" >>"$GITHUB_OUTPUT"
+      - run: mkdir warm && head -c 100000 /dev/urandom >warm/blob
+      - uses: ./cache/save
+        with:
+          path: warm
+          key: e2e-warm-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: The save left a plan for the runner, not GitHub's cache
+        run: ls "$GITHUB_WORKSPACE"/../../_backmesh-cache/*/plan.json
+
+  cache-restore:
+    needs: [read, cache-save]
+    runs-on: ${{ fromJson(needs.read.outputs.matrix).include[0].label }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: backmesh/backmesh
+          ref: ${{ needs.read.outputs.ref }}
+      - name: The cache token is ready
+        id: bucket
+        run: *ready
+      - name: The runner reads the save's bucket
+        env:
+          SAVED_TO: ${{ needs.cache-save.outputs.bucket }}
+          BUCKET: ${{ steps.bucket.outputs.bucket }}
+        run: |
+          [[ $BUCKET == "$SAVED_TO" ]] || { echo "::error::the save went to $SAVED_TO and this runner reads $BUCKET, another region's: rerun the jobs"; exit 1; }
+      # The save's runner uploads after its job, so this tries for 5 minutes.
+      - name: The next job restores the save
+        env:
+          INPUT_PATH: warm
+          INPUT_KEY: e2e-warm-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          for _ in $(seq 20); do
+            node cache/dist/restore.mjs
+            [[ -s warm/blob ]] && exit 0
+            sleep 15
+          done
+          echo "::error::the save never reached the bucket: the runner's upload after the job failed"
+          exit 1
+
   result:
-    needs: [read, labels]
+    needs: [read, labels, cache-save, cache-restore]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -66,7 +136,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - env:
-          CONCLUSION: ${{ needs.labels.result }}
+          # The first of the label, save and restore jobs that didn't succeed.
+          CONCLUSION: ${{ needs.labels.result != 'success' && needs.labels.result || needs.cache-save.result != 'success' && needs.cache-save.result || needs.cache-restore.result }}
           URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           jq -n --arg conclusion "$CONCLUSION" --arg url "$URL" '{$conclusion, $url}' >result.json

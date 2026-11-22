@@ -129,5 +129,9 @@ as `actions/cache` also requires, and GNU `cp` (coreutils) to save.
 - A `container:` job gets no automatic cache. Neither does a job whose workflow
   file isn't in its checkout, such as a reusable workflow from another
   repository, or a checkout with its own `path:`.
+- A job defined in a reusable workflow from another repository reads the
+  cache but saves nothing, and `backmesh/cache` prints
+  `not saved (read-only ref)`. Define a job that saves in the calling
+  repository's own workflow files.
 - Keys starting with `bm-auto-` are reserved for the automatic cache.
 - The upload's result is in the runner Job's log, not the job's log.
