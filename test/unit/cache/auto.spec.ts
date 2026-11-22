@@ -24,6 +24,7 @@ import {
 import { restore } from '../../../src/cache/auto/restore.js';
 import { saveJob, type SaveJob } from '../../../src/cache/auto/save.js';
 import { refPrefix, type ReadyFile } from '../../../src/cache/format.js';
+import type { Store } from '../../../src/cache/store.js';
 import { memoryStore } from './memory-store.js';
 
 // The zstd CLI, as the runner image has it: on PATH, or ZSTD_DIR's.
@@ -157,9 +158,9 @@ async function save(
   return { record, logs };
 }
 
-async function restoreJob(
+// The job's token, ready.
+async function readyToken(
   r: Runner,
-  b: Bucket,
   prefixes: ReadyFile['prefixes'] = { own: OWN, default: DEF },
   job = JOB,
 ) {
@@ -175,11 +176,51 @@ async function restoreJob(
     job,
   };
   await writeFile(r.token, JSON.stringify(file));
-  const env = { RUNNER_TOOL_CACHE: r.tools, HOME: r.home, ImageOS: 'ubuntu24' };
-  await restore(r.token, r.state, env, () => b.store);
-  const lines = await readFile(join(r.state, 'lines'), 'utf8').catch(() => '');
-  // The restores run at once, so their lines come in any order.
-  return lines.trim().split('\n').filter(Boolean).sort();
+}
+const envOf = (r: Runner) => ({
+  RUNNER_TOOL_CACHE: r.tools,
+  HOME: r.home,
+  ImageOS: 'ubuntu24',
+});
+// The restores run at once, so their lines come in any order.
+const linesOf = async (r: Runner) =>
+  (await readFile(join(r.state, 'lines'), 'utf8').catch(() => ''))
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .sort();
+
+async function restoreJob(
+  r: Runner,
+  b: Bucket,
+  prefixes: ReadyFile['prefixes'] = { own: OWN, default: DEF },
+  job = JOB,
+) {
+  await readyToken(r, prefixes, job);
+  await restore(r.token, r.state, envOf(r), () => b.store);
+  return linesOf(r);
+}
+
+// A bucket whose GETs of keys matching `held` wait for `open()`.
+function gated(b: Bucket, held: RegExp) {
+  let open!: () => void;
+  const gate = new Promise<void>((ok) => (open = ok));
+  const store: Store = {
+    ...b.store,
+    get: async (key) => {
+      if (held.test(key)) await gate;
+      return b.store.get(key);
+    },
+  };
+  return { store, open };
+}
+const exists = (path: string) =>
+  readFile(path).then(
+    () => true,
+    () => false,
+  );
+async function until(path: string) {
+  while (!(await exists(path))) await new Promise((ok) => setTimeout(ok, 5));
 }
 
 describe('the automatic caches, from one job to the next', () => {
@@ -263,7 +304,7 @@ describe('the automatic caches, from one job to the next', () => {
     expect(b.objects.size).toBe(before);
   });
 
-  it('discards a restore that lands after a step made its directory, as `late`', async () => {
+  it('gives way to a step that made its directory first', async () => {
     const r = await runner();
     const b = bucket();
     await r.vm();
@@ -274,7 +315,9 @@ describe('the automatic caches, from one job to the next', () => {
     await mkdir(mine, { recursive: true });
     await writeFile(join(mine, 'own'), 'step');
     expect(await restoreJob(r, b)).toEqual([
-      expect.stringMatching(/^backmesh cache: auto late yarn/),
+      expect.stringMatching(
+        /^backmesh cache: auto gave way yarn: a step made .* first, at \+\d+\.\d s$/,
+      ),
     ]);
     expect(await readdir(mine)).toEqual(['own']);
     expect(await readdir(join(r.home, '.cache', 'yarn'))).toEqual(['v6']);
@@ -299,17 +342,122 @@ describe('the automatic caches, from one job to the next', () => {
     expect(await readdir(join(r.tools, 'node', '22.23.5'))).toEqual([]);
   });
 
-  it('restores nothing once the job-started hook gave up on a pending token', async () => {
+  it('holds the hook for the tools only: a dependency cache restores in the background', async () => {
+    const r = await runner();
+    const b = bucket();
+    await r.vm();
+    const node = await setupTool(r);
+    await yarnCache(r);
+    await save(r, b, join(node, 'bin'));
+    await r.vm();
+    await readyToken(r);
+    const g = gated(b, /bm-auto-yarn.*\.tar/);
+    const running = restore(r.token, r.state, envOf(r), () => g.store);
+    await until(join(r.state, 'tools-done'));
+    expect(await linesOf(r)).toEqual([
+      expect.stringMatching(/^backmesh cache: auto restored node 22\.23\.5/),
+    ]);
+    expect(await exists(join(r.state, 'done'))).toBe(false);
+    g.open();
+    await running;
+    expect(await linesOf(r)).toEqual([
+      expect.stringMatching(/restored node/),
+      expect.stringMatching(
+        /^backmesh cache: auto restored yarn \(own\) {2}0 MB in \d+\.\d s, at \+\d+\.\d s$/,
+      ),
+    ]);
+    // For the saver: when it landed, which it notes before the rename.
+    const restored = JSON.parse(
+      await readFile(join(r.state, 'restored.json'), 'utf8'),
+    ) as Restored;
+    expect(restored.deps.yarn?.landed).toBeGreaterThan(0);
+  });
+
+  it('gives way to a step that makes the directory while it downloads, and leaves the step its files', async () => {
+    const r = await runner();
+    const b = bucket();
+    await r.vm();
+    await yarnCache(r);
+    await save(r, b, join(r.tools, 'none'));
+    await r.vm();
+    await readyToken(r);
+    const g = gated(b, /bm-auto-yarn.*\.tar/);
+    const running = restore(r.token, r.state, envOf(r), () => g.store);
+    await until(join(r.state, 'tools-done'));
+    const mine = join(r.home, '.cache', 'yarn', 'v6');
+    await mkdir(mine, { recursive: true });
+    await writeFile(join(mine, 'own'), 'step');
+    g.open();
+    await running;
+    expect(await linesOf(r)).toEqual([
+      expect.stringMatching(/^backmesh cache: auto gave way yarn/),
+    ]);
+    expect(await readdir(mine)).toEqual(['own']);
+    expect(await readdir(join(r.home, '.cache', 'yarn'))).toEqual(['v6']);
+    // Not restored, so the saver treats the step's cache as the job's.
+    expect(
+      JSON.parse(await readFile(join(r.state, 'restored.json'), 'utf8')).deps,
+    ).toEqual({});
+  });
+
+  it('gives up a dependency cache still restoring at its limit, and leaves no directory', async () => {
+    const r = await runner();
+    const b = bucket();
+    await r.vm();
+    await yarnCache(r);
+    await save(r, b, join(r.tools, 'none'));
+    await r.vm();
+    await readyToken(r);
+    const g = gated(b, /bm-auto-yarn.*\.tar/);
+    await restore(r.token, r.state, envOf(r), () => g.store, 300);
+    expect(await linesOf(r)).toEqual([
+      expect.stringMatching(
+        /^backmesh cache: auto gave up yarn: still restoring at \+\d+\.\d s$/,
+      ),
+    ]);
+    // The download, let go, discards what it fetched.
+    g.open();
+    await new Promise((ok) => setTimeout(ok, 200));
+    expect(await readdir(join(r.home, '.cache', 'yarn'))).toEqual([]);
+    expect(
+      JSON.parse(await readFile(join(r.state, 'restored.json'), 'utf8')).deps,
+    ).toEqual({});
+  });
+
+  it('once the hook gave up, restores no tool, but waits on for the token for the dependency caches', async () => {
+    const r = await runner();
+    const b = bucket();
+    await r.vm();
+    const node = await setupTool(r);
+    await yarnCache(r);
+    await save(r, b, join(node, 'bin'));
+    await r.vm();
+    await writeFile(r.token, JSON.stringify({ v: 1, state: 'pending' }));
+    await writeFile(join(r.state, 'gave-up'), '');
+    const running = restore(r.token, r.state, envOf(r), () => b.store);
+    await new Promise((ok) => setTimeout(ok, 300));
+    await readyToken(r);
+    await running;
+    expect(await linesOf(r)).toEqual([
+      expect.stringMatching(/^backmesh cache: auto restored yarn \(own\)/),
+      'backmesh cache: auto skipped node 22.23.5: the job started without it',
+    ]);
+    expect(await readdir(r.tools)).toEqual([]);
+  });
+
+  it('gives up on a token still pending at its limit', async () => {
     const r = await runner();
     const b = bucket();
     await r.vm();
     await writeFile(r.token, JSON.stringify({ v: 1, state: 'pending' }));
-    await writeFile(join(r.state, 'gave-up'), '');
-    await restore(r.token, r.state, {}, () => b.store);
-    expect(
-      JSON.parse(await readFile(join(r.state, 'restored.json'), 'utf8')),
-    ).toEqual({ deps: {} });
+    await restore(r.token, r.state, {}, () => b.store, 300);
+    expect(await linesOf(r)).toEqual([
+      expect.stringMatching(
+        /^backmesh cache: auto gave up: no cache token by \+\d+\.\d s$/,
+      ),
+    ]);
     await expect(readFile(join(r.state, 'done'))).resolves.toBeDefined();
+    await expect(readFile(join(r.state, 'tools-done'))).resolves.toBeDefined();
     // The hook's timing line reads when the token came: it never did.
     await expect(readFile(join(r.state, 'ready'))).rejects.toThrow();
   });
@@ -530,6 +678,8 @@ describe('the saver', () => {
     expect(await restoreJob(r, b)).toEqual([
       expect.stringMatching(/restored yarn \(own\)/),
     ]);
+    // The install, after the restore landed.
+    await new Promise((ok) => setTimeout(ok, 5));
     await writeFile(
       join(r.home, '.cache', 'yarn', 'v6', 'new.js'),
       'y'.repeat(200),
@@ -579,6 +729,73 @@ describe('the saver', () => {
     expect(
       (await save(r, b, join(node, 'bin'), { now: Date.now() + 4 * DAY })).logs,
     ).toEqual([]);
+  });
+});
+
+describe('the saver, after a dependency cache restored in the background', () => {
+  // A restore of the record's key, one lockfile behind; `install` writes
+  // into the cache after it lands.
+  async function behind(install: boolean) {
+    const r = await runner();
+    const b = bucket();
+    await r.vm();
+    await yarnCache(r);
+    await save(r, b, join(r.tools, 'none'));
+    await r.vm();
+    await writeFile(join(r.ws, 'yarn.lock'), 'left-pad@1.3.1\n');
+    await restoreJob(r, b);
+    await new Promise((ok) => setTimeout(ok, 5));
+    if (install)
+      await writeFile(join(r.home, '.cache', 'yarn', 'v6', 'new.js'), 'y');
+    return { r, b, ...(await save(r, b, join(r.tools, 'none'))) };
+  }
+
+  it("doesn't save it under the new lockfile when nothing was written into it after it landed", async () => {
+    const { logs, record } = await behind(false);
+    expect(logs).toEqual([
+      expect.stringMatching(/^result=stale key=bm-auto-yarn-/),
+      expect.stringMatching(/^result=recorded /),
+    ]);
+    // Still in the record, so the next run restores it.
+    expect(record.deps.map((d) => d.pm)).toEqual(['yarn']);
+  });
+
+  it('saves it when the install wrote into it after it landed', async () => {
+    const { logs } = await behind(true);
+    expect(logs[0]).toMatch(/^result=saved key=bm-auto-yarn-/);
+  });
+});
+
+describe("Yarn 1's save", () => {
+  it('leaves out the entries no installed lockfile resolves', async () => {
+    const r = await runner();
+    const b = bucket();
+    await r.vm();
+    const used = 'a'.repeat(40);
+    const old = 'b'.repeat(40);
+    await writeFile(
+      join(r.ws, 'yarn.lock'),
+      `left-pad@^1.3.0:\n  version "1.3.0"\n  resolved "https://registry.yarnpkg.com/left-pad/-/left-pad-1.3.0.tgz#${used}"\n`,
+    );
+    const v6 = join(r.home, '.cache', 'yarn', 'v6');
+    for (const name of [
+      `npm-left-pad-1.3.0-${used}-integrity`,
+      `npm-left-pad-1.2.0-${old}-integrity`,
+      // No hash in its name, such as a file: package's: kept.
+      'npm-local-1.0.0',
+      '.tmp',
+    ]) {
+      await mkdir(join(v6, name), { recursive: true });
+      await writeFile(join(v6, name, 'f'), 'x');
+    }
+    const { record } = await save(r, b, join(r.tools, 'none'));
+    expect(record.deps[0]?.base).toBe(2);
+    await r.vm();
+    await restoreJob(r, b);
+    expect((await readdir(v6)).sort()).toEqual([
+      'npm-left-pad-1.3.0-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-integrity',
+      'npm-local-1.0.0',
+    ]);
   });
 });
 
