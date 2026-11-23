@@ -142,15 +142,55 @@ On 2026-11-23's second v0.5.7 run, an experiment
 (`experiments/2026-11-23-0.5.7-cores.json`), `backmesh-8`, `backmesh-16` and
 three cache arms ran alongside `backmesh-4` and `ubuntu-latest`, interleaved,
 so the seven arms' jobs contended for the installation at once. The figures
-below are the cold medians over 5 rounds.
+below are the cold medians over 5 rounds. Costs are at spot prices with the
+disk, each VM billed for at least a minute, against GitHub's 4-core price, what
+a private repository pays for a 4-core larger runner (a public repository's
+`ubuntu-latest`, as here, has 4 vCPUs and is free).
 
-- **More cores speed up the build itself, but not the wait.** From the first step to done,
-  `backmesh-16` was 2.8× `ubuntu-latest` on go, 1.8× on docker and 1.6× on
-  typescript. On rust and python there was no measurable difference: their
-  1.3× medians are within the rounds' spread. Each job still waits 40 to 45 s for
-  its VM, against `ubuntu-latest`'s 4 s, so from the queueing to done no label
-  beat `ubuntu-latest` by more than 1.3× (go on `backmesh-16`, warm). On most
-  builds they took longer.
+**Equal vCPUs: `backmesh-4` against GitHub's 4-core runner.** This is the
+headline comparison, the way other runner providers compare: the same 4 vCPUs,
+so what differs is the CPU's generation and the price.
+
+| Build      | First step to done      | Queued to done           | Cost a build    |
+| ---------- | ----------------------- | ------------------------ | --------------- |
+| docker     | 69 s against 90 s, 1.3× | 111 s against 94 s, 0.8× | $0.0025, 1/9.5  |
+| go         | 49 s against 64 s, 1.3× | 90 s against 69 s, 0.8×  | $0.0021, 1/11.3 |
+| python     | 17 s against 22 s, 1.3× | 56 s against 28 s, 0.5×  | $0.0016, 1/7.4  |
+| rust       | 45 s against 31 s, 0.7× | 87 s against 34 s, 0.4×  | $0.0020, 1/5.9  |
+| typescript | 28 s against 39 s, 1.4× | 71 s against 43 s, 0.6×  | $0.0016, 1/7.4  |
+
+- **The build itself** was 1.3 to 1.4× faster on `backmesh-4`'s newer CPU,
+  except rust (below). Python's 1.3× is within the rounds' spread: warm, it
+  was 1.1×.
+- **The wait isn't.** Each backmesh job waits 36 to 51 s for its VM, against
+  `ubuntu-latest`'s 4 to 6 s, so from the queueing to done `backmesh-4` was
+  slower on every build.
+- **The price** was 1/6 to 1/11 of GitHub's 4-core runner. A private
+  repository's default `ubuntu-latest` has 2 vCPUs at about $0.006 to $0.008 a
+  minute, a half to two thirds of the 4-core price: for as many minutes the
+  ratios would shrink by as much, to 1/3 to 1/8, but a build on 2 vCPUs takes
+  longer, and these runs don't measure it.
+
+**Cost-equivalent view: `backmesh-8` and `backmesh-16`.** Not an equal-vCPU
+comparison: these labels have 2 and 4 times `ubuntu-latest`'s vCPUs, and still
+cost less than its 4-core price. First step to done, its speed against
+ubuntu-latest's, and the price against GitHub's 4-core runner:
+
+| Build      | `backmesh-8`      | `backmesh-16`     |
+| ---------- | ----------------- | ----------------- |
+| docker     | 55 s, 1.6×, 1/6.9 | 50 s, 1.8×, 1/4.0 |
+| go         | 31 s, 2.1×, 1/9.1 | 23 s, 2.8×, 1/5.3 |
+| python     | 16 s, 1.4×, 1/4.6 | 17 s, 1.3×, 1/2.7 |
+| rust       | 29 s, 1.1×, 1/4.6 | 23 s, 1.3×, 1/2.7 |
+| typescript | 30 s, 1.3×, 1/4.6 | 25 s, 1.6×, 1/2.6 |
+
+- **More cores speed up the build itself, but not the wait.** On rust and
+  python there was no measurable difference: their 1.3× medians are within the
+  rounds' spread. From the queueing to done no label without a cache beat
+  `ubuntu-latest` by more than 1.3× (go on `backmesh-16`, warm), and on most
+  builds they took longer. Among the cache arms, `backmesh-16/cache`'s docker
+  build was 1.5× `ubuntu-latest/cache`'s cold, against a slow `type=gha`
+  build (below).
 - **What doesn't scale with cores.** Python's build stayed at 16 to 17 s on 4, 8
   and 16 vCPUs: it's `uv sync`'s downloads and a single-process pytest.
   TypeScript went from 28 s to 25 s: `hereby local` is mostly one `tsc`. Rust
@@ -158,6 +198,9 @@ below are the cold medians over 5 rounds.
   is older than GitHub's. ripgrep's own crate compiles on one core for about
   17 s, so `backmesh-4` (45 s) is slower than `ubuntu-latest` (31 s), and
   `backmesh-16`'s 23 s isn't measurably faster.
+
+The rest:
+
 - **The CPU.** `backmesh-4`, `-8` and `-16` ran on `m8i` (Intel Xeon 6975P-C)
   in 143 of 150 jobs; the other 7, on `-8` and `-16`, fell back to `m7a` (AMD EPYC
   9R14). `ubuntu-latest`'s 50 jobs ran on seven different CPUs, from AMD EPYC
@@ -172,24 +215,13 @@ below are the cold medians over 5 rounds.
   shows it; docker's `type=gha` has no such output, though its warm builds had
   5 `CACHED` steps. It brought go to 21 s and rust to 24 s, and made docker's
   `type=gha` build slower (113 s warm, 179 s cold, against 87 to 90 s
-  without). `backmesh/cache` hit in 29 of 50 warm jobs, a figure that reflects
+  without). `backmesh/cache` hit in 30 of 50 warm jobs, a figure that reflects
   0.5.7's late cache token more than the cache: a restore waits for the
-  token, which came a median 14 s and up to 45 s into the job. 12 warm jobs had no token by
-  then and fell back to GitHub's cache, which was empty. 9 more followed a cold
-  job that had fallen back and so saved to GitHub's cache. When it hit, warm
-  `backmesh-16/cache` builds took 19 s for go and rust, 59 s for docker and 29 s
-  for typescript.
-- **Cost.** At spot prices with the disk, each VM billed for at least a
-  minute, a build on `backmesh-4` cost 1/6 to 1/11 of GitHub's 4-core price,
-  what a private repository pays for a 4-core larger runner (a public
-  repository's `ubuntu-latest`, as here, has 4 vCPUs and is free). It was 1/5
-  to 1/9 on `backmesh-8` and 1/3 to 1/5 on `backmesh-16`. The fastest speedup
-  per dollar: go, 2.8× faster from the first step at 1/5.3 of the price, on
-  `backmesh-16`. A private repository's default `ubuntu-latest` has 2 vCPUs at
-  about $0.006 to $0.008 a minute, a half to two thirds of the 4-core price:
-  for as many minutes the ratios would shrink by as much, to 1/3 to 1/8 on
-  `backmesh-4`, but a build on 2 vCPUs takes longer, and these runs don't
-  measure it.
+  token, which came a median 14 s and up to 45 s into the job. Of the 20
+  misses, 11 had no token by then and fell back to GitHub's cache, which was
+  empty, and 9 followed a cold job that had fallen back and so saved to
+  GitHub's cache. When it hit, warm `backmesh-16/cache` builds took 19 s for
+  go and rust, 59 s for docker and 29 s for typescript.
 
 <!-- results:start -->
 
