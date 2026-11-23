@@ -400,10 +400,43 @@ export const SIGNED_IN: Record<Cloud, string> = {
 const GCP_ROLES =
   'roles/compute.instanceAdmin.v1 roles/compute.securityAdmin roles/storage.admin';
 
-// The grants upgrade names for a key connection's identity (`keyLine`):
-// AWS's inline policy and GCP's custom role, which the user makes.
-export const AWS_NETWORK_POLICY = 'AnycloudJobsNetwork';
+// The grants `keyLine` names for a key connection's identity: AWS's inline
+// policy and GCP's custom role, which the user makes.
+const AWS_NETWORK_POLICY = 'AnycloudJobsNetwork';
 export const GCP_NETWORK_ROLE = 'anycloudJobsNetwork';
+
+// What anycloud 0.1.81 adds to each cloud's role setup, for its VM Job
+// network (RFC 0053): upgrade across it re-applies those clouds' role
+// connections, and names the rights a key connection's identity needs.
+// Azure's is unchanged.
+export const ROLE_SETUP: {
+  since: string;
+  rights: Partial<Record<Cloud, string[]>>;
+} = {
+  since: '0.1.81',
+  rights: {
+    aws: [
+      ...['ec2:CreateVpc', 'ec2:CreateSubnet', 'ec2:CreateInternetGateway'],
+      ...['ec2:AttachInternetGateway', 'ec2:CreateRoute'],
+      ...['ec2:DescribeAvailabilityZones', 'ec2:DescribeInternetGateways'],
+      ...['ec2:DescribeRouteTables', 'ec2:DescribeSubnets'],
+    ],
+    gcp: ['compute.networks.create', 'compute.networks.get'],
+  },
+};
+
+// A key connection has no setup to re-apply, so the user grants its
+// generated identity the new rights, once, in the account install used.
+// `removeIdentity` deletes the grant with the identity.
+export function keyLine(cloud: Cloud, connection: string) {
+  const rights = ROLE_SETUP.rights[cloud]!;
+  const name = generatedIdentity(connection);
+  const command =
+    cloud === 'aws'
+      ? `aws iam put-user-policy --user-name ${name} --policy-name ${AWS_NETWORK_POLICY} --policy-document '${JSON.stringify({ Version: '2012-10-17', Statement: [{ Effect: 'Allow', Action: rights, Resource: '*' }] })}'`
+      : `PROJECT=$(gcloud config get-value project); gcloud iam roles describe ${GCP_NETWORK_ROLE} --project "$PROJECT" --format none || gcloud iam roles create ${GCP_NETWORK_ROLE} --project "$PROJECT" --permissions ${rights.join(',')} --format none; gcloud projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:${name}@$PROJECT.iam.gserviceaccount.com" --role "projects/$PROJECT/roles/${GCP_NETWORK_ROLE}" --condition None --format none`;
+  return `${cloud}'s key connection ${connection} has no setup to re-apply, and its runners need ${rights.join(', ')}. Unless its identity ${name} has them, grant them, signed in to the ${SIGNED_IN[cloud]} install used:\n  ${command}`;
+}
 
 export function deleteIdentity(cloud: Cloud, connection: string): string {
   const name = generatedIdentity(connection);
@@ -637,6 +670,9 @@ export async function connectClouds(
           if (!GENERATED_EXISTS[cloud].test(String(error))) throw error;
           throw new Error(identityLeft(cloud, credentials), { cause: error });
         });
+      // anycloud 0.1.81 generates GCP's identity without the VM Job
+      // network's rights; its next release grants them.
+      if (cloud === 'gcp') deps.ui.print(keyLine(cloud, credentials));
       continue;
     }
     deps.ui.print(

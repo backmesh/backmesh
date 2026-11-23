@@ -11,7 +11,7 @@ import {
   type anycloudApi,
   type anycloudExec,
 } from '../anycloud/client.js';
-import type { FeatureTable } from '../anycloud/features.js';
+import { type FeatureTable, newer } from '../anycloud/features.js';
 import { anycloudControl } from '../app/anycloud.js';
 import { OVERRIDE } from '../app/override.js';
 import type { Compatibility } from '../release/compatibility.js';
@@ -71,14 +71,13 @@ import {
 import { readApiVersion, readListener, type StatusReport } from './status.js';
 import {
   applyRole,
-  AWS_NETWORK_POLICY,
-  GCP_NETWORK_ROLE,
   classesOf,
-  generatedIdentity,
+  keyLine,
   listedAccount,
   noGpuLine,
   noKvmLine,
   planRegions,
+  ROLE_SETUP,
   PUBLIC_REPOS_LINE,
   runnerClouds,
   signInRequired,
@@ -116,6 +115,8 @@ export interface UpgradeDeps {
   confirm?: (question: string) => Promise<boolean>;
   // The release before the pinned anycloud, the oldest a move starts from.
   previous?: string;
+  // The role setup the pinned anycloud's release window changed.
+  roleSetup?: typeof ROLE_SETUP;
 }
 
 // The labels whose every runner region's quota is under one runner, from
@@ -255,7 +256,13 @@ export async function upgrade(
   // The connections whose setup this release changes, read and their
   // clouds' CLIs checked before the API moves: a re-apply that can't run
   // after it would leave the runners' launches denied.
-  const setups = await changedConnections(as(from), clusterIdOf(url));
+  const setups = await changedConnections(
+    as(from),
+    clusterIdOf(url),
+    from,
+    release.anycloud,
+    deps.roleSetup ?? ROLE_SETUP,
+  );
   await checkRoleClouds(setups, deps);
   const apiUpgraded = await upgradeApi(from, release.anycloud, deps);
   const installation = await readInstallation(api);
@@ -343,7 +350,9 @@ export async function upgrade(
     );
   }
   for (const key of setups) {
-    if (!key.account && connections.has(key.credentials)) print(keyLine(key));
+    if (!key.account && connections.has(key.credentials)) {
+      print(keyLine(key.cloud, key.credentials));
+    }
   }
   if (!planOnly) await reapplyRoles(roles, deps);
   // Each org's classes, planned again with the pinned catalog's types,
@@ -726,31 +735,23 @@ async function connectionOf(cloud: Cloud, url: string, deps: UpgradeDeps) {
   return installConnection(cloud, clusterIdOf(url), listed)?.name;
 }
 
-// What anycloud 0.1.81 (ANYCLOUD_VERSION) adds to each cloud's role
-// setup, for its VM Job network (RFC 0053): upgrade re-applies those
-// clouds' role connections, and names the rights a key connection's
-// identity needs. Azure's is unchanged. A pin that adds none empties it.
-const NEW_RIGHTS: Partial<Record<Cloud, string[]>> = {
-  aws: [
-    ...['ec2:CreateVpc', 'ec2:CreateSubnet', 'ec2:CreateInternetGateway'],
-    ...['ec2:AttachInternetGateway', 'ec2:CreateRoute'],
-    ...['ec2:DescribeAvailabilityZones', 'ec2:DescribeInternetGateways'],
-    ...['ec2:DescribeRouteTables', 'ec2:DescribeSubnets'],
-  ],
-  gcp: ['compute.networks.create', 'compute.networks.get'],
-};
-
 type Changed = { cloud: Cloud; credentials: string; account?: string };
 
-// This control plane's connection in each cloud NEW_RIGHTS names, read
-// through the API at its own release: a role connection has its account,
-// a key connection (our CI's override) none.
+// This control plane's connection in each cloud whose role setup changed,
+// read through the API at its own release: a role connection has its
+// account, a key connection (our CI's override) none. Only a move across
+// the release that changed it, and a re-run on that release, which retries
+// a re-apply that failed after the API moved.
 async function changedConnections(
   api: AnycloudApi,
   clusterId: string,
+  from: string,
+  to: string,
+  { since, rights }: typeof ROLE_SETUP,
 ): Promise<Changed[]> {
+  if (newer(from, since) || newer(since, to)) return [];
   const listed = await api.listCredentials({});
-  return (Object.keys(NEW_RIGHTS) as Cloud[]).flatMap((cloud) => {
+  return (Object.keys(rights) as Cloud[]).flatMap((cloud) => {
     const entry = installConnection(cloud, clusterId, listed);
     if (!entry) return [];
     const account = listedAccount(cloud, entry);
@@ -760,6 +761,9 @@ async function changedConnections(
 
 // Each role cloud's CLI signed in, and AWS's to the role's account, as
 // install checks before it bills. GCP's re-apply names its project itself.
+// It's every role connection on the control plane, before upgrade can read
+// which are the runners': a control-plane-only cloud's is checked too,
+// though only the runners' are re-applied.
 async function checkRoleClouds(changed: Changed[], deps: UpgradeDeps) {
   const roles = changed.filter((c) => c.account);
   if (!roles.length) return;
@@ -777,19 +781,6 @@ async function checkRoleClouds(changed: Changed[], deps: UpgradeDeps) {
       `aws's CLI is signed in to account ${Account ?? 'unknown'}, not ${aws.account}, where ${aws.credentials}'s role is: sign it in to ${aws.account}, then run \`backmesh upgrade\` again.`,
     );
   }
-}
-
-// A key connection has no setup to re-apply, so the user grants its
-// generated identity the new rights, once, in the account install used.
-// uninstall's `removeIdentity` deletes the grant with the identity.
-function keyLine({ cloud, credentials }: Changed) {
-  const rights = NEW_RIGHTS[cloud]!;
-  const name = generatedIdentity(credentials);
-  const command =
-    cloud === 'aws'
-      ? `aws iam put-user-policy --user-name ${name} --policy-name ${AWS_NETWORK_POLICY} --policy-document '${JSON.stringify({ Version: '2012-10-17', Statement: [{ Effect: 'Allow', Action: rights, Resource: '*' }] })}'`
-      : `PROJECT=$(gcloud config get-value project); gcloud iam roles describe ${GCP_NETWORK_ROLE} --project "$PROJECT" --format none || gcloud iam roles create ${GCP_NETWORK_ROLE} --project "$PROJECT" --permissions ${rights.join(',')} --format none; gcloud projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:${name}@$PROJECT.iam.gserviceaccount.com" --role "projects/$PROJECT/roles/${GCP_NETWORK_ROLE}" --condition None --format none`;
-  return `${cloud}'s key connection ${credentials} has no setup to re-apply, and its runners need ${rights.join(', ')}. Unless its identity ${name} has them, grant them, signed in to the ${SIGNED_IN[cloud]} install used:\n  ${command}`;
 }
 
 // A release's runners can need new permissions, as anycloud 0.1.81's VM Job
