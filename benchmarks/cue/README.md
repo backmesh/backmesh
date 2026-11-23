@@ -84,29 +84,82 @@ hosted runner is billed per minute.
 
 ## Results
 
-### 2026-11-23, backmesh 0.5.7
+### 2026-11-23, backmesh 0.5.7, against GitHub-hosted
+
+[Run 45245714397](https://github.com/backmesh/backmesh/actions/runs/45245714397)
+of this workflow from main, on backmesh's own CI installation (backmesh 0.5.7):
+target `backmesh/benchmarks`, `backmesh-16`, width 8, 10 rounds, lead 75 s,
+125 minutes. A push is the unit: each figure is the median over an arm's 10
+pushes of the push's median over its 8 jobs, with the range over pushes. The
+p-values are exact two-sided Mann–Whitney tests on the push medians,
+Bonferroni-corrected over the 3 pairs of arms.
+
+| Figure                                  | Cued               | Not cued            | GitHub-hosted    |
+| --------------------------------------- | ------------------ | ------------------- | ---------------- |
+| Jobs served                             | 52 of 80 (65%)     | 0 of 80 (0%)        | 80 of 80 (100%)  |
+| Queued to done                          | 15.25 s (10.5–130) | 52 s (47.5–106.5)   | 16 s (15–20)     |
+| Queued to first real step               | 13.25 s (8–128)    | 49.5 s (45.5–104.5) | 13.5 s (12.5–18) |
+| Queued to assigned                      | 3.25 s (1–108.5)   | 40 s (35.5–95.5)    | 3 s (2–3)        |
+| Job setup (assigned to first real step) | 9.5 s (7–16.5)     | 10 s (9–10)         | 10.75 s (10–15)  |
+| of which yarn install                   | 4 s (1–8)          | 4.5 s (4–5)         | 7 s (6.5–8)      |
+
+| Queued to done, pair    | p (corrected) |
+| ----------------------- | ------------- |
+| Cued against hosted     | 1 (0.81 raw)  |
+| Cued against not cued   | 0.051         |
+| Not cued against hosted | 0.00003       |
+
+For queued to first real step they're 1 (0.96 raw), 0.052 and 0.00003.
+
+The job is short (about 2 s after its first real step), so queued to done
+is mostly the time to start. With a cue, a job is done no sooner than on
+`ubuntu-latest`: the medians are 15.25 and 16 s, and the test finds no
+difference. Without a cue it takes about 36 s longer, and that difference
+holds. Cued against not cued just misses 0.05 after the correction.
+
+In the 6 cued pushes where a cue's runners took 7 or 8 of the 8 jobs, the
+jobs were done in 10.5 to 16.5 s, against the hosted pushes' 15 to 20 s,
+mostly through a quicker install (a median of 2.75 s against 7 s). The other
+cued pushes missed for two reasons:
+
+- **Slow launches, in both arms.** In cued pushes 0 and 9, jobs waited 21
+  to 167 s and 72 to 227 s for a runner. Uncued pushes 10 and 19 waited up
+  to 263 and 244 s, while an uncued job usually waits 35 to 46 s. That fits
+  the cloud refusing spot capacity while the launch retries, but the run
+  kept no listener or launch logs, so it isn't confirmed.
+- **Partial misses.** In cued pushes 15, 18 and 24, a cue's runners took 7,
+  3 and 2 jobs within 2 to 5 s, and the rest waited 8 to 52 s, well under a
+  cold start. The cue aims each runner to be ready at the push (lead after
+  the cue) and starts it at that minus the label's p75 boot time, so about
+  1 in 4 runners comes up after its job queues, and with 8 runners one late
+  is likely.
+
+Even so, cued pushes 18 and 24 (31.5 and 36.5 s) beat every uncued push
+(47.5 s at least). The runners also differ in size: `ubuntu-latest` on a
+public repo has 4 vCPUs, `backmesh-16` 16.
+
+### 2026-11-23, backmesh 0.5.7, 3 rounds
 
 [Run 45237380381](https://github.com/backmesh/backmesh/actions/runs/45237380381)
 of this workflow from main, on backmesh's own CI installation (backmesh 0.5.7):
 target `backmesh/benchmarks`, `backmesh-16`, width 8, 3 rounds, lead 75 s.
 Each figure is the median over pushes of the push's median over its jobs,
-with the range over pushes. **Queued to done** is each `bench` job's
-`created_at` to its `completed_at`, read from the target's job times after
-the run; the job summary doesn't have it.
+with the range over pushes. **Queued to done** was read from the target's
+job times after the run, as the job summary didn't have it then. With 3
+pushes an arm, the figures show a direction only.
 
-| Figure                    | Cued           | Not cued       |
-| ------------------------- | -------------- | -------------- |
-| Jobs served               | 17 of 24 (71%) | 0 of 24 (0%)   |
-| Queued to first real step | 17 s (11–34)   | 52 s (46–80.5) |
-| Queued to assigned        | 7 s (1–24.5)   | 43.5 s (36–71) |
-| Job setup                 | 10 s (10–10)   | 10 s (9–10)    |
-| Queued to done            | 19 s (13–36.5) | 54.5 s (48–83) |
+| Figure                                  | Cued           | Not cued       |
+| --------------------------------------- | -------------- | -------------- |
+| Jobs served                             | 17 of 24 (71%) | 0 of 24 (0%)   |
+| Queued to first real step               | 17 s (11–34)   | 52 s (46–80.5) |
+| Queued to assigned                      | 7 s (1–24.5)   | 43.5 s (36–71) |
+| Job setup (assigned to first real step) | 10 s (10–10)   | 10 s (9–10)    |
+| Queued to done                          | 19 s (13–36.5) | 54.5 s (48–83) |
 
 Served per cued push: 5, 4 and 8 of 8; the jobs a cue's runner didn't take
 waited for a runner of their own, like an uncued push's. The slowest job of
 a push, the wave's end, was done 40, 99 and 14 s after queueing cued, and
-181, 99 and 53 s uncued. There is no GitHub-hosted arm of this workload
-yet, so how this compares with `ubuntu-latest` isn't measured here.
+181, 99 and 53 s uncued. This run had no GitHub-hosted arm.
 
 ### 2026-11-10, a one-off workflow
 

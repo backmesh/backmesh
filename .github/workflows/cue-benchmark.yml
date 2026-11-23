@@ -46,9 +46,9 @@ jobs:
   benchmark:
     runs-on: ubuntu-24.04
     environment: e2e
-    # Covers the worst case (rounds=10, lead=600 s): about 210 minutes,
+    # Covers the worst case (rounds=10, lead=600 s): about 215 minutes,
     # mostly the leads and the 200 s GAP_MS after each of up to 20 pushes
-    # on the label.
+    # on the label. At the 75 s lead, 10 rounds took 125 minutes.
     timeout-minutes: 300
     permissions:
       contents: read

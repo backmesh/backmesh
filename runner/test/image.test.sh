@@ -29,6 +29,7 @@ echo 'first-use install: passed'
 
 # az, gcloud and aws from a caller that isn't bash, as a JavaScript action
 # calls them: two concurrent first calls each, which install once and both run.
+# gsutil then runs from gcloud's install.
 # shellcheck disable=SC2016 # JavaScript
 docker run --rm --entrypoint node "$image" -e '
   const { execFile } = require("node:child_process");
@@ -41,6 +42,8 @@ docker run --rm --entrypoint node "$image" -e '
       if (n !== 1) throw new Error(`${cmd}: ${n} install lines`);
       console.log(`${cmd}: installed once, ran twice`);
     }
+    await run("gsutil", ["version"]);
+    console.log("gsutil: ran");
   })().catch((e) => { console.log(`::error::cloud CLI first use: ${e.message}`); process.exit(1); });'
 
 # The tool cache's link, GitHub's variables, apt's shims ahead of the real
