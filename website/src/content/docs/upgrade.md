@@ -17,7 +17,14 @@ every org on the control plane, so it takes no `--org`.
 It checks that the release supports the installation's control plane, upgrades
 the control plane, then restarts each org's listener on the new image, one at
 a time. Running jobs keep going on their VMs through the listener's restart;
-only scaling pauses. A listener whose VM is gone gets a new VM, from the
+only scaling pauses. When the control plane is more than one release behind,
+the pause starts at its update: until an org's listener restarts, after the
+role re-apply (minutes on AWS), any sign-in and the orgs before it, that org
+starts no runners. Its jobs wait queued at GitHub and start after the
+restart, and running jobs keep going without backmesh's cache, whose
+action falls back to GitHub's. A run
+that stops in between leaves runners paused until `backmesh upgrade` runs
+again and finishes. A listener whose VM is gone gets a new VM, from the
 settings the control plane keeps, and one that stopped is started again,
 both before upgrade plans anything, so `--plan` works only after a run
 without it; one whose token the control plane refuses, such as after a

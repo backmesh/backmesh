@@ -8,7 +8,8 @@ import { StepFailed } from '../../../src/anycloud/binary.js';
 import { GitHubError } from '../../../src/app/github.js';
 import { NeedsPlan, PlanChanged, UsageError } from '../../../src/cli/errors.js';
 import { PUBLIC_REPOS_LINE, ROLE_SETUP } from '../../../src/cli/install.js';
-import { upgrade, type UpgradeDeps } from '../../../src/cli/upgrade.js';
+import { OLDEST, upgrade, type UpgradeDeps } from '../../../src/cli/upgrade.js';
+import { ANYCLOUD_PREVIOUS_VERSION } from '../../../src/anycloud/contract.generated.js';
 import { parseRoutes } from '../../../src/listener/routes.js';
 import { planClasses } from '../../../src/runners/classes.js';
 import { awsInRegions, CATALOG, catalogs } from '../runners/fixtures.js';
@@ -384,6 +385,7 @@ function setUp({
     wait: async () => {},
     // `version`'s default, two releases before RELEASE.anycloud.
     oldest: '0.1.70',
+    previous: '0.1.71',
     // As if RELEASE.anycloud changed the role setup, as 0.1.81 does.
     roleSetup: { ...ROLE_SETUP, since: RELEASE.anycloud },
     features: {
@@ -1409,6 +1411,54 @@ describe('upgrade', () => {
       expect(worker.calls).toEqual([]);
     });
 
+    it('says the runners pause from a move past the window until the rolls', async () => {
+      const { deps, lines } = setUp();
+      await upgrade(deps);
+      expect(lines).toContain(
+        "The control plane's update pauses runner starts until each org's listener rolls, below; queued jobs wait at GitHub.",
+      );
+    });
+
+    // One behind, as 0.1.81 to 0.1.82: the old listener is in the new API's
+    // window, so nothing pauses.
+    it('moves an API one release behind without a pause', async () => {
+      const { deps, calls, lines } = setUp({
+        version: '0.1.71',
+        listener: 'down',
+      });
+      await expect(upgrade(deps)).rejects.toThrow(
+        new RegExp(`^acme's listener didn't start on ${VM.acme}\\.$`),
+      );
+      expect(mutations(calls)).toContain('api upgrade --sign-in-apps 5622376');
+      expect(lines.some((l) => l.includes('pauses runner starts'))).toBe(false);
+    });
+
+    // A regenerated contract moves ANYCLOUD_PREVIOUS_VERSION: decide OLDEST
+    // again, as the release that backmesh last pinned.
+    it('starts from the release backmesh v0.5.7 pinned, under the real constants', async () => {
+      expect(ANYCLOUD_PREVIOUS_VERSION).toBe('0.1.81');
+      expect(OLDEST).toBe('0.1.80');
+      const at = (version: string) => {
+        const { deps, calls } = setUp({ version, listener: 'down' });
+        delete deps.oldest;
+        delete deps.previous;
+        deps.release = async () => ({ ...RELEASE, anycloud: '0.1.82' });
+        return { deps, calls };
+      };
+      const old = at('0.1.79');
+      await expect(upgrade(old.deps)).rejects.toThrow(
+        /too old for this backmesh to upgrade/,
+      );
+      expect(mutations(old.calls)).toEqual([]);
+      const oldest = at(OLDEST);
+      await expect(upgrade(oldest.deps)).rejects.toThrow(
+        "an org whose listener hasn't rolled starts no runners",
+      );
+      expect(mutations(oldest.calls)).toContain(
+        'api upgrade --sign-in-apps 5622376',
+      );
+    });
+
     it('refuses a control plane older than the oldest a move starts from', async () => {
       const { deps, calls, worker } = setUp({ version: '0.1.69' });
       const error = await upgrade(deps).catch((e: unknown) => e);
@@ -1437,7 +1487,7 @@ describe('upgrade', () => {
       const { deps, calls } = twoToOne();
       deps.confirm = async () => false;
       await expect(upgrade(deps)).rejects.toThrow(
-        'Upgrade cancelled after the control plane updated, with no listener changed',
+        "Upgrade cancelled after the control plane updated, with no listener changed; run `backmesh upgrade` again to finish. Until a `backmesh upgrade` run finishes, an org whose listener hasn't rolled starts no runners: its jobs wait queued at GitHub, and its running jobs keep going without backmesh's cache.",
       );
       expect(mutations(calls)).toEqual([
         'api upgrade --sign-in-apps 5622376',
@@ -1466,7 +1516,7 @@ describe('upgrade', () => {
     it('leaves the new API with the old listener when a later check refuses', async () => {
       const { deps, calls } = setUp({ listener: 'down' });
       await expect(upgrade(deps)).rejects.toThrow(
-        `acme's listener didn't start on ${VM.acme}.`,
+        `acme's listener didn't start on ${VM.acme}. Until a \`backmesh upgrade\` run finishes, an org whose listener hasn't rolled starts no runners`,
       );
       expect(mutations(calls)).toEqual([
         'api upgrade --sign-in-apps 5622376',

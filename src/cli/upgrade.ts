@@ -10,6 +10,7 @@ import {
   type anycloudApi,
   type anycloudExec,
 } from '../anycloud/client.js';
+import { ANYCLOUD_PREVIOUS_VERSION } from '../anycloud/contract.generated.js';
 import { type FeatureTable, newer } from '../anycloud/features.js';
 import { anycloudControl } from '../app/anycloud.js';
 import { OVERRIDE } from '../app/override.js';
@@ -114,6 +115,8 @@ export interface UpgradeDeps {
   confirm?: (question: string) => Promise<boolean>;
   // The oldest anycloud a move starts from (OLDEST).
   oldest?: string;
+  // The pinned anycloud's previous release (ANYCLOUD_PREVIOUS_VERSION).
+  previous?: string;
   // The role setup the pinned anycloud's release window changed.
   roleSetup?: typeof ROLE_SETUP;
 }
@@ -200,9 +203,26 @@ export interface UpgradeOptions {
 // The oldest anycloud a move starts from: backmesh v0.5.7's. The pinned
 // release's own previous (ANYCLOUD_PREVIOUS_VERSION) is 0.1.81, which no
 // backmesh release pinned, and `api upgrade` skips releases.
-const OLDEST = '0.1.80';
+export const OLDEST = '0.1.80';
 
-export async function upgrade(
+// From a move past the API's window until each org's listener rolls, the
+// old listener's launches and cache tokens are refused.
+const PAUSED =
+  "Until a `backmesh upgrade` run finishes, an org whose listener hasn't rolled starts no runners: its jobs wait queued at GitHub, and its running jobs keep going without backmesh's cache.";
+
+export async function upgrade(deps: UpgradeDeps, options: UpgradeOptions = {}) {
+  const state = { paused: false };
+  try {
+    return await upgradeOnce(deps, options, state);
+  } catch (error) {
+    if (state.paused && error instanceof Error) {
+      error.message = `${error.message} ${PAUSED}`;
+    }
+    throw error;
+  }
+}
+
+async function upgradeOnce(
   deps: UpgradeDeps,
   {
     runners = [],
@@ -210,7 +230,8 @@ export async function upgrade(
     planId: agreed,
     yes = false,
     publicRepos,
-  }: UpgradeOptions = {},
+  }: UpgradeOptions,
+  state: { paused: boolean },
 ) {
   const moved = new Set(runnerClouds(runners));
   const { run, print } = deps;
@@ -224,7 +245,8 @@ export async function upgrade(
   // `api upgrade`, the version and the token exchange (anycloud's client
   // window: the API's own release and the one before it, `api-version.ts`),
   // so it moves first, before the listeners can be read or planned. It
-  // changes no runners, and the old listener keeps running on it.
+  // changes no runners, and the old listener keeps running on it, though
+  // past the window it starts none until it rolls (PAUSED).
   // Only checks that need no read come before it, and that a backmesh
   // listener is there, read with the API's own client version; a refusal
   // after it leaves the new API with the old listener, which a later upgrade
@@ -267,7 +289,14 @@ export async function upgrade(
     deps.roleSetup ?? ROLE_SETUP,
   );
   await checkRoleClouds(setups, deps);
+  const pauses = newer(deps.previous ?? ANYCLOUD_PREVIOUS_VERSION, from);
+  if (pauses) {
+    print(
+      "The control plane's update pauses runner starts until each org's listener rolls, below; queued jobs wait at GitHub.",
+    );
+  }
   const apiUpgraded = await upgradeApi(from, release.anycloud, deps);
+  state.paused = pauses;
   const installation = await readInstallation(api);
   if (!installation.orgs.length) {
     throw new UsageError(
@@ -659,6 +688,7 @@ export async function upgrade(
       { control, exec, again: 'upgrade', wait: deps.wait },
     );
   }
+  state.paused = false;
   return {
     controlPlane: { from, to: release.anycloud, upgraded: apiUpgraded },
     listeners: rolled,
