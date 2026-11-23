@@ -213,6 +213,26 @@ describe('signInForKey', () => {
     expect(limited.signIns()).toHaveLength(2);
   });
 
+  it("asks again when GitHub fails a request with an error it doesn't document, up to 5 times in a row", async () => {
+    // As an e2e install saw it; the error code is a stand-in.
+    const failed = json({
+      error: 'server_error',
+      error_description: 'The request failed to be processed, please try again',
+    });
+    const worker = fakeWorker({
+      codes: [failed, json(DEVICE)],
+      polls: [failed, pending, failed, failed, failed, failed, token],
+    });
+    expect((await signIn(worker).key).key).toBe(INSTALL_KEY);
+    expect(worker.signIns()).toHaveLength(2);
+
+    const down = fakeWorker({ polls: [failed] });
+    await expect(signIn(down).key).rejects.toThrow(
+      'GitHub refused the sign-in: The request failed to be processed, please try again',
+    );
+    expect(down.tokenPolls()).toHaveLength(5);
+  });
+
   it('ends the sign-in when the person denies it', async () => {
     const worker = fakeWorker({ polls: [json({ error: 'access_denied' })] });
 

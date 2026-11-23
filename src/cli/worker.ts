@@ -108,10 +108,25 @@ const refusalSchema = z.object({
   error_description: z.string().optional(),
 });
 const pollSchema = z.object({ access_token: z.string() }).or(refusalSchema);
-const refused = (answer: z.infer<typeof refusalSchema>) =>
+type Refusal = z.infer<typeof refusalSchema>;
+const refused = (answer: Refusal) =>
   new Error(
     `GitHub refused the sign-in: ${answer.error_description ?? answer.error}`,
   );
+// The device flow's documented errors. Any other, such as "The request
+// failed to be processed, please try again", is GitHub failing the request:
+// asked again, up to GITHUB_RETRIES in a row.
+const DEVICE_ERRORS = new Set([
+  'authorization_pending',
+  'slow_down',
+  'expired_token',
+  'unsupported_grant_type',
+  'incorrect_client_credentials',
+  'incorrect_device_code',
+  'access_denied',
+  'device_flow_disabled',
+]);
+const GITHUB_RETRIES = 5;
 
 const sleep = (deps: WorkerDeps) =>
   deps.wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
@@ -144,13 +159,19 @@ async function github<T>(
 // GitHub's device flow with the backmesh App: prints the code and when it
 // expires, then polls GitHub every interval until someone signs in. Plain
 // lines, no prompt: CI runs this unattended and someone enters the code
-// from the job log. A poll GitHub doesn't answer is asked again, a code
-// that expires is replaced by a fresh one, and only a denial or
+// from the job log. A poll GitHub doesn't answer or fails is asked again,
+// a code that expires is replaced by a fresh one, and only a denial or
 // SIGN_IN_MS without a sign-in ends it. The device code is a credential,
 // so it's never printed. Answers the App's user token (`ghu_`).
 async function deviceSignIn(deps: WorkerDeps, why: string): Promise<string> {
   const wait = sleep(deps);
   const deadline = Date.now() + SIGN_IN_MS;
+  let failures = 0;
+  const retry = (answer: Refusal) => {
+    if (DEVICE_ERRORS.has(answer.error)) return false;
+    if (++failures >= GITHUB_RETRIES) throw refused(answer);
+    return true;
+  };
   while (Date.now() < deadline) {
     const device = await github(
       deps,
@@ -158,11 +179,12 @@ async function deviceSignIn(deps: WorkerDeps, why: string): Promise<string> {
       { client_id: GITHUB_APP_CLIENT_ID },
       deviceSchema.or(refusalSchema),
     );
-    if (!device) {
+    if (!device || ('error' in device && retry(device))) {
       await wait(5_000);
       continue;
     }
     if ('error' in device) throw refused(device);
+    failures = 0;
     const expires = Date.now() + device.expires_in * 1000;
     const at = new Date(expires).toISOString().slice(11, 16);
     deps.print(
@@ -186,6 +208,8 @@ async function deviceSignIn(deps: WorkerDeps, why: string): Promise<string> {
       // which only the App's client secret redeems: it's left unread, and an
       // expired sign-in signs in again.
       if ('access_token' in answer) return answer.access_token;
+      if (retry(answer)) continue;
+      failures = 0;
       if (answer.error === 'authorization_pending') continue;
       if (answer.error === 'slow_down') interval += 5;
       else if (answer.error === 'expired_token') break;

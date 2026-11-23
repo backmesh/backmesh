@@ -100,6 +100,17 @@ export const anycloudPath = (env: NodeJS.ProcessEnv, name: string) =>
 export const readSaved = async (path: string) =>
   (await readFile(path, 'utf8').catch(() => '')).trim();
 
+// A dropped connection's own error, such as Bun's `ECONNRESET`, says
+// nothing of where it went.
+const dropped =
+  (what: string) =>
+  (cause: unknown): never => {
+    throw new Error(
+      `${what}: ${cause instanceof Error ? cause.message : String(cause)}`,
+      { cause },
+    );
+  };
+
 // A refused bearer: a stale token's 401, or GITHUB_SIGN_IN_REQUIRED for the
 // stale GitHub sign-in behind it. The CLI's `signInRecovery` refreshes only
 // the second (`auth.ts:50-80` at v0.1.72).
@@ -141,7 +152,10 @@ export function anycloudApi(
           }
         },
       ],
-      fetch: fetch && ((request, init) => fetch(request, init)),
+      fetch: (request, init) =>
+        (fetch ?? globalThis.fetch)(request, init).catch(
+          dropped(`Couldn't reach the control plane at ${url}`),
+        ),
     }),
   );
 }
@@ -180,13 +194,15 @@ export function anycloudExec(
       },
       body: JSON.stringify({ command }),
     });
+  const unreachable = (id: string) =>
+    dropped(`anycloud exec ${id} couldn't reach ${url}`);
   return async (id, command) => {
-    let response = await post(id, command);
+    let response = await post(id, command).catch(unreachable(id));
     if (response.status === 401 && refresh) {
       bearer = await (refreshed ??= refresh(response));
-      response = await post(id, command);
+      response = await post(id, command).catch(unreachable(id));
     }
-    const text = await response.text();
+    const text = await response.text().catch(unreachable(id));
     if (!response.ok) {
       const reason = (() => {
         try {

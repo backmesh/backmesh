@@ -87,6 +87,7 @@ function setUp({
   answers = true,
   drained = DONE,
   reads = [],
+  posts = [],
   tty,
   hostedList = true,
   connections = [{ name: 'bm-aws', kind: 'role' }, { name: 'bm-gcp' }],
@@ -110,6 +111,8 @@ function setUp({
   // GET /drain's replies before `drained`: a failed exec, null from a
   // restarted listener, or a drain still running.
   reads?: (Error | null | DrainStatus)[];
+  // POST /drain's failed execs before it starts the drain.
+  posts?: Error[];
   tty?: { confirm: boolean[]; typed: string };
   // Whether the hosted API's `credentials list` answers.
   hostedList?: boolean;
@@ -187,7 +190,7 @@ function setUp({
       const post = line.includes('"POST"');
       calls.push(`exec ${name} ${post ? 'POST' : 'GET'} /drain`);
       const reply = post
-        ? { ...DONE, state: 'running' }
+        ? (posts.shift() ?? { ...DONE, state: 'running' })
         : reads.length
           ? reads.shift()
           : drained;
@@ -1229,6 +1232,26 @@ describe('uninstall', () => {
     );
     expect(changes(down.calls)).toEqual([
       'POST /v1/installs/cleanup',
+      'exec backmesh-acme POST /drain',
+    ]);
+  });
+
+  it('posts the drain again when its exec fails, as a POST to a draining listener changes nothing', async () => {
+    const reset = new Error(
+      "anycloud exec bml-acme couldn't reach https://c1.anycloud.sh: ECONNRESET",
+    );
+    const { deps, calls } = setUp({ posts: [reset, reset] });
+    await expect(uninstall(scripted, deps)).resolves.toMatchObject({});
+    expect(calls).toContain(DELETE_HOSTED);
+
+    const down = setUp({ posts: Array(3).fill(reset) });
+    await expect(uninstall(scripted, down.deps)).rejects.toThrow(
+      /drain didn't answer 3 times in a row/,
+    );
+    expect(changes(down.calls)).toEqual([
+      'POST /v1/installs/cleanup',
+      'exec backmesh-acme POST /drain',
+      'exec backmesh-acme POST /drain',
       'exec backmesh-acme POST /drain',
     ]);
   });
