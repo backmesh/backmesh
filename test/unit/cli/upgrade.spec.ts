@@ -1487,7 +1487,7 @@ describe('upgrade', () => {
       const { deps, calls } = twoToOne();
       deps.confirm = async () => false;
       await expect(upgrade(deps)).rejects.toThrow(
-        "Upgrade cancelled after the control plane updated, with no listener changed; run `backmesh upgrade` again to finish. Until a `backmesh upgrade` run finishes, an org whose listener hasn't rolled starts no runners: its jobs wait queued at GitHub, and its running jobs keep going without backmesh's cache.",
+        "Upgrade cancelled after the control plane updated, with no listener changed; run `backmesh upgrade` again to finish.\nUntil a `backmesh upgrade` run finishes, an org whose listener hasn't rolled starts no runners: its jobs wait queued at GitHub, and its running jobs keep going without backmesh's cache.",
       );
       expect(mutations(calls)).toEqual([
         'api upgrade --sign-in-apps 5622376',
@@ -1516,7 +1516,7 @@ describe('upgrade', () => {
     it('leaves the new API with the old listener when a later check refuses', async () => {
       const { deps, calls } = setUp({ listener: 'down' });
       await expect(upgrade(deps)).rejects.toThrow(
-        `acme's listener didn't start on ${VM.acme}. Until a \`backmesh upgrade\` run finishes, an org whose listener hasn't rolled starts no runners`,
+        `acme's listener didn't start on ${VM.acme}.\nUntil a \`backmesh upgrade\` run finishes, an org whose listener hasn't rolled starts no runners`,
       );
       expect(mutations(calls)).toEqual([
         'api upgrade --sign-in-apps 5622376',

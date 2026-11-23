@@ -216,7 +216,7 @@ export async function upgrade(deps: UpgradeDeps, options: UpgradeOptions = {}) {
     return await upgradeOnce(deps, options, state);
   } catch (error) {
     if (state.paused && error instanceof Error) {
-      error.message = `${error.message} ${PAUSED}`;
+      error.message = `${error.message}\n${PAUSED}`;
     }
     throw error;
   }

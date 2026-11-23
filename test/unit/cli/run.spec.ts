@@ -390,6 +390,17 @@ describe('backmesh CLI', () => {
     expect(result.stderr).not.toContain('secret');
   });
 
+  it("puts an API error's status after its first line, not a note below it", async () => {
+    vi.mocked(install).mockRejectedValueOnce(
+      Object.assign(new Error('Conflict.\nA later note.'), { status: 409 }),
+    );
+    const result = await run(
+      ...['install', '--org', 'acme', '--control-plane', 'aws:us-east-2'],
+      '--yes',
+    );
+    expect(result.stderr).toContain('Conflict. (HTTP 409)\nA later note.');
+  });
+
   it("refreshes status's stale hosted API token", async () => {
     const fake = fakeHosted();
     const io = { stdout: () => {}, stderr: () => {}, env: {}, isTTY: false };

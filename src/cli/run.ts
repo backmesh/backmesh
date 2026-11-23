@@ -626,8 +626,11 @@ function describe(error: unknown): string {
   const lines: string[] = [];
   for (let e: unknown = error; e instanceof Error && lines.length < 5;) {
     const status = (e as { status?: unknown }).status;
+    // The status follows the message's own first line, not a note after it.
     lines.push(
-      typeof status === 'number' ? `${e.message} (HTTP ${status})` : e.message,
+      typeof status === 'number'
+        ? e.message.replace(/^.*/, `$& (HTTP ${status})`)
+        : e.message,
     );
     e = e.cause;
   }
