@@ -26,6 +26,15 @@ ARG HELM_VERSION=3.22.1
 ARG HELM_SHA256=896cf63684a42a723d61c980369d6e588330927deb13676ca0d85006dd6da0ea
 ARG YQ_VERSION=4.54.1
 ARG YQ_SHA256=8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f
+# The cloud CLIs, installed on first use (cloud-cli.sh): Microsoft's noble
+# package, Google's x86-64 archive, and AWS's x86-64 zip, which AWS's key
+# signs. Their versions are runner-images main's README's on 2026-11-23, not
+# toolset.lock's revision; bump them by hand.
+ARG AZ_VERSION=2.93.0
+ARG AZ_SHA256=a6ed3e2d3eca33c6e3b40d0534d4607048a02d656192accefcb7881ce8679124
+ARG GCLOUD_VERSION=593.0.0
+ARG GCLOUD_SHA256=42c32b7553c712f71fcf6f124546c0519437f53755f47f9bd0c957998cd6b826
+ARG AWS_VERSION=2.40.4
 # corepack's defaults where a repository names no packageManager.
 ARG YARN_VERSION=1.22.22
 ARG PNPM_VERSION=12.18.0
@@ -143,7 +152,7 @@ COPY runner-job.sh /usr/local/bin/runner-job
 COPY runner-job-completed.sh runner-job-started.sh /usr/local/bin/
 COPY dist/auto-cache.mjs dist/LICENSE dist/NOTICE /usr/local/lib/backmesh/
 COPY first-use.bash /etc/backmesh/first-use.bash
-# az, gcloud and aws install on first use, from any caller (cloud-cli.sh).
+# az, gcloud, gsutil and aws install on first use, from any caller (cloud-cli.sh).
 COPY keys/ /usr/share/keyrings/backmesh/
 COPY cloud-cli.sh /usr/local/libexec/backmesh/cloud-cli
 # apt-get and apt fetch apt's lists on first use (apt.sh). Actions that
@@ -151,7 +160,9 @@ COPY cloud-cli.sh /usr/local/libexec/backmesh/cloud-cli
 # through /opt/hostedtoolcache; the entrypoint creates it as the runner user.
 # en_US.UTF-8 for tools that ask for it by name.
 COPY apt.sh /usr/local/libexec/backmesh/apt
-RUN for cli in az gcloud aws; do ln -s /usr/local/libexec/backmesh/cloud-cli "/usr/local/bin/$cli"; done \
+RUN for cli in az gcloud gsutil aws; do ln -s /usr/local/libexec/backmesh/cloud-cli "/usr/local/bin/$cli"; done \
+    && printf 'az_version=%s\naz_sha256=%s\ngcloud_version=%s\ngcloud_sha256=%s\naws_version=%s\n' \
+        "$AZ_VERSION" "$AZ_SHA256" "$GCLOUD_VERSION" "$GCLOUD_SHA256" "$AWS_VERSION" >/usr/share/backmesh/cloud-cli.env \
     && ln -s /usr/local/libexec/backmesh/apt /usr/local/bin/apt-get \
     && ln -s /usr/local/libexec/backmesh/apt /usr/local/bin/apt \
     && ln -s "$RUNNER_TOOL_CACHE" /opt/hostedtoolcache \
