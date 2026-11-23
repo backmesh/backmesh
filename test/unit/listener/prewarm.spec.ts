@@ -812,14 +812,14 @@ describe('Planner.cue', () => {
   ];
   const cueAt = (t: number) => s(t + 10);
   // 10/20/30/40 s learned starts, each label given (no registrations, so
-  // an 8 s default register): the median is 25 s, p75 30 s.
+  // an 8 s default register): the median is 25 s, p95 40 s.
   const varyingBoots = (planner: Planner, ...labels: string[]) => {
     for (const sec of [10, 20, 30, 40]) {
       for (const label of labels) planner.booted(label, s(sec), null);
     }
   };
 
-  it("starts the first wave so it's ready at the lead, and ends it 180 s idle after", () => {
+  it("starts the first wave 5 s before it'd be ready at the lead, and ends it 180 s idle after", () => {
     const { planner } = make();
     const t = learnRuns(planner, [shape(31)]);
     // A learned boot of 31 s on both labels (one sample: its percentile is
@@ -828,12 +828,12 @@ describe('Planner.cue', () => {
     planner.booted(L8, 23_000, 8_000);
     const at = cueAt(t);
     expect(planner.cue('ACME/app', 'main', s(100), at).added).toBe(2);
-    // Ready at +100 s, so each starts 31 s before.
-    expect(planner.speculative(L, at + s(68))).toBe(0);
-    expect(planner.speculative(L, at + s(69))).toBe(1);
-    expect(planner.speculative(L8, at + s(69))).toBe(1);
-    expect(planner.speculative(L, at + s(69 + 31 + 180) - 1)).toBe(1);
-    expect(planner.speculative(L, at + s(69 + 31 + 180))).toBe(0);
+    // Ready at +100 s, so each starts 31 s and the 5 s slack before.
+    expect(planner.speculative(L, at + s(63))).toBe(0);
+    expect(planner.speculative(L, at + s(64))).toBe(1);
+    expect(planner.speculative(L8, at + s(64))).toBe(1);
+    expect(planner.speculative(L, at + s(64 + 31 + 180) - 1)).toBe(1);
+    expect(planner.speculative(L, at + s(64 + 31 + 180))).toBe(0);
   });
 
   it("times a cue slot's boot at a high percentile of the label's recent boots, not the median", () => {
@@ -843,10 +843,10 @@ describe('Planner.cue', () => {
     expect(planner.boot(L)).toBe(s(25 + 8));
     const at = cueAt(t);
     expect(planner.cue('acme/app', 'main', s(100), at).added).toBe(2);
-    // Ready at +100 s: p75's 38 s boot starts the slot at +62 s. The
-    // median's 33 s would only start it at +67 s.
-    expect(planner.speculative(L, at + s(61))).toBe(0);
-    expect(planner.speculative(L, at + s(62))).toBe(1);
+    // Ready at +100 s: p95's 48 s boot and the 5 s slack start the slot
+    // at +47 s. The median's 33 s would only start it at +67 s.
+    expect(planner.speculative(L, at + s(46))).toBe(0);
+    expect(planner.speculative(L, at + s(47))).toBe(1);
   });
 
   it('idles a cued slot 180 s, against a predicted one at 60 s, both over a 1 s boot', () => {
@@ -997,10 +997,10 @@ describe('Planner.cue', () => {
     planner.booted(L8, 23_000, 8_000);
     const at = cueAt(t);
     planner.cue('acme/app', 'main', s(100), at);
-    planner.speculative(L, at + s(68));
+    planner.speculative(L, at + s(63));
     expect(steps(logs)).toEqual([]);
-    planner.speculative(L, at + s(69));
-    planner.speculative(L, at + s(70), true);
+    planner.speculative(L, at + s(64));
+    planner.speculative(L, at + s(65), true);
     const workflow = 'acme/app/.github/workflows/ci.yml push';
     expect(steps(logs)).toEqual([
       {
@@ -1012,7 +1012,7 @@ describe('Planner.cue', () => {
         bootMs: 31_000,
       },
     ]);
-    // The push's run comes 10 s before its runners should be ready, by
+    // The push's run comes 5 s before its runners should be ready, by
     // the boot each slot was given, though boots measured since then run
     // longer.
     for (let i = 0; i < 20; i++) {
@@ -1028,7 +1028,7 @@ describe('Planner.cue', () => {
       branch: 'main',
       run: 200,
       slots: 2,
-      readyInMs: 10_000,
+      readyInMs: 5_000,
     });
 
     // A push before its cue's slots start: they never start, and a
@@ -1046,8 +1046,8 @@ describe('Planner.cue', () => {
       expect.objectContaining({ msg: 'cue taken', readyInMs: 71_000 }),
     ]);
 
-    // Its last runner counts: lint's (71 s) started 21 s ago, build's
-    // (31 s) not yet, so build's is ready in 31 s and lint's in 50.
+    // Its last runner counts: lint's (71 s) started 26 s ago, build's
+    // (31 s) not yet, so build's is ready in 31 s and lint's in 45.
     const mixed = make();
     const w = learnRuns(mixed.planner, [shape(31)]);
     mixed.planner.booted(L, 23_000, 8_000);
@@ -1058,7 +1058,7 @@ describe('Planner.cue', () => {
       cueAt(w) + s(50),
     );
     expect(steps(mixed.logs)).toEqual([
-      expect.objectContaining({ msg: 'cue taken', readyInMs: 50_000 }),
+      expect.objectContaining({ msg: 'cue taken', readyInMs: 45_000 }),
     ]);
 
     const idle = make();
@@ -1163,14 +1163,14 @@ describe('Planner.cue', () => {
 
   it("times a cued run's later jobs by what's left of the trigger's CUE_PERCENTILE boot, not the median", () => {
     const { planner } = make();
-    // p75 is 30 s, giving a 38 s cue boot against a 33 s median.
+    // p95 is 40 s, giving a 48 s cue boot against a 33 s median.
     varyingBoots(planner, L);
     const t = learnRuns(
       planner,
       Array.from({ length: 5 }, () => shape(31)),
     );
-    // Cued at once, the push 10 s later: what's left of the 38 s cue boot
-    // is 28 s, not the median's 23 s.
+    // Cued at once, the push 10 s later: what's left of the 48 s cue boot
+    // is 38 s, not the median's 23 s.
     planner.cue('acme/app', 'main', 0, s(t));
     const list = later(t + 10);
     const from = s(t + 10);
@@ -1179,8 +1179,8 @@ describe('Planner.cue', () => {
     for (let sec = 0; sec < 300; sec++) {
       if (planner.speculative(L, from + s(sec)) === 2) {
         // The median would give 92 s (23 s left, less the 33 s T3
-        // subtracts): using the cue's own percentile gives 97 s instead.
-        expect(sec).toBe(97);
+        // subtracts): using the cue's own percentile gives 107 s instead.
+        expect(sec).toBe(107);
         return;
       }
     }
@@ -1203,7 +1203,7 @@ describe('Planner.cue', () => {
       },
     ];
     const { planner } = make();
-    varyingBoots(planner, L); // p75: a 38 s cue boot, frozen onto the slot.
+    varyingBoots(planner, L); // p95: a 48 s cue boot, frozen onto the slot.
     planner.booted(L8, s(0), s(8)); // L8's own boot: a fixed 8 s.
     const t = learnRuns(
       planner,
@@ -1211,7 +1211,7 @@ describe('Planner.cue', () => {
     );
     planner.cue('acme/app', 'main', 0, s(t));
     // L's boots move a lot right after the cue, before the push: were the
-    // slot's remaining wait re-read from these, it would be 190 s off.
+    // slot's remaining wait re-read from these, it would be 160 s off.
     for (let i = 0; i < 20; i++) planner.booted(L, s(200), null);
     const list = events(
       200,
@@ -1227,9 +1227,9 @@ describe('Planner.cue', () => {
     planner.observe(L, find(list, 'build', 'JobAssigned').job, from);
     for (let sec = 0; sec < 600; sec++) {
       if (planner.speculative(L8, from + s(sec)) === 1) {
-        // Off the slot's frozen 38 s boot (28 s left of it, 10 s after the
-        // cue): 122 s. Re-read from L's now-200+ s boot, it would be 292 s.
-        expect(sec).toBe(122);
+        // Off the slot's frozen 48 s boot (38 s left of it, 10 s after the
+        // cue): 132 s. Re-read from L's now-200+ s boot, it would be 292 s.
+        expect(sec).toBe(132);
         return;
       }
     }
@@ -1391,8 +1391,8 @@ describe('Planner.cue', () => {
       kept: 0,
       dropped: 0,
     });
-    expect(planner.speculative(L, at + s(528))).toBe(0);
-    expect(planner.speculative(L, at + s(529))).toBe(1);
+    expect(planner.speculative(L, at + s(523))).toBe(0);
+    expect(planner.speculative(L, at + s(524))).toBe(1);
   });
 
   it("hands a run the rescheduled cue's runners, kept or new", () => {
