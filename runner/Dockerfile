@@ -143,7 +143,7 @@ COPY runner-job.sh /usr/local/bin/runner-job
 COPY runner-job-completed.sh runner-job-started.sh /usr/local/bin/
 COPY dist/auto-cache.mjs dist/LICENSE dist/NOTICE /usr/local/lib/backmesh/
 COPY first-use.bash /etc/backmesh/first-use.bash
-# az, gcloud and aws install on first use, from any caller (cloud-cli.sh).
+# az, gcloud, gsutil and aws install on first use, from any caller (cloud-cli.sh).
 COPY keys/ /usr/share/keyrings/backmesh/
 COPY cloud-cli.sh /usr/local/libexec/backmesh/cloud-cli
 # apt-get and apt fetch apt's lists on first use (apt.sh). Actions that
@@ -151,7 +151,7 @@ COPY cloud-cli.sh /usr/local/libexec/backmesh/cloud-cli
 # through /opt/hostedtoolcache; the entrypoint creates it as the runner user.
 # en_US.UTF-8 for tools that ask for it by name.
 COPY apt.sh /usr/local/libexec/backmesh/apt
-RUN for cli in az gcloud aws; do ln -s /usr/local/libexec/backmesh/cloud-cli "/usr/local/bin/$cli"; done \
+RUN for cli in az gcloud gsutil aws; do ln -s /usr/local/libexec/backmesh/cloud-cli "/usr/local/bin/$cli"; done \
     && ln -s /usr/local/libexec/backmesh/apt /usr/local/bin/apt-get \
     && ln -s /usr/local/libexec/backmesh/apt /usr/local/bin/apt \
     && ln -s "$RUNNER_TOOL_CACHE" /opt/hostedtoolcache \
