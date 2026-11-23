@@ -237,9 +237,11 @@ const exists = (path: string) =>
     () => true,
     () => false,
   );
-async function until(path: string) {
-  while (!(await exists(path))) await new Promise((ok) => setTimeout(ok, 5));
-}
+// Until a restore's staging directory appears in `dir`.
+const staging = (dir: string) =>
+  eventually(async () =>
+    (await readdir(dir).catch(() => [])).some((n) => n.includes('.bm-')),
+  );
 
 describe('the automatic caches, from one job to the next', () => {
   it('saves the tools and caches a job used, restores them into its next run, and stores nothing more', async () => {
@@ -360,7 +362,7 @@ describe('the automatic caches, from one job to the next', () => {
     expect(await readdir(join(r.tools, 'node', '22.23.5'))).toEqual([]);
   });
 
-  it('holds the hook for the tools only: a dependency cache restores in the background', async () => {
+  it('restores the tools in the background too, each line with when it landed', async () => {
     const r = await runner();
     const b = bucket();
     await r.vm();
@@ -369,26 +371,95 @@ describe('the automatic caches, from one job to the next', () => {
     await save(r, b, join(node, 'bin'));
     await r.vm();
     await readyToken(r);
-    const g = gated(b, /bm-auto-yarn.*\.tar/);
+    await started(r);
+    const g = gated(b, /bm-auto-(tool|yarn).*\.tar/);
     const running = restore(r.token, r.state, envOf(r), () => g.store);
-    await until(join(r.state, 'tools-done'));
-    expect(await linesOf(r)).toEqual([
-      expect.stringMatching(/^backmesh cache: auto restored node 22\.23\.5/),
-    ]);
-    expect(await exists(join(r.state, 'done'))).toBe(false);
+    await staging(join(r.tools, 'node', '22.23.5'));
+    expect(await linesOf(r)).toEqual([]);
     g.open();
     await running;
     expect(await linesOf(r)).toEqual([
-      expect.stringMatching(/restored node/),
+      expect.stringMatching(
+        /^backmesh cache: auto restored node 22\.23\.5 \(own\) {2}0 MB in \d+\.\d s, at \+\d+\.\d s$/,
+      ),
       expect.stringMatching(
         /^backmesh cache: auto restored yarn \(own\) {2}0 MB in \d+\.\d s, at \+\d+\.\d s$/,
       ),
+    ]);
+    await expect(readFile(`${node}.complete`)).resolves.toBeDefined();
+    // No file for a hook to wait on.
+    expect((await readdir(r.state)).sort()).toEqual([
+      'done',
+      'lines',
+      'ready',
+      'restored.json',
+      'started',
     ]);
     // For the saver: when it landed, which it notes before the rename.
     const restored = JSON.parse(
       await readFile(join(r.state, 'restored.json'), 'utf8'),
     ) as Restored;
     expect(restored.deps.yarn?.landed).toBeGreaterThan(0);
+  });
+
+  it('gives way to setup-* installing the same version while the tool downloads, and leaves it its install', async () => {
+    const r = await runner();
+    const b = bucket();
+    await r.vm();
+    await save(r, b, join(await setupTool(r), 'bin'));
+    await r.vm();
+    await readyToken(r);
+    const g = gated(b, /bm-auto-tool.*\.tar/);
+    const running = restore(r.token, r.state, envOf(r), () => g.store);
+    const version = join(r.tools, 'node', '22.23.5');
+    await staging(version);
+    const node = await setupTool(r);
+    await writeFile(join(node, 'bin', 'node'), '#!setup');
+    g.open();
+    await running;
+    expect(await linesOf(r)).toEqual([
+      expect.stringMatching(
+        /^backmesh cache: auto gave way node 22\.23\.5: a step made .* first, at \+\d+\.\d s$/,
+      ),
+    ]);
+    expect(await readFile(join(node, 'bin', 'node'), 'utf8')).toBe('#!setup');
+    expect(await readdir(version)).toEqual(['x64', 'x64.complete']);
+  });
+
+  it("gives way to setup-*'s directory while still empty, as tool-cache makes it before its files, and marks nothing complete", async () => {
+    const r = await runner();
+    const b = bucket();
+    await r.vm();
+    await save(r, b, join(await setupTool(r), 'bin'));
+    await r.vm();
+    await readyToken(r);
+    const g = gated(b, /bm-auto-tool.*\.tar/);
+    const running = restore(r.token, r.state, envOf(r), () => g.store);
+    const version = join(r.tools, 'node', '22.23.5');
+    await staging(version);
+    await mkdir(join(version, 'x64'));
+    g.open();
+    await running;
+    expect(await linesOf(r)).toEqual([
+      expect.stringMatching(/^backmesh cache: auto gave way node 22\.23\.5/),
+    ]);
+    expect(await readdir(version)).toEqual(['x64']);
+    expect(await readdir(join(version, 'x64'))).toEqual([]);
+  });
+
+  it('gives way to a tool whose marker setup-* left, without its directory', async () => {
+    const r = await runner();
+    const b = bucket();
+    await r.vm();
+    await save(r, b, join(await setupTool(r), 'bin'));
+    await r.vm();
+    const version = join(r.tools, 'node', '22.23.5');
+    await mkdir(version, { recursive: true });
+    await writeFile(join(version, 'x64.complete'), '');
+    expect(await restoreJob(r, b)).toEqual([
+      expect.stringMatching(/^backmesh cache: auto gave way node 22\.23\.5/),
+    ]);
+    expect(await readdir(version)).toEqual(['x64.complete']);
   });
 
   it('gives way to a step that makes the directory while it downloads, and leaves the step its files', async () => {
@@ -401,7 +472,7 @@ describe('the automatic caches, from one job to the next', () => {
     await readyToken(r);
     const g = gated(b, /bm-auto-yarn.*\.tar/);
     const running = restore(r.token, r.state, envOf(r), () => g.store);
-    await until(join(r.state, 'tools-done'));
+    await staging(join(r.home, '.cache', 'yarn'));
     const mine = join(r.home, '.cache', 'yarn', 'v6');
     await mkdir(mine, { recursive: true });
     await writeFile(join(mine, 'own'), 'step');
@@ -483,9 +554,7 @@ describe('the automatic caches, from one job to the next', () => {
       stop.signal,
     );
     const yarn = join(r.home, '.cache', 'yarn');
-    await eventually(async () =>
-      (await readdir(yarn).catch(() => [])).some((n) => n.includes('.bm-')),
-    );
+    await staging(yarn);
     stop.abort();
     await running;
     expect(await readdir(yarn)).toEqual([]);
@@ -541,28 +610,28 @@ describe('the automatic caches, from one job to the next', () => {
     );
   });
 
-  it('ends a tool download once the hook gave up, and leaves no directory', async () => {
+  it("gives up a tool still restoring at its limit after the job's start, and leaves no directory", async () => {
     const r = await runner();
     const b = bucket();
     await r.vm();
     await save(r, b, join(await setupTool(r), 'bin'));
     await r.vm();
     await readyToken(r);
+    await started(r);
     const g = gated(b, /bm-auto-tool.*\.tar/);
-    const running = restore(r.token, r.state, envOf(r), () => g.store);
-    const version = join(r.tools, 'node', '22.23.5');
-    await eventually(async () =>
-      (await readdir(version).catch(() => [])).some((n) => n.includes('.bm-')),
-    );
-    await writeFile(join(r.state, 'gave-up'), '');
-    await running;
+    await restore(r.token, r.state, envOf(r), () => g.store, 300);
     expect(await linesOf(r)).toEqual([
-      'backmesh cache: auto skipped node 22.23.5: the job started without it',
+      expect.stringMatching(
+        /^backmesh cache: auto gave up node 22\.23\.5: still restoring at \+0\.[3-9] s$/,
+      ),
     ]);
-    expect(await readdir(version)).toEqual([]);
+    const version = join(r.tools, 'node', '22.23.5');
+    expect(await eventually(async () => !(await readdir(version)).length)).toBe(
+      true,
+    );
   });
 
-  it('once the hook gave up, restores no tool, but waits on for the token for the dependency caches', async () => {
+  it('restores the tools too when the token comes after the job started', async () => {
     const r = await runner();
     const b = bucket();
     await r.vm();
@@ -571,16 +640,18 @@ describe('the automatic caches, from one job to the next', () => {
     await save(r, b, join(node, 'bin'));
     await r.vm();
     await writeFile(r.token, JSON.stringify({ v: 1, state: 'pending' }));
-    await writeFile(join(r.state, 'gave-up'), '');
+    await started(r);
     const running = restore(r.token, r.state, envOf(r), () => b.store);
     await new Promise((ok) => setTimeout(ok, 300));
     await readyToken(r);
     await running;
     expect(await linesOf(r)).toEqual([
+      expect.stringMatching(
+        /^backmesh cache: auto restored node 22\.23\.5 \(own\) .*, at \+0\.[3-9] s$/,
+      ),
       expect.stringMatching(/^backmesh cache: auto restored yarn \(own\)/),
-      'backmesh cache: auto skipped node 22.23.5: the job started without it',
     ]);
-    expect(await readdir(r.tools)).toEqual([]);
+    await expect(readFile(`${node}.complete`)).resolves.toBeDefined();
   });
 
   it('gives up on a token still pending at its limit', async () => {
@@ -596,12 +667,11 @@ describe('the automatic caches, from one job to the next', () => {
       ),
     ]);
     await expect(readFile(join(r.state, 'done'))).resolves.toBeDefined();
-    await expect(readFile(join(r.state, 'tools-done'))).resolves.toBeDefined();
     // The hook's timing line reads when the token came: it never did.
     await expect(readFile(join(r.state, 'ready'))).rejects.toThrow();
   });
 
-  it('notes when the token came, for the hook to time its wait', async () => {
+  it("notes when the token came, for Complete runner's line", async () => {
     const r = await runner();
     const b = bucket();
     await r.vm();
@@ -624,6 +694,8 @@ describe('the automatic caches, from one job to the next', () => {
     expect(await readFile(join(r.state, 'lines'), 'utf8')).toBe(
       'backmesh cache: auto skipped: the cache is off for this runner (FORBIDDEN)\n',
     );
+    // No token came.
+    expect(await exists(join(r.state, 'ready'))).toBe(false);
   });
 
   it('ignores a record whose tool names a path outside the tool cache', async () => {

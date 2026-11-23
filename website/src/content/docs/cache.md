@@ -59,10 +59,10 @@ change:
 - **Tools.** The versions that `actions/setup-node`, `setup-python`,
   `setup-java`, `setup-go` and the other `setup-*` actions put on `PATH` are
   saved once per repository. They're restored into the runner's tool cache
-  before the job's next run, so `setup-*` finds them there. A tool a step
-  changed after setup isn't saved, such as a Python that `pip install` wrote
-  into outside a virtual environment. A saved tool lasts 7 days; after that,
-  `setup-*` fetches the latest patch release again.
+  in the job's next run, where a `setup-*` step that runs after the restore
+  finds them. A tool a step changed after setup isn't saved, such as a Python
+  that `pip install` wrote into outside a virtual environment. A saved tool
+  lasts 7 days; after that, `setup-*` fetches the latest patch release again.
 - **npm, Yarn and pnpm.** Their download caches (`~/.npm`, `~/.cache/yarn`,
   `~/.yarn/berry/cache` and `~/.local/share/pnpm/store`) are saved under a key
   made from the lockfiles the job installed. Jobs that install the same
@@ -72,13 +72,14 @@ change:
   holds only those the job's `yarn.lock` files name.
 
 The runner restores what the same job, or the same matrix leg, used in its
-last run. The tools restore while GitHub sets up the job, which waits for them
-at most 10 seconds. The package managers' caches restore in the background,
-for up to 2 minutes after the job starts, as its first steps run; a step that
-makes the cache's directory first, such as an install that started before the
-restore finished, keeps its own. Set up runner shows a line for each restore, or why
-there was none, and how long the job waited for them; Complete runner shows
-the background restores', with when each landed. A job's first run, and a new
+last run. The job doesn't wait for it: the tools and the package managers'
+caches restore in the background, for up to 2 minutes after the job starts,
+as its first steps run. A step that makes the directory first, such as a
+`setup-*` step installing the same version or an install that started before
+the restore finished, keeps its own, and a restore never leaves a half-written
+directory. Complete runner shows when the job's cache token came, and a line
+for each restore, with when it landed, or why there was none. A restore still
+running then stops, and its line is in the runner Job's log, not the job's. A job's first run, and a new
 matrix leg, restore nothing. The saves upload after the job, after
 `backmesh/cache`'s own. A package manager's cache restored from an older
 lockfile is saved again only if the job's install wrote into it, or, for Yarn
@@ -143,8 +144,7 @@ as `actions/cache` also requires, and GNU `cp` (coreutils) to save.
   job that saves in the calling repository's own workflow files.
 - The automatic restores wait for the job's cache token, which reaches the
   runner when GitHub tells backmesh the job started: a median 12 seconds into
-  the job, and sometimes 45. A job whose token takes over 10 seconds starts
-  without its tools, and an install that starts before its cache arrives
-  downloads everything.
+  the job, and sometimes 45. A `setup-*` step or an install that runs before
+  its cache arrives downloads everything.
 - Keys starting with `bm-auto-` are reserved for the automatic cache.
 - The upload's result is in the runner Job's log, not the job's log.

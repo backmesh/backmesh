@@ -82,8 +82,8 @@ async function completed(sha: string) {
   throw new Error(`no completed run for ${sha} within 45 min`);
 }
 
-// `<ISO time> <text>` lines of the Marks step and the backmesh lines of
-// Set up runner.
+// `<ISO time> <text>` lines of the Marks step and the job log's
+// `backmesh cache: auto` lines.
 function parseLog(log: string) {
   const marks: Record<string, number> = {};
   const cache: string[] = [];

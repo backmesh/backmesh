@@ -34,7 +34,7 @@ setup() {
   echo 10737418240 >"$scratch/cgroup/memory.peak"
   printf 'source %q && cgroup=%q proc=%q sample_every=${SAMPLE_EVERY:-0.1} && main summary\n' \
     "$script" "$scratch/cgroup" "$scratch/proc" >"$scratch/hook.sh"
-  printf 'source %q && auto_wait=${AUTO_WAIT:-1} && main timings\n' "$script" >"$scratch/started-hook.sh"
+  printf 'source %q && main timings\n' "$script" >"$scratch/started-hook.sh"
   touch "$calls"
   echo 2.338.2 >"$root"/opt/actions-runner-dist/.runner-version
   # A fake runner as actions/runner lays it out: run.sh, which with
@@ -147,7 +147,7 @@ case_times_a_start_on_its_vm() {
   check 'and the wait for this job' 'grep -Eq "^  Assignment +0\.[3-9] s  GitHub assigned this job$" "$scratch/job-log"'
   check 'which add up' adds_up
   check 'prints the marks in one line' \
-    'grep -Eq "^backmesh-job-timings runner=bmabcde-04-x submitted_ms=$(((now - 100) * 1000 + 250)) vm_booted_ms=$(((now - 60) * 1000)) container_started_ms=$(((now - 22) * 1000)) job_started_ms=[0-9]{13} runner_listening_ms=[0-9]{13} job_received_ms=[0-9]{13} restore_waited_ms= hook_done_ms=[0-9]{13}$" "$scratch/out"'
+    'grep -Eq "^backmesh-job-timings runner=bmabcde-04-x submitted_ms=$(((now - 100) * 1000 + 250)) vm_booted_ms=$(((now - 60) * 1000)) container_started_ms=$(((now - 22) * 1000)) job_started_ms=[0-9]{13} runner_listening_ms=[0-9]{13} job_received_ms=[0-9]{13} hook_done_ms=[0-9]{13}$" "$scratch/out"'
 }
 
 case_times_a_start_without_the_submit_time() {
@@ -158,7 +158,7 @@ case_times_a_start_without_the_submit_time() {
   check 'from the start, with the runner and assignment as one' \
     '[[ $(awk "NR > 1 { print \$1 }" "$scratch/job-log" | paste -sd" ") == Runner ]] && grep -q "the runner connected, GitHub assigned this job" "$scratch/job-log"'
   check 'leaves the missing marks empty' \
-    'grep -Eq "^backmesh-job-timings runner=bmabcde-04-x submitted_ms= vm_booted_ms= container_started_ms= job_started_ms=[0-9]{13} runner_listening_ms= job_received_ms=[0-9]{13} restore_waited_ms= hook_done_ms=[0-9]{13}$" "$scratch/out"'
+    'grep -Eq "^backmesh-job-timings runner=bmabcde-04-x submitted_ms= vm_booted_ms= container_started_ms= job_started_ms=[0-9]{13} runner_listening_ms= job_received_ms=[0-9]{13} hook_done_ms=[0-9]{13}$" "$scratch/out"'
   run_job timings
   check 'prints nothing outside a job' '((status == 0)) && [[ ! -s $scratch/out ]]'
 }
@@ -430,100 +430,57 @@ case_skips_the_automatic_save_with_under_a_minute_left() {
   check 'starts no save' '! grep -q "auto-cache.mjs save" "$calls"'
 }
 
-case_waits_for_the_automatic_restores_and_prints_them() {
-  local dir=$scratch/auto
+case_holds_the_job_for_no_restore() {
+  local dir=$scratch/auto start=${EPOCHREALTIME/./}
   mkdir -p "$dir"
-  echo "job_started ${EPOCHREALTIME/./}" >"$scratch/marks"
-  # As the restorer writes it: no newline.
-  { sleep 0.2; printf %s $((${EPOCHREALTIME/./} / 1000)) >"$dir/ready"; sleep 0.3
-    echo 'backmesh cache: auto restored node 22.23.5 (own)' >"$dir/lines"; : >"$dir/done"; } &
-  BACKMESH_AUTO_STATE=$dir BACKMESH_JOB_MARKS=$scratch/marks AUTO_WAIT=5 bash "$scratch/started-hook.sh" >"$scratch/out" 2>&1
+  echo "job_started $start" >"$scratch/marks"
+  # A restorer that never finishes, and has said nothing yet.
+  BACKMESH_AUTO_STATE=$dir BACKMESH_JOB_MARKS=$scratch/marks bash "$scratch/started-hook.sh" >"$scratch/out" 2>&1
   status=$?
-  wait
   check 'exits 0' '((status == 0))'
-  check 'prints the restorer'"'"'s line' 'grep -qx "backmesh cache: auto restored node 22.23.5 (own)" "$scratch/out"'
-  check 'leaves a pending token to the restorer' '[[ ! -e $dir/gave-up ]]'
-  check 'notes the job'"'"'s start for the restorer'"'"'s lines' \
+  check 'at once' '(((${EPOCHREALTIME/./} - start) < 500000))'
+  check 'notes the job'"'"'s start for the restorer'"'"'s limit and lines' \
     '[[ $(cat "$dir/started") =~ ^[0-9]{13}$ ]]'
-  check 'then one line of where the time went' \
-    'grep -Eq "^backmesh cache: auto took ([0-9]+) ms: ([0-9]+) ms for the cache token, ([0-9]+) ms restoring$" "$scratch/out"'
-  check 'its token wait the restorer'"'"'s, its total the hook'"'"'s' \
-    'sed -En "s/^backmesh cache: auto took ([0-9]+) ms: ([0-9]+) ms .* ([0-9]+) ms restoring$/\1 \2 \3/p" "$scratch/out" | awk "{ exit !(\$1 >= 450 && \$1 < 3000 && \$2 >= 150 && \$2 < 1500 && \$3 >= 250 && \$2 + \$3 <= \$1 + 1) }"'
-  check 'marks the job, the wait for the restorer and the hook'"'"'s end, in order' \
-    '[[ $(awk "{ print \$1 }" "$scratch/marks" | paste -sd" ") == "job_started job_received restore_waited hook_done" ]]'
-  check 'the wait lasting until the restorer was done' \
-    'awk "{ m[\$1] = \$2 } END { w = m[\"restore_waited\"] - m[\"job_received\"]; exit !(w >= 450000 && w < 3000000 && m[\"hook_done\"] >= m[\"restore_waited\"]) }" "$scratch/marks"'
+  check 'prints no cache line' '! grep -q "^backmesh cache:" "$scratch/out"'
+  check 'leaves the restorer no other file' '[[ $(ls "$dir") == started ]]'
+  check 'marks the job and the hook'"'"'s end, with no wait between' \
+    '[[ $(awk "{ print \$1 }" "$scratch/marks" | paste -sd" ") == "job_started job_received hook_done" ]]'
 }
 
-case_gives_up_on_a_restorer_that_never_finishes() {
-  local dir=$scratch/auto start=$SECONDS
-  mkdir -p "$dir"
-  BACKMESH_AUTO_STATE=$dir AUTO_WAIT=1 bash "$scratch/started-hook.sh" >"$scratch/out" 2>&1
-  status=$?
-  check 'exits 0' '((status == 0))'
-  check 'within its deadline' '((SECONDS - start <= 3))'
-  check 'tells the restorer the job started without its tools' '[[ -e $dir/gave-up ]]'
-  check 'and says so, with the time it took' \
-    'grep -Eqx "backmesh cache: auto took [0-9]+ ms: no cache token within 1 s, so the job starts without its tools; the dependency caches wait on for it in the background" "$scratch/out"'
-}
-
-case_waits_for_the_tools_only() {
-  local dir=$scratch/auto start=$SECONDS
-  mkdir -p "$dir"
-  { sleep 0.2; printf %s $((${EPOCHREALTIME/./} / 1000)) >"$dir/ready"; sleep 0.2
-    echo 'backmesh cache: auto restored node 22.23.5 (own)' >"$dir/lines"; : >"$dir/tools-done"; } &
-  BACKMESH_AUTO_STATE=$dir AUTO_WAIT=5 bash "$scratch/started-hook.sh" >"$scratch/out" 2>&1
-  status=$?
-  wait
-  check 'exits 0' '((status == 0))'
-  check 'once the tools are done' '((SECONDS - start < 3))'
-  check 'prints the tool'"'"'s line' 'grep -qx "backmesh cache: auto restored node 22.23.5 (own)" "$scratch/out"'
-  check 'leaves the dependency caches to the restorer' '[[ ! -e $dir/gave-up ]]'
-  check 'and says so, with where the time went' \
-    'grep -Eqx "backmesh cache: auto took [0-9]+ ms: [0-9]+ ms for the cache token, [0-9]+ ms restoring tools; the dependency caches go on in the background" "$scratch/out"'
-}
-
-case_prints_the_background_restores_when_the_job_completes() {
+case_prints_the_restores_and_the_token_when_the_job_completes() {
   local dir=$scratch/auto
   mkdir -p "$dir"
-  printf %s $((${EPOCHREALTIME/./} / 1000)) >"$dir/ready"
-  echo 'backmesh cache: auto restored node 22.23.5 (own)' >"$dir/lines"
-  : >"$dir/tools-done"
-  BACKMESH_AUTO_STATE=$dir AUTO_WAIT=1 bash "$scratch/started-hook.sh" >/dev/null 2>&1
-  echo 'backmesh cache: auto restored yarn (own)  812 MB in 9.1 s, at +23.4 s' >>"$dir/lines"
+  # As the hook and the restorer write them: no newline.
+  printf %s 1763800000000 >"$dir/started"
+  printf %s 1763800012345 >"$dir/ready"
+  printf '%s\n' 'backmesh cache: auto restored node 22.23.5 (own)  40 MB in 1.2 s, at +13.6 s' \
+    'backmesh cache: auto restored yarn (own)  812 MB in 9.1 s, at +23.4 s' >"$dir/lines"
   BACKMESH_AUTO_STATE=$dir bash "$scratch/hook.sh" >"$scratch/out" 2>&1
   status=$?
   check 'exits 0' '((status == 0))'
-  check 'prints the lines that came after the job started, only' \
-    '[[ $(cat "$scratch/out") == "backmesh cache: auto restored yarn (own)  812 MB in 9.1 s, at +23.4 s" ]]'
+  check 'prints when the token came, then every restore'"'"'s line' \
+    '[[ $(cat "$scratch/out") == "backmesh cache: auto the cache token came at +12.3 s
+backmesh cache: auto restored node 22.23.5 (own)  40 MB in 1.2 s, at +13.6 s
+backmesh cache: auto restored yarn (own)  812 MB in 9.1 s, at +23.4 s" ]]'
 }
 
-case_prints_no_timing_when_it_restored_nothing() {
+case_counts_a_token_before_the_job_as_at_its_start() {
   local dir=$scratch/auto
   mkdir -p "$dir"
-  printf %s $((${EPOCHREALTIME/./} / 1000)) >"$dir/ready"
-  echo 'backmesh cache: auto skipped: the cache is off for this runner (FORBIDDEN)' >"$dir/lines"
-  : >"$dir/done"
-  BACKMESH_AUTO_STATE=$dir AUTO_WAIT=1 bash "$scratch/started-hook.sh" >"$scratch/out" 2>&1
-  status=$?
-  check 'exits 0' '((status == 0))'
-  check 'prints the restorer'"'"'s line' 'grep -q "cache is off" "$scratch/out"'
-  check 'and no timing line' '! grep -q "auto took" "$scratch/out"'
+  printf %s 1763800000000 >"$dir/started"
+  printf %s 1763799999000 >"$dir/ready"
+  BACKMESH_AUTO_STATE=$dir bash "$scratch/hook.sh" >"$scratch/out" 2>&1
+  check 'says +0.0 s' '[[ $(cat "$scratch/out") == "backmesh cache: auto the cache token came at +0.0 s" ]]'
 }
 
-case_says_when_tool_restores_outlast_the_wait() {
+case_prints_no_token_line_without_a_token() {
   local dir=$scratch/auto
   mkdir -p "$dir"
-  printf %s $((${EPOCHREALTIME/./} / 1000)) >"$dir/ready"
-  BACKMESH_AUTO_STATE=$dir AUTO_WAIT=1 bash "$scratch/started-hook.sh" >"$scratch/out" 2>&1
-  status=$?
-  check 'exits 0' '((status == 0))'
-  check 'says the job starts without its tools' \
-    'grep -Eqx "backmesh cache: auto took [0-9]+ ms: [0-9]+ ms for the cache token, then the job starts without its tools; the dependency caches go on in the background" "$scratch/out"'
-}
-
-case_waits_at_most_10_s_for_the_restorer() {
-  check 'by default' '[[ $(source "$script" && echo "$auto_wait") == 10 ]]'
+  printf %s 1763800000000 >"$dir/started"
+  echo 'backmesh cache: auto gave up: no cache token by +120.0 s' >"$dir/lines"
+  BACKMESH_AUTO_STATE=$dir bash "$scratch/hook.sh" >"$scratch/out" 2>&1
+  check 'prints the restorer'"'"'s line alone' \
+    '[[ $(cat "$scratch/out") == "backmesh cache: auto gave up: no cache token by +120.0 s" ]]'
 }
 
 case_records_the_job_facts_for_the_save() {
