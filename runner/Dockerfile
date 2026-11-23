@@ -26,6 +26,14 @@ ARG HELM_VERSION=3.22.1
 ARG HELM_SHA256=896cf63684a42a723d61c980369d6e588330927deb13676ca0d85006dd6da0ea
 ARG YQ_VERSION=4.54.1
 ARG YQ_SHA256=8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f
+# The cloud CLIs, installed on first use (cloud-cli.sh): Microsoft's noble
+# package, Google's x86-64 archive, and AWS's x86-64 zip, which AWS's key
+# signs.
+ARG AZ_VERSION=2.93.0
+ARG AZ_SHA256=a6ed3e2d3eca33c6e3b40d0534d4607048a02d656192accefcb7881ce8679124
+ARG GCLOUD_VERSION=593.0.0
+ARG GCLOUD_SHA256=42c32b7553c712f71fcf6f124546c0519437f53755f47f9bd0c957998cd6b826
+ARG AWS_VERSION=2.40.4
 # corepack's defaults where a repository names no packageManager.
 ARG YARN_VERSION=1.22.22
 ARG PNPM_VERSION=12.18.0
@@ -152,6 +160,8 @@ COPY cloud-cli.sh /usr/local/libexec/backmesh/cloud-cli
 # en_US.UTF-8 for tools that ask for it by name.
 COPY apt.sh /usr/local/libexec/backmesh/apt
 RUN for cli in az gcloud gsutil aws; do ln -s /usr/local/libexec/backmesh/cloud-cli "/usr/local/bin/$cli"; done \
+    && printf 'az_version=%s\naz_sha256=%s\ngcloud_version=%s\ngcloud_sha256=%s\naws_version=%s\n' \
+        "$AZ_VERSION" "$AZ_SHA256" "$GCLOUD_VERSION" "$GCLOUD_SHA256" "$AWS_VERSION" >/usr/share/backmesh/cloud-cli.env \
     && ln -s /usr/local/libexec/backmesh/apt /usr/local/bin/apt-get \
     && ln -s /usr/local/libexec/backmesh/apt /usr/local/bin/apt \
     && ln -s "$RUNNER_TOOL_CACHE" /opt/hostedtoolcache \
