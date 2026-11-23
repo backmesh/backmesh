@@ -33,7 +33,8 @@ pinned() {
 }
 
 # Microsoft's package, unpacked without dpkg: it has no maintainer scripts,
-# and its dependencies are base Ubuntu libraries.
+# and its dependencies are base Ubuntu libraries. So dpkg keeps no record of
+# azure-cli (dpkg -l doesn't list it), and its bash completion isn't installed.
 az_install() {
   pinned "https://packages.microsoft.com/repos/azure-cli/pool/main/a/azure-cli/azure-cli_${az_version}-1~noble_amd64.deb" "$az_sha256" \
     && sudo -n rm -rf /opt/az.new /opt/az \

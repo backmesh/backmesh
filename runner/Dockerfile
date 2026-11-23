@@ -28,7 +28,8 @@ ARG YQ_VERSION=4.54.1
 ARG YQ_SHA256=8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f
 # The cloud CLIs, installed on first use (cloud-cli.sh): Microsoft's noble
 # package, Google's x86-64 archive, and AWS's x86-64 zip, which AWS's key
-# signs.
+# signs. Their versions are runner-images main's README's on 2026-11-23, not
+# toolset.lock's revision; bump them by hand.
 ARG AZ_VERSION=2.93.0
 ARG AZ_SHA256=a6ed3e2d3eca33c6e3b40d0534d4607048a02d656192accefcb7881ce8679124
 ARG GCLOUD_VERSION=593.0.0
