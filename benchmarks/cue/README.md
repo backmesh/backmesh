@@ -78,6 +78,32 @@ hosted runner is billed per minute.
 
 ## Results
 
+### 2026-11-23, backmesh 0.5.7
+
+[Run 45237380381](https://github.com/backmesh/backmesh/actions/runs/45237380381)
+of this workflow from main, on backmesh's own CI installation (backmesh 0.5.7):
+target `backmesh/benchmarks`, `backmesh-16`, width 8, 3 rounds, lead 75 s.
+Each figure is the median over pushes of the push's median over its jobs,
+with the range over pushes. **Queued to done** is each `bench` job's
+`created_at` to its `completed_at`, read from the target's job times after
+the run; the job summary doesn't have it.
+
+| Figure                    | Cued           | Not cued       |
+| ------------------------- | -------------- | -------------- |
+| Jobs served               | 17 of 24 (71%) | 0 of 24 (0%)   |
+| Queued to first real step | 17 s (11–34)   | 52 s (46–80.5) |
+| Queued to assigned        | 7 s (1–24.5)   | 43.5 s (36–71) |
+| Job setup                 | 10 s (10–10)   | 10 s (9–10)    |
+| Queued to done            | 19 s (13–36.5) | 54.5 s (48–83) |
+
+Served per cued push: 5, 4 and 8 of 8; the jobs a cue's runner didn't take
+waited for a runner of their own, like an uncued push's. The slowest job of
+a push, the wave's end, was done 40, 99 and 14 s after queueing cued, and
+181, 99 and 53 s uncued. There is no GitHub-hosted arm of this workload
+yet, so how this compares with `ubuntu-latest` isn't measured here.
+
+### 2026-11-10, a one-off workflow
+
 Measured on 2026-11-10 on backmesh's own CI installation, on `backmesh-4`.
 This run used a one-off workflow of 8 parallel `sleep 60` jobs per push
 rather than `run.ts`. Three warm-up pushes came first. Then three pushes each
