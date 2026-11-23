@@ -78,7 +78,8 @@ as its first steps run. A step that makes the directory first, such as a
 `setup-*` step installing the same version or an install that started before
 the restore finished, keeps its own, and a restore never leaves a half-written
 directory. Complete runner shows when the job's cache token came, and a line
-for each restore, with when it landed, or why there was none. A job's first run, and a new
+for each restore, with when it landed, or why there was none. A restore still
+running then stops, and its line is in the runner Job's log, not the job's. A job's first run, and a new
 matrix leg, restore nothing. The saves upload after the job, after
 `backmesh/cache`'s own. A package manager's cache restored from an older
 lockfile is saved again only if the job's install wrote into it, or, for Yarn

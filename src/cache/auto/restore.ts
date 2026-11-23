@@ -126,6 +126,10 @@ async function restoreOne(
     if (failed) throw failed.reason;
     // `bounded` has said why.
     if (!commit()) return '';
+    // A tool's check and the rename below aren't one step, as Node has no
+    // RENAME_NOREPLACE: a setup-* step's mkdirP in between is replaced, and
+    // its copy then lands in the restored directory. That holds the same
+    // version, and setup-* writes its marker last.
     if (!t.pm && taken()) return gaveWay();
     const ours = (await stat(staging)).ino;
     if (t.pm) {
@@ -155,7 +159,10 @@ async function restoreOne(
     }
     // Marked complete last, and only while the directory is still the
     // restore's: a setup-* step that found the tool missing may have
-    // replaced it with its own since, and marks that one itself.
+    // replaced it with its own since, and marks that one itself. One that
+    // replaces it between the check and the write gets the marker early, and
+    // rewrites it once its copy is done; a tree it left half-copied has files
+    // newer than the marker, which the saver refuses (save.ts changedAfter).
     if (!t.pm) {
       if ((await stat(t.dir).catch(() => undefined))?.ino !== ours)
         return gaveWay();

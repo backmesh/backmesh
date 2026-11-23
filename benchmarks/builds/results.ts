@@ -62,6 +62,8 @@ export const SEGMENTS = [
   ['runner', 'Runner connected to GitHub', 'runner_listening'],
   ['assigned', 'GitHub assigned the job', 'startedAt'],
   ['setUpJob', 'Set up job (actions downloaded)', 'job_received'],
+  // Results before 0.5.7 only: the job-started hook no longer waits for the
+  // automatic restores, and marks no `restore_waited`.
   ['cacheHold', 'Cache hold (automatic restores)', 'restore_waited'],
   ['toFirstStep', 'Rest of the setup, to the first step', 'firstStep'],
 ] as const;
