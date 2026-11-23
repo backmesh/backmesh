@@ -28,10 +28,6 @@ export function anycloudControl(api: AnycloudApi, run: RunAnycloud) {
       token(['api', 'token', 'rotate', '--service', service]),
     removeService: (service: string) =>
       cli('api', 'access', 'remove', '--service', service),
-    // C29 (RFC 0049 release 1): a Deployment's ServiceAccount, which a
-    // listener from before its VM has.
-    removeServiceAccount: (deployment: string) =>
-      cli('api', 'access', 'remove', '--service-account', deployment),
   };
 }
 

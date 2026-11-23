@@ -49,11 +49,8 @@ export interface CliIo {
   readStatus?: (io: CliIo, org?: string) => Promise<StatusReport>;
   // Streams a workload's log to this terminal; resolves with the exit code.
   streamLogs?: (args: string[]) => Promise<number>;
-  // The control plane's listeners, for `logs`: each name and its VM, or a
-  // listener from before its VM's Deployment.
-  listeners?: (
-    io: CliIo,
-  ) => Promise<{ name: string; vm?: string; deployment?: string }[]>;
+  // The control plane's listeners, for `logs`: each name and its VM.
+  listeners?: (io: CliIo) => Promise<{ name: string; vm: string }[]>;
   cueDeps?: (io: CliIo) => CueDeps;
 }
 
@@ -114,6 +111,7 @@ function realUpgradeDeps(io: CliIo, json: boolean): UpgradeDeps {
   return {
     env: io.env,
     run: runAnycloud,
+    command: cloudCommand,
     runLong: anycloudBinary(0),
     release: async () => readCompatibility(),
     status: () => realStatus(io),
@@ -227,10 +225,9 @@ async function realListeners(io: CliIo) {
     undefined,
     tokenRefresh(io.env, runAnycloud, url, reSignIn(io)),
   );
-  return (await readInstallation(api)).orgs.map(({ name, vm, deployment }) => ({
+  return (await readInstallation(api)).orgs.map(({ name, vm }) => ({
     name,
-    vm: vm?.id,
-    deployment: deployment?.name,
+    vm: vm.id,
   }));
 }
 
@@ -435,17 +432,13 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
               : `Pass --org <org> for that org's listener's log; this control plane runs ${listeners.length} listeners.`,
           );
         }
-        // A Deployment runs until `upgrade` has moved it. A VM's own log is
-        // anycloud's keepalive: the listener's is its container's.
-        exitCode = await (io.streamLogs ?? realLogs)(
-          listener.deployment
-            ? ['logs', listener.deployment, ...follow]
-            : [
-                'exec',
-                listener.vm!,
-                `docker logs --tail 1000 ${opts.follow ? '--follow ' : ''}backmesh-listener`,
-              ],
-        );
+        // A VM's own log is anycloud's keepalive: the listener's is its
+        // container's.
+        exitCode = await (io.streamLogs ?? realLogs)([
+          'exec',
+          listener.vm,
+          `docker logs --tail 1000 ${opts.follow ? '--follow ' : ''}backmesh-listener`,
+        ]);
       },
     );
 
@@ -633,8 +626,11 @@ function describe(error: unknown): string {
   const lines: string[] = [];
   for (let e: unknown = error; e instanceof Error && lines.length < 5;) {
     const status = (e as { status?: unknown }).status;
+    // The status follows the message's own first line, not a note after it.
     lines.push(
-      typeof status === 'number' ? `${e.message} (HTTP ${status})` : e.message,
+      typeof status === 'number'
+        ? e.message.replace(/^.*/, `$& (HTTP ${status})`)
+        : e.message,
     );
     e = e.cause;
   }

@@ -74,7 +74,7 @@ export interface UninstallOptions {
 export interface UninstallDeps {
   env: NodeJS.ProcessEnv;
   run: RunAnycloud;
-  // For `cluster delete`, which waits until the installation is gone.
+  // For `api delete`, which waits until the installation is gone.
   runLong: RunAnycloud;
   // The user's cloud CLIs, which delete our CI's generated identities.
   command: RunCommand;
@@ -91,7 +91,7 @@ export interface UninstallDeps {
 }
 
 const POLL_MS = 10_000;
-// Half an hour of polls, for the drain and for the pools' VMs to go.
+// Half an hour of polls, for the drain and for the runners' VMs to go.
 const POLLS = 180;
 // `anycloud exec` can fail while the API or the listener is briefly away.
 const FAILED_READS = 3;
@@ -131,7 +131,7 @@ export const leftoverIdentity = (cloud: Cloud, connection?: string) =>
 export const leftoverRole = (cloud: Cloud, maybe = false) =>
   `${cloud}'s role connection setup is left in the ${SIGNED_IN[cloud]} it ran in${maybe ? ', if install connected it' : ''}. It trusts only this control plane, which is gone; delete it in ${cloud}'s console.`;
 
-// What `cluster delete --json` couldn't delete, with the tag, ID or name to
+// What `api delete --json` couldn't delete, with the tag, ID or name to
 // search for (`DeleteEntry`, anycloud `src/cli/services/seed-delete.ts`). A
 // kept bucket is reported on its own, and a harmless entry is left on
 // purpose at no cost.
@@ -314,9 +314,6 @@ interface ControlPlane {
   unfinished: string[];
   // `--org` with no listener: `unfinished` is only a note, not a failure.
   unfinishedNoteOnly: boolean;
-  // When the control plane goes, `bm-control`'s other unmanaged
-  // Deployments, stopped before the GitHub cleanup (`removeOthers`).
-  others: string[];
   // Whether the control plane goes: no `--org`, or the last org's.
   whole: boolean;
   // The connections install made, unless they couldn't be read.
@@ -343,7 +340,7 @@ async function readOrgs(
 ) {
   const orgs: Org[] = [];
   for (const listener of listeners) {
-    if (listener.vm?.lost && !listener.deployment) {
+    if (listener.vm.lost) {
       const org = orgOfListener(listener.name)!;
       orgs.push({ org, listener, jobs: await runnerJobs(org) });
       continue;
@@ -397,7 +394,7 @@ async function readControlPlane(
   );
   const api = (deps.api ?? anycloudApi)(url, token, undefined, refresh);
   const exec = (deps.exec ?? anycloudExec)(url, token, undefined, refresh);
-  const { pool, orgs: listeners } = await readInstallation(api);
+  const { orgs: listeners } = await readInstallation(api);
   // `--org` for one of several orgs removes that org only; for the last
   // org, or without it, uninstall removes everything.
   const { org } = options;
@@ -460,20 +457,6 @@ async function readControlPlane(
   const leftovers = !whole
     ? new Map<Cloud, Leftover>()
     : (connections ?? everyCloud(deps.env, clusterId));
-  // Any other Deployment there, such as an older listener, could register
-  // scale sets again during the GitHub cleanup. Managed ones are anycloud's.
-  const others =
-    whole && pool
-      ? (await api.listDeployments({ query: {} })).deployments
-          .filter(
-            (d) =>
-              d.nodePoolId === pool.id &&
-              d.deletedAt === null &&
-              !d.managed &&
-              !listeners.some((listener) => listener.deployment?.id === d.id),
-          )
-          .map((d) => d.name)
-      : [];
   const deleteBucket =
     whole && (await bucketDecision(options, deps, clusterId));
   return {
@@ -484,7 +467,6 @@ async function readControlPlane(
     orgs,
     unfinished,
     unfinishedNoteOnly: !!org && !listeners.length,
-    others,
     whole,
     connections,
     leftovers,
@@ -551,11 +533,11 @@ async function removeOrg(
   if (plane) {
     // An org's other listener VMs go before the drain, so none takes a job
     // or registers the scale sets again meanwhile.
-    if (listener?.vm?.others.length)
+    if (listener?.vm.others.length)
       await terminateVms(plane.api, deps, listener.vm.others);
     // A lost VM's listener can't drain: its org's runners are stopped
     // instead.
-    const lost = !!listener?.vm?.lost && !listener.deployment;
+    const lost = !!listener?.vm.lost;
     if (listener && !lost) await drainListener(deps, plane.exec, listener);
     if (lost && tag) await stopRunners(plane, deps, sessionOf(tag));
     await removeListener(org, listener, plane.api, deps);
@@ -568,7 +550,6 @@ async function removeOrg(
           await deps.run(['secrets', 'delete', name]).catch(() => undefined);
       }
     }
-    if (plane.whole) await removeOthers(plane, deps);
   }
   // Refused: with no listener ever run, nothing of this install is at
   // GitHub; a listener's runner groups are left for the org's owner to
@@ -650,9 +631,8 @@ async function removeOrg(
 }
 
 // Step 1 for one org: its listener's VM and service, then a wait until the
-// VM is gone; a listener from before its VM, its Deployment and
-// ServiceAccount. A rerun past the delete finds the service gone or not.
-// The Secret stays until the org is finished.
+// VM is gone. A rerun past the delete finds the service gone or not. The
+// Secret stays until the org is finished.
 async function removeListener(
   org: string,
   listener: Listener | undefined,
@@ -661,18 +641,8 @@ async function removeListener(
 ) {
   const name = listener?.name ?? listenerName(org);
   const control = anycloudControl(api, deps.run);
-  const { vm, deployment } = listener ?? {};
+  const vm = listener?.vm;
   if (vm && !vm.lost) await terminateVms(api, deps, [vm.id]);
-  if (deployment) await deps.run(['deployment', 'delete', name]);
-  // A rerun past the Deployment's delete finds it gone, and its
-  // ServiceAccount gone or not; an org that only ever had a VM has none.
-  if (!vm || deployment) {
-    await control.removeServiceAccount(name).catch((error: unknown) => {
-      if (deployment) throw error;
-    });
-  }
-  // A rerun past the delete doesn't wait again: the first run drained it.
-  if (deployment) await stopped(api, deps, [name], 'the listener to stop');
   // Idempotent, so a rerun past the VM's end still revokes its token, and
   // an org that never had a service is fine. An anycloud without service
   // tokens never issued one.
@@ -703,30 +673,6 @@ async function terminateVms(
     (vms) => !vms.some((w) => ids.includes(w.id) && !TERMINAL.has(w.state)),
     ids.length > 1 ? 'the listener VMs to go' : 'the listener VM to go',
   );
-}
-
-// Waits until none of the named Deployments runs.
-const stopped = (
-  api: AnycloudApi,
-  deps: UninstallDeps,
-  names: string[],
-  what: string,
-) =>
-  poll(
-    deps,
-    () => api.listDeployments({ query: {} }),
-    ({ deployments }) =>
-      !deployments.some((d) => names.includes(d.name) && d.deletedAt === null),
-    what,
-  );
-
-// Before the first org's GitHub cleanup when the control plane goes:
-// `bm-control`'s other Deployments, so none registers scale sets again.
-async function removeOthers(plane: ControlPlane, deps: UninstallDeps) {
-  const names = plane.others.splice(0);
-  if (!names.length) return;
-  for (const name of names) await deps.run(['deployment', 'delete', name]);
-  await stopped(plane.api, deps, names, `${names.join(', ')} to stop`);
 }
 
 // One path (owner, 2026-11-06): each org removed from GitHub
@@ -782,7 +728,7 @@ export async function uninstall(
     !!seedDelete && (await bucketDecision(options, deps, seedDelete));
   const seedArgs = seedDelete
     ? [
-        'cluster',
+        'api',
         'delete',
         seedDelete,
         '--cloud',
@@ -793,7 +739,7 @@ export async function uninstall(
     : [];
   // Before any change: with no deletion flag, the seed's delete checks its
   // guards (the account, a gone or stopped management VM) and only lists
-  // what it would delete (`cluster.md`, "Delete with the hosted API gone").
+  // what it would delete (`api-utilities.md`, "Delete with the hosted API gone").
   // An installation that is failed or mid-delete, such as an AWS stack whose
   // VM is gone or an earlier run's DELETE_FAILED, is refused only without
   // `--delete-vms`, which the delete below passes; anycloud tells it apart
@@ -985,27 +931,14 @@ async function stopRunners(
   await poll(deps, runners, (jobs) => !jobs.length, "the runners' VMs to go");
 }
 
-// Steps 3-5: the runners and pools once the listener is gone, then the
-// installation through its own API, which deletes itself last; the
-// connections go with it. With C28, the bucket goes only when confirmed.
+// Steps 3-4: the runners once the listener is gone, then the installation
+// through its own API, which deletes itself last; the connections go with
+// it. With C28, the bucket goes only when confirmed.
 async function deleteCloudSide(plane: ControlPlane, deps: UninstallDeps) {
-  const { run } = deps;
   await stopRunners(plane, deps);
-  const ours = async () =>
-    (await plane.api.listNodePools({ query: {} })).nodePools.filter(
-      (pool) =>
-        pool.name.startsWith('bm-') &&
-        (pool.state !== 'terminated' || pool.releasing),
-    );
-  for (const pool of await ours()) {
-    if (pool.state !== 'terminated') {
-      await run(['node-pool', 'delete', pool.id]);
-    }
-  }
-  await poll(deps, ours, (pools) => !pools.length, "the pools' VMs to go");
   printRemaining(
     await deps.runLong([
-      ...['cluster', 'delete', plane.clusterId],
+      ...['api', 'delete', plane.clusterId],
       ...(plane.deleteBucket
         ? ['--delete-buckets', '--confirm', plane.clusterId]
         : []),

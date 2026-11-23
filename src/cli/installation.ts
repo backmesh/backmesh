@@ -1,6 +1,5 @@
 // What `install` and `status` both read: the installation's identity from the
-// hosted API's URL, each org's listener on its VM, and, until `upgrade`
-// moves it to one, a listener still on `bm-control` with invariant 3 there.
+// hosted API's URL, and each org's listener on its VM.
 import { createHash } from 'node:crypto';
 
 import { ORPCError } from '@orpc/client';
@@ -10,9 +9,6 @@ import type { AnycloudApi } from '../anycloud/client.js';
 import { ANYCLOUD_VERSION } from '../anycloud/contract.generated.js';
 import { CLOUDS, PUBLIC_VCPUS, type Cloud } from '../runners/classes.js';
 import { listListenerVms, type ListenerVm } from './listener-vm.js';
-
-// Where listeners ran before each had its own VM; `upgrade` moves them.
-export const CONTROL_POOL = 'bm-control';
 
 // The hosted API's URL is `https://<cluster-id>.anycloud.sh`
 // (`docs/reference/cli/cluster.md:90` at v0.1.71).
@@ -173,8 +169,7 @@ const rateLimited = ({ status, headers }: Response, body: string) =>
     headers.has('retry-after') ||
     /secondary rate limit/i.test(body));
 
-// Each org's Secret and its anycloud service share one name, as a listener
-// from before its VM's Deployment and ServiceAccount (C29) do: `backmesh-` and
+// Each org's Secret and its anycloud service share one name: `backmesh-` and
 // the lower-cased login, since GitHub logins are case-insensitive.
 export const listenerName = (org: string) => `backmesh-${org.toLowerCase()}`;
 // A GitHub login: up to 39 letters, digits and single inner hyphens.
@@ -183,36 +178,9 @@ export const orgOfListener = (name: string) => LISTENER.exec(name)?.[1];
 
 export const sessionOf = (tag: string) => `bm-${tag}`;
 
-export type NodePool = Awaited<
-  ReturnType<AnycloudApi['listNodePools']>
->['nodePools'][number];
-export type Deployment = Awaited<
-  ReturnType<AnycloudApi['listDeployments']>
->['deployments'][number];
-
-// A listener is an unmanaged `backmesh-<org>` Deployment; anycloud runs
-// `job --node-pool` on a managed one (RFC 0044).
-const isListener = (deployment: Deployment, pool: NodePool) =>
-  !!orgOfListener(deployment.name) &&
-  !deployment.managed &&
-  deployment.nodePoolId === pool.id;
-
-export interface ControlPool {
-  pool?: NodePool;
-  // Every org's listener, by name.
-  listeners: Deployment[];
-  // Invariant 3: why `bm-control` isn't the listeners alone on an
-  // unprivileged pool, or why a listener is elsewhere. Empty when it is,
-  // or nothing exists yet.
-  problems: string[];
-}
-
-// Deployments aren't workloads, so this reads both, and neither list filters
-// on `bm-control` by name: it compares each `nodePoolId` itself. A pool's
-// privileged setting is fixed at create (`node-pools-domain.ts:330`). A control
-// plane on another anycloud refuses this release's reads (anycloud's client
-// window, `api-version.ts`), and anycloud's own message names anycloud. Its
-// message carries both versions.
+// A control plane on another anycloud refuses this release's reads
+// (anycloud's client window, `api-version.ts`), and anycloud's own message
+// names anycloud. Its message carries both versions.
 export const BEHIND_CONTROL_PLANE =
   'This control plane is behind this backmesh; run `backmesh upgrade`.';
 export const AHEAD_CONTROL_PLANE =
@@ -230,63 +198,6 @@ function controlPlaneAhead(message: string): boolean {
   return false;
 }
 
-export async function readControlPool(api: AnycloudApi): Promise<ControlPool> {
-  const pools = await api
-    .listNodePools({ query: {} })
-    .catch((error: unknown) => {
-      if (
-        error instanceof ORPCError &&
-        error.code === 'CLIENT_VERSION_MISMATCH'
-      ) {
-        throw new Error(
-          controlPlaneAhead(error.message)
-            ? AHEAD_CONTROL_PLANE
-            : BEHIND_CONTROL_PLANE,
-          { cause: error },
-        );
-      }
-      throw error;
-    });
-  const pool = pools.nodePools.find(
-    (entry) => entry.name === CONTROL_POOL && entry.state !== 'terminated',
-  );
-  const deployments = (
-    await api.listDeployments({ query: {} })
-  ).deployments.filter((deployment) => deployment.deletedAt === null);
-  const elsewhere = deployments.filter(
-    (d) => orgOfListener(d.name) && d.nodePoolId !== pool?.id,
-  );
-  const problems = elsewhere.map(
-    (d) =>
-      `A Deployment named ${d.name} runs outside ${CONTROL_POOL}, on node pool ${d.nodePoolId}`,
-  );
-  if (!pool) return { listeners: [], problems };
-  // At most 500 runner Jobs: one 1,000-row page.
-  const workloads = await api.listWorkloads({
-    query: { stateClass: 'terminatable', limit: '1000' },
-  });
-  const listeners = deployments
-    .filter((d) => isListener(d, pool))
-    .sort((a, b) => a.name.localeCompare(b.name));
-  const others = [
-    ...deployments
-      .filter((d) => d.nodePoolId === pool.id && !listeners.includes(d))
-      .map((d) => `Deployment ${d.name}${d.managed ? ' (managed)' : ''}`),
-    ...workloads
-      .filter((w) => w.nodePoolId === pool.id)
-      .map((w) => `workload ${w.id}`),
-  ];
-  if (pool.allowPrivilegedJobs) {
-    problems.push(`${CONTROL_POOL} admits privileged Jobs`);
-  }
-  if (others.length) {
-    problems.push(
-      `${CONTROL_POOL} runs more than the listeners: ${others.join(', ')}`,
-    );
-  }
-  return { pool, listeners, problems };
-}
-
 interface ClusterRecord {
   id: string;
   name?: string;
@@ -295,21 +206,17 @@ interface ClusterRecord {
 }
 
 /**
- * Where the control plane this machine targets runs: its own cluster record
- * (`cluster list --json`, anycloud 0.1.74), else `bm-control`'s cloud and
- * region, which install creates beside the management VM. Undefined when
- * neither says, such as an install that stopped before `bm-control`. `name`
- * is the cluster record's own, read for nothing but `install`'s re-run
- * reuse check (`backmesh`, not some other anycloud cluster this machine
- * happens to target), and absent when the record wasn't found by ID.
+ * Where the control plane this machine targets runs, from its own cluster
+ * record (`cluster list --json`). Undefined when it isn't listed. `name` is
+ * the record's own, read for nothing but `install`'s re-run reuse check
+ * (`backmesh`, not some other anycloud cluster this machine happens to
+ * target).
  */
 export async function controlPlaneOf(
   run: (args: string[]) => Promise<string>,
   url: string,
-  pool: NodePool | undefined,
 ): Promise<{ cloud: Cloud; region: string; name?: string } | undefined> {
   const id = clusterIdOf(url);
-  // An older API, or one that won't list, leaves `bm-control` to say.
   const clusters = await run(['cluster', 'list', '--json'])
     .then((out) => JSON.parse(out) as unknown)
     .catch(() => []);
@@ -317,56 +224,51 @@ export async function controlPlaneOf(
     (cluster): cluster is ClusterRecord =>
       (cluster as ClusterRecord | null)?.id === id,
   );
-  for (const where of [own, pool]) {
-    const cloud = where?.cloudProvider?.toLowerCase() as Cloud;
-    if (where?.region && CLOUDS.includes(cloud)) {
-      return { cloud, region: where.region, name: own?.name };
-    }
-  }
-  return undefined;
+  const cloud = own?.cloudProvider?.toLowerCase() as Cloud;
+  return own?.region && CLOUDS.includes(cloud)
+    ? { cloud, region: own.region, name: own.name }
+    : undefined;
 }
 
-/**
- * An org's listener: on its VM, or still a Deployment on `bm-control` that
- * `upgrade` moves to one. Both while a move is under way.
- */
+/** An org's listener, on its VM. */
 export interface Listener {
   // `backmesh-<org>`.
   name: string;
-  vm?: ListenerVm;
-  deployment?: Deployment;
+  vm: ListenerVm;
 }
 
-export interface Installation extends ControlPool {
+export interface Installation {
   // Every org's listener, by name.
   orgs: Listener[];
+  // Why the listeners aren't one VM per org. Empty when they are.
+  problems: string[];
 }
 
-// `bm-control` first, whose read maps a control plane on another anycloud
-// to its message.
+// Its read maps a control plane on another anycloud to its message.
 export async function readInstallation(
   api: AnycloudApi,
 ): Promise<Installation> {
-  const control = await readControlPool(api);
-  const vms = await listListenerVms(api);
-  const names = [
-    ...new Set([...vms, ...control.listeners].map(({ name }) => name)),
-  ].sort();
+  const vms = await listListenerVms(api).catch((error: unknown) => {
+    if (
+      error instanceof ORPCError &&
+      error.code === 'CLIENT_VERSION_MISMATCH'
+    ) {
+      throw new Error(
+        controlPlaneAhead(error.message)
+          ? AHEAD_CONTROL_PLANE
+          : BEHIND_CONTROL_PLANE,
+        { cause: error },
+      );
+    }
+    throw error;
+  });
   return {
-    ...control,
-    problems: [
-      ...control.problems,
-      ...vms
-        .filter((vm) => vm.others.length)
-        .map(
-          (vm) =>
-            `${vm.org} has more than one listener VM: ${[vm.id, ...vm.others].join(', ')}; two listeners contend for its runner group, so terminate all but one`,
-        ),
-    ],
-    orgs: names.map((name) => ({
-      name,
-      vm: vms.find((vm) => vm.name === name),
-      deployment: control.listeners.find((d) => d.name === name),
-    })),
+    problems: vms
+      .filter((vm) => vm.others.length)
+      .map(
+        (vm) =>
+          `${vm.org} has more than one listener VM: ${[vm.id, ...vm.others].join(', ')}; two listeners contend for its runner group, so terminate all but one`,
+      ),
+    orgs: vms.map((vm) => ({ name: vm.name, vm })),
   };
 }

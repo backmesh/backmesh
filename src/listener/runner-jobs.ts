@@ -263,8 +263,7 @@ export function anycloudRunnerJobs(
     async list() {
       // Every `bm-*` session, a prefix match: the 500-runner cap is the
       // control plane's. 1,000 rows holds the cap and its overshoot of 50
-      // per other listener for up to 11 listeners; `bm-control` holds about
-      // 8, so one page is complete.
+      // per other listener for up to 11 listeners, so one page is complete.
       const items = (
         await api.listWorkloads({
           query: { session: 'bm-', stateClass: 'terminatable', limit: '1000' },

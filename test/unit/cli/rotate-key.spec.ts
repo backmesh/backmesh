@@ -70,9 +70,8 @@ function fixture({
   // 'down': the listener doesn't answer; 'no-key': no install key yet;
   // 'before-vm-jobs': no runner classes Secret.
   listener = 'ok' as 'ok' | 'down' | 'no-key' | 'before-vm-jobs',
-  // Where it runs: its VM, a VM anycloud found gone, or still a
-  // Deployment on `bm-control`.
-  host = 'vm' as 'vm' | 'lost' | 'deployment',
+  // Its VM, or a VM anycloud found gone.
+  host = 'vm' as 'vm' | 'lost',
   missing = false,
   revokes,
   installs,
@@ -93,7 +92,7 @@ function fixture({
   preRotating,
 }: {
   listener?: 'ok' | 'down' | 'no-key' | 'before-vm-jobs';
-  host?: 'vm' | 'lost' | 'deployment';
+  host?: 'vm' | 'lost';
   missing?: boolean;
   revokes?: (Response | Error)[];
   installs?: (Response | Error)[];
@@ -120,9 +119,8 @@ function fixture({
     calls.push(args.join(' '));
     return binary.run(args);
   };
-  const id = host === 'deployment' ? 'dep-acme' : VM;
   const { exec } = fakeExec((target, command) => {
-    if (target !== id) return new Error('Workload or Deployment not found');
+    if (target !== VM) return new Error('Workload not found');
     const values = rolledValues(command);
     if (values) {
       rolls++;
@@ -166,44 +164,14 @@ function fixture({
       },
     });
   });
-  const onPool = host === 'deployment' && !missing;
   const routes = {
-    'GET /v1/node-pools': {
-      nodePools: onPool
-        ? [
-            {
-              id: 'np-1',
-              name: 'bm-control',
-              state: 'running',
-              allowPrivilegedJobs: false,
-              cloudProvider: 'AWS',
-              region: 'us-east-2',
-            },
-          ]
-        : [],
-    },
-    'GET /v1/deployments': {
-      deployments: onPool
-        ? [
-            {
-              id: 'dep-acme',
-              name: 'backmesh-acme',
-              managed: false,
-              nodePoolId: 'np-1',
-              deletedAt: null,
-              image: IMAGE,
-            },
-          ]
-        : [],
-    },
-    'GET /v1/workloads':
-      missing || host === 'deployment'
-        ? []
-        : [
-            listenerVm('acme', VM, {
-              state: host === 'lost' ? 'failed' : 'running',
-            }),
-          ],
+    'GET /v1/workloads': missing
+      ? []
+      : [
+          listenerVm('acme', VM, {
+            state: host === 'lost' ? 'failed' : 'running',
+          }),
+        ],
     'GET /v1/secrets': [{ name: 'backmesh-acme', createdAt: 1, updatedAt: 1 }],
     'PUT /v1/secrets/backmesh-acme': (body: string) => {
       order.push('secret');
@@ -733,19 +701,17 @@ describe('rotateKey', () => {
     await expect(rotateKey(deps, { org: 'acme' })).rejects.toThrow(UsageError);
   });
 
-  it('refuses a listener whose VM is gone, or still on bm-control: upgrade first', async () => {
-    for (const host of ['lost', 'deployment'] as const) {
-      const { deps, worker, calls } = fixture({ host });
-      const error = await rotateKey(deps, { org: 'acme' }).catch(
-        (e: unknown) => e,
-      );
-      expect(error).toBeInstanceOf(UsageError);
-      expect((error as Error).message).toBe(
-        `acme's listener ${host === 'lost' ? 'VM is gone' : 'still runs on bm-control'}; run \`backmesh upgrade\` first, then rotate-key.`,
-      );
-      expect(worker.calls).toEqual([]);
-      expect(rolled(calls)).toBe(false);
-    }
+  it('refuses a listener whose VM is gone: upgrade first', async () => {
+    const { deps, worker, calls } = fixture({ host: 'lost' });
+    const error = await rotateKey(deps, { org: 'acme' }).catch(
+      (e: unknown) => e,
+    );
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toBe(
+      "acme's listener VM is gone; run `backmesh upgrade` first, then rotate-key.",
+    );
+    expect(worker.calls).toEqual([]);
+    expect(rolled(calls)).toBe(false);
   });
 
   it("refuses when the listener doesn't answer", async () => {

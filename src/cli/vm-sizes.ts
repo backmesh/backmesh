@@ -3,7 +3,7 @@
 // a region (`NotAvailableForSubscription`, as sponsorship and trial offers
 // are, some in every region), so each VM takes the first of its sizes the
 // region offers, or have no quota for that size's family (a new subscription's
-// `standardDSv5Family` may be 0), which `cluster create` and `vm` otherwise
+// `standardDSv5Family` may be 0), which `api create` and `vm` otherwise
 // find only after the GitHub sign-in and the App install. AWS and GCP have
 // no such per-account restriction: every account may launch `t3` and `e2`
 // types in each US region that offers them, as all of backmesh's do. Their
@@ -182,7 +182,7 @@ export async function alwaysOnRegions(
     },
   );
   // Why each candidate can't take `vms`, one line each; none when it can.
-  // A region whose usage can't be read passes, as `cluster create` finds
+  // A region whose usage can't be read passes, as `api create` finds
   // out.
   const unread: string[] = [];
   const why = async (r: string): Promise<Fit> => {

@@ -17,25 +17,40 @@ every org on the control plane, so it takes no `--org`.
 It checks that the release supports the installation's control plane, upgrades
 the control plane, then restarts each org's listener on the new image, one at
 a time. Running jobs keep going on their VMs through the listener's restart;
-only scaling pauses. A listener whose VM is gone gets a new VM, from the
+only scaling pauses. When the control plane is more than one release behind,
+the pause starts at its update: until an org's listener restarts, after the
+role re-apply (minutes on AWS), any sign-in and the orgs before it, that org
+starts no runners. Its jobs wait queued at GitHub and start after the
+restart, and running jobs keep going without backmesh's cache, whose
+action falls back to GitHub's. A run
+that stops in between leaves runners paused until `backmesh upgrade` runs
+again and finishes. A listener whose VM is gone gets a new VM, from the
 settings the control plane keeps, and one that stopped is started again,
 both before upgrade plans anything, so `--plan` works only after a run
 without it; one whose token the control plane refuses, such as after a
-restore from an older backup, gets a new token. An install from before each
-listener had its own VM moves each org's listener onto one, keeping its
-runner group and labels; the old listener keeps running until the new one
-has checked its settings and token. If a move stops part way, running
-`upgrade` again finishes it. The old shared listener pool is deleted
-once it's empty. Moving one org asks nothing, since its VM costs about what
-the pool did; moving several asks, with their VMs' total.
+restore from an older backup, gets a new token. An install from before
+v0.5.0, whose listeners share one node, runs `upgrade` with backmesh v0.5.5
+first, which moves each listener to its own VM.
 
 It plans each org's labels again from the release's catalog, with each
 cloud's [regions](/install/#regions) recomputed the same way install's are —
 the fixed candidate list, narrowed to what your account allows — never kept
 from an earlier run, so a region that's added or an account policy that
-changes reaches an existing org on its next `upgrade`. It reads nothing
-through your cloud CLI, so it needs no cloud sign-in. To add a cloud, run
+changes reaches an existing org on its next `upgrade`. To add a cloud, run
 `backmesh install`.
+
+Right after the control plane updates, and before any listener restarts,
+`upgrade` re-applies the role setup of each runner cloud whose role this
+release changes, through your signed-in cloud CLI, as install made it: a
+release's runners can need rights the role doesn't have yet. So `upgrade`
+needs that cloud's CLI signed in, AWS's to the account install used, and it
+checks this before the control plane updates. Once the control plane is
+current, `--plan` names each role. It runs on every `upgrade`, and changes
+nothing when the role already matches. If it stops there, sign in as it says
+and run `backmesh upgrade` again; runners that start before it finishes can
+fail to launch, and their jobs get new runners once it has. A cloud connected
+with keys instead of a role has no setup to re-apply: `upgrade` prints the
+rights its identity needs and the command that grants them.
 
 Pass `--runners <cloud>` (repeatable) to list every cloud the runners keep: a
 cloud you leave out is removed. Its labels stop taking jobs, its runners

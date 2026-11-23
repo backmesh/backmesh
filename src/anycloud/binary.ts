@@ -1,6 +1,6 @@
 // The pinned `anycloud` binary: backmesh drives it with `--json`
-// where the API has no route, such as the catalog, `cluster create` and
-// `deployment create`. Its arguments hold nothing secret. backmesh fetches it
+// where the API has no route, such as the catalog and `api create`. Its
+// arguments hold nothing secret. backmesh fetches it
 // on first use and runs it with its own state directory, so the user never
 // installs, types or configures it.
 import { execFile, spawn, type StdioOptions } from 'node:child_process';
@@ -107,7 +107,7 @@ const childEnv = () => ({
 
 // A failed call names the step and anycloud's own reason, never the
 // `Command failed: <path> <args>` line, and keeps stdout for
-// `relayedAction`, and stderr for `cluster create`'s progress.
+// `relayedAction`, and stderr for `api create`'s progress.
 export class StepFailed extends Error {
   constructor(
     args: readonly string[],
@@ -115,7 +115,7 @@ export class StepFailed extends Error {
     readonly stderr: string,
     options: { cause: unknown },
   ) {
-    // With `--json`, `cluster create` and `cluster delete` print their
+    // With `--json`, `api create` and `api delete` print their
     // failure as `{"error":{"code","message"}}` on stdout and progress on
     // stderr. A binary that didn't start (ENOENT, EACCES) printed nothing.
     const reason =

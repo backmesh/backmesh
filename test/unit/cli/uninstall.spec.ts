@@ -68,32 +68,22 @@ const RELEASED: FeatureTable = {
   'vm-job-regions': undefined,
   'service-tokens': '0.1.0',
 };
-const DELETE_HOSTED = 'cluster delete c1 --delete-buckets --confirm c1 --json';
-
-const pool = (id: string, name: string) => ({
-  id,
-  name,
-  state: 'running',
-  releasing: false,
-  allowPrivilegedJobs: name !== 'bm-control',
-});
+const DELETE_HOSTED = 'api delete c1 --delete-buckets --confirm c1 --json';
 
 // Each org's listener VM.
 const vmOf = (org: string) => `bml-l8u5e-${org.padEnd(6, '0').slice(0, 6)}`;
 
 // A machine targeting the control plane at HOSTED, whose connections are
-// aws's role and gcp's generated key, each org's listener on its VM (or
-// still on `bm-control` with `legacy`) with one running job, and a drain
+// aws's role and gcp's generated key, each org's listener on its VM with
+// one running job, and a drain
 // that ends `drained`. Deletes change what the API lists next.
 function setUp({
   url = HOSTED,
   listener = true,
-  legacy = false,
   lost = false,
   duplicate = false,
   orgs = ['acme'],
   secrets = orgs,
-  others = [],
   answers = true,
   drained = DONE,
   reads = [],
@@ -107,8 +97,6 @@ function setUp({
 }: {
   url?: string;
   listener?: boolean;
-  // The listeners are Deployments on `bm-control`, from before their VMs.
-  legacy?: boolean;
   // anycloud found the listeners' VMs gone.
   lost?: boolean;
   // acme has a second running listener VM.
@@ -117,8 +105,6 @@ function setUp({
   orgs?: string[];
   // The orgs whose `backmesh-<org>` Secret exists.
   secrets?: string[];
-  // Other Deployments on `bm-control`, such as an older listener.
-  others?: { name: string; managed: boolean }[];
   answers?: boolean;
   drained?: DrainStatus;
   // GET /drain's replies before `drained`: a failed exec, null from a
@@ -144,7 +130,7 @@ function setUp({
   const phases = new Map<string, number>();
   const { run: answer, calls } = fakeBinary({
     'api token': 't0ken',
-    'cluster delete': JSON.stringify({ outcome: 'destroyed', remaining: [] }),
+    'api delete': JSON.stringify({ outcome: 'destroyed', remaining: [] }),
   });
   const run = async (args: string[]) => {
     const line = args.join(' ');
@@ -157,30 +143,18 @@ function setUp({
       }
       return JSON.stringify([...connections, { name: 'mine', kind: 'key' }]);
     }
-    if (/^(deployment|node-pool) delete /.test(line)) deleted.add(args[2]!);
     if (/^terminate /.test(line)) deleted.add(args[1]!);
     if (/^secrets delete /.test(line)) deleted.add(`secret ${args[2]}`);
-    if (
-      line.startsWith('api access remove --service-account ') &&
-      !(
-        listener &&
-        legacy &&
-        orgs.includes(args.at(-1)!.replace('backmesh-', ''))
-      )
-    ) {
-      void calls.push(line);
-      throw new Error('not a member');
-    }
     return answer(args);
   };
   // `anycloud exec` into a listener, recorded as its Secret's name.
   const listenerOf = (id: string) =>
-    `backmesh-${orgs.find((org) => vmOf(org) === id || `backmesh-${org}` === id)}`;
+    `backmesh-${orgs.find((org) => vmOf(org) === id)}`;
   const { exec } = fakeExec((id, line) => {
     const name = listenerOf(id);
     if (line.includes('8080/status')) {
       calls.push(`exec ${name} /status`);
-      if (!listener) throw new Error('no such Deployment');
+      if (!listener) throw new Error('no such workload');
       return JSON.stringify({
         code: 200,
         env: {
@@ -246,27 +220,8 @@ function setUp({
         () => (deleted.add(`bucket ${name}`), {}),
       ]),
     ),
-    'GET /v1/node-pools': () => ({
-      nodePools: [pool('np-1', 'bm-control'), pool('np-2', 'bm-aws-spot')].map(
-        (p) => (deleted.has(p.id) ? { ...p, state: 'terminated' } : p),
-      ),
-    }),
-    'GET /v1/deployments': () => ({
-      deployments: [
-        ...(listener && legacy
-          ? orgs.map((org) => ({ name: `backmesh-${org}`, managed: false }))
-          : []),
-        ...others,
-      ].map((d) => ({
-        ...d,
-        id: d.name,
-        nodePoolId: 'np-1',
-        deletedAt: deleted.has(d.name) ? 1 : null,
-        image: LISTENER_IMAGE,
-      })),
-    }),
     'GET /v1/workloads': () => [
-      ...(listener && !legacy
+      ...(listener
         ? orgs.map((org) =>
             listenerVm(org, vmOf(org), {
               state: lost
@@ -399,7 +354,7 @@ const scripted: UninstallOptions = {
 
 const changes = (calls: string[]) =>
   calls.filter((c) =>
-    /^(exec backmesh-\w+ POST|POST \/v1\/installs\/cleanup|github DELETE|deployment (delete|upgrade)|terminate bml-|api access|node-pool delete|cluster delete|credentials delete|secrets delete)/.test(
+    /^(exec backmesh-\w+ POST|POST \/v1\/installs\/cleanup|github DELETE|terminate bml-|api access|api delete|credentials delete|secrets delete)/.test(
       c,
     ),
   );
@@ -424,8 +379,6 @@ describe('uninstall', () => {
       ...GITHUB_DELETES,
       'POST /v1/installs/cleanup/finish',
       'secrets delete backmesh-acme',
-      'node-pool delete np-1',
-      'node-pool delete np-2',
       // Through the hosted API, which deletes itself and its connections.
       DELETE_HOSTED,
     ]);
@@ -482,7 +435,7 @@ describe('uninstall', () => {
       "Deleted gcp's identity anycloud-bm-gcp, which install generated, from the project gcp's CLI is signed in to.",
     );
     const deletes = calls.filter((c) =>
-      /^cloud gcloud iam service-accounts delete|^cluster delete/.test(c),
+      /^cloud gcloud iam service-accounts delete|^api delete/.test(c),
     );
     expect(deletes).toEqual([
       DELETE_HOSTED,
@@ -550,11 +503,11 @@ describe('uninstall', () => {
     );
     expect(changes(calls)).toEqual([
       // The seed's guards first, deleting nothing, before any change.
-      'cluster delete c1 --cloud aws --region us-east-2 --json',
+      'api delete c1 --cloud aws --region us-east-2 --json',
       'POST /v1/installs/cleanup',
       ...GITHUB_DELETES,
       'POST /v1/installs/cleanup/finish',
-      'cluster delete c1 --cloud aws --region us-east-2 --delete-vms --delete-buckets --confirm c1 --json',
+      'api delete c1 --cloud aws --region us-east-2 --delete-vms --delete-buckets --confirm c1 --json',
     ]);
     expect(result).toEqual({
       orgs: [{ org: 'acme', appRemoved: true }],
@@ -609,7 +562,7 @@ describe('uninstall', () => {
       left.deps,
     );
     expect(left.calls).toContain(
-      'cluster delete c1 --cloud aws --region us-east-2 --delete-vms --confirm c1 --json',
+      'api delete c1 --cloud aws --region us-east-2 --delete-vms --confirm c1 --json',
     );
     expect(left.lines).toContain(
       'Still in your cloud, to delete in its console: vm anycloud_cluster=c1, identity anycloud-c1-cfn, control plane VM i-0vm.',
@@ -647,7 +600,7 @@ describe('uninstall', () => {
       if (args[1] === 'delete') {
         running.calls.push(args.join(' '));
         throw new Error(
-          'cluster delete failed: The management VM i-0abc is running (MANAGEMENT_VM_RUNNING)',
+          'api delete failed: The management VM i-0abc is running (MANAGEMENT_VM_RUNNING)',
         );
       }
       return run(args);
@@ -658,10 +611,10 @@ describe('uninstall', () => {
         running.deps,
       ),
     ).rejects.toThrow(
-      "backmesh won't delete c1 through your cloud CLI, so nothing was deleted: cluster delete failed: The management VM i-0abc is running",
+      "backmesh won't delete c1 through your cloud CLI, so nothing was deleted: api delete failed: The management VM i-0abc is running",
     );
     expect(changes(running.calls)).toEqual([
-      'cluster delete c1 --cloud aws --region us-east-2 --json',
+      'api delete c1 --cloud aws --region us-east-2 --json',
     ]);
 
     // A failed or mid-delete installation, such as an AWS stack whose VM is
@@ -673,7 +626,7 @@ describe('uninstall', () => {
         if (args[1] === 'delete' && !args.includes('--delete-vms')) {
           failed.calls.push(args.join(' '));
           throw new Error(
-            `cluster delete failed: Cluster c1's installation is ${status} (management VM i-0abc is gone); delete it with --delete-vms once its API is gone (MANAGEMENT_VM_RUNNING)`,
+            `api delete failed: Cluster c1's installation is ${status} (management VM i-0abc is gone); delete it with --delete-vms once its API is gone (MANAGEMENT_VM_RUNNING)`,
           );
         }
         return failedRun(args);
@@ -683,7 +636,7 @@ describe('uninstall', () => {
         failed.deps,
       );
       expect(changes(failed.calls).at(-1)).toBe(
-        'cluster delete c1 --cloud aws --region us-east-2 --delete-vms --delete-buckets --confirm c1 --json',
+        'api delete c1 --cloud aws --region us-east-2 --delete-vms --delete-buckets --confirm c1 --json',
       );
       if (status === 'failed') {
         const asked = setUp({
@@ -828,7 +781,7 @@ describe('uninstall', () => {
       { org: 'acme', yes: true, deleteCheckpointBucket: false },
       kept.deps,
     );
-    expect(kept.calls).toContain('cluster delete c1 --json');
+    expect(kept.calls).toContain('api delete c1 --json');
     expect(result.checkpointBucket).toBe('kept');
     expect(kept.lines).toContain(
       "The checkpoint bucket is kept, with the control plane's backups. Delete it in your cloud's console once you no longer need them.",
@@ -936,7 +889,7 @@ describe('uninstall', () => {
     await expect(uninstall(scripted, deps)).rejects.toThrow(
       "GitHub still lists runner bm0a1b2-a4-k3j9x0qz, runner group backmesh-l8u5e-k3j9x0 in acme. The cloud side wasn't deleted; run `backmesh uninstall --org acme` again.",
     );
-    expect(changes(calls)).not.toContain('node-pool delete np-1');
+    expect(changes(calls)).not.toContain(DELETE_HOSTED);
     expect(changes(calls)).not.toContain('POST /v1/installs/cleanup/finish');
   });
 
@@ -1059,8 +1012,6 @@ describe('uninstall', () => {
       'github DELETE /abc/_apis/runtime/runnerscalesets/2',
       'github DELETE /orgs/acme/actions/runner-groups/3',
       'secrets delete backmesh-acme',
-      'node-pool delete np-1',
-      'node-pool delete np-2',
       DELETE_HOSTED,
     ]);
     expect(worker.bodies[0]).toMatchObject({ install_only: true });
@@ -1092,11 +1043,8 @@ describe('uninstall', () => {
 
       expect(changes(calls)).toEqual([
         'POST /v1/installs/cleanup',
-        'api access remove --service-account backmesh-acme',
         'api access remove --service backmesh-acme',
         // A Secret goes with the control plane.
-        'node-pool delete np-1',
-        'node-pool delete np-2',
         DELETE_HOSTED,
       ]);
       // The cache buckets, by the org's ID from GitHub.
@@ -1127,8 +1075,6 @@ describe('uninstall', () => {
     expect(changes(calls)).toEqual([
       'POST /v1/installs/cleanup',
       'api access remove --service backmesh-acme',
-      'node-pool delete np-1',
-      'node-pool delete np-2',
       DELETE_HOSTED,
     ]);
     expect(calls).toContain('terminate bmabc12-a4-x');
@@ -1188,8 +1134,6 @@ describe('uninstall', () => {
       ...GITHUB_DELETES,
       'POST /v1/installs/cleanup/finish',
       'secrets delete backmesh-acme',
-      'node-pool delete np-1',
-      'node-pool delete np-2',
       DELETE_HOSTED,
     ]);
     expect(worker.bodies.at(-1)).toEqual({
@@ -1305,30 +1249,14 @@ describe('uninstall', () => {
     await uninstall(scripted, deps);
     expect(changes(calls)).toEqual([
       'POST /v1/installs/cleanup',
-      'api access remove --service-account backmesh-acme',
       'api access remove --service backmesh-acme',
       ...GITHUB_DELETES,
       'POST /v1/installs/cleanup/finish',
       'secrets delete backmesh-acme',
-      'node-pool delete np-1',
-      'node-pool delete np-2',
       DELETE_HOSTED,
     ]);
     // No listener, no key to send.
     expect(bearers[1]).toBeNull();
-  });
-
-  it('removes a listener still on bm-control: its Deployment and ServiceAccount', async () => {
-    const { deps, calls } = setUp({ legacy: true });
-    await uninstall(scripted, deps);
-    expect(changes(calls).slice(0, 5)).toEqual([
-      'POST /v1/installs/cleanup',
-      'exec backmesh-acme POST /drain',
-      'deployment delete backmesh-acme',
-      'api access remove --service-account backmesh-acme',
-      // Idempotent: an install never moved to a VM has no service.
-      'api access remove --service backmesh-acme',
-    ]);
   });
 
   it('removes an org whose listener VM is gone: no drain, its runners stopped instead, and the VM left to anycloud', async () => {
@@ -1431,8 +1359,6 @@ describe('uninstall', () => {
       'api access remove --service backmesh-beta',
       'POST /v1/installs/cleanup/finish',
       'secrets delete backmesh-beta',
-      'node-pool delete np-1',
-      'node-pool delete np-2',
       DELETE_HOSTED,
     ]);
   });
@@ -1443,7 +1369,6 @@ describe('uninstall', () => {
     // Nothing of acme's is touched, and beta's sign-in has no key.
     expect(changes(calls)).toEqual([
       'POST /v1/installs/cleanup',
-      'api access remove --service-account backmesh-beta',
       'api access remove --service backmesh-beta',
       ...githubDeletes('beta'),
       'POST /v1/installs/cleanup/finish',
@@ -1464,15 +1389,10 @@ describe('uninstall', () => {
 
   it('runs the whole path for --org when no listener runs, whatever is left', async () => {
     // A listener that crashed or was never per org: no backmesh-<org>
-    // Deployment or Secret. Only the sign-in names the org.
-    // An older listener runs as another Deployment on `bm-control`.
+    // VM or Secret. Only the sign-in names the org.
     const { deps, calls, bearers, lines } = setUp({
       listener: false,
       secrets: ['github-app'],
-      others: [
-        { name: 'backmesh', managed: false },
-        { name: 'bm-job', managed: true },
-      ],
     });
     await expect(
       uninstall({ ...scripted, org: 'acme' }, deps),
@@ -1482,14 +1402,9 @@ describe('uninstall', () => {
     });
     expect(changes(calls)).toEqual([
       'POST /v1/installs/cleanup',
-      'api access remove --service-account backmesh-acme',
       'api access remove --service backmesh-acme',
-      // Stopped before the GitHub cleanup; anycloud's managed one stays.
-      'deployment delete backmesh',
       ...GITHUB_DELETES,
       'POST /v1/installs/cleanup/finish',
-      'node-pool delete np-1',
-      'node-pool delete np-2',
       DELETE_HOSTED,
     ]);
     // No key to send.
@@ -1629,7 +1544,11 @@ describe('uninstall', () => {
     const gcp = leftoverIdentity('gcp', 'bm-gcp').split('\n').slice(1);
     expect(gcp).toHaveLength(1);
     expect(gcp[0]).toMatch(
-      /SA=anycloud-bm-gcp@\$PROJECT\.iam\.gserviceaccount\.com; for role in roles\/compute\.instanceAdmin\.v1 roles\/compute\.securityAdmin roles\/storage\.admin; do gcloud projects remove-iam-policy-binding .*; done; gcloud iam service-accounts delete "\$SA"/,
+      /SA=anycloud-bm-gcp@\$PROJECT\.iam\.gserviceaccount\.com; for role in roles\/compute\.instanceAdmin\.v1 roles\/compute\.securityAdmin roles\/storage\.admin projects\/\$PROJECT\/roles\/anycloudJobsNetwork; do gcloud projects remove-iam-policy-binding .*; done; gcloud iam service-accounts delete "\$SA"/,
+    );
+    const aws = leftoverIdentity('aws', 'bm-aws').split('\n').slice(1);
+    expect(aws[0]).toMatch(
+      /for policy in \$\(aws iam list-user-policies --user-name anycloud-bm-aws .*\); do aws iam delete-user-policy --user-name anycloud-bm-aws --policy-name "\$policy"; done; aws iam delete-user/,
     );
     const azure = leftoverIdentity('azure', 'bm-azure').split('\n').slice(1);
     expect(azure[0]).toMatch(

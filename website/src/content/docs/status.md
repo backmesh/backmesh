@@ -39,8 +39,6 @@ It shows the shared control plane once, then one section for each org on it.
 - **Checks**: whether a listener's VM is gone, which `backmesh upgrade`
   creates again; whether the control plane refuses a listener's token, such
   as after a restore from an older backup, which `backmesh upgrade` replaces;
-  whether a listener is in standby, taking no jobs, because a move off the
-  old shared listener pool didn't finish, which `backmesh upgrade` finishes;
   whether each listener can get GitHub tokens from backmesh.com; and other
   warnings.
 

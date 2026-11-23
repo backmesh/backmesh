@@ -28,7 +28,7 @@ export interface InstallPlan {
     managementVm?: string;
     monthlyUsd?: number;
     // Read from this machine's control plane when it has one; a new one
-    // otherwise, and install checks again once `cluster create` resumes it.
+    // otherwise, and install checks again once `api create` resumes it.
     exists: boolean;
     sharedWith: string[];
   };
@@ -103,12 +103,13 @@ export const hashPlan = (plan: object) =>
 export interface UpgradePlan {
   anycloud: { from: string; to: string };
   images: { runner: string; listener: string };
+  // The runner clouds' role connections, whose setup it re-applies (no
+  // consent: the release needs it).
+  roles: { cloud: string; credentials: string; account: string }[];
   orgs: {
     org: string;
     // The listener it read (`fingerprint`), and what changes in its runners.
     current: string | null;
-    // Its listener moves from `bm-control` to its own VM.
-    moves: boolean;
     changes: RunnerChanges;
     classes: Pick<RunnerClass, 'label' | 'cloud' | 'vmTypes' | 'regions'>[];
   }[];

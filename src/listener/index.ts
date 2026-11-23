@@ -37,12 +37,7 @@ import { anycloudRunnerJobs, runnerVm } from './runner-jobs.js';
 import { Quotas } from './quota.js';
 import { readQuotaStatus } from '../runners/quota.js';
 import { Scaler } from './scaler.js';
-import {
-  API_TOKEN_ENV,
-  API_URL_ENV,
-  RUNNER_GROUP_ENV,
-  STANDBY_ENV,
-} from './env.js';
+import { API_TOKEN_ENV, API_URL_ENV, RUNNER_GROUP_ENV } from './env.js';
 
 const log: Log = (entry) =>
   process.stdout.write(
@@ -122,23 +117,12 @@ const api = anycloudApi(
   },
 );
 
-// In standby, one read before `/status` answers, so it reports a token the
-// control plane refuses, or any other failure to reach it.
-const standby = !!process.env[STANDBY_ENV];
-if (standby) {
-  await api
-    .listWorkloads({ query: { workloadType: 'vm', limit: '1' } })
-    .catch((error: unknown) => {
-      refused ??= { since: new Date().toISOString(), error: String(error) };
-    });
-}
 // Loopback only: `backmesh status`, `upgrade` and `uninstall` reach it through
 // `anycloud exec` and `docker exec`. Up first, so they work while the App
 // isn't installed or the runner group can't be made.
 const server = serve(control);
 
 const listening = control.listen(async (signal) => {
-  if (standby) return void (await stopped());
   await waitForToken(tokens, log, signal);
   const octokit = installationOctokit(tokens, fetch);
   const actions = new ActionsClient({

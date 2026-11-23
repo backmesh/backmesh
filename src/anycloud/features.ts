@@ -4,7 +4,7 @@
 export const FEATURES = {
   // RFC 0049 release 1: C29, C3, C4, C15, C19, C27 and C30.
   'release-1': '0.1.72',
-  // RFC 0049 C26 (e): `cluster create` through the user's cloud CLI, with
+  // RFC 0049 C26 (e): `api create` through the user's cloud CLI, with
   // no Docker or local API, and a hosted API that keeps its own cluster
   // record and deletes itself.
   c26: '0.1.74',
@@ -14,7 +14,7 @@ export const FEATURES = {
   // through the user's own cloud CLI, with no prompt (owner,
   // 2026-11-08: in 0.1.74).
   'role-apply': '0.1.74',
-  // `cluster delete` keeps the managed checkpoint bucket unless given
+  // `api delete` keeps the managed checkpoint bucket unless given
   // `--delete-buckets --confirm <id>`.
   c28: '0.1.74',
   // A VM Job's `cloudConfig.regions`, an allow-list the optimizer

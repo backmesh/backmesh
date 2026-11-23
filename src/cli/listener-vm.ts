@@ -36,7 +36,7 @@ import {
 export const LISTENER_VM_IMAGE =
   'mirror.gcr.io/library/docker:29-cli@sha256:34507eb5069d8be82c95dd3b6987d4250fd5fee49b82e2509b7d7a7030740d6d';
 // About $15–32 a month each with its disk and address: the listener needs
-// about half a vCPU and 512 MiB, as it had on `bm-control`. `t3.small`,
+// about half a vCPU and 512 MiB. `t3.small`,
 // `e2-small` and Azure's B-series burst above their baseline, billing a busy
 // listener's surplus. Each is linux/amd64, as anycloud's VMs require. On
 // Azure a new listener takes the first size its region offers the

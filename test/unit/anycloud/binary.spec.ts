@@ -69,26 +69,26 @@ describe('the pinned binary', () => {
 
   it('reports a failed step without the binary’s command line', () => {
     const error = new StepFailed(
-      ['node-pool', 'delete', 'np-1', '--json'],
+      ['terminate', 'bml-l8u5e-abc123', '--json'],
       '{"ok":false}\n',
-      'Error: pool np-1 is busy\n',
+      'Error: workload bml-l8u5e-abc123 not found\n',
       { cause: new Error('Command failed: /home/u/.backmesh/bin/anycloud') },
     );
     expect(error.message).toBe(
-      'node-pool delete failed: Error: pool np-1 is busy',
+      'terminate bml-l8u5e-abc123 failed: Error: workload bml-l8u5e-abc123 not found',
     );
     // `relayedAction` reads a relayed sign-in from stdout.
     expect(error.stdout).toBe('{"ok":false}\n');
-    // `cluster create --json`'s failure: the error document on stdout,
+    // `api create --json`'s failure: the error document on stdout,
     // progress on stderr.
     const create = new StepFailed(
-      ['cluster', 'create', 'backmesh', '--json'],
+      ['api', 'create', 'backmesh', '--json'],
       '{"error":{"code":"CLOUD_RIGHTS_MISSING","message":"The identity lacks ec2:RunInstances"}}\n',
       '[12:00:00] Using aws account 123456789012 as arn:aws:iam::123456789012:user/ops\n',
       { cause: new Error('Command failed') },
     );
     expect(create.message).toBe(
-      'cluster create failed: The identity lacks ec2:RunInstances (CLOUD_RIGHTS_MISSING)',
+      'api create failed: The identity lacks ec2:RunInstances (CLOUD_RIGHTS_MISSING)',
     );
     // A binary that didn't start printed nothing; its cause says why.
     const unstarted = new StepFailed(['api', 'status'], '', '', {

@@ -4,11 +4,12 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { StatusReport } from '../../../src/cli/status.js';
+import { StepFailed } from '../../../src/anycloud/binary.js';
 import { GitHubError } from '../../../src/app/github.js';
 import { NeedsPlan, PlanChanged, UsageError } from '../../../src/cli/errors.js';
-import { PUBLIC_REPOS_LINE } from '../../../src/cli/install.js';
-import { upgrade, type UpgradeDeps } from '../../../src/cli/upgrade.js';
-import { runnerGroupName } from '../../../src/github/runner-group.js';
+import { PUBLIC_REPOS_LINE, ROLE_SETUP } from '../../../src/cli/install.js';
+import { OLDEST, upgrade, type UpgradeDeps } from '../../../src/cli/upgrade.js';
+import { ANYCLOUD_PREVIOUS_VERSION } from '../../../src/anycloud/contract.generated.js';
 import { parseRoutes } from '../../../src/listener/routes.js';
 import { planClasses } from '../../../src/runners/classes.js';
 import { awsInRegions, CATALOG, catalogs } from '../runners/fixtures.js';
@@ -150,8 +151,6 @@ function setUp({
   listener,
   // A second org's listener on the same control plane.
   beta = false,
-  // beta's listener is still a Deployment on `bm-control` too.
-  betaMoves = false,
   // The listener's BACKMESH_RUNNERS; null: one from before VM Jobs.
   runners = RUNNERS as string | null,
   // The install region's catalog.
@@ -160,18 +159,14 @@ function setUp({
   rotatingFrom,
   // bm-aws's cache buckets, when an install made them.
   cacheBuckets,
-  // Where acme's listener runs: its VM, a VM anycloud found gone, still
-  // a Deployment on `bm-control` (one from before its VM), or that
-  // Deployment with the VM a stopped move made, its listener not started.
+  // acme's listener's VM, or a VM anycloud found gone.
   host = 'vm',
   // acme's listener's `/status` beyond its defaults.
   body = {},
-  poolType = 't3.small',
 }: {
   cacheBuckets?: string[];
   catalog?: typeof CATALOG.aws;
   beta?: boolean;
-  betaMoves?: boolean;
   runners?: string | null;
   installs?: (Response | Error)[];
   listener?: 'down' | 'no-key';
@@ -182,10 +177,8 @@ function setUp({
   watch?: string;
   keyStatus?: Response | Error | (Response | Error)[];
   rotatingFrom?: string;
-  host?: 'vm' | 'lost' | 'deployment' | 'both';
+  host?: 'vm' | 'lost';
   body?: object;
-  // `bm-control`'s Node's size.
-  poolType?: string;
 } = {}) {
   const envOf = (org: string, mine: boolean): Record<string, string> => ({
     ORG: org,
@@ -200,28 +193,20 @@ function setUp({
         }),
     ...(runners !== null && { BACKMESH_RUNNERS: runners }),
     ...(rotatingFrom && { BACKMESH_ROTATING_FROM: rotatingFrom }),
-    // A Deployment's image is its own, and it has no runner group or token.
-    ...(!(mine ? host === 'deployment' || host === 'both' : betaMoves) && {
-      BACKMESH_LISTENER_IMAGE: mine ? image : OLD_LISTENER,
-      BACKMESH_RUNNER_GROUP: GROUP,
-      ANYCLOUD_API_TOKEN: TOKEN,
-    }),
+    BACKMESH_LISTENER_IMAGE: mine ? image : OLD_LISTENER,
+    BACKMESH_RUNNER_GROUP: GROUP,
+    ANYCLOUD_API_TOKEN: TOKEN,
   });
   const hosts = new Map<string, Host>();
-  const onDeployment = host === 'deployment' || host === 'both';
-  const acmeId = onDeployment ? 'dep-acme' : VM.acme!;
-  hosts.set(acmeId, {
+  hosts.set(VM.acme!, {
     org: 'acme',
     env: host === 'lost' ? undefined : envOf('acme', true),
     up: host !== 'lost' && listener !== 'down',
     stuck: listener === 'down',
     body: { ...LISTENING, ...body },
   });
-  if (host === 'both') {
-    hosts.set(VM.acme!, { org: 'acme', up: false, body: LISTENING });
-  }
   if (beta) {
-    hosts.set(betaMoves ? 'dep-beta' : VM.beta!, {
+    hosts.set(VM.beta!, {
       org: 'beta',
       env: envOf('beta', false),
       up: true,
@@ -233,37 +218,22 @@ function setUp({
     ...(host === 'lost' && { 'backmesh-acme': envOf('acme', true) }),
   };
   const workloads: object[] = [
-    ...(host === 'vm' || host === 'both'
-      ? [listenerVm('acme', VM.acme!)]
-      : host === 'lost'
-        ? [
-            // Whatever size its install took there.
-            listenerVm('acme', VM.acme!, {
-              state: 'failed',
-              region: 'us-east-2',
-              vmType: 't3.medium',
-            }),
-          ]
-        : []),
-    ...(beta && !betaMoves ? [listenerVm('beta', VM.beta!)] : []),
-  ];
-  const deployment = (org: string) => ({
-    id: `dep-${org}`,
-    name: `backmesh-${org}`,
-    managed: false,
-    nodePoolId: 'np-1',
-    deletedAt: null as number | null,
-    image: org === 'acme' ? image : OLD_LISTENER,
-  });
-  const deployments = [
-    ...(onDeployment ? [deployment('acme')] : []),
-    ...(beta && betaMoves ? [deployment('beta')] : []),
+    host === 'vm'
+      ? listenerVm('acme', VM.acme!)
+      : // Whatever size its install took there.
+        listenerVm('acme', VM.acme!, {
+          state: 'failed',
+          region: 'us-east-2',
+          vmType: 't3.medium',
+        }),
+    ...(beta ? [listenerVm('beta', VM.beta!)] : []),
   ];
   const binary = fakeBinary({
     'vm-types aws us-east-2': JSON.stringify(catalog),
     'vm-types aws us-east-1': JSON.stringify(CATALOG.aws),
     'vm-types aws us-west-2': JSON.stringify(CATALOG.aws),
     'vm-types gcp us-central1': JSON.stringify(CATALOG.gcp),
+    'vm-types azure westus2': JSON.stringify(CATALOG.azure),
     'api status --json': JSON.stringify({ url: HOSTED }),
     'api token': 't0ken',
     'api status --watch --json': watch,
@@ -302,9 +272,6 @@ function setUp({
       });
       workloads.push(listenerVm(org, id));
     }
-    if (args[0] === 'deployment' && args[1] === 'delete') {
-      for (const d of deployments) if (d.id === args[2]) d.deletedAt = 1;
-    }
     return out;
   };
   // Hooks a test sets: a roll's values that fail, a start that fails.
@@ -317,7 +284,7 @@ function setUp({
     const refused = refusal();
     if (refused) return new Error('Client/API version mismatch.');
     const target = hosts.get(id);
-    if (!target) return new Error(`Workload or Deployment not found`);
+    if (!target) return new Error(`Workload not found`);
     const values = rolledValues(command);
     if (values) {
       calls.push(`roll ${id}`);
@@ -339,23 +306,10 @@ function setUp({
     }
     return JSON.stringify({ code: 200, env: target.env, body: target.body });
   });
-  const routes = {
-    'GET /v1/node-pools': {
-      nodePools: deployments.length
-        ? [
-            {
-              id: 'np-1',
-              name: 'bm-control',
-              state: 'running',
-              allowPrivilegedJobs: false,
-              cloudProvider: 'AWS',
-              region: 'us-east-2',
-              vmTypes: [poolType],
-            },
-          ]
-        : [],
-    },
-    'GET /v1/deployments': () => ({ deployments }),
+  const routes: Record<string, unknown> = {
+    // The connections, as an older API lists them too: bm-aws a key, as
+    // our CI's override makes.
+    'GET /v1/credentials': [{ name: 'bm-aws', cloudProvider: 'AWS' }],
     'GET /v1/workloads': () => workloads,
     'GET /v1/secrets': () =>
       Object.keys(secrets).map((name) => ({
@@ -400,11 +354,18 @@ function setUp({
     codes: [Response.json(DEVICE), Response.json(NEXT_DEVICE)],
     polls: [Response.json({ error: 'expired_token' }), GITHUB_TOKEN],
   });
+  // The user's cloud CLIs, signed in to the roles' account and project.
+  const command = async (args: string[]) => {
+    calls.push(args.join(' '));
+    if (args[0] === 'aws') return JSON.stringify({ Account: '111122223333' });
+    return args[0] === 'gcloud' ? 'proj-1\n' : '{}';
+  };
   const deps: UpgradeDeps = {
     // No saved anycloud files, whatever this machine holds.
     env: { BACKMESH_ANYCLOUD_DIR: mkdtempSync(join(tmpdir(), 'backmesh-')) },
     signInCheck: async () => ({ login: 'octocat', appIds: [] }),
     run,
+    command,
     runLong: run,
     release: async () => RELEASE,
     status: async () => STATUS,
@@ -422,8 +383,11 @@ function setUp({
           ? githubOrg(new URL(String(url)).pathname)
           : Response.json({ version: served }),
     wait: async () => {},
-    // `version`'s default is the release before RELEASE.anycloud.
-    previous: '0.1.70',
+    // `version`'s default, two releases before RELEASE.anycloud.
+    oldest: '0.1.70',
+    previous: '0.1.71',
+    // As if RELEASE.anycloud changed the role setup, as 0.1.81 does.
+    roleSetup: { ...ROLE_SETUP, since: RELEASE.anycloud },
     features: {
       'release-1': '0.1.0',
       c26: '0.1.0',
@@ -452,7 +416,7 @@ const ROLL = `roll ${VM.acme}`;
 const rolledAny = (calls: string[]) => calls.some((c) => c.startsWith('roll '));
 const mutations = (calls: string[]) =>
   calls.filter((c) =>
-    /^(api upgrade|api status --watch|api access|api token rotate|deployment|node-pool|vm |roll |start )/.test(
+    /^(api upgrade|api status --watch|api access|api token rotate|credentials new|vm |roll |start )/.test(
       c,
     ),
   );
@@ -992,12 +956,10 @@ describe('upgrade', () => {
             .split(' ')[2]!,
         ).values.BACKMESH_RUNNERS,
       );
-    // Anything but a read of the control pool, or the listener's roll.
+    // Anything but a read, or the listener's roll.
     const controlPlaneChanges = (calls: string[], requests: string[]) => [
       ...mutations(calls).filter((c) => !c.startsWith('roll ')),
-      ...requests.filter(
-        (r) => /node-pools|cluster/.test(r) && !r.startsWith('GET '),
-      ),
+      ...requests.filter((r) => /cluster/.test(r) && !r.startsWith('GET ')),
     ];
 
     it('shows the removal in the plan, and changes nothing', async () => {
@@ -1449,8 +1411,55 @@ describe('upgrade', () => {
       expect(worker.calls).toEqual([]);
     });
 
-    it('refuses one more than a release behind before moving it', async () => {
-      // Its listeners' anycloud would be outside the new API's client window.
+    it('says the runners pause from a move past the window until the rolls', async () => {
+      const { deps, lines } = setUp();
+      await upgrade(deps);
+      expect(lines).toContain(
+        "The control plane's update pauses runner starts until each org's listener rolls, below; queued jobs wait at GitHub.",
+      );
+    });
+
+    // One behind, as 0.1.81 to 0.1.82: the old listener is in the new API's
+    // window, so nothing pauses.
+    it('moves an API one release behind without a pause', async () => {
+      const { deps, calls, lines } = setUp({
+        version: '0.1.71',
+        listener: 'down',
+      });
+      await expect(upgrade(deps)).rejects.toThrow(
+        new RegExp(`^acme's listener didn't start on ${VM.acme}\\.$`),
+      );
+      expect(mutations(calls)).toContain('api upgrade --sign-in-apps 5622376');
+      expect(lines.some((l) => l.includes('pauses runner starts'))).toBe(false);
+    });
+
+    // A regenerated contract moves ANYCLOUD_PREVIOUS_VERSION: decide OLDEST
+    // again, as the release that backmesh last pinned.
+    it('starts from the release backmesh v0.5.7 pinned, under the real constants', async () => {
+      expect(ANYCLOUD_PREVIOUS_VERSION).toBe('0.1.81');
+      expect(OLDEST).toBe('0.1.80');
+      const at = (version: string) => {
+        const { deps, calls } = setUp({ version, listener: 'down' });
+        delete deps.oldest;
+        delete deps.previous;
+        deps.release = async () => ({ ...RELEASE, anycloud: '0.1.82' });
+        return { deps, calls };
+      };
+      const old = at('0.1.79');
+      await expect(upgrade(old.deps)).rejects.toThrow(
+        /too old for this backmesh to upgrade/,
+      );
+      expect(mutations(old.calls)).toEqual([]);
+      const oldest = at(OLDEST);
+      await expect(upgrade(oldest.deps)).rejects.toThrow(
+        "an org whose listener hasn't rolled starts no runners",
+      );
+      expect(mutations(oldest.calls)).toContain(
+        'api upgrade --sign-in-apps 5622376',
+      );
+    });
+
+    it('refuses a control plane older than the oldest a move starts from', async () => {
       const { deps, calls, worker } = setUp({ version: '0.1.69' });
       const error = await upgrade(deps).catch((e: unknown) => e);
       expect(error).toBeInstanceOf(UsageError);
@@ -1478,7 +1487,7 @@ describe('upgrade', () => {
       const { deps, calls } = twoToOne();
       deps.confirm = async () => false;
       await expect(upgrade(deps)).rejects.toThrow(
-        'Upgrade cancelled after the control plane updated, with no listener changed',
+        "Upgrade cancelled after the control plane updated, with no listener changed; run `backmesh upgrade` again to finish.\nUntil a `backmesh upgrade` run finishes, an org whose listener hasn't rolled starts no runners: its jobs wait queued at GitHub, and its running jobs keep going without backmesh's cache.",
       );
       expect(mutations(calls)).toEqual([
         'api upgrade --sign-in-apps 5622376',
@@ -1507,7 +1516,7 @@ describe('upgrade', () => {
     it('leaves the new API with the old listener when a later check refuses', async () => {
       const { deps, calls } = setUp({ listener: 'down' });
       await expect(upgrade(deps)).rejects.toThrow(
-        `acme's listener didn't start on ${VM.acme}.`,
+        `acme's listener didn't start on ${VM.acme}.\nUntil a \`backmesh upgrade\` run finishes, an org whose listener hasn't rolled starts no runners`,
       );
       expect(mutations(calls)).toEqual([
         'api upgrade --sign-in-apps 5622376',
@@ -1548,143 +1557,6 @@ describe('upgrade', () => {
       runnerImage: RELEASE.runnerImage,
       cacheBuckets: ['bm-cache-l8u5e-us-east-2'],
     };
-
-    it('moves a listener off bm-control: its VM first, the Deployment stopped before it starts, then bm-control goes', async () => {
-      const { deps, calls, requests, lines, hosts } = setUp({
-        version: RELEASE.anycloud,
-        host: 'deployment',
-      });
-      const result = await upgrade(deps);
-      const moves = mutations(calls);
-      const id = /--id (bml-l8u5e-[a-z0-9]{6})/.exec(moves.join('\n'))?.[1];
-      expect(moves).toEqual([
-        'api access add --service backmesh-acme --json',
-        expect.stringMatching(
-          new RegExp(
-            `^vm \\S+ --id ${id} --credentials bm-aws --region us-east-2 --vm-type t3.small --secret backmesh-acme --wait$`,
-          ),
-        ),
-        // In standby while the Deployment still runs, then taking jobs.
-        `roll ${id}`,
-        'deployment delete dep-acme',
-        `roll ${id}`,
-        'api access remove --service-account backmesh-acme',
-        'node-pool delete np-1',
-      ]);
-      // Read in its Pod, where it still was.
-      expect(calls.indexOf('status dep-acme')).toBeGreaterThanOrEqual(0);
-      // Its runner group keeps the Deployment's name, so its scale sets
-      // stay; the new token is the one just issued.
-      const values = secretOf('acme', {
-        BACKMESH_RUNNER_GROUP: runnerGroupName('l8u5e', 'dep-acme'),
-        ANYCLOUD_API_TOKEN: 'acapi_issued',
-      });
-      expect(saved(requests)).toEqual([values]);
-      expect(hosts.get(id!)!.env).toEqual(values);
-      expect(lines).toContain(
-        "acme's listener moves from bm-control to its own t3.small VM, about $17 a month, and bm-control, about the same, is deleted.",
-      );
-      expect(result.listeners).toEqual([
-        { org: 'acme', image: RELEASE.listenerImage, rolled: true },
-      ]);
-      // The plan names the move.
-      const plan = setUp({ version: RELEASE.anycloud, host: 'deployment' });
-      expect(await upgrade(plan.deps, { plan: true })).toMatchObject({
-        orgs: [{ org: 'acme', moves: true }],
-      });
-      expect(mutations(plan.calls)).toEqual([]);
-    });
-
-    it("moves a listener to a VM of bm-control's own size", async () => {
-      const { deps, calls, lines } = setUp({
-        version: RELEASE.anycloud,
-        host: 'deployment',
-        poolType: 't3.medium',
-      });
-      await upgrade(deps);
-      expect(mutations(calls)).toContainEqual(
-        expect.stringContaining(' --vm-type t3.medium '),
-      );
-      expect(lines).toContain(
-        "acme's listener moves from bm-control to its own t3.medium VM and bm-control, about the same, is deleted.",
-      );
-    });
-
-    it('finishes a move that stopped after making the VM: reads the Deployment, then rolls the VM it made', async () => {
-      const { deps, calls, hosts } = setUp({
-        version: RELEASE.anycloud,
-        host: 'both',
-      });
-      await upgrade(deps);
-      expect(calls).toContain('status dep-acme');
-      expect(mutations(calls)).toEqual([
-        'api access add --service backmesh-acme --json',
-        `roll ${VM.acme}`,
-        'deployment delete dep-acme',
-        `roll ${VM.acme}`,
-        'api access remove --service-account backmesh-acme',
-        'node-pool delete np-1',
-      ]);
-      expect(hosts.get(VM.acme!)!.env).toMatchObject({
-        BACKMESH_RUNNER_GROUP: runnerGroupName('l8u5e', 'dep-acme'),
-      });
-    });
-
-    it("keeps the Deployment running when the VM's listener can't use its token in standby", async () => {
-      const { deps, calls, hooks, hosts } = setUp({
-        version: RELEASE.anycloud,
-        host: 'deployment',
-      });
-      hooks.roll = (values) => {
-        // The control plane refuses the new token.
-        if (values.BACKMESH_STANDBY) {
-          for (const [id, h] of hosts) {
-            if (id.startsWith('bml-')) {
-              h.body = {
-                ...h.body,
-                anycloud: {
-                  since: '2026-11-18T06:00:00.000Z',
-                  error: 'HTTP 401: {}',
-                },
-              };
-            }
-          }
-        }
-        return false;
-      };
-      await expect(upgrade(deps)).rejects.toThrow(
-        /can't use the control plane \(HTTP 401: \{\}\), so its Deployment keeps running/,
-      );
-      expect(calls.filter((c) => c.startsWith('deployment'))).toEqual([]);
-      expect(calls).not.toContain('node-pool delete np-1');
-    });
-
-    it('takes a listener a stopped move left in standby out of it, with nothing else to change', async () => {
-      const { deps, calls, hosts } = setUp({ ...current });
-      const acme = hosts.get(VM.acme!)!;
-      acme.env = { ...acme.env, BACKMESH_STANDBY: '1' };
-      await upgrade(deps);
-      // The move's last step too.
-      expect(mutations(calls)).toEqual([
-        ROLL,
-        'api access remove --service-account backmesh-acme',
-      ]);
-      expect(acme.env).not.toHaveProperty('BACKMESH_STANDBY');
-    });
-
-    it('asks before moving several orgs, with the VMs’ total cost', async () => {
-      const { deps, calls, lines } = setUp({
-        version: RELEASE.anycloud,
-        host: 'deployment',
-        beta: true,
-        betaMoves: true,
-      });
-      await expect(upgrade(deps)).rejects.toThrow(NeedsPlan);
-      expect(lines).toContain(
-        "acme, beta's listeners move from bm-control to t3.small VMs of their own: about $34 a month in all, instead of bm-control's one Node at about $17, which is deleted.",
-      );
-      expect(mutations(calls)).toEqual([]);
-    });
 
     it('refuses --plan and --plan-id while a listener must start again first, changing nothing', async () => {
       for (const host of ['lost', 'vm'] as const) {
@@ -1747,6 +1619,233 @@ describe('upgrade', () => {
       expect(result.listeners).toEqual([
         { org: 'acme', image: RELEASE.listenerImage, rolled: true },
       ]);
+    });
+  });
+
+  describe("the runner clouds' role setup", () => {
+    const awsAndGcp = JSON.stringify(
+      planClasses(
+        [
+          { cloud: 'aws', region: 'us-east-2', credentials: 'bm-aws' },
+          { cloud: 'gcp', region: 'us-central1', credentials: 'bm-gcp' },
+        ],
+        catalogs({ aws: CATALOG.aws, gcp: CATALOG.gcp }),
+        'aws',
+      ).classes,
+    );
+    const AWS_ROLE = {
+      name: 'bm-aws',
+      cloudProvider: 'AWS',
+      kind: 'role',
+      roleArn: 'arn:aws:iam::111122223333:role/anycloud-role',
+    };
+    const GCP_ROLE = {
+      name: 'bm-gcp',
+      cloudProvider: 'GCP',
+      kind: 'role',
+      serviceAccountEmail: 'anycloud-role@proj-1.iam.gserviceaccount.com',
+    };
+    // Role connections, as the API and the binary list them, and each
+    // re-apply's environment; a re-apply answers the account it applied in.
+    const withRoles = (
+      over: Parameters<typeof setUp>[0] = {},
+      listed: object[] = [AWS_ROLE, GCP_ROLE],
+      applied: Record<string, string> = {},
+    ) => {
+      const set = setUp({ runners: awsAndGcp, ...over });
+      set.routes['GET /v1/credentials'] = listed;
+      const run = set.deps.run;
+      const envs: Record<string, NodeJS.ProcessEnv | undefined> = {};
+      const answer = async (args: string[], env?: NodeJS.ProcessEnv) => {
+        // The binary lists the same connections.
+        if (args.join(' ') === 'credentials list --json') {
+          await run(args);
+          return JSON.stringify(listed);
+        }
+        if (args[0] === 'credentials' && args[1] === 'new') {
+          envs[args[2]!] = env;
+          await run(args);
+          const account =
+            applied[args[2]!] ??
+            { 'bm-aws': '111122223333', 'bm-gcp': 'proj-1' }[args[2]!];
+          return JSON.stringify({ name: args[2], account });
+        }
+        return run(args);
+      };
+      set.deps.run = set.deps.runLong = answer;
+      return { ...set, envs };
+    };
+    const REAPPLIED = [
+      'credentials new bm-aws --provider aws --role --apply --json',
+      'credentials new bm-gcp --provider gcp --role --apply --project-id proj-1 --json',
+    ];
+    it('re-applies each role connection right after the API moves, before any roll', async () => {
+      const { deps, calls, envs, lines } = withRoles();
+      await upgrade(deps);
+      expect(mutations(calls)).toEqual([
+        'api upgrade --sign-in-apps 5622376',
+        'api status --watch --json',
+        ...REAPPLIED,
+        ROLL,
+      ]);
+      // The AWS stack's region, as install's.
+      expect(envs['bm-aws']).toEqual({ AWS_REGION: 'us-east-2' });
+      expect(lines).toEqual(
+        expect.arrayContaining([
+          "aws's role connection bm-aws in account 111122223333 (its stack in us-east-2): upgrade re-applies its setup through your aws CLI, for this release's runner permissions.",
+          "gcp's role connection bm-gcp in project proj-1: upgrade re-applies its setup through your gcloud CLI, for this release's runner permissions.",
+        ]),
+      );
+    });
+
+    it('re-applies it on a re-run with the API already current', async () => {
+      const { deps, calls } = withRoles({
+        version: RELEASE.anycloud,
+        image: RELEASE.listenerImage,
+        runnerImage: RELEASE.runnerImage,
+      });
+      await upgrade(deps);
+      expect(mutations(calls)).toEqual(REAPPLIED);
+    });
+
+    it('names it in the plan, which changes nothing', async () => {
+      const { deps, calls, lines } = withRoles({
+        version: RELEASE.anycloud,
+        image: RELEASE.listenerImage,
+      });
+      const plan = await upgrade(deps, { plan: true });
+      expect(plan).toMatchObject({
+        roles: [
+          { cloud: 'aws', credentials: 'bm-aws', account: '111122223333' },
+          { cloud: 'gcp', credentials: 'bm-gcp', account: 'proj-1' },
+        ],
+      });
+      expect(lines).toContain(
+        "aws's role connection bm-aws in account 111122223333 (its stack in us-east-2): upgrade re-applies its setup through your aws CLI, for this release's runner permissions.",
+      );
+      expect(mutations(calls)).toEqual([]);
+    });
+
+    it("names the grants a key connection's identity needs, as our CI's, and re-applies nothing", async () => {
+      const { deps, calls, lines } = withRoles({}, [
+        { name: 'bm-aws', cloudProvider: 'AWS', accessKeyId: 'AK1' },
+        { name: 'bm-gcp', cloudProvider: 'GCP', clientEmail: 'x@proj-1' },
+      ]);
+      await upgrade(deps);
+      expect(calls.some((c) => /^(credentials new|aws|gcloud)/.test(c))).toBe(
+        false,
+      );
+      expect(lines).toEqual(
+        expect.arrayContaining([
+          `aws's key connection bm-aws has no setup to re-apply, and its runners need ec2:CreateVpc, ec2:CreateSubnet, ec2:CreateInternetGateway, ec2:AttachInternetGateway, ec2:CreateRoute, ec2:DescribeAvailabilityZones, ec2:DescribeInternetGateways, ec2:DescribeRouteTables, ec2:DescribeSubnets. Unless its identity anycloud-bm-aws has them, grant them, signed in to the account install used:
+  aws iam put-user-policy --user-name anycloud-bm-aws --policy-name AnycloudJobsNetwork --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["ec2:CreateVpc","ec2:CreateSubnet","ec2:CreateInternetGateway","ec2:AttachInternetGateway","ec2:CreateRoute","ec2:DescribeAvailabilityZones","ec2:DescribeInternetGateways","ec2:DescribeRouteTables","ec2:DescribeSubnets"],"Resource":"*"}]}'`,
+          `gcp's key connection bm-gcp has no setup to re-apply, and its runners need compute.networks.create, compute.networks.get. Unless its identity anycloud-bm-gcp has them, grant them, signed in to the project install used:
+  PROJECT=$(gcloud config get-value project); gcloud iam roles describe anycloudJobsNetwork --project "$PROJECT" --format none || gcloud iam roles create anycloudJobsNetwork --project "$PROJECT" --permissions compute.networks.create,compute.networks.get --format none; gcloud projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:anycloud-bm-gcp@$PROJECT.iam.gserviceaccount.com" --role "projects/$PROJECT/roles/anycloudJobsNetwork" --condition None --format none`,
+        ]),
+      );
+    });
+
+    it("leaves Azure's role connection, whose setup this release doesn't change, and its CLI alone", async () => {
+      const azure = JSON.stringify(
+        planClasses(
+          [{ cloud: 'azure', region: 'westus2', credentials: 'bm-azure' }],
+          catalogs({ azure: CATALOG.azure }),
+          'azure',
+        ).classes,
+      );
+      const { deps, calls } = withRoles({ runners: azure }, [
+        {
+          name: 'bm-azure',
+          cloudProvider: 'Azure',
+          kind: 'role',
+          subscriptionId: 'sub-1',
+        },
+      ]);
+      await upgrade(deps);
+      expect(calls.some((c) => /^(credentials new|az )/.test(c))).toBe(false);
+    });
+
+    it('re-applies again on a re-run on the pinned release, which retries a failed one', async () => {
+      const { deps, calls } = withRoles({
+        version: RELEASE.anycloud,
+        image: RELEASE.listenerImage,
+        runnerImage: RELEASE.runnerImage,
+      });
+      await upgrade(deps);
+      expect(calls.filter((c) => c.startsWith('credentials new'))).toEqual(
+        REAPPLIED,
+      );
+    });
+
+    it('re-applies nothing and checks no CLI for a setup no move crosses', async () => {
+      const { deps, calls, lines, requests } = withRoles();
+      // A change at the oldest release a move starts from is already there.
+      deps.roleSetup = { ...ROLE_SETUP, since: '0.1.70' };
+      await upgrade(deps);
+      expect(calls.some((c) => /^(credentials new|aws|gcloud)/.test(c))).toBe(
+        false,
+      );
+      expect(requests.some((r) => /^GET \/v1\/credentials( |$)/.test(r))).toBe(
+        false,
+      );
+      expect(lines.some((l) => l.includes('role connection'))).toBe(false);
+    });
+
+    it('re-applies a connection two orgs share once', async () => {
+      const { deps, calls } = withRoles({ beta: true });
+      await upgrade(deps);
+      expect(calls.filter((c) => c.startsWith('credentials new'))).toEqual(
+        REAPPLIED,
+      );
+    });
+
+    it("stops before the API moves when a role cloud's CLI is signed out", async () => {
+      const { deps, calls } = withRoles();
+      const command = deps.command;
+      deps.command = async (args, env) => {
+        if (args.join(' ') === 'gcloud auth print-access-token') {
+          throw new Error('Command failed: not signed in');
+        }
+        return command(args, env);
+      };
+      await expect(upgrade(deps)).rejects.toThrow(
+        "gcloud isn't signed in: run `gcloud auth login`.",
+      );
+      expect(mutations(calls)).toEqual([]);
+    });
+
+    it("stops before the API moves when aws is signed in to another account than the role's", async () => {
+      const { deps, calls } = withRoles();
+      deps.command = async () => JSON.stringify({ Account: '444455556666' });
+      await expect(upgrade(deps)).rejects.toThrow(
+        "aws's CLI is signed in to account 444455556666, not 111122223333, where bm-aws's role is: sign it in to 111122223333, then run `backmesh upgrade` again.",
+      );
+      expect(mutations(calls)).toEqual([]);
+    });
+
+    it('stops before any roll when a re-apply lands in another account', async () => {
+      const { deps, calls } = withRoles({}, undefined, {
+        'bm-gcp': 'proj-2',
+      });
+      await expect(upgrade(deps)).rejects.toThrow(
+        "gcp's CLI re-applied the role setup in project proj-2, not proj-1, where bm-gcp's role is. Sign it in to proj-1. This release's runners need its role setup; run `backmesh upgrade` again.",
+      );
+      expect(rolledAny(calls)).toBe(false);
+    });
+
+    it('stops before any roll when a re-apply fails, saying to run upgrade again', async () => {
+      const { deps, calls } = withRoles();
+      const run = deps.runLong;
+      deps.run = deps.runLong = async (args, env) => {
+        if (args[2] !== 'bm-gcp') return run(args, env);
+        calls.push(args.join(' '));
+        const stdout = `${JSON.stringify({ actionRequired: { command: 'gcloud auth login' } })}\n`;
+        throw new StepFailed(args, stdout, '', { cause: new Error('exit') });
+      };
+      await expect(upgrade(deps)).rejects.toThrow(
+        "gcp's CLI needs a sign-in to project proj-1: run `gcloud auth login`. This release's runners need its role setup; run `backmesh upgrade` again.",
+      );
+      expect(rolledAny(calls)).toBe(false);
     });
   });
 });

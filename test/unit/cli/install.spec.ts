@@ -108,9 +108,7 @@ const github = fakeGitHub({
 function setUp(
   {
     env = {},
-    pools = [] as object[],
     workloads = [] as object[],
-    deployments = [] as object[],
     // Listener VMs already on the control plane.
     vms = [] as object[],
     worker = fakeWorker(),
@@ -148,9 +146,7 @@ function setUp(
     // connection an installation before 0.4.1 named, which `RUNNERS` records.
     cacheBuckets?: string[];
     env?: NodeJS.ProcessEnv;
-    pools?: object[];
     workloads?: object[];
-    deployments?: object[];
     vms?: object[];
     worker?: ReturnType<typeof fakeWorker>;
     features?: FeatureTable;
@@ -175,7 +171,7 @@ function setUp(
   const { run: answer, calls } = fakeBinary({
     'credentials list --json': '[]',
     'vm-types aws us-east-2': JSON.stringify(CATALOG.aws),
-    'cluster create backmesh': JSON.stringify({ name: 'backmesh', ...RUNNING }),
+    'api create backmesh': JSON.stringify({ name: 'backmesh', ...RUNNING }),
     'api token': 't0ken',
     // A control plane with listener VMs has its own cluster record, which
     // says where it runs.
@@ -238,9 +234,7 @@ function setUp(
       },
     }),
     'PUT /v1/secrets/backmesh-acme': {},
-    'GET /v1/node-pools': { nodePools: pools },
     'GET /v1/workloads': () => [...workloads, ...listed],
-    'GET /v1/deployments': { deployments },
   });
   // `anycloud exec`: the listener's probe answers as `exec backmesh-acme`
   // in `binary` says (`probe`), else as a new listener; the start and roll
@@ -316,8 +310,7 @@ function setUp(
           })),
         ]);
       }
-      // The new management VM at anycloud 0.1.78's 8,000 IOPS; bm-control's
-      // Node is created at the baseline.
+      // The new management VM at anycloud 0.1.78's 8,000 IOPS.
       if (args[0] === 'aws' && args[1] === 'ec2') {
         return {
           'describe-instances': JSON.stringify(['vol-api']),
@@ -506,7 +499,7 @@ describe('install', () => {
       ),
     ).toEqual([
       // Through the user's cloud CLI, with no local API, after the quotas.
-      'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud aws --region us-east-2 --vm-type t3.large --sign-in-apps 5622376 --json',
       `api use ${HOSTED}`,
       // The role's trust names the hosted API, so it comes after create.
       `credentials new ${BM.aws} --provider aws --role --apply --json`,
@@ -607,9 +600,9 @@ describe('install', () => {
     const { deps, calls, requests } = setUp({ env: OVERRIDE, tty: false });
     await install(options, deps);
     expect(
-      calls.filter((c) => /^(cluster|credentials new|vm )/.test(c)),
+      calls.filter((c) => /^(api create|credentials new|vm )/.test(c)),
     ).toEqual([
-      'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud aws --region us-east-2 --vm-type t3.large --sign-in-apps 5622376 --json',
       `credentials new ${BM.aws} --provider aws --profile default --account-id 123456789012 --generate`,
       expect.stringMatching(/^vm .* --secret backmesh-acme --wait$/),
     ]);
@@ -781,7 +774,7 @@ describe('install', () => {
     expect(lines).toContain(
       "azure's quotas couldn't be read, so the plan shows them as unread.",
     );
-    expect(calls.some((c) => c.startsWith('cluster create'))).toBe(true);
+    expect(calls.some((c) => c.startsWith('api create'))).toBe(true);
   });
 
   it('removes a role connection made in another account, so a re-run makes it again', async () => {
@@ -828,7 +821,7 @@ describe('install', () => {
     );
   });
 
-  it("stops at a failed cluster create with anycloud's reason, before anything else", async () => {
+  it("stops at a failed api create with anycloud's reason, before anything else", async () => {
     const { deps, calls } = setUp();
     const run = deps.runLong;
     deps.runLong = async (args) => {
@@ -843,9 +836,9 @@ describe('install', () => {
       );
     };
     await expect(install(asked, deps)).rejects.toThrow(
-      /^cluster create failed: arn:aws:iam::123456789012:user\/ops lacks ec2:RunInstances \(CLOUD_RIGHTS_MISSING\)$/,
+      /^api create failed: arn:aws:iam::123456789012:user\/ops lacks ec2:RunInstances \(CLOUD_RIGHTS_MISSING\)$/,
     );
-    expect(calls.at(-1)).toMatch(/^cluster create backmesh /);
+    expect(calls.at(-1)).toMatch(/^api create backmesh /);
   });
 
   it('hands the listener its classes as BACKMESH_RUNNERS in its Secret', async () => {
@@ -880,7 +873,7 @@ describe('install', () => {
     await expect(install(options, deps)).rejects.toThrow(
       /Can't run the runners:\n- aws allows 2 spot vCPUs, under one 4-vCPU VM/,
     );
-    expect(calls.some((c) => c.startsWith('cluster create'))).toBe(false);
+    expect(calls.some((c) => c.startsWith('api create'))).toBe(false);
   });
 
   it('refuses without --yes and without a terminal, before anything runs', async () => {
@@ -898,7 +891,7 @@ describe('install', () => {
       'Install cancelled before anything billed was created',
     );
     expect(confirm).toHaveBeenCalledOnce();
-    expect(calls.some((c) => c.startsWith('cluster create'))).toBe(false);
+    expect(calls.some((c) => c.startsWith('api create'))).toBe(false);
   });
 
   it('names a label that would start no runners, and asks before going on, no unless yes', async () => {
@@ -920,7 +913,7 @@ describe('install', () => {
     expect(confirm).toHaveBeenCalledWith(
       '4 labels would start no runners until a quota is raised. Install anyway?',
     );
-    expect(calls.some((c) => c.startsWith('cluster create'))).toBe(false);
+    expect(calls.some((c) => c.startsWith('api create'))).toBe(false);
   });
 
   it('refuses an anycloud without release 1, C26 or role connections', async () => {
@@ -1053,22 +1046,6 @@ describe('install', () => {
     });
   });
 
-  const control = {
-    id: 'p1',
-    name: 'bm-control',
-    state: 'running',
-    allowPrivilegedJobs: false,
-    cloudProvider: 'AWS',
-    region: 'us-east-2',
-  };
-  const listener = {
-    id: 'd1',
-    name: 'backmesh-acme',
-    nodePoolId: 'p1',
-    managed: false,
-    deletedAt: null,
-    image: images.listenerImage,
-  };
   // acme's listener on its own VM.
   const VM = 'bml-l8u5e-abc123';
   const acmeVm = listenerVm('acme', VM, { region: 'us-east-2' });
@@ -1104,95 +1081,20 @@ describe('install', () => {
     }),
   });
 
-  it('refuses a bm-control that breaks invariant 3, before step 6', async () => {
-    const privileged = setUp({
-      env: OVERRIDE,
-      pools: [{ ...control, allowPrivilegedJobs: true }],
-    });
-    await expect(install(options, privileged.deps)).rejects.toThrow(
-      'bm-control admits privileged Jobs',
-    );
-    const shared = setUp({
-      env: OVERRIDE,
-      pools: [control],
-      workloads: [{ id: 'web', workloadType: 'service', nodePoolId: 'p1' }],
-      deployments: [
-        listener,
-        { ...listener, id: 'd2', name: 'api' },
-        { ...listener, id: 'd3', managed: true },
-      ],
-    });
-    await expect(install(options, shared.deps)).rejects.toThrow(
-      'bm-control runs more than the listeners: Deployment api, Deployment backmesh-acme (managed), workload web',
-    );
-    expect(shared.calls.some((c) => /^(api access|vm |roll )/.test(c))).toBe(
-      false,
-    );
-  });
-
-  it("refuses a managed listener's Deployment on bm-control", async () => {
-    const managed = setUp({
-      env: OVERRIDE,
-      pools: [control],
-      deployments: [{ ...listener, managed: true }],
-    });
-    await expect(install(options, managed.deps)).rejects.toThrow(
-      'bm-control runs more than the listeners: Deployment backmesh-acme (managed)',
-    );
-    const unmanaged = setUp(
+  it('refuses an org with two listener VMs, before step 6', async () => {
+    const { deps, calls } = setUp(
       {
         env: OVERRIDE,
+        workloads: [listenerVm('acme', 'bml-l8u5e-def456')],
         vms: [acmeVm],
         hosted: true,
       },
       probe(),
     );
-    await expect(install(options, unmanaged.deps)).resolves.toBeDefined();
-  });
-
-  it('ignores a deleted Deployment on bm-control', async () => {
-    const { deps } = setUp(
-      {
-        env: OVERRIDE,
-        pools: [control],
-        vms: [acmeVm],
-        deployments: [{ ...listener, id: 'd2', name: 'api', deletedAt: 1 }],
-        hosted: true,
-      },
-      probe(),
-    );
-    await expect(install(options, deps)).resolves.toBeDefined();
-  });
-
-  it('refuses a re-run over a listener still on bm-control: upgrade moves it first', async () => {
-    const { deps, calls, requests } = setUp(
-      {
-        env: OVERRIDE,
-        pools: [control],
-        deployments: [listener],
-        hosted: true,
-      },
-      probe(),
-    );
-    const error = await install(options, deps).catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(UsageError);
-    expect((error as Error).message).toBe(
-      "acme's listener still runs on bm-control: run `backmesh upgrade` first, which moves it to its own VM, then install again.",
-    );
-    expect(calls.some((c) => /^(api access|vm )/.test(c))).toBe(false);
-    expect(requests.filter((r) => /^(POST|PUT)/.test(r))).toEqual([]);
-  });
-
-  it("refuses a listener's Deployment on another pool", async () => {
-    const { deps, calls } = setUp({
-      env: OVERRIDE,
-      pools: [control, { id: 'p2', name: 'web', state: 'running' }],
-      deployments: [{ ...listener, nodePoolId: 'p2' }],
-    });
     await expect(install(options, deps)).rejects.toThrow(
-      'A Deployment named backmesh-acme runs outside bm-control, on node pool p2',
+      `Each org must have one listener VM:\n- acme has more than one listener VM: bml-l8u5e-def456, ${VM}`,
     );
-    expect(calls.some((c) => c.startsWith('api access add'))).toBe(false);
+    expect(calls.some((c) => /^(api access|vm |roll )/.test(c))).toBe(false);
   });
 
   describe('adding an org to a control plane', () => {
@@ -1222,7 +1124,7 @@ describe('install', () => {
         planId: string;
       };
       await install({ ...own, planId }, deps);
-      expect(calls.some((c) => c.startsWith('cluster create'))).toBe(false);
+      expect(calls.some((c) => c.startsWith('api create'))).toBe(false);
     });
 
     it("keeps this machine's control plane, and refuses moving it", async () => {
@@ -1246,8 +1148,8 @@ describe('install', () => {
     });
 
     it("places a re-run by the control plane's own record, and needs --control-plane without one", async () => {
-      // An install that stopped before bm-control: the cluster record says
-      // where it runs.
+      // An install that stopped before its listener: the cluster record
+      // says where it runs.
       const binary = {
         'cluster list --json': JSON.stringify([
           { id: 'c1', cloudProvider: 'AWS', region: 'us-west-2' },
@@ -1261,7 +1163,7 @@ describe('install', () => {
         controlPlane: { cloud: 'aws', region: 'us-west-2', exists: true },
       });
 
-      // Neither a record nor bm-control: no default, at a terminal either.
+      // No record: no default, at a terminal either.
       const unknown = setUp({ env: OVERRIDE, hosted: true });
       const error = await install(
         { org: 'acme', yes: false },
@@ -1271,9 +1173,7 @@ describe('install', () => {
       expect((error as Error).message).toBe(
         `This machine targets the control plane at ${HOSTED}, and install can't read where it runs: pass --control-plane <cloud>:<region> as it was created.`,
       );
-      expect(unknown.calls.some((c) => c.startsWith('cluster create'))).toBe(
-        false,
-      );
+      expect(unknown.calls.some((c) => c.startsWith('api create'))).toBe(false);
       await expect(
         install(
           { ...options, plan: true },
@@ -1320,7 +1220,7 @@ describe('install', () => {
 
     it("stops before its registration when the plan didn't show the other orgs", async () => {
       // This machine had no target, so the plan saw a new control plane;
-      // `cluster create` resumed beta's.
+      // `api create` resumed beta's.
       const { deps, calls } = adding(undefined, false);
       const plan = await planOf(deps);
       expect(plan.sameOwner).toBeNull();
@@ -1499,26 +1399,6 @@ describe('install', () => {
     ]);
   });
 
-  it('rolls a listener a stopped move left in standby out of it on a re-run', async () => {
-    const { deps, calls, requests } = setUp(
-      {
-        env: OVERRIDE,
-        vms: [acmeVm],
-        hosted: true,
-        cacheBuckets: ['bm-cache-l8u5e-us-east-2'],
-      },
-      probe({ BACKMESH_STANDBY: '1' }),
-    );
-    await install(options, deps);
-    expect(calls).toContainEqual(`roll ${VM}`);
-    const secret = requests.find((r) =>
-      r.startsWith('PUT /v1/secrets/backmesh-acme '),
-    )!;
-    expect(JSON.parse(secret.split(' ')[2]!).values).not.toHaveProperty(
-      'BACKMESH_STANDBY',
-    );
-  });
-
   it('changes the cache cap on a re-run: in the plan and its ID, then the Secret and a roll', async () => {
     const rerun = (env: Record<string, string> = {}) =>
       setUp(
@@ -1687,12 +1567,12 @@ describe('install', () => {
     // The saved control plane answered, so this re-run never ran `cluster
     // create` or anything else on its cloud: adding gcp needed only gcp's
     // vm-types read and its role connection.
-    expect(calls.some((c) => c.startsWith('cluster create'))).toBe(false);
+    expect(calls.some((c) => c.startsWith('api create'))).toBe(false);
     expect(calls).toContain(`api use ${HOSTED}`);
   });
 
   it('reuses an answering saved control plane, touching no aws command at all', async () => {
-    // An aws control plane, `bm-control` running: adding gcp runners alone
+    // An aws control plane with acme's listener: adding gcp runners alone
     // (not aws, which this run doesn't name) should need no aws command,
     // neither through the anycloud binary nor the user's own aws CLI.
     const binary = { 'vm-types gcp us-east4': JSON.stringify(CATALOG.gcp) };
@@ -1706,7 +1586,7 @@ describe('install', () => {
     );
     await install({ ...options, runners: ['gcp'] }, deps);
 
-    expect(calls.some((c) => c.startsWith('cluster create'))).toBe(false);
+    expect(calls.some((c) => c.startsWith('api create'))).toBe(false);
     expect(calls.some((c) => / aws\b|-aws\b/.test(c))).toBe(false);
     expect(commands.some((c) => c.startsWith('aws '))).toBe(false);
     expect(calls).toContain(`api use ${HOSTED}`);
@@ -1731,13 +1611,13 @@ describe('install', () => {
   });
 
   it("connects a reused control plane's cloud while it has no listener yet", async () => {
-    // A first install whose `cluster create` finished but whose aws role
+    // A first install whose `api create` finished but whose aws role
     // connection failed: the API answers and its record is named `backmesh`,
     // but aws's connection and the listener's VM don't exist. The re-run
     // reuses the cluster, yet still connects aws, since step 7 creates the
     // listener's VM with that connection.
     const binary = { 'vm-types gcp us-east4': JSON.stringify(CATALOG.gcp) };
-    const { deps, calls, requests } = setUp(
+    const { deps, calls } = setUp(
       { env: OVERRIDE, hosted: true },
       {
         ...binary,
@@ -1753,7 +1633,7 @@ describe('install', () => {
     );
     await install({ ...options, runners: ['gcp'] }, deps);
 
-    expect(calls.some((c) => c.startsWith('cluster create'))).toBe(false);
+    expect(calls.some((c) => c.startsWith('api create'))).toBe(false);
     expect(calls.some((c) => c.startsWith(`credentials new ${BM.aws}`))).toBe(
       true,
     );
@@ -1762,15 +1642,12 @@ describe('install', () => {
         new RegExp(`^vm .* --credentials ${BM.aws} --region us-east-2 `),
       ),
     );
-    expect(requests.some((r) => r.startsWith('POST /v1/node-pools'))).toBe(
-      false,
-    );
   });
 
   it("keeps today's path for a targeted API that isn't recognizably backmesh's own", async () => {
     // Answering, and its location known (a cluster record this machine's
     // target resolves to), but named for something else entirely and
-    // without a `bm-control`: this machine's active target may be the
+    // without a listener: this machine's active target may be the
     // user's own, unrelated anycloud cluster, so install never reuses it,
     // and everything runs as it did before this change, aws CLI included.
     const { deps, calls, commands } = setUp(
@@ -1787,27 +1664,27 @@ describe('install', () => {
       },
     );
     await install(options, deps);
-    expect(calls.some((c) => c.startsWith('cluster create'))).toBe(true);
+    expect(calls.some((c) => c.startsWith('api create'))).toBe(true);
     expect(commands.some((c) => c.startsWith('aws '))).toBe(true);
   });
 
   it('never reuses a control plane whose location is unknown', async () => {
-    // Answering, but with neither `bm-control` nor a `cluster list` record:
+    // Answering, but with neither a listener nor a `cluster list` record:
     // install can't tell where it runs, let alone that it's its own, so
     // --control-plane still names where to create or resume one, as before.
     const { deps, calls } = setUp({ env: OVERRIDE, hosted: true });
     await install({ ...options, controlPlane: 'aws:us-east-2' }, deps);
-    expect(calls.some((c) => c.startsWith('cluster create'))).toBe(true);
+    expect(calls.some((c) => c.startsWith('api create'))).toBe(true);
   });
 
   it('creates the control plane as before with no saved API, or one that never answers', async () => {
-    // No saved API: a fresh machine, today's unconditional `cluster create`.
+    // No saved API: a fresh machine, today's unconditional `api create`.
     const fresh = setUp({ env: OVERRIDE });
     await install(options, fresh.deps);
-    expect(fresh.calls.some((c) => c.startsWith('cluster create'))).toBe(true);
+    expect(fresh.calls.some((c) => c.startsWith('api create'))).toBe(true);
 
     // A saved API that never answers stops install before it reaches
-    // `cluster create`, exactly as it did before this change: a non-answering
+    // `api create`, exactly as it did before this change: a non-answering
     // control plane is never silently treated as gone.
     const down = setUp({ env: OVERRIDE, hosted: true });
     const fetch = down.deps.fetch!;
@@ -1819,7 +1696,7 @@ describe('install', () => {
     await expect(install(options, down.deps)).rejects.toThrow(
       `The control plane at ${HOSTED} didn't answer; retry, or run \`backmesh status\`.`,
     );
-    expect(down.calls.some((c) => c.startsWith('cluster create'))).toBe(false);
+    expect(down.calls.some((c) => c.startsWith('api create'))).toBe(false);
   });
 
   it("carries an unfinished rotate-key rotation's marker through a reinstall's roll, never dropping it", async () => {
@@ -1917,10 +1794,10 @@ describe('install', () => {
   });
 
   it("stops when the org's listener appears after a plan that didn't show it", async () => {
-    // This machine targeted no control plane, and `cluster create` resumed
+    // This machine targeted no control plane, and `api create` resumed
     // one where acme's listener runs.
     const { deps, calls } = setUp(
-      { env: OVERRIDE, pools: [control], deployments: [listener] },
+      { env: OVERRIDE, workloads: [acmeVm] },
       probe(),
     );
     await expect(install(options, deps)).rejects.toThrow(PlanChanged);
@@ -2028,7 +1905,7 @@ describe('install', () => {
     ]) {
       const refused = setUp({ env: { ...OVERRIDE, GITHUB_TOKEN: token } });
       await expect(install(options, refused.deps)).rejects.toThrow(message);
-      expect(refused.calls.some((c) => c.startsWith('cluster'))).toBe(false);
+      expect(refused.calls.some((c) => c.startsWith('api create'))).toBe(false);
     }
 
     // anycloud reads the saved sign-in over GITHUB_TOKEN, and so does the check.
@@ -2101,6 +1978,10 @@ describe('install', () => {
     );
     // Only AWS's disks have provisioned speed to lower.
     expect(gcp.commands.filter((c) => c.startsWith('aws ec2'))).toEqual([]);
+    // anycloud generates each identity with the VM Job network's rights.
+    for (const { lines } of [aws, gcp]) {
+      expect(lines.some((l) => l.includes('key connection'))).toBe(false);
+    }
   });
 
   // anycloud 0.1.73's refusals: its own for AWS and Azure, and the IAM
@@ -2201,7 +2082,7 @@ describe('install', () => {
     expect(lines).toContain(
       "Couldn't reach backmesh.com (api.backmesh.com didn't answer); waiting for it.",
     );
-    expect(calls.some((c) => c.startsWith('cluster create'))).toBe(true);
+    expect(calls.some((c) => c.startsWith('api create'))).toBe(true);
   });
 
   it.each([
@@ -2216,7 +2097,7 @@ describe('install', () => {
       const worker = fakeWorker({ tokens: [answer] });
       const { deps, calls } = setUp({ env: OVERRIDE, worker });
       await expect(install(options, deps)).rejects.toThrow(message);
-      expect(calls.some((c) => c.startsWith('cluster create'))).toBe(false);
+      expect(calls.some((c) => c.startsWith('api create'))).toBe(false);
     },
   );
 
@@ -2301,9 +2182,7 @@ describe('install', () => {
       expect(moved.worker.calls.filter((c) => c.startsWith('POST'))).toEqual(
         [],
       );
-      expect(moved.calls.some((c) => c.startsWith('cluster create'))).toBe(
-        false,
-      );
+      expect(moved.calls.some((c) => c.startsWith('api create'))).toBe(false);
     });
 
     it.each([
@@ -2414,7 +2293,7 @@ describe('install', () => {
         PlanChanged,
       );
       expect(worker.calls).toContain('POST /v1/installs');
-      expect(calls.some((c) => c.startsWith('cluster create'))).toBe(false);
+      expect(calls.some((c) => c.startsWith('api create'))).toBe(false);
     });
 
     it('stops a plan it cannot read the hosted control plane for', async () => {
@@ -2541,7 +2420,7 @@ describe('install', () => {
     // AWS, each in its one fixed anchor region (regions are never asked
     // for, owner, 2026-11-13).
     expect(calls).toContain(
-      'cluster create backmesh --cloud gcp --region us-east1 --vm-type e2-standard-2 --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud gcp --region us-east1 --vm-type e2-standard-2 --sign-in-apps 5622376 --json',
     );
     const routes = parseRoutes(
       JSON.parse(
@@ -2575,21 +2454,23 @@ describe('install', () => {
 
     // A machine that targets a control plane is asked only about runners,
     // as for a second org.
-    const second = setUp({
-      env: OVERRIDE,
-      pools: [
-        {
-          id: 'p1',
-          name: 'bm-control',
-          state: 'running',
-          allowPrivilegedJobs: false,
-          cloudProvider: 'AWS',
-          region: 'us-east-2',
-        },
-      ],
-      hosted: true,
-      answers: [''],
-    });
+    const second = setUp(
+      {
+        env: OVERRIDE,
+        hosted: true,
+        answers: [''],
+      },
+      {
+        'cluster list --json': JSON.stringify([
+          {
+            id: 'c1',
+            name: 'backmesh',
+            cloudProvider: 'AWS',
+            region: 'us-east-2',
+          },
+        ]),
+      },
+    );
     await install({ org: 'acme', yes: false }, second.deps);
     expect(second.lines.filter((l) => l.endsWith(']'))).toEqual([
       'Runner clouds? [aws]',
@@ -2662,7 +2543,7 @@ describe('install', () => {
     ).rejects.toThrow(
       "--public-repos needs runners on the control plane's cloud, aws",
     );
-    expect(calls.some((c) => c.startsWith('cluster create'))).toBe(false);
+    expect(calls.some((c) => c.startsWith('api create'))).toBe(false);
   });
 
   it('refuses a --runners value with a region: regions are fixed, not chosen', async () => {
@@ -2827,7 +2708,7 @@ describe("install's always-on VM sizes on Azure", () => {
       binary,
     );
     const { runLong } = set.deps;
-    // Each `cluster delete`'s environment.
+    // Each `api delete`'s environment.
     const envs: (NodeJS.ProcessEnv | undefined)[] = [];
     set.deps.runLong = async (args, env) => {
       if (args[1] === 'delete') envs.push(env);
@@ -2845,11 +2726,11 @@ describe("install's always-on VM sizes on Azure", () => {
     return { plan, run: () => install({ ...opts, planId: plan.planId }, deps) };
   };
   const eastus = { ...options, controlPlane: 'azure:eastus' };
-  // Azure's capacity refusal, as `cluster create --json` relays it.
+  // Azure's capacity refusal, as `api create --json` relays it.
   const CAPACITY = (region: string) =>
     `{"error":{"code":"UNEXPECTED","message":"az deployment group create failed: (SkuNotAvailable) The requested VM size for resource 'Following SKUs have failed for Capacity Restrictions: Standard_D2s_v5' is currently not available in location '${region}'. Please try another size or deploy to a different location or zones. See https://aka.ms/azureskunotavailable for details."}}\n`;
   // A create that fails in `region` with `stdout`, Azure's capacity refusal
-  // by default, after the progress `cluster create` prints on stderr for a
+  // by default, after the progress `api create` prints on stderr for a
   // new cluster or a resumed one.
   const refusedIn = (
     deps: InstallDeps,
@@ -2860,10 +2741,7 @@ describe("install's always-on VM sizes on Azure", () => {
   ) => {
     const { runLong } = deps;
     deps.runLong = async (args, env) => {
-      if (
-        /^(cluster create|vm) /.test(args.join(' ')) &&
-        args.includes(region)
-      ) {
+      if (/^(api create|vm) /.test(args.join(' ')) && args.includes(region)) {
         calls.push(args.join(' '));
         throw new StepFailed(
           args,
@@ -2876,7 +2754,7 @@ describe("install's always-on VM sizes on Azure", () => {
     };
   };
   const steps = (calls: string[]) =>
-    calls.filter((c) => /^(cluster (create|delete)|vm )/.test(c));
+    calls.filter((c) => /^(api (create|delete)|vm )/.test(c));
 
   it('names a restricted size before any sign-in, and places the VMs where every size is offered', async () => {
     const { deps, lines, worker, commands } = azure();
@@ -2943,7 +2821,7 @@ describe("install's always-on VM sizes on Azure", () => {
     );
     await run();
     expect(steps(calls)).toEqual([
-      'cluster create backmesh --cloud azure --region eastus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud azure --region eastus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
       expect.stringContaining(
         '--region eastus --vm-type Standard_B2als_v2 --secret backmesh-acme --wait',
       ),
@@ -3087,7 +2965,7 @@ describe("install's always-on VM sizes on Azure", () => {
     // A sponsorship subscription's regional vCPUs.
     '(OperationNotAllowed) Operation could not be completed as it results in exceeding approved Total Regional Cores quota.',
   ])(
-    'deletes what a quota-refused cluster create started and tries the next region: %s',
+    'deletes what a quota-refused api create started and tries the next region: %s',
     async (refusal) => {
       const { deps, calls } = azure();
       refusedIn(
@@ -3100,11 +2978,11 @@ describe("install's always-on VM sizes on Azure", () => {
       await (await planned(eastus, deps)).run();
       expect(steps(calls)).toEqual([
         expect.stringContaining(
-          'cluster create backmesh --cloud azure --region centralus ',
+          'api create backmesh --cloud azure --region centralus ',
         ),
-        expect.stringMatching(/^cluster delete .* --region centralus /),
+        expect.stringMatching(/^api delete .* --region centralus /),
         expect.stringContaining(
-          'cluster create backmesh --cloud azure --region northcentralus ',
+          'api create backmesh --cloud azure --region northcentralus ',
         ),
         expect.stringContaining(
           '--region northcentralus --vm-type Standard_B2s',
@@ -3113,15 +2991,15 @@ describe("install's always-on VM sizes on Azure", () => {
     },
   );
 
-  it('deletes what a capacity-refused cluster create started and tries the next region, signing in once', async () => {
+  it('deletes what a capacity-refused api create started and tries the next region, signing in once', async () => {
     const { deps, calls, worker, envs } = azure();
     refusedIn(deps, calls, 'centralus');
     await (await planned(eastus, deps)).run();
     const id = 'backmesh-1763553600000-x7k2p9';
     expect(steps(calls)).toEqual([
-      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
-      `cluster delete ${id} --cloud azure --region centralus --delete-vms --delete-buckets --confirm ${id} --json`,
-      'cluster create backmesh --cloud azure --region northcentralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
+      `api delete ${id} --cloud azure --region centralus --delete-vms --delete-buckets --confirm ${id} --json`,
+      'api create backmesh --cloud azure --region northcentralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
       expect.stringContaining(
         '--region northcentralus --vm-type Standard_B2s --secret backmesh-acme --wait',
       ),
@@ -3143,7 +3021,7 @@ describe("install's always-on VM sizes on Azure", () => {
       'SkuNotAvailable',
     );
     expect(steps(calls)).toEqual([
-      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
     ]);
   });
 
@@ -3160,7 +3038,7 @@ describe("install's always-on VM sizes on Azure", () => {
       'API_NOT_READY',
     );
     expect(steps(calls)).toEqual([
-      'cluster create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
     ]);
   });
 
@@ -3194,7 +3072,7 @@ describe("install's always-on VM sizes on Azure", () => {
     );
     await run();
     expect(steps(calls)[0]).toBe(
-      'cluster create backmesh --cloud azure --region northcentralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud azure --region northcentralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
     );
   });
 
@@ -3424,7 +3302,7 @@ describe("install's always-on VM sizes on Azure", () => {
       'InsufficientInstanceCapacity',
     );
     expect(steps(calls)).toEqual([
-      'cluster create backmesh --cloud aws --region us-east-2 --vm-type t3.large --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud aws --region us-east-2 --vm-type t3.large --sign-in-apps 5622376 --json',
     ]);
   });
 });
@@ -3446,7 +3324,7 @@ describe("a control plane named backmesh that this machine doesn't use", () => {
     )) as Error;
     // Before any sign-in, and before anything is created.
     expect(worker.calls).toEqual([]);
-    expect(calls.some((c) => c.startsWith('cluster create'))).toBe(false);
+    expect(calls.some((c) => c.startsWith('api create'))).toBe(false);
     expect(error).toBeInstanceOf(UsageError);
     return error.message;
   };
@@ -3569,7 +3447,7 @@ describe("a control plane named backmesh that this machine doesn't use", () => {
     expect(lines).toContain(`Install resumes the control plane ${ID}.`);
     expect(calls).toContainEqual(
       expect.stringMatching(
-        /^cluster create backmesh --cloud aws --region us-east-2 /,
+        /^api create backmesh --cloud aws --region us-east-2 /,
       ),
     );
     expect(
@@ -3633,11 +3511,11 @@ describe("a control plane named backmesh that this machine doesn't use", () => {
     });
     await install(options, deps);
     expect(calls).toContainEqual(
-      expect.stringMatching(/^cluster create backmesh /),
+      expect.stringMatching(/^api create backmesh /),
     );
   });
 
-  it('names --control-plane-id in a failed cluster create that started one', async () => {
+  it('names --control-plane-id in a failed api create that started one', async () => {
     const { deps } = setUp({ env: OVERRIDE });
     const { runLong } = deps;
     deps.runLong = async (args, env) => {

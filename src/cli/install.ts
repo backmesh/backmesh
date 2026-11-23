@@ -111,7 +111,6 @@ import {
   type RunCommand,
 } from '../runners/regions.js';
 import {
-  CONTROL_POOL,
   clusterIdOf,
   connectionName,
   installConnection,
@@ -280,7 +279,7 @@ export interface InstallUi {
 export interface InstallDeps {
   env: NodeJS.ProcessEnv;
   run: RunAnycloud;
-  // For `cluster create` and `credentials new --generate`, which run for
+  // For `api create` and `credentials new --generate`, which run for
   // minutes.
   runLong: RunAnycloud;
   command: RunCommand;
@@ -401,14 +400,52 @@ export const SIGNED_IN: Record<Cloud, string> = {
 const GCP_ROLES =
   'roles/compute.instanceAdmin.v1 roles/compute.securityAdmin roles/storage.admin';
 
+// The grants `keyLine` names for a key connection's identity: AWS's inline
+// policy and GCP's custom role, which the user makes.
+const AWS_NETWORK_POLICY = 'AnycloudJobsNetwork';
+export const GCP_NETWORK_ROLE = 'anycloudJobsNetwork';
+
+// What anycloud 0.1.81 adds to each cloud's role setup, for its VM Job
+// network (RFC 0053): upgrade across it re-applies those clouds' role
+// connections, and names the rights a key connection's identity needs.
+// Azure's is unchanged.
+export const ROLE_SETUP: {
+  since: string;
+  rights: Partial<Record<Cloud, string[]>>;
+} = {
+  since: '0.1.81',
+  rights: {
+    aws: [
+      ...['ec2:CreateVpc', 'ec2:CreateSubnet', 'ec2:CreateInternetGateway'],
+      ...['ec2:AttachInternetGateway', 'ec2:CreateRoute'],
+      ...['ec2:DescribeAvailabilityZones', 'ec2:DescribeInternetGateways'],
+      ...['ec2:DescribeRouteTables', 'ec2:DescribeSubnets'],
+    ],
+    gcp: ['compute.networks.create', 'compute.networks.get'],
+  },
+};
+
+// A key connection has no setup to re-apply, so the user grants its
+// generated identity the new rights, once, in the account install used.
+// `removeIdentity` deletes the grant with the identity.
+export function keyLine(cloud: Cloud, connection: string) {
+  const rights = ROLE_SETUP.rights[cloud]!;
+  const name = generatedIdentity(connection);
+  const command =
+    cloud === 'aws'
+      ? `aws iam put-user-policy --user-name ${name} --policy-name ${AWS_NETWORK_POLICY} --policy-document '${JSON.stringify({ Version: '2012-10-17', Statement: [{ Effect: 'Allow', Action: rights, Resource: '*' }] })}'`
+      : `PROJECT=$(gcloud config get-value project); gcloud iam roles describe ${GCP_NETWORK_ROLE} --project "$PROJECT" --format none || gcloud iam roles create ${GCP_NETWORK_ROLE} --project "$PROJECT" --permissions ${rights.join(',')} --format none; gcloud projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:${name}@$PROJECT.iam.gserviceaccount.com" --role "projects/$PROJECT/roles/${GCP_NETWORK_ROLE}" --condition None --format none`;
+  return `${cloud}'s key connection ${connection} has no setup to re-apply, and its runners need ${rights.join(', ')}. Unless its identity ${name} has them, grant them, signed in to the ${SIGNED_IN[cloud]} install used:\n  ${command}`;
+}
+
 export function deleteIdentity(cloud: Cloud, connection: string): string {
   const name = generatedIdentity(connection);
   const command = (() => {
     if (cloud === 'aws') {
-      return `for key in $(aws iam list-access-keys --user-name ${name} --query 'AccessKeyMetadata[].AccessKeyId' --output text); do aws iam delete-access-key --user-name ${name} --access-key-id "$key"; done; aws iam delete-user-policy --user-name ${name} --policy-name AnycloudAccess; aws iam delete-user --user-name ${name}`;
+      return `for key in $(aws iam list-access-keys --user-name ${name} --query 'AccessKeyMetadata[].AccessKeyId' --output text); do aws iam delete-access-key --user-name ${name} --access-key-id "$key"; done; for policy in $(aws iam list-user-policies --user-name ${name} --query PolicyNames --output text); do aws iam delete-user-policy --user-name ${name} --policy-name "$policy"; done; aws iam delete-user --user-name ${name}`;
     }
     if (cloud === 'gcp') {
-      return `PROJECT=$(gcloud config get-value project); SA=${name}@$PROJECT.iam.gserviceaccount.com; for role in ${GCP_ROLES}; do gcloud projects remove-iam-policy-binding "$PROJECT" --member "serviceAccount:$SA" --role "$role" --condition None --format none; done; gcloud iam service-accounts delete "$SA" --project "$PROJECT" --quiet`;
+      return `PROJECT=$(gcloud config get-value project); SA=${name}@$PROJECT.iam.gserviceaccount.com; for role in ${GCP_ROLES} projects/$PROJECT/roles/${GCP_NETWORK_ROLE}; do gcloud projects remove-iam-policy-binding "$PROJECT" --member "serviceAccount:$SA" --role "$role" --condition None --format none; done; gcloud iam service-accounts delete "$SA" --project "$PROJECT" --quiet`;
     }
     return `for app in $(az ad app list --display-name ${name} --query '[].appId' --output tsv); do az role assignment delete --assignee "$app" --scope "/subscriptions/$(az account show --query id --output tsv)"; az ad app delete --id "$app"; done`;
   })();
@@ -481,7 +518,7 @@ const roleLeft = (cloud: Cloud, apiUrl: string) =>
       'the anycloud-role deployment and resource group, the custom role, and its role assignment',
   })[cloud];
 
-type Listed = {
+export type Listed = {
   name: string;
   kind?: string;
   roleArn?: string;
@@ -491,7 +528,7 @@ type Listed = {
 
 // A saved role connection's account, as `credentials list --json` shows
 // its identifiers; undefined for a key connection (our CI's override).
-const listedAccount = (cloud: Cloud, entry: Listed) => {
+export const listedAccount = (cloud: Cloud, entry: Listed) => {
   if (entry.kind !== 'role') return undefined;
   if (cloud === 'aws') return entry.roleArn?.split(':')[4];
   if (cloud === 'gcp') {
@@ -504,7 +541,7 @@ const listedAccount = (cloud: Cloud, entry: Listed) => {
 
 // `--apply --json`'s refusals: a signed-out cloud CLI's `actionRequired`
 // names the login command.
-const signInRequired = (error: unknown) => {
+export const signInRequired = (error: unknown) => {
   if (!(error instanceof StepFailed)) return undefined;
   try {
     const { actionRequired } = JSON.parse(
@@ -523,9 +560,52 @@ const signInRequired = (error: unknown) => {
 const INVALID_TARGET = /\binvalid_target\b/;
 const PROPAGATION_WAITS_MS = [10_000, 20_000, 30_000, 60_000];
 
+// `credentials new <name> --role --apply --json` through the user's cloud
+// CLI, in `account`: install's setup, and upgrade's re-apply, which anycloud
+// converges on the same cloud side and saves again as a no-op. Returns the
+// account the CLI applied in.
+export async function applyRole(
+  { cloud, credentials }: Pick<CloudTarget, 'cloud' | 'credentials'>,
+  account: string,
+  env: NodeJS.ProcessEnv,
+  deps: Pick<InstallDeps, 'runLong' | 'wait'> & {
+    print: (line: string) => void;
+  },
+): Promise<string | undefined> {
+  for (let i = 0; ; i++) {
+    try {
+      const out = await deps.runLong(
+        [
+          ...['credentials', 'new', credentials, '--provider', cloud],
+          ...['--role', '--apply', ...accountArgs(cloud, account), '--json'],
+        ],
+        env,
+      );
+      return (
+        JSON.parse(out.trim().split('\n').at(-1) ?? '{}') as {
+          account?: string;
+        }
+      ).account;
+    } catch (error) {
+      if (cloud !== 'gcp' || !INVALID_TARGET.test(String(error))) throw error;
+      const ms = PROPAGATION_WAITS_MS[i];
+      if (ms === undefined) {
+        throw new Error(
+          `GCP still refused the new role's token after ${PROPAGATION_WAITS_MS.reduce((a, b) => a + b) / 60_000} minutes: ${(error as Error).message}`,
+          { cause: error },
+        );
+      }
+      deps.print(
+        `GCP doesn't take the new role's token yet, as a new workload identity provider takes a minute or two to propagate; trying again in ${ms / 1000}s.`,
+      );
+      await (deps.wait ?? ((t) => new Promise((r) => setTimeout(r, t))))(ms);
+    }
+  }
+}
+
 // Step 3, on the hosted API after step 5: each cloud's role connection,
 // whose trust names the hosted API's issuer, so it can't come before
-// `cluster create`. anycloud's `credentials new --role --apply` makes the
+// `api create`. anycloud's `credentials new --role --apply` makes the
 // role's cloud side through the user's own cloud CLI, in the plan's
 // account, and saves it, with no prompt. An existing
 // connection is reused, and a re-run converges on the cloud side. Our CI's
@@ -595,39 +675,10 @@ export async function connectClouds(
     deps.ui.print(
       `Connecting ${cloud} with a role connection in ${SIGNED_IN[cloud]} ${account}, through your ${LOGINS[cloud][0][0]} CLI.`,
     );
-    const apply = async (): Promise<string> => {
-      for (let i = 0; ; i++) {
-        try {
-          return await deps.runLong(
-            [
-              ...args,
-              '--role',
-              '--apply',
-              ...accountArgs(cloud, account),
-              '--json',
-            ],
-            env,
-          );
-        } catch (error) {
-          if (cloud !== 'gcp' || !INVALID_TARGET.test(String(error)))
-            throw error;
-          const ms = PROPAGATION_WAITS_MS[i];
-          if (ms === undefined) {
-            throw new Error(
-              `GCP still refused the new role's token after ${PROPAGATION_WAITS_MS.reduce((a, b) => a + b) / 60_000} minutes: ${(error as Error).message}`,
-              { cause: error },
-            );
-          }
-          deps.ui.print(
-            `GCP doesn't take the new role's token yet, as a new workload identity provider takes a minute or two to propagate; trying again in ${ms / 1000}s.`,
-          );
-          await (deps.wait ?? ((t) => new Promise((r) => setTimeout(r, t))))(
-            ms,
-          );
-        }
-      }
-    };
-    const out = await apply().catch((error: unknown) => {
+    const made = await applyRole(target, account, env, {
+      ...deps,
+      print: deps.ui.print,
+    }).catch((error: unknown) => {
       const login = signInRequired(error);
       const again = 'Run install again; the control plane stays and is reused.';
       throw new Error(
@@ -637,17 +688,14 @@ export async function connectClouds(
         { cause: error },
       );
     });
-    const saved = JSON.parse(out.trim().split('\n').at(-1) ?? '{}') as {
-      account?: string;
-    };
-    if (saved.account !== account) await wrongAccount(saved.account);
+    if (made !== account) await wrongAccount(made);
   }
 }
 
 // Step 5: the hosted API on the `--control-plane`, created through the user's
 // cloud CLI with nothing stored here (anycloud 0.1.74's seed). Re-running
-// `cluster create` with the same name and region resumes it from the cloud's
-// own tags (`docs/reference/cli/cluster.md`). A new cluster Azure refuses
+// `api create` with the same name and region resumes it from the cloud's
+// own tags (`docs/reference/cli/api-utilities.md`). A new cluster Azure refuses
 // for capacity or quota, by the ID its progress names (`[<time>] Creating cluster
 // <name> (ID: <id>)`, never `Resuming`), is deleted: its resource group and
 // checkpoint bucket, not the subscription's shared `anycloud-storage`. It's
@@ -664,7 +712,7 @@ async function bootstrapCluster(
     let out: string;
     try {
       out = await deps.runLong([
-        'cluster',
+        'api',
         'create',
         CLUSTER,
         '--cloud',
@@ -696,14 +744,14 @@ async function bootstrapCluster(
         }
         throw error;
       }
-      // `cluster delete` looks for the cluster's API first, and with this
+      // `api delete` looks for the cluster's API first, and with this
       // machine's local target and no local API it exits there; its own
-      // never answers, so delete goes on without it (`cluster.md`, "Delete
-      // with the hosted API gone").
+      // never answers, so delete goes on without it (`api-utilities.md`,
+      // "Delete with the hosted API gone").
       await deps
         .runLong(
           [
-            'cluster',
+            'api',
             'delete',
             id,
             '--cloud',
@@ -751,13 +799,12 @@ async function bootstrapCluster(
 
 const connectApi = (deps: InstallDeps) => hostedApi(deps, deps.ui.print);
 
-// Backmesh, not the API, keeps `bm-control` to the listeners alone,
-// unprivileged (invariant 3, plan B), until `upgrade` moves them to VMs.
+// One listener VM per org: two contend for its runner group.
 async function checkInstallation(api: AnycloudApi) {
   const control = await readInstallation(api);
   if (control.problems.length) {
     throw new Error(
-      `${CONTROL_POOL} must run only the listeners, unprivileged (invariant 3):\n- ${control.problems.join('\n- ')}`,
+      `Each org must have one listener VM:\n- ${control.problems.join('\n- ')}`,
     );
   }
   return control;
@@ -766,7 +813,7 @@ async function checkInstallation(api: AnycloudApi) {
 // Another org's listener means this run adds an org to the control plane:
 // only with the user's word that every org has the same
 // owner, which the plan carries. A control plane the plan didn't know
-// of (`cluster create` resumed one this machine had no target for) needs a
+// of (`api create` resumed one this machine had no target for) needs a
 // new plan, or the question at a terminal.
 async function checkAddedOrg(
   options: InstallOptions,
@@ -809,7 +856,7 @@ async function checkAddedOrg(
 // The control plane this machine already targets, read with no sign-in:
 // none when the target isn't a hosted API. One that doesn't answer stops
 // the plan, which would otherwise show a new control plane. Step 5 reuses
-// one found here instead of running `cluster create` again.
+// one found here instead of running `api create` again.
 async function existingControlPlane(deps: InstallDeps) {
   const url = await activeApiUrl(deps.run);
   try {
@@ -835,7 +882,7 @@ async function existingControlPlane(deps: InstallDeps) {
       ...control,
       url,
       exec: (deps.exec ?? anycloudExec)(url, token),
-      location: await controlPlaneOf(deps.run, url, control.pool),
+      location: await controlPlaneOf(deps.run, url),
     };
   } catch (cause) {
     throw new Error(
@@ -916,7 +963,7 @@ async function placementOf(
     ...targeted.location,
     credentials: '',
   };
-  // Never a default for a control plane install can't place: `cluster
+  // Never a default for a control plane install can't place: `api
   // create` resumes only in its own region.
   if (targeted && !there && !named) {
     throw new UsageError(
@@ -1043,12 +1090,6 @@ async function currentListener(
   const name = listenerName(org);
   const found = targeted?.orgs.find((l) => l.name === name);
   if (!found) return undefined;
-  // `upgrade` moves a listener from `bm-control` to its VM.
-  if (!found.vm) {
-    throw new UsageError(
-      `${org}'s listener still runs on ${CONTROL_POOL}: run \`backmesh upgrade\` first, which moves it to its own VM, then install again.`,
-    );
-  }
   const running = await readListener(targeted!.exec, found).catch(
     (cause: unknown) => {
       throw new Error(
@@ -1094,8 +1135,6 @@ async function currentListener(
     // sets or clears it.
     rotatingFrom: running.rotatingFrom,
     cacheCapGb: running.cacheCapGb,
-    // Left in standby by a move that didn't finish: a roll ends it.
-    standby: running.standby,
     routes,
     live,
   };
@@ -1121,17 +1160,14 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   const release = await deps.release();
   const targeted = await existingControlPlane(deps);
   // Reusable: found answering, its location known, and recognizably
-  // this installation's own control plane — a listener or `bm-control` is
-  // there, or its cluster record (when the API offers one) is named
-  // `backmesh` — not some
-  // other anycloud cluster this machine happens to target. Anything else
-  // keeps today's path: placement still follows `targeted.location` when
-  // it's known, but `cluster create` and every connection run as before.
+  // this installation's own control plane — a listener is there, or its
+  // cluster record is named `backmesh` — not some other anycloud cluster
+  // this machine happens to target. Anything else keeps today's path:
+  // placement still follows `targeted.location` when it's known, but
+  // `api create` and every connection run as before.
   const reused =
     targeted?.location &&
-    (targeted.orgs.length ||
-      targeted.pool ||
-      targeted.location.name === CLUSTER)
+    (targeted.orgs.length || targeted.location.name === CLUSTER)
       ? targeted
       : undefined;
   const current = await currentListener(options.org, targeted, release);
@@ -1140,7 +1176,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     deps,
     targeted,
     current && targetsOf(current.routes),
-    !!(reused?.orgs.length || reused?.pool),
+    !!reused?.orgs.length,
   );
   const { runners } = placement;
   const { identities, signedIn } = await checkPrerequisites(
@@ -1261,7 +1297,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   // `vm`'s size in `r`: the one the plan read there on Azure.
   const sizeIn = (r: AlwaysOnRegion | undefined, vm: AlwaysOn) =>
     r?.sizes[alwaysOn.indexOf(vm)] ?? vm.sizes[0]!;
-  // The control plane named `backmesh` that `cluster create` would
+  // The control plane named `backmesh` that `api create` would
   // resume: this machine's own, or the one `--control-plane-id` names, and
   // on Azure in its own region.
   const { cloud, region } = placement.controlPlane;
@@ -1556,10 +1592,10 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
 
   // Step 5. `reused` already found this machine's own control plane
   // answering (`existingControlPlane`, before any sign-in): a re-run
-  // reuses it as-is and skips `cluster create`, so once `bm-control` runs,
+  // reuses it as-is and skips `api create`, so once it runs,
   // its cloud is read for nothing here and adding another cloud's runners
   // needs only that cloud's CLI and rights (owner, 2026-11-10). With no saved API, one that
-  // didn't answer, or one install can't recognize as its own, `cluster
+  // didn't answer, or one install can't recognize as its own, `api
   // create` resumes or creates it, as it always has for clusters tagged
   // since anycloud 0.1.74's CloudFormation seed (an older untagged cluster
   // instead starts a new one).
@@ -1593,7 +1629,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     // The listener goes with a new control plane.
     if (!plan.controlPlane.exists) place = { ...place, region: created.region };
     // The management VM's disk at gp3's baseline until anycloud's template
-    // makes it so (control-disks.ts). A resumed `cluster create` lowers it
+    // makes it so (control-disks.ts). A resumed `api create` lowers it
     // too.
     if (controlPlane.cloud === 'aws') {
       await lowerManagementDisk(
@@ -1606,7 +1642,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     }
   }
   await deps.run(['api', 'use', url]);
-  // `cluster create` may have resumed a control plane on another release,
+  // `api create` may have resumed a control plane on another release,
   // or the reused one may have moved since `targeted` read it.
   checkHosted(
     await readApiVersion(url, deps.fetch ?? globalThis.fetch),
@@ -1614,7 +1650,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     'install',
   );
   const { api, exec } = await connectApi(deps);
-  // Invariant 3, before step 6: the cluster may predate this run.
+  // Before step 6: the cluster may predate this run.
   const existing = await checkInstallation(api);
   await checkAddedOrg(options, plan, existing.orgs, deps);
   // Each cloud's connection, now that the control plane is known: the one
@@ -1685,8 +1721,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     // listener's Secret.
     if (
       finalRunners !== current.listener.runners ||
-      plan.cacheCapGb !== current.cacheCapGb ||
-      current.standby
+      plan.cacheCapGb !== current.cacheCapGb
     ) {
       const line = reorderedOnlyLine(
         undefined,

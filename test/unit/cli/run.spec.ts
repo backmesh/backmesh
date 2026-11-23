@@ -19,7 +19,7 @@ vi.mock('../../../src/cli/upgrade.js', async (original) => {
 
 // The control plane's listeners, for `logs`.
 const ACME = { name: 'backmesh-acme', vm: 'bml-l8u5e-abc123' };
-let listeners: { name: string; vm?: string; deployment?: string }[] = [ACME];
+let listeners: { name: string; vm: string }[] = [ACME];
 
 async function run(...argv: string[]) {
   const output = { stdout: '', stderr: '' };
@@ -50,6 +50,7 @@ async function run(...argv: string[]) {
     upgradeDeps: () => ({
       env: {},
       run: never,
+      command: never,
       runLong: never,
       release: never,
       status: never,
@@ -101,24 +102,6 @@ describe('backmesh CLI', () => {
       'exec',
       'bml-l8u5e-abc123',
       'docker logs --tail 1000 --follow backmesh-listener',
-    ]);
-    // One `upgrade` hasn't moved off its Deployment yet.
-    listeners = [{ name: 'backmesh-beta', deployment: 'backmesh-beta' }];
-    expect((await run('logs')).streamLogs).toHaveBeenCalledWith([
-      'logs',
-      'backmesh-beta',
-    ]);
-    // Mid-move, the Deployment still runs.
-    listeners = [
-      {
-        name: 'backmesh-beta',
-        vm: 'bml-q2w3e-abc123',
-        deployment: 'backmesh-beta',
-      },
-    ];
-    expect((await run('logs')).streamLogs).toHaveBeenCalledWith([
-      'logs',
-      'backmesh-beta',
     ]);
     listeners = [ACME, { name: 'backmesh-beta', vm: 'bml-q2w3e-abc123' }];
     const several = await run('logs');
@@ -405,6 +388,17 @@ describe('backmesh CLI', () => {
       'Saving the App key failed.\nCaused by: Input validation failed (HTTP 400)',
     );
     expect(result.stderr).not.toContain('secret');
+  });
+
+  it("puts an API error's status after its first line, not a note below it", async () => {
+    vi.mocked(install).mockRejectedValueOnce(
+      Object.assign(new Error('Conflict.\nA later note.'), { status: 409 }),
+    );
+    const result = await run(
+      ...['install', '--org', 'acme', '--control-plane', 'aws:us-east-2'],
+      '--yes',
+    );
+    expect(result.stderr).toContain('Conflict. (HTTP 409)\nA later note.');
   });
 
   it("refreshes status's stale hosted API token", async () => {

@@ -4,7 +4,12 @@
 // delete it.
 import type { Cloud } from '../runners/classes.js';
 import type { RunCommand } from '../runners/regions.js';
-import { deleteIdentity, generatedIdentity, SIGNED_IN } from './install.js';
+import {
+  deleteIdentity,
+  GCP_NETWORK_ROLE,
+  generatedIdentity,
+  SIGNED_IN,
+} from './install.js';
 
 // What anycloud's `--generate` marks its identity with: AWS's user tag, GCP's
 // service account description, and Azure's app tags
@@ -74,7 +79,10 @@ async function removeGcp(name: string, command: RunCommand): Promise<Found> {
     ...['--project', project, '--format', 'json'],
   ])) as { description?: string };
   if (!description.startsWith(GCP_DESCRIPTION)) return 'unmarked';
-  for (const role of GCP_ROLES) {
+  for (const role of [
+    ...GCP_ROLES,
+    `projects/${project}/roles/${GCP_NETWORK_ROLE}`,
+  ]) {
     await command([
       ...['gcloud', 'projects', 'remove-iam-policy-binding', project],
       ...['--member', `serviceAccount:${account}`, '--role', role],

@@ -49,7 +49,6 @@ import { z } from 'zod';
 
 import {
   clusterIdOf,
-  CONTROL_POOL,
   installTag,
   listenerName,
   readInstallation,
@@ -135,10 +134,10 @@ export async function rotateKey(
       `There's no listener for ${org} on ${url}; run \`backmesh install\`.`,
     );
   }
-  const vm = listener.vm?.lost ? undefined : listener.vm?.id;
-  if (!vm) {
+  const vm = listener.vm.id;
+  if (listener.vm.lost) {
     throw new UsageError(
-      `${org}'s listener ${listener.vm ? 'VM is gone' : `still runs on ${CONTROL_POOL}`}; run \`backmesh upgrade\` first, then rotate-key.`,
+      `${org}'s listener VM is gone; run \`backmesh upgrade\` first, then rotate-key.`,
     );
   }
   const running = await readListener(exec, listener).catch(() => undefined);
