@@ -18,7 +18,7 @@ const SIZES: Record<number, string> = {
 };
 
 // The families whose nested virtualization backmesh's KVM classes rely on
-// (classes.ts's KVM filter): AWS's m7a and m6a don't
+// (classes.ts's KVM filter): AWS's m8a, m7a and m6a don't
 // nest, and Azure's ads_v5 doesn't either. Independent of classes.ts, so
 // this test also catches a drift between the two.
 const KVM_TYPES: Record<Cloud, (vcpus: number) => string[]> = {
@@ -39,10 +39,8 @@ function fits(type: VmTypeDetails | undefined, vcpus: number): boolean {
 /** Whether `details` offers every type of every `backmesh-N` and KVM class. */
 function qualifies(cloud: Cloud, details: readonly VmTypeDetails[]): boolean {
   return CLASS_VCPUS.every((vcpus) => {
-    const general = [true, false].every((spot) =>
-      VM_TYPES[cloud](vcpus, spot).every((t) =>
-        fits(findVmType(details, t), vcpus),
-      ),
+    const general = VM_TYPES[cloud](vcpus).every((t) =>
+      fits(findVmType(details, t), vcpus),
     );
     const kvm = KVM_TYPES[cloud](vcpus).every((t) => {
       const type = findVmType(details, t);
@@ -163,7 +161,7 @@ describe('runner regions', () => {
 
   it('excludes us-west-1 for AWS specifically because it lacks m7a', () => {
     expect(qualifies('aws', PINNED.aws['us-west-1']!)).toBe(false);
-    // On-demand m8a is offered in every AWS runner region.
+    // m8a is offered in every AWS runner region.
     for (const region of RUNNER_REGIONS.aws) {
       expect(PINNED.aws[region]!.some((t) => t.vmType === 'm8a.xlarge')).toBe(
         true,

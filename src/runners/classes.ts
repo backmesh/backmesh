@@ -30,19 +30,16 @@ const AWS_SIZE: Record<number, string> = {
  * (`moveImageStoresToResourceDisk`), goes first: 21.5 s faster to start than
  * `as_v5` with no anycloud change (the OS disk stays Premium_LRS either way;
  * an actual ephemeral OS disk would save about 6 s more but isn't built).
- * AWS's on-demand classes try `m8a` first (owner, 2026-11-23; anycloud#30,
- * `experiments/m8a-vs-m8i`): it ran backmesh's builds in 0.64–0.88× `m8i`'s
- * time and launched 40 of 40 on demand, but its spot capacity is too scarce
- * to lead a spot class.
+ * AWS's classes, spot too, try `m8a` first (owner, 2026-11-23;
+ * anycloud#30, `experiments/m8a-vs-m8i`): it ran backmesh's builds in
+ * 0.64–0.88× `m8i`'s time, and since anycloud fails a spot launch over to the
+ * next target as soon as a zone refuses (anycloud#35), spot `xlarge` landed
+ * on `m8a` 20 of 20 times in about 9.6 s and `4xlarge` 9 of 20 in about
+ * 13.7 s.
  */
-export const VM_TYPES: Record<
-  Cloud,
-  (vcpus: number, spot: boolean) => string[]
-> = {
-  aws: (n, spot) =>
-    [...(spot ? [] : ['m8a']), 'm8i', 'm7a', 'm7i', 'm6a'].map(
-      (f) => `${f}.${AWS_SIZE[n]}`,
-    ),
+export const VM_TYPES: Record<Cloud, (vcpus: number) => string[]> = {
+  aws: (n) =>
+    ['m8a', 'm8i', 'm7a', 'm7i', 'm6a'].map((f) => `${f}.${AWS_SIZE[n]}`),
   gcp: (n) => [`n2-standard-${n}`, `n2d-standard-${n}`],
   azure: (n) => [
     `Standard_D${n}ads_v5`,
@@ -269,17 +266,15 @@ export function planClasses(
     ) =>
       fits(details, vmType, n) &&
       findVmType(details, vmType)?.capabilities?.nestedVirtualization === true;
-    const kvmTypes = (vcpus: number, spot: boolean) =>
-      VM_TYPES[target.cloud](vcpus, spot).filter((vmType) =>
+    const kvmTypes = (vcpus: number) =>
+      VM_TYPES[target.cloud](vcpus).filter((vmType) =>
         byRegion.some(([, details]) => nests(details, vmType, vcpus)),
       );
     const classes = [false, true].flatMap((kvm) =>
       [true, false].flatMap((spot) =>
         CLASS_VCPUS.flatMap((vcpus): RunnerClass[] => {
           const ok = kvm ? nests : fits;
-          const vmTypes = kvm
-            ? kvmTypes(vcpus, spot)
-            : VM_TYPES[target.cloud](vcpus, spot);
+          const vmTypes = kvm ? kvmTypes(vcpus) : VM_TYPES[target.cloud](vcpus);
           const regions = byRegion.flatMap(([region, details]) =>
             vmTypes.some((vmType) => ok(details, vmType, vcpus))
               ? [region]
@@ -310,15 +305,9 @@ export function planClasses(
       ),
     );
     const names = byRegion.map(([region]) => region);
-    // Every type of the size's spot and on-demand classes.
-    const allTypes = (vcpus: number) => [
-      ...new Set(
-        [true, false].flatMap((spot) => VM_TYPES[target.cloud](vcpus, spot)),
-      ),
-    ];
     plan.problems.push(
       ...CLASS_VCPUS.flatMap((vcpus) =>
-        allTypes(vcpus).flatMap((vmType) => {
+        VM_TYPES[target.cloud](vcpus).flatMap((vmType) => {
           const offered = byRegion.find(([, d]) => findVmType(d, vmType));
           return offered
             ? (shapeProblem(offered[1], vmType, vcpus) ?? [])
@@ -327,7 +316,7 @@ export function planClasses(
       ),
       ...byRegion.flatMap(([region, details]) =>
         CLASS_VCPUS.some((vcpus) =>
-          allTypes(vcpus).some((t) => fits(details, t, vcpus)),
+          VM_TYPES[target.cloud](vcpus).some((t) => fits(details, t, vcpus)),
         )
           ? []
           : [`${target.cloud} ${region} offers none of the runners' VM types`],

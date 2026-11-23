@@ -51,18 +51,20 @@ describe('runner classes', () => {
       vcpus: 4,
       spot: true,
       kvm: false,
-      // The new order drops m6i even though the catalog still offers it.
-      vmTypes: ['m8i.xlarge', 'm7a.xlarge', 'm7i.xlarge', 'm6a.xlarge'],
+      // m8a first; the order drops m6i even though the catalog still offers it.
+      vmTypes: [
+        'm8a.xlarge',
+        'm8i.xlarge',
+        'm7a.xlarge',
+        'm7i.xlarge',
+        'm6a.xlarge',
+      ],
       regions: ['us-east-2'],
     });
-    // On demand tries m8a first; spot doesn't, since m8a's spot capacity is scarce.
-    expect(classes.find((c) => c.label === 'backmesh-od-4')?.vmTypes).toEqual([
-      'm8a.xlarge',
-      'm8i.xlarge',
-      'm7a.xlarge',
-      'm7i.xlarge',
-      'm6a.xlarge',
-    ]);
+    // On demand tries the same types.
+    expect(classes.find((c) => c.label === 'backmesh-od-4')?.vmTypes).toEqual(
+      classes[1]!.vmTypes,
+    );
     expect(classes.find((c) => c.label === 'backmesh-kvm-od-16')).toEqual(
       expect.objectContaining({
         spot: false,
@@ -181,7 +183,7 @@ describe('runner classes', () => {
     ]);
   });
 
-  it('keeps an on-demand class in a region without m8a, on the types after it', () => {
+  it('keeps a class in a region without m8a, on the types after it', () => {
     const noM8a = CATALOG.aws.filter((type) => !type.vmType.startsWith('m8a.'));
     const { classes, problems } = planClasses(
       [AWS],
@@ -197,10 +199,12 @@ describe('runner classes', () => {
       'aws',
     );
     expect(problems).toEqual([]);
-    expect(classes.find((c) => c.label === 'backmesh-od-4')?.regions).toEqual([
-      'us-east-2',
-      'us-west-2',
-    ]);
+    for (const label of ['backmesh-4', 'backmesh-od-4']) {
+      expect(classes.find((c) => c.label === label)?.regions).toEqual([
+        'us-east-2',
+        'us-west-2',
+      ]);
+    }
     // With no region offering it, install names it like any other type.
     expect(
       planClasses([AWS], catalogs({ aws: noM8a }), 'aws').problems,

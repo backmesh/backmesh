@@ -14,17 +14,17 @@ it.
 
 A job's VM is the first type in its [label's](/labels/) list that has capacity:
 
-| Label         | vCPU | Memory | Types, in order                                            |
-| ------------- | ---- | ------ | ---------------------------------------------------------- |
-| `backmesh-2`  | 2    | 8 GiB  | `m8i.large`, `m7a.large`, `m7i.large`, `m6a.large`         |
-| `backmesh-4`  | 4    | 16 GiB | `m8i.xlarge`, `m7a.xlarge`, `m7i.xlarge`, `m6a.xlarge`     |
-| `backmesh-8`  | 8    | 32 GiB | `m8i.2xlarge`, `m7a.2xlarge`, `m7i.2xlarge`, `m6a.2xlarge` |
-| `backmesh-16` | 16   | 64 GiB | `m8i.4xlarge`, `m7a.4xlarge`, `m7i.4xlarge`, `m6a.4xlarge` |
+| Label         | vCPU | Memory | Types, in order                                                           |
+| ------------- | ---- | ------ | ------------------------------------------------------------------------- |
+| `backmesh-2`  | 2    | 8 GiB  | `m8a.large`, `m8i.large`, `m7a.large`, `m7i.large`, `m6a.large`           |
+| `backmesh-4`  | 4    | 16 GiB | `m8a.xlarge`, `m8i.xlarge`, `m7a.xlarge`, `m7i.xlarge`, `m6a.xlarge`      |
+| `backmesh-8`  | 8    | 32 GiB | `m8a.2xlarge`, `m8i.2xlarge`, `m7a.2xlarge`, `m7i.2xlarge`, `m6a.2xlarge` |
+| `backmesh-16` | 16   | 64 GiB | `m8a.4xlarge`, `m8i.4xlarge`, `m7a.4xlarge`, `m7i.4xlarge`, `m6a.4xlarge` |
 
-The on-demand labels, such as `backmesh-od-4`, try `m8a` first, then the same
-types: it ran backmesh's builds in 0.64–0.88 times `m8i`'s time, typically
-about 1.3 times as fast, but its spot capacity is too scarce for the spot
-labels. The [KVM labels](/labels/#kvm) use `m8i`, then `m7i` (`m8a`, `m7a` and
+The on-demand labels, such as `backmesh-od-4`, use the same types. `m8a` goes
+first because it ran backmesh's builds in 0.64–0.88 times `m8i`'s time,
+typically about 1.3 times as fast. When a zone has no spot `m8a`, the job moves
+on to the next zone or type within seconds. The [KVM labels](/labels/#kvm) use `m8i`, then `m7i` (`m8a`, `m7a` and
 `m6a` don't nest). The [GPU labels](/labels/#gpu) use `g4dn.xlarge` (one T4, 4 vCPUs and
 16 GiB), then `g4dn.2xlarge` (the same T4, 8 vCPUs and 32 GiB). When AWS is the control plane's cloud, its labels are plain, as above;
 otherwise they name it, such as `backmesh-aws-4`.
@@ -76,15 +76,18 @@ These are catalog prices in `us-east-2`, spot in the lowest zone, for a
 
 | Type         | Spot $/h | On demand $/h |
 | ------------ | -------- | ------------- |
+| `m8a.xlarge` | 0.065    | 0.2434        |
 | `m8i.xlarge` | 0.0583   | 0.2117        |
 | `m7a.xlarge` | 0.07     | 0.2318        |
 | `m7i.xlarge` | 0.0497   | 0.2016        |
 | `m6a.xlarge` | 0.0547   | 0.1728        |
-| `m8a.xlarge` | –        | 0.2434        |
 
-`m8a` runs only on-demand labels, so its spot price doesn't apply. It costs 15 %
-more an hour than `m8i` on demand, but builds finish sooner, so a job costs
-about 9 % less at `backmesh-od-4` and about the same at `backmesh-od-16`.
+`m8a`'s prices are from the catalog on 2026-11-23, when `m8i.xlarge`'s spot
+price was 0.0649. On spot, `m8a.xlarge` then cost about the same an hour as
+`m8i.xlarge`, so a `backmesh-4` job that finishes sooner costs less;
+`m8a.4xlarge` cost about 27 % more than `m8i.4xlarge`, about even a job. On
+demand `m8a` costs 15 % more an hour than `m8i`, so a job costs about 9 % less at
+`backmesh-od-4` and about the same at `backmesh-od-16`.
 
 Other sizes scale with their vCPUs. Each job also pays for its VM's boot and its
 100 GB gp3 disk at 4,000 IOPS and 500 MiB/s, about $0.038 an hour. The

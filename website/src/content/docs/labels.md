@@ -58,11 +58,11 @@ while a named one keeps its cloud.
 Each job's VM is the first type in its label's list that has capacity. The types
 for `backmesh-4` are below; the other sizes use the same families at their size:
 
-| Cloud | Types for `backmesh-4`, in order                           |
-| ----- | ---------------------------------------------------------- |
-| AWS   | `m8i.xlarge`, `m7a.xlarge`, `m7i.xlarge`, `m6a.xlarge`     |
-| GCP   | `n2-standard-4`, `n2d-standard-4`                          |
-| Azure | `Standard_D4ads_v5`, `Standard_D4as_v5`, `Standard_D4s_v5` |
+| Cloud | Types for `backmesh-4`, in order                                     |
+| ----- | -------------------------------------------------------------------- |
+| AWS   | `m8a.xlarge`, `m8i.xlarge`, `m7a.xlarge`, `m7i.xlarge`, `m6a.xlarge` |
+| GCP   | `n2-standard-4`, `n2d-standard-4`                                    |
+| Azure | `Standard_D4ads_v5`, `Standard_D4as_v5`, `Standard_D4s_v5`           |
 
 When no type has capacity, jobs wait at GitHub and [`backmesh status`](/status/)
 shows why runners are short. Each cloud's page lists every size's types:
@@ -72,9 +72,7 @@ shows why runners are short. Each cloud's page lists every size's types:
 
 Each size also has an on-demand label, with the same types on on-demand VMs:
 `backmesh-od-2` to `backmesh-od-16`, or `backmesh-gcp-od-4` and so on on
-another cloud. On AWS they try `m8a` first, such as `m8a.xlarge` for
-`backmesh-od-4`: it builds faster than `m8i` but has too little spot capacity
-to lead the spot labels. On demand costs about 2 to 5 times spot, so use it for long jobs
+another cloud. On demand costs about 2 to 5 times spot, so use it for long jobs
 on the critical path, where a reclaim would cost more than it saves.
 
 backmesh also reruns a run's failed jobs on demand when spot reclaims were its

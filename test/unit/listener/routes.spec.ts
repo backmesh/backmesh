@@ -29,7 +29,13 @@ describe('routes', () => {
       vcpus: 4,
       spot: true,
       kvm: false,
-      vmTypes: ['m8i.xlarge', 'm7a.xlarge', 'm7i.xlarge', 'm6a.xlarge'],
+      vmTypes: [
+        'm8a.xlarge',
+        'm8i.xlarge',
+        'm7a.xlarge',
+        'm7i.xlarge',
+        'm6a.xlarge',
+      ],
       regions: ['us-east-2'],
       onDemand: { label: 'backmesh-od-4' },
     });
