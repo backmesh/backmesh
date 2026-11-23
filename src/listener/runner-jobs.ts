@@ -31,6 +31,14 @@ export const RUNNER_DISK_GB = 100;
 export const AWS_RUNNER_DISK_IOPS = 4_000;
 export const AWS_RUNNER_DISK_THROUGHPUT_MIBPS = 500;
 
+// GCP's runner disk is pd-ssd: anycloud's `high` tier on `n2` and `n2d`
+// (`bootDiskFor`, `src/api/services/gateways/gcp.ts`), its default too, named
+// here so a change to that default doesn't move runners off it. anycloud's
+// image-delivery spike (anycloud#29, n2-standard-4, 100 GB, n=10) started a
+// job 23 s sooner on pd-ssd than on pd-standard, for about $0.02 more a VM
+// hour (owner, 2026-11-23).
+export const GCP_RUNNER_DISK_TIER = 'high';
+
 export interface RunnerJob {
   id: string;
   state: string;
@@ -330,6 +338,7 @@ export function anycloudRunnerJobs(
             diskIops: AWS_RUNNER_DISK_IOPS,
             diskThroughputMibps: AWS_RUNNER_DISK_THROUGHPUT_MIBPS,
           }),
+          ...(cloud === 'gcp' && { diskTier: GCP_RUNNER_DISK_TIER }),
         },
         workloadType: 'job',
         maxRetries: 0,
