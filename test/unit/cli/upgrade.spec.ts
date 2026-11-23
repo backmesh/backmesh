@@ -7,7 +7,7 @@ import type { StatusReport } from '../../../src/cli/status.js';
 import { StepFailed } from '../../../src/anycloud/binary.js';
 import { GitHubError } from '../../../src/app/github.js';
 import { NeedsPlan, PlanChanged, UsageError } from '../../../src/cli/errors.js';
-import { PUBLIC_REPOS_LINE } from '../../../src/cli/install.js';
+import { PUBLIC_REPOS_LINE, ROLE_SETUP } from '../../../src/cli/install.js';
 import { upgrade, type UpgradeDeps } from '../../../src/cli/upgrade.js';
 import { parseRoutes } from '../../../src/listener/routes.js';
 import { planClasses } from '../../../src/runners/classes.js';
@@ -384,6 +384,8 @@ function setUp({
     wait: async () => {},
     // `version`'s default is the release before RELEASE.anycloud.
     previous: '0.1.70',
+    // As if RELEASE.anycloud changed the role setup, as 0.1.81 does.
+    roleSetup: { ...ROLE_SETUP, since: RELEASE.anycloud },
     features: {
       'release-1': '0.1.0',
       c26: '0.1.0',
@@ -1712,6 +1714,23 @@ describe('upgrade', () => {
       ]);
       await upgrade(deps);
       expect(calls.some((c) => /^(credentials new|az )/.test(c))).toBe(false);
+    });
+
+    it('re-applies nothing and checks no CLI past the release that changed the setup', async () => {
+      const { deps, calls, lines, requests } = withRoles({
+        version: RELEASE.anycloud,
+        image: RELEASE.listenerImage,
+        runnerImage: RELEASE.runnerImage,
+      });
+      deps.roleSetup = { ...ROLE_SETUP, since: '0.1.71' };
+      await upgrade(deps);
+      expect(calls.some((c) => /^(credentials new|aws|gcloud)/.test(c))).toBe(
+        false,
+      );
+      expect(requests.some((r) => /^GET \/v1\/credentials( |$)/.test(r))).toBe(
+        false,
+      );
+      expect(lines.some((l) => l.includes('role connection'))).toBe(false);
     });
 
     it('re-applies a connection two orgs share once', async () => {
