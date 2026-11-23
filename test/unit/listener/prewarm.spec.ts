@@ -1271,6 +1271,7 @@ describe('Planner.cue', () => {
       added: 2,
       kept: 0,
       dropped: 2,
+      capped: 0,
     });
     expect(planner.speculative(L, at + s(229))).toBe(0);
     expect(planner.speculative(L, at + s(429))).toBe(1);
@@ -1293,6 +1294,7 @@ describe('Planner.cue', () => {
       added: 0,
       kept: 2,
       dropped: 0,
+      capped: 0,
     });
     // Moved past them, but still with over half of CUE_IDLE_MS (180 s) to
     // spare before +251 s: they stand for it, unmoved.
@@ -1496,6 +1498,55 @@ describe('Planner.cue', () => {
       dropped: 1,
     });
     expect(planner.speculative(L, at + s(10))).toBe(1);
+  });
+
+  // A first wave of `n` matrix jobs on L, all queued at once.
+  const matrix = (n: number): Spec[] =>
+    Array.from({ length: n }, (_, i) => ({
+      name: `shard (${i})`,
+      q: 0,
+      start: 31,
+      end: 131,
+    }));
+
+  it('starts a matrix first wave in full, up to 64 untaken cue runners per org', () => {
+    const { planner, logs } = make();
+    const t = learnRuns(planner, [matrix(40)]);
+    const at = cueAt(t);
+    expect(planner.cue('acme/app', 'main', 0, at)).toEqual({
+      added: 40,
+      kept: 0,
+      dropped: 0,
+      capped: 0,
+    });
+    // Another repo's 40-wide wave gets the 24 the org has left.
+    const web = 'acme/web/.github/workflows/ci.yml@refs/heads/main';
+    const shifted = matrix(40).map((j) => ({
+      ...j,
+      q: t,
+      start: t + 31,
+      end: t + 131,
+    }));
+    feed(planner, events(900, shifted, web));
+    const later = at + s(100);
+    expect(planner.cue('acme/web', 'main', 0, later)).toMatchObject({
+      added: 24,
+      capped: 16,
+    });
+    expect(planner.speculative(L, later)).toBe(64);
+    expect(logs).toContainEqual(
+      expect.objectContaining({ msg: 'cue capped', repo: 'acme/web' }),
+    );
+  });
+
+  it("frees a cue's runners from the cap once its run takes them", () => {
+    const { planner } = make();
+    const t = learnRuns(planner, [matrix(70)]);
+    let at = cueAt(t);
+    expect(planner.cue('acme/app', 'main', 0, at).added).toBe(64);
+    // The push's run takes them, so the next push's cue has the cap again.
+    at = cueAt(learnRuns(planner, [matrix(70)], 901, t + 20));
+    expect(planner.cue('acme/app', 'main', 0, at).added).toBe(64);
   });
 });
 
