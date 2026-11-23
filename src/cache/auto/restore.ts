@@ -2,12 +2,18 @@
 // by runner-job as the runner user with the runner, it waits for the token
 // file's `ready`, reads the job's record and restores every directory the
 // record names at once, each into a staging directory renamed onto its
-// target. The job-started hook waits for the tools, which setup-* steps look
-// for at once; the dependency caches go on in the background, up to `limit`
-// after the job starts.
+// target, in the background as the job's steps run, up to `limit` after the
+// job starts.
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { appendFile, mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import {
+  appendFile,
+  mkdir,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
@@ -63,8 +69,6 @@ interface Restoring {
   restored: Restored;
   // Writes restored.json, whole, for a saver that may run before the end.
   persist: () => Promise<void>;
-  // The hook stopped waiting: the job's steps may be running.
-  gaveUp: () => boolean;
   // Past `limit` after the job started.
   expired: () => boolean;
   // `+<s> s` since the job started.
@@ -84,8 +88,15 @@ async function restoreOne(
 ): Promise<string> {
   const started = Date.now();
   const store = c.storeOf(signal);
-  if (existsSync(t.dir))
-    return `gave way ${t.what}: a step made ${t.dir} first, at ${c.at()}`;
+  // setup-* finds a tool by its directory and `.complete` marker, and
+  // installs one through tool-cache, which removes both, makes the directory,
+  // copies its files in, then writes the marker. A tool gives way to either,
+  // even an empty directory, as a rename would replace one.
+  const marker = `${t.dir}.complete`;
+  const taken = () => existsSync(t.dir) || (!t.pm && existsSync(marker));
+  const gaveWay = () =>
+    `gave way ${t.what}: a step made ${t.dir} first, at ${c.at()}`;
+  if (taken()) return gaveWay();
   const match = await findEntry(
     store,
     c.prefixes,
@@ -115,6 +126,8 @@ async function restoreOne(
     if (failed) throw failed.reason;
     // `bounded` has said why.
     if (!commit()) return '';
+    if (!t.pm && taken()) return gaveWay();
+    const ours = (await stat(staging)).ino;
     if (t.pm) {
       c.restored.deps[t.pm] = {
         ref: match.ref,
@@ -138,17 +151,27 @@ async function restoreOne(
       }
       const code = (error as NodeJS.ErrnoException).code;
       if (code !== 'ENOTEMPTY' && code !== 'EEXIST') throw error;
-      return `gave way ${t.what}: a step made ${t.dir} first, at ${c.at()}`;
+      return gaveWay();
     }
-    // setup-* takes a tool without it as missing.
-    if (!t.pm) await writeFile(`${t.dir}.complete`, '');
+    // Marked complete last, and only while the directory is still the
+    // restore's: a setup-* step that found the tool missing may have
+    // replaced it with its own since, and marks that one itself.
+    if (!t.pm) {
+      if ((await stat(t.dir).catch(() => undefined))?.ino !== ours)
+        return gaveWay();
+      try {
+        await writeFile(marker, '', { flag: 'wx' });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        return gaveWay();
+      }
+    }
   } finally {
     await rm(staging, { recursive: true, force: true });
   }
   const older = match.key === t.key ? '' : ', an older lockfile';
   const size = `${(manifest.bytes / 1e6).toFixed(0)} MB`;
-  const at = t.pm ? `, at ${c.at()}` : '';
-  return `restored ${t.what} (${match.ref}${older})  ${size} in ${secs(started)}${at}`;
+  return `restored ${t.what} (${match.ref}${older})  ${size} in ${secs(started)}, at ${c.at()}`;
 }
 
 // restoreOne until `over()`: then one not yet renamed is let go, its requests
@@ -187,7 +210,6 @@ async function restoreAll(
   c: Restoring,
   env: NodeJS.ProcessEnv,
   say: (text: string) => Promise<void>,
-  toolsDone: () => Promise<void>,
 ) {
   const key = recordKey(file.job!);
   const store = c.storeOf(c.stop);
@@ -210,7 +232,11 @@ async function restoreAll(
     return say(
       'skipped: the job opts out, or its workflow file is not in its repository',
     );
-  const deps: Promise<void>[] = [];
+  const targets: Target[] = record.tools.map((tool) => ({
+    what: `${tool.tool} ${tool.version}`,
+    key: toolKey(env.ImageOS ?? 'linux', tool),
+    dir: toolDir(env.RUNNER_TOOL_CACHE!, tool),
+  }));
   for (const d of record.deps) {
     if (record.aside.includes(d.pm)) continue;
     if (d.reset) {
@@ -219,37 +245,26 @@ async function restoreAll(
       );
       continue;
     }
-    const t: Target = {
+    targets.push({
       what: d.pm,
       key: d.key,
       dir: join(env.HOME!, PM_DIRS[d.pm]),
       pm: d.pm,
-    };
-    const why = () => `gave up ${t.what}: still restoring at ${c.at()}`;
-    deps.push(bounded(c, t, c.expired, why).then(say));
+    });
   }
   for (const pm of record.aside)
     await say(`skipped ${pm}: the job caches ${PM_DIRS[pm]} itself`);
   await Promise.all(
-    record.tools.map(async (tool) => {
-      const t: Target = {
-        what: `${tool.tool} ${tool.version}`,
-        key: toolKey(env.ImageOS ?? 'linux', tool),
-        dir: toolDir(env.RUNNER_TOOL_CACHE!, tool),
-      };
-      // setup-* may be installing it.
-      const why = () => `skipped ${t.what}: the job started without it`;
-      await say(c.gaveUp() ? why() : await bounded(c, t, c.gaveUp, why));
+    targets.map(async (t) => {
+      const why = () => `gave up ${t.what}: still restoring at ${c.at()}`;
+      await say(await bounded(c, t, c.expired, why));
     }),
   );
-  await toolsDone();
-  await Promise.all(deps);
 }
 
-// Writes `lines` for the hooks to print, `ready` with when the token came
-// (epoch ms) for the job-started hook's timing line, `tools-done` once the
-// tools are, which is all that hook waits for, `restored.json` for the
-// saver, then `done`, into `state`. Never throws.
+// Writes `lines` for the job-completed hook to print, `ready` with when the
+// token came (epoch ms) for its line, `restored.json` for the saver, then
+// `done`, into `state`. Never throws.
 export async function restore(
   tokenPath: string,
   state: string,
@@ -265,7 +280,6 @@ export async function restore(
     console.log(line);
     await appendFile(join(state, 'lines'), `${line}\n`).catch(() => undefined);
   };
-  const toolsDone = () => writeFile(join(state, 'tools-done'), '');
   const restored: Restored = { deps: {} };
   let saving = Promise.resolve();
   const persist = () =>
@@ -289,10 +303,9 @@ export async function restore(
   };
   const expired = () => Date.now() >= (startedAt() ?? Infinity) + limit;
   const at = () => `+${secs(startedAt() ?? began)}`;
-  const gaveUp = () => existsSync(join(state, 'gave-up'));
   try {
     const file = await ready(tokenPath, () => expired() || stop.aborted);
-    if (file && file.state !== 'pending')
+    if (file?.state === 'ready')
       await writeFile(join(state, 'ready'), String(Date.now()));
     if (file?.state === 'pending') {
       // A runner stopped before it got a job has nothing to say.
@@ -311,18 +324,16 @@ export async function restore(
         prefixes: file.prefixes,
         restored,
         persist,
-        gaveUp,
         expired,
         at,
         stop,
       };
-      await restoreAll(file, c, env, say, toolsDone);
+      await restoreAll(file, c, env, say);
     }
   } catch (error) {
     await say(`failed: ${String(error).slice(0, 200)}`);
   } finally {
     await persist();
-    await toolsDone();
     await writeFile(join(state, 'done'), '');
   }
 }

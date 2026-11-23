@@ -18,7 +18,7 @@ export interface Job {
   // backmesh's start-up marks (runner/runner-job.sh), in epoch µs, from the
   // Marks step; none on GitHub's runners.
   marks: Record<string, number>;
-  // Set up runner's `backmesh cache: auto` lines.
+  // The job log's `backmesh cache: auto` lines.
   cache: string[];
   nproc: number | null;
   // On backmesh's AWS runners: `aws <region>` and the VM type.

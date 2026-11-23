@@ -1,7 +1,14 @@
 // src/cache/auto/restore.ts
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { appendFile, mkdir as mkdir2, rename, rm, writeFile as writeFile3 } from "node:fs/promises";
+import {
+  appendFile,
+  mkdir as mkdir2,
+  rename,
+  rm,
+  stat,
+  writeFile as writeFile3
+} from "node:fs/promises";
 import { join as join3 } from "node:path";
 import { setTimeout as sleep2 } from "node:timers/promises";
 
@@ -4941,9 +4948,9 @@ async function ready(path, over) {
   }
 }
 async function restoreOne(c, t, commit, signal) {
-  let started = Date.now(), store = c.storeOf(signal);
-  if (existsSync(t.dir))
-    return `gave way ${t.what}: a step made ${t.dir} first, at ${c.at()}`;
+  let started = Date.now(), store = c.storeOf(signal), marker = `${t.dir}.complete`, taken = () => existsSync(t.dir) || !t.pm && existsSync(marker), gaveWay = () => `gave way ${t.what}: a step made ${t.dir} first, at ${c.at()}`;
+  if (taken())
+    return gaveWay();
   let match = await findEntry(store, c.prefixes, entryVersion([t.dir]), t.key, t.pm ? [lineOf(t.key)] : []);
   if (!match || !t.pm && match.key !== t.key)
     return `missed ${t.what}`;
@@ -4955,6 +4962,9 @@ async function restoreOne(c, t, commit, signal) {
       throw failed.reason;
     if (!commit())
       return "";
+    if (!t.pm && taken())
+      return gaveWay();
+    let ours = (await stat(staging)).ino;
     if (t.pm)
       c.restored.deps[t.pm] = {
         ref: match.ref,
@@ -4970,15 +4980,26 @@ async function restoreOne(c, t, commit, signal) {
       let code = error.code;
       if (code !== "ENOTEMPTY" && code !== "EEXIST")
         throw error;
-      return `gave way ${t.what}: a step made ${t.dir} first, at ${c.at()}`;
+      return gaveWay();
     }
-    if (!t.pm)
-      await writeFile3(`${t.dir}.complete`, "");
+    if (!t.pm) {
+      if ((await stat(t.dir).catch(() => {
+        return;
+      }))?.ino !== ours)
+        return gaveWay();
+      try {
+        await writeFile3(marker, "", { flag: "wx" });
+      } catch (error) {
+        if (error.code !== "EEXIST")
+          throw error;
+        return gaveWay();
+      }
+    }
   } finally {
     await rm(staging, { recursive: !0, force: !0 });
   }
-  let older = match.key === t.key ? "" : ", an older lockfile", size = `${(manifest.bytes / 1e6).toFixed(0)} MB`, at = t.pm ? `, at ${c.at()}` : "";
-  return `restored ${t.what} (${match.ref}${older})  ${size} in ${secs(started)}${at}`;
+  let older = match.key === t.key ? "" : ", an older lockfile", size = `${(manifest.bytes / 1e6).toFixed(0)} MB`;
+  return `restored ${t.what} (${match.ref}${older})  ${size} in ${secs(started)}, at ${c.at()}`;
 }
 async function bounded(c, t, over, why) {
   let end = new AbortController, committed = !1, settled = !1;
@@ -4995,7 +5016,7 @@ async function bounded(c, t, over, why) {
     return `failed ${t.what}: ${String(error).slice(0, 200)}`;
   }).finally(() => settled = !0) || why();
 }
-async function restoreAll(file, c, env, say, toolsDone) {
+async function restoreAll(file, c, env, say) {
   let key = recordKey(file.job), store = c.storeOf(c.stop), found = await findEntry(store, c.prefixes, RECORD_VERSION, key, []);
   if (!found || found.key !== key)
     return say("found no record of this job yet: its save writes one");
@@ -5011,7 +5032,11 @@ async function restoreAll(file, c, env, say, toolsDone) {
     return say("skipped: a container: job runs in its own image");
   if (record.off)
     return say("skipped: the job opts out, or its workflow file is not in its repository");
-  let deps = [];
+  let targets = record.tools.map((tool) => ({
+    what: `${tool.tool} ${tool.version}`,
+    key: toolKey(env.ImageOS ?? "linux", tool),
+    dir: toolDir(env.RUNNER_TOOL_CACHE, tool)
+  }));
   for (let d of record.deps) {
     if (record.aside.includes(d.pm))
       continue;
@@ -5019,24 +5044,19 @@ async function restoreAll(file, c, env, say, toolsDone) {
       await say(`skipped ${d.pm}: its cache outgrew its lockfile, so it starts again`);
       continue;
     }
-    let t = {
+    targets.push({
       what: d.pm,
       key: d.key,
       dir: join3(env.HOME, PM_DIRS[d.pm]),
       pm: d.pm
-    }, why = () => `gave up ${t.what}: still restoring at ${c.at()}`;
-    deps.push(bounded(c, t, c.expired, why).then(say));
+    });
   }
   for (let pm of record.aside)
     await say(`skipped ${pm}: the job caches ${PM_DIRS[pm]} itself`);
-  await Promise.all(record.tools.map(async (tool) => {
-    let t = {
-      what: `${tool.tool} ${tool.version}`,
-      key: toolKey(env.ImageOS ?? "linux", tool),
-      dir: toolDir(env.RUNNER_TOOL_CACHE, tool)
-    }, why = () => `skipped ${t.what}: the job started without it`;
-    await say(c.gaveUp() ? why() : await bounded(c, t, c.gaveUp, why));
-  })), await toolsDone(), await Promise.all(deps);
+  await Promise.all(targets.map(async (t) => {
+    let why = () => `gave up ${t.what}: still restoring at ${c.at()}`;
+    await say(await bounded(c, t, c.expired, why));
+  }));
 }
 async function restore(tokenPath, state, env = process.env, storeOf = (tokens, signal) => openStore(tokens, globalThis.fetch, signal), limit = LIMIT, stop = new AbortController().signal) {
   let began = Date.now(), say = async (text) => {
@@ -5045,7 +5065,7 @@ async function restore(tokenPath, state, env = process.env, storeOf = (tokens, s
 `).catch(() => {
       return;
     });
-  }, toolsDone = () => writeFile3(join3(state, "tools-done"), ""), restored = { deps: {} }, saving = Promise.resolve(), persist = () => saving = saving.catch(() => {
+  }, restored = { deps: {} }, saving = Promise.resolve(), persist = () => saving = saving.catch(() => {
     return;
   }).then(async () => {
     let path = join3(state, "restored.json");
@@ -5055,10 +5075,10 @@ async function restore(tokenPath, state, env = process.env, storeOf = (tokens, s
       started ||= Number(readFileSync(join3(state, "started"), "utf8"));
     } catch {}
     return started || void 0;
-  }, expired = () => Date.now() >= (startedAt() ?? 1 / 0) + limit, at = () => `+${secs(startedAt() ?? began)}`, gaveUp = () => existsSync(join3(state, "gave-up"));
+  }, expired = () => Date.now() >= (startedAt() ?? 1 / 0) + limit, at = () => `+${secs(startedAt() ?? began)}`;
   try {
     let file = await ready(tokenPath, () => expired() || stop.aborted);
-    if (file && file.state !== "pending")
+    if (file?.state === "ready")
       await writeFile3(join3(state, "ready"), String(Date.now()));
     if (file?.state === "pending") {
       if (startedAt())
@@ -5071,17 +5091,16 @@ async function restore(tokenPath, state, env = process.env, storeOf = (tokens, s
         prefixes: file.prefixes,
         restored,
         persist,
-        gaveUp,
         expired,
         at,
         stop
       };
-      await restoreAll(file, c, env, say, toolsDone);
+      await restoreAll(file, c, env, say);
     }
   } catch (error) {
     await say(`failed: ${String(error).slice(0, 200)}`);
   } finally {
-    await persist(), await toolsDone(), await writeFile3(join3(state, "done"), "");
+    await persist(), await writeFile3(join3(state, "done"), "");
   }
 }
 
