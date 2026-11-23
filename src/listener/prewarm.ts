@@ -32,14 +32,16 @@ import { nearestRank } from './timings.js';
 // same rank of every label's, else 8 s.
 // T3 starts a slot a boot before its job: the cue benchmark found
 // the median too fast for a cue's own slot, as half a label's boots run
-// longer, so a cue's uses CUE_PERCENTILE instead of the median;
+// longer, and p75 still left one of a push's 8 runners late in most
+// pushes, so a cue's uses CUE_PERCENTILE and starts CUE_SLACK_MS sooner;
 // T2's children start the moment their parent does, with no boot
 // subtraction. Either way the slot ends IDLE_MS, or a cue's CUE_IDLE_MS,
 // after its runner should be ready.
 const BOOT_MS = 71_000;
 const REGISTER_MS = 8_000;
 const BOOTS_KEPT = 20;
-const CUE_PERCENTILE = 0.75;
+const CUE_PERCENTILE = 0.95;
+const CUE_SLACK_MS = 5_000;
 // An unused slot ends this long after its runner should be ready.
 const IDLE_MS = 60_000;
 // A cue's slot waits longer: its runner is the only one for its push, so
@@ -361,10 +363,11 @@ export class Planner {
   // A cue: a push to the repo's branch is coming in about
   // `leadMs`. Starts the first waves (the trigger and the jobs queued with
   // it) of the repo's push and pull_request workflows (`cueKeys`), each
-  // runner ready then (at CUE_PERCENTILE of the label's recent boots, never
-  // earlier than now: the lead itself caps how early a slot starts, since
-  // `ready - boot` can't go below `now` when `boot` runs past `leadMs`) and
-  // ending CUE_IDLE_MS after it should be ready.
+  // runner ready CUE_SLACK_MS before then (at CUE_PERCENTILE of the
+  // label's recent boots, never earlier than now: the lead itself caps how
+  // early a slot starts, since `ready - boot - CUE_SLACK_MS` can't go below
+  // `now` when `boot` runs past `leadMs`) and ending CUE_IDLE_MS after it
+  // should be ready.
   //
   // A later cue for the same repo and branch reschedules the earlier one's:
   // its runners not started yet are dropped and planned again, and those
@@ -439,7 +442,7 @@ export class Planner {
         visited.add(key);
         for (const [label, n] of firstWave(state.waves)) {
           const boot = this.boot(label, CUE_PERCENTILE);
-          const activeAt = Math.max(now, ready - boot);
+          const activeAt = Math.max(now, ready - boot - CUE_SLACK_MS);
           for (let i = 0; i < n; i++) {
             const old = earlier.find(
               (slot) =>
