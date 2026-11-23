@@ -3,7 +3,7 @@
 // and reads each push's job times from the row the target's report.mjs
 // writes. Run by cue-benchmark.yml:
 //
-//   TARGET_REPO=<owner>/<repo> LABEL=backmesh-16 ROUNDS=5 \
+//   TARGET_REPO=<owner>/<repo> LABEL=backmesh-16 ROUNDS=5 WIDTH=8 \
 //   LEAD_S=75 BACKMESH_CLI=dist/cli/index.js BACKMESH_CUE_TOKEN=… \
 //   GIT_SSH_COMMAND='ssh -i <deploy key>' OUTPUT_DIR=… node benchmarks/cue/run.ts
 import { execFile } from 'node:child_process';
@@ -30,6 +30,8 @@ const repo = env('TARGET_REPO');
 const label = env('LABEL');
 const rounds = Number(env('ROUNDS'));
 const leadS = Number(env('LEAD_S'));
+// The first wave's jobs: a matrix of this many on the label.
+const width = Number(env('WIDTH'));
 const cli = resolve(env('BACKMESH_CLI'));
 const out = env('OUTPUT_DIR');
 const BRANCH = 'bench';
@@ -63,7 +65,7 @@ if (!(await git('ls-remote', 'origin', 'refs/heads/results'))) {
 const remoteBench = await git('ls-remote', 'origin', `refs/heads/${BRANCH}`);
 await (remoteBench ? git('switch', BRANCH) : git('switch', '--orphan', BRANCH));
 
-// The target's files, with the label, as the warm-up's commit: the planner
+// The target's files, with the label and width, as the warm-up's commit: the planner
 // learns the workflow's first wave from that push. The
 // workflow is named for its label, as the planner keys history by workflow
 // file, so a new label's cues don't start runners on the old one.
@@ -75,22 +77,29 @@ for (const file of ['package.json', 'yarn.lock', 'report.mjs']) {
 const workflow = await readFile(join(target, 'bench.yml'), 'utf8');
 await writeFile(
   join(work, `.github/workflows/bench-${label}.yml`),
-  workflow.replace('__LABEL__', label),
+  workflow
+    .replace('__LABEL__', label)
+    .replace(
+      '__SHARDS__',
+      JSON.stringify(Array.from({ length: width }, (_, i) => i + 1)),
+    ),
 );
 await git('add', '-A');
 
+interface Job {
+  name: string;
+  createdAt: string;
+  startedAt: string;
+  runner: string | null;
+  steps: {
+    name: string;
+    startedAt: string | null;
+    conclusion: string | null;
+  }[];
+}
 interface Row {
   sha: string;
-  job: {
-    createdAt: string;
-    startedAt: string;
-    runner: string | null;
-    steps: {
-      name: string;
-      startedAt: string | null;
-      conclusion: string | null;
-    }[];
-  };
+  jobs: Job[];
 }
 
 // Commits, pushes and waits for the push's row.
@@ -129,16 +138,15 @@ async function cue() {
 const seconds = (from: string | number, to: string | null | undefined) =>
   to ? Math.round((Date.parse(to) - new Date(from).getTime()) / 1000) : null;
 
-// One round's figures, in seconds: push to the job queued, queued to a
-// runner taking it, the job's setup (its steps before the marker) and push
-// to the marker's start. A failed install or marker fails the round: GitHub
-// gives a skipped step a start too.
-function figures(pushedAt: number, row: Row) {
-  const { job } = row;
+// One job's figures, in seconds: push to the job queued, queued to a
+// runner taking it, queued to the marker's start, the job's setup (its
+// steps before the marker) and push to the marker's start. A failed install
+// or marker fails the round: GitHub gives a skipped step a start too.
+function jobFigures(pushedAt: number, job: Job) {
   const step = (name: string) => job.steps.find((s) => s.name === name);
   for (const name of ['Install', 'Marker']) {
     if (step(name)?.conclusion !== 'success') {
-      throw new Error(`${row.sha}: ${name} didn't succeed`);
+      throw new Error(`${job.name}: ${name} didn't succeed`);
     }
   }
   const marker = step('Marker')!.startedAt;
@@ -147,8 +155,30 @@ function figures(pushedAt: number, row: Row) {
     pushToMarker: seconds(pushedAt, marker),
     pushToQueued: seconds(pushedAt, job.createdAt),
     queuedToAssigned: seconds(job.createdAt, job.startedAt),
+    queuedToMarker: seconds(job.createdAt, marker),
     setup: seconds(job.startedAt, marker),
     install: seconds(install!, marker),
+  };
+}
+type Figures = ReturnType<typeof jobFigures>;
+
+// A push's figures: each the median over its jobs, and how many of them a
+// runner took within SERVED_S of their queueing.
+function figures(pushedAt: number, row: Row) {
+  if (row.jobs.length !== width) {
+    throw new Error(`${row.sha}: ${row.jobs.length} jobs, not ${width}`);
+  }
+  const jobs = row.jobs.map((job) => jobFigures(pushedAt, job));
+  const of = (key: keyof Figures) =>
+    median(jobs.map((j) => j[key]).filter((x) => x !== null));
+  return {
+    served: jobs.filter((j) => (j.queuedToAssigned ?? 1e9) <= SERVED_S).length,
+    queuedToMarker: of('queuedToMarker'),
+    pushToMarker: of('pushToMarker'),
+    queuedToAssigned: of('queuedToAssigned'),
+    pushToQueued: of('pushToQueued'),
+    setup: of('setup'),
+    install: of('install'),
   };
 }
 
@@ -157,7 +187,7 @@ const results: {
   cued: boolean;
   cue?: { outcome: string; message: string };
   sha: string;
-  runner: string | null;
+  runners: (string | null)[];
   figures: ReturnType<typeof figures>;
 }[] = [];
 
@@ -168,6 +198,7 @@ const median = (v: number[]) => {
   return s.length % 2 ? s[mid]! : (s[mid - 1]! + s[mid]!) / 2;
 };
 const NAMES = {
+  queuedToMarker: 'Queued to first real step',
   pushToMarker: 'Push to first real step',
   queuedToAssigned: 'Queued to assigned',
   pushToQueued: 'Push to queued',
@@ -175,12 +206,18 @@ const NAMES = {
   install: 'of which yarn install',
 } as const;
 type Result = (typeof results)[number];
-const served = (r: Result) => (r.figures.queuedToAssigned ?? 1e9) <= SERVED_S;
+// Over the pushes `which` picks: their jobs' share served, and the median
+// and range of each push's median.
+const share = (which: (r: Result) => boolean) => {
+  const of = results.filter(which);
+  const served = of.reduce((n, r) => n + r.figures.served, 0);
+  const jobs = of.length * width;
+  return jobs
+    ? `${served} of ${jobs} (${Math.round((100 * served) / jobs)}%)`
+    : 'n/a';
+};
 const cell = (which: (r: Result) => boolean, key: keyof typeof NAMES) => {
-  const v = results
-    .filter(which)
-    .map((r) => r.figures[key])
-    .filter((x) => x !== null);
+  const v = results.filter(which).map((r) => r.figures[key]);
   if (!v.length) return 'n/a';
   return `${median(v)} s (${Math.min(...v)}–${Math.max(...v)})`;
 };
@@ -203,7 +240,7 @@ async function benchmark() {
       cued,
       ...(sent && { cue: sent }),
       sha: row.sha,
-      runner: row.job.runner,
+      runners: row.jobs.map((job) => job.runner),
       figures: figures(pushedAt, row),
     };
     console.log(JSON.stringify(result));
@@ -217,25 +254,28 @@ async function benchmark() {
 }
 
 async function summarize() {
-  const count = (cued: boolean) => {
-    const of = results.filter((r) => r.cued === cued);
-    return `${of.filter(served).length} of ${of.length}`;
-  };
   const columns: [string, (r: Result) => boolean][] = [
     ['Cued', (r) => r.cued],
-    ['Cued, served', (r) => r.cued && served(r)],
     ['Not cued', (r) => !r.cued],
   ];
   const table = [
-    `### Cue benchmark: ${label}, ${rounds} × 2 pushes, cue ${leadS} s ahead`,
+    `### Cue benchmark: ${label}, ${width} jobs a push, ${rounds} × 2 pushes, cue ${leadS} s ahead`,
     '',
-    `Median (min–max), in seconds. Served (a runner took the job within ${SERVED_S} s of its queueing): cued ${count(true)}, not cued ${count(false)}.`,
+    `Per push, its jobs' median; then the median (min–max) over pushes, in seconds. Served: a runner took the job within ${SERVED_S} s of its queueing.`,
     '',
     `| Figure | ${columns.map(([name]) => name).join(' | ')} |`,
     `| --- |${columns.map(() => ' --- |').join('')}`,
+    `| Jobs served | ${columns.map(([, which]) => share(which)).join(' | ')} |`,
     ...Object.entries(NAMES).map(
       ([key, name]) =>
         `| ${name} | ${columns.map(([, which]) => cell(which, key as keyof typeof NAMES)).join(' | ')} |`,
+    ),
+    '',
+    '| Round | Cued | Served | Queued to first real step |',
+    '| --- | --- | --- | --- |',
+    ...results.map(
+      (r) =>
+        `| ${r.round} | ${r.cued ? 'yes' : 'no'} | ${r.figures.served} of ${width} | ${r.figures.queuedToMarker} s |`,
     ),
     '',
   ].join('\n');

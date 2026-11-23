@@ -1,6 +1,7 @@
 # The cue benchmark's target (benchmarks/cue/README.md): run.ts copies this to
 # the target repo as .github/workflows/bench-<label>.yml, with
-# the label for runs-on, and pushes to its bench branch.
+# the label for runs-on and the width's shards, and pushes to its bench
+# branch. The bench jobs are the run's first wave; report needs them all.
 name: Bench
 
 on:
@@ -13,9 +14,10 @@ jobs:
   bench:
     runs-on: __LABEL__
     timeout-minutes: 20
-    permissions:
-      contents: write # report.mjs writes its row to the results branch
-      actions: read # and reads this job's step times
+    strategy:
+      matrix:
+        shard: __SHARDS__
+    permissions: {}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -33,8 +35,21 @@ jobs:
       - name: Marker
         run: echo marker
 
+  # On a hosted runner, so the label serves only the first wave.
+  report:
+    needs: bench
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # report.mjs writes its row to the results branch
+      actions: read # and reads the bench jobs' step times
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Report
-        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: node report.mjs

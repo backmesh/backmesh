@@ -46,6 +46,12 @@ const IDLE_MS = 60_000;
 // losing it to a short idle timeout costs a full cold start, where a
 // history prediction's loss is one of several for the same job.
 const CUE_IDLE_MS = 180_000;
+// Cue runners no run has taken yet, across the org's repos and branches
+// (one listener, one planner, per org): what a push that never comes costs
+// is at most this many VMs for a boot plus CUE_IDLE_MS. anycloud's widest
+// first wave, its integration matrix and the workflows beside it, is about
+// 50 jobs.
+export const CUE_RUNNERS = 64;
 // A key is (workflow, event); predictions use its last 20 runs, T3 timing
 // needs 5 of them, and T2 (start a job's children when it starts) runs with
 // fewer.
@@ -375,7 +381,7 @@ export class Planner {
     now: number,
     pr: 'y' | 'n' | '?' = '?',
   ) {
-    const none = { added: 0, kept: 0, dropped: 0 };
+    const none = { added: 0, kept: 0, dropped: 0, capped: 0 };
     return this.safe(() => {
       this.settle(now);
       const ready = now + leadMs;
@@ -421,7 +427,15 @@ export class Planner {
       // scored regardless: a real runner went unused, replacement or not.
       const addedPerPair = new Map<string, number>();
       const pairKey = (key: string, label: string) => `${key}\0${label}`;
-      for (const [key, state] of this.cueKeys(repo, branch, pr, probeSkipped)) {
+      const keys = [...this.cueKeys(repo, branch, pr, probeSkipped)];
+      // Other pushes' untaken cue runners, and this push's that stay
+      // untouched: with those this cue keeps or adds, at most CUE_RUNNERS.
+      const held = this.slots.filter(
+        (slot) =>
+          slot.key !== undefined &&
+          (!unmatched.has(slot) || probeSkipped.has(slot.key)),
+      ).length;
+      for (const [key, state] of keys) {
         visited.add(key);
         for (const [label, n] of firstWave(state.waves)) {
           const boot = this.boot(label, CUE_PERCENTILE);
@@ -439,6 +453,10 @@ export class Planner {
               old.run = run;
               unmatched.delete(old);
               result.kept++;
+              continue;
+            }
+            if (held + result.kept + result.added >= CUE_RUNNERS) {
+              result.capped++;
               continue;
             }
             const expiresAt = this.cueExpiresAt(activeAt, boot);
@@ -481,6 +499,9 @@ export class Planner {
         }
         this.slots = this.slots.filter((slot) => !stale.includes(slot));
         result.dropped += stale.length;
+      }
+      if (result.capped) {
+        this.note({ msg: 'cue capped', repo, branch, capped: result.capped });
       }
       this.lastVisited = visited;
       this.lastProbeSkipped = probeSkipped;
