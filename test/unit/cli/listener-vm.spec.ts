@@ -103,6 +103,26 @@ describe('anycloudExec', () => {
     );
   });
 
+  it('names the control plane when the connection drops', async () => {
+    // Bun's fetch error, which says nothing of where it went.
+    const reset = new Error(
+      'ECONNRESET: The socket connection was closed unexpectedly.',
+    );
+    const exec = (response: () => Promise<Response>) =>
+      anycloudExec('https://c1.anycloud.sh', 't', response as typeof fetch);
+    await expect(
+      exec(() => Promise.reject(reset))('v', 'true'),
+    ).rejects.toThrow(
+      "anycloud exec v couldn't reach https://c1.anycloud.sh: ECONNRESET: The socket connection was closed unexpectedly.",
+    );
+    const cut = new Response(
+      new ReadableStream({ pull: (controller) => controller.error(reset) }),
+    );
+    await expect(exec(async () => cut)('v', 'true')).rejects.toThrow(
+      "anycloud exec v couldn't reach https://c1.anycloud.sh: ECONNRESET",
+    );
+  });
+
   it('fails on an error event or a stream with no exit', async () => {
     const answer = (response: () => Response) =>
       anycloudExec('https://c1.anycloud.sh', 't', (async () =>

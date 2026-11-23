@@ -256,21 +256,24 @@ async function drainListener(
     }
     return drainStatusSchema.parse(body);
   };
-  parse(await execListener(exec, listener, '/drain', { method: 'POST' }));
   let failed = 0;
+  const read = (method: 'GET' | 'POST') => () =>
+    execListener(exec, listener, '/drain', { method }).then(
+      (reply) => ((failed = 0), parse(reply)),
+      (cause: unknown) => {
+        if (++failed < FAILED_READS) return undefined;
+        throw new Error(
+          `The listener's drain didn't answer ${FAILED_READS} times in a row. Nothing in your clouds was deleted; check \`backmesh status\` and run uninstall again.`,
+          { cause },
+        );
+      },
+    );
+  // A POST to a draining listener changes nothing, so a failed one is sent
+  // again.
+  await poll(deps, read('POST'), (value) => !!value, "the listener's drain");
   const status = (await poll(
     deps,
-    () =>
-      execListener(exec, listener, '/drain').then(
-        (reply) => ((failed = 0), parse(reply)),
-        (cause: unknown) => {
-          if (++failed < FAILED_READS) return undefined;
-          throw new Error(
-            `The listener's drain didn't answer ${FAILED_READS} times in a row. Nothing in your clouds was deleted; check \`backmesh status\` and run uninstall again.`,
-            { cause },
-          );
-        },
-      ),
+    read('GET'),
     (value) => value !== undefined && value.state !== 'running',
     "the listener's drain",
   ))!;

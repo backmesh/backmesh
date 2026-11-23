@@ -100,6 +100,17 @@ describe('the anycloud API', () => {
     );
     expect((error as Error).cause).toBe(failed);
   });
+
+  it('names the control plane when the connection drops', async () => {
+    const api = anycloudApi('https://c1.anycloud.sh', 't0ken', async () => {
+      throw new Error(
+        'ECONNRESET: The socket connection was closed unexpectedly.',
+      );
+    });
+    await expect(api.listSecrets()).rejects.toThrow(
+      "Couldn't reach the control plane at https://c1.anycloud.sh: ECONNRESET: The socket connection was closed unexpectedly.",
+    );
+  });
 });
 
 describe('the hosted API token', () => {
