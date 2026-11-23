@@ -20,12 +20,19 @@ export const GITHUB_4_CORE_PER_MIN = 0.012;
  * it (src/cli/install.ts MANAGEMENT_MONTHLY_USD and src/cli/listener-vm.ts
  * LISTENER_VM_MONTHLY_USD). */
 export const CATALOG_DATE = '2026-11-13';
+/** AWS's `backmesh-4` spot prices by VM family, $/hour, as above. */
+export const AWS_SPOT_XLARGE: Record<string, number> = {
+  m8i: 0.0583,
+  m7a: 0.07,
+  m7i: 0.0497,
+  m6a: 0.0547,
+};
 const clouds = [
   {
     cloud: 'AWS',
     region: 'us-east-2',
-    // m8i, m7a, m7i, m6a (no m6i).
-    spot: [0.0583, 0.07, 0.0497, 0.0547],
+    // No m6i.
+    spot: Object.values(AWS_SPOT_XLARGE),
     bootS: [30, 30],
     controlPlane: 86,
   },
@@ -67,6 +74,9 @@ export const per1000 = clouds.map(
 );
 
 export const github1000 = GITHUB_4_CORE_PER_MIN * 1000;
+
+/** The runner's disk on AWS, $ an hour, as above. */
+export const AWS_DISK_PER_HOUR = 0.0384;
 
 /** The headline: a month of 4-vCPU jobs on GitHub and on backmesh, as a
  * lower bound: each cloud's fixed control plane plus the jobs' spot VMs over

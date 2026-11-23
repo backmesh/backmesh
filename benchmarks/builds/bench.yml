@@ -15,12 +15,13 @@ jobs:
   docker:
     runs-on: __LABEL__
     steps:
-      # backmesh's start-up marks, and on AWS the VM's region and type.
+      # backmesh's start-up marks, the CPU, and on AWS the VM's region and type.
       - &marks
         name: Marks
         working-directory: .
         run: |
           cat "${BACKMESH_JOB_MARKS:-/dev/null}"; echo "nproc $(nproc)"
+          echo "cpu $(lscpu | sed -n 's/^Model name: *//p')"
           imds=http://169.254.169.254/latest
           [[ -n ${BACKMESH_JOB_MARKS:-} ]] || exit 0
           t=$(curl -sfm 2 -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' $imds/api/token) || exit 0

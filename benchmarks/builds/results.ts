@@ -21,6 +21,12 @@ export interface Job {
   // The job log's `backmesh cache: auto` lines.
   cache: string[];
   nproc: number | null;
+  // lscpu's model name; none in results before 2026-11-23's cores run.
+  cpu?: string | null;
+  // bench-cache.yml's jobs: each cache's `cache-hit` output, and the Docker
+  // build's CACHED steps.
+  hits?: Record<string, string>;
+  dockerCached?: number;
   // On backmesh's AWS runners: `aws <region>` and the VM type.
   region: string | null;
   vm: string | null;
