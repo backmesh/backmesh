@@ -11,6 +11,10 @@ Keep this file small and durable.
   for code quality, pull requests, size estimates and justification tables, and
   code review.
 - Run `yarn verify` (lint, format check, typecheck, tests) before pushing.
+- A change that claims a speedup gets its own A/B before it merges: run
+  `benchmarks/` (builds, cue) on a build of the change and on main, and put the
+  numbers in the PR body. No measured gain, no speed claim: reconsider the
+  change.
 - backmesh uses only anycloud's public API and CLI. Nothing CI-specific goes into
   anycloud; a gap there is an anycloud issue, not a backmesh workaround inside it.
 - Never run local cloud CLIs (`aws`, `gcloud`, `az`) or a local anycloud API

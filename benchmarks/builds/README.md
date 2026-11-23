@@ -55,7 +55,8 @@ deleted. [`report.ts`](report.ts) writes the results below from every file in
 
 **Re-run it before a release that touches the runners' start-up, the cache or
 scheduling**, on the release's installation, and commit the results file and
-the README.
+the README. A release that claims a speedup runs it on its rc and on the last
+release before the final tag, and claims only the gain it measures.
 
 ## Figures
 
