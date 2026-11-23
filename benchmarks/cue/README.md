@@ -111,18 +111,32 @@ Bonferroni-corrected over the 3 pairs of arms.
 
 For queued to first real step they're 1 (0.96 raw), 0.052 and 0.00003.
 
-With a cue, a build's queued to done is no faster than on `ubuntu-latest`:
-the medians are 15.25 and 16 s, and the test finds no difference. Without
-one, it's about 36 s slower, and that difference holds. Cued against not
-cued just misses 0.05 after the correction, as the cued arm's slow pushes
-overlap the uncued ones. The cued arm
-is bimodal. In the 6 pushes a cue's runners served 7 or 8 of the 8 jobs, it
-was done in 10.5 to 16.5 s, against the hosted pushes' 15 to 20 s, mostly
-as its install is quicker. In the other 4
-(0, 0, 2 and 3 of 8 served) it took 31.5 to 130 s, as long as an uncued
-push or longer. The first cued push after the warm-up was one of them. The
-hosted runner differs in size: `ubuntu-latest` on a public repo has 4 vCPUs,
-`backmesh-16` 16.
+The job is short (about 2 s after its first real step), so queued to done
+is mostly the time to start. With a cue, a job is done no sooner than on
+`ubuntu-latest`: the medians are 15.25 and 16 s, and the test finds no
+difference. Without a cue it takes about 36 s longer, and that difference
+holds. Cued against not cued just misses 0.05 after the correction.
+
+In the 6 cued pushes where a cue's runners took 7 or 8 of the 8 jobs, the
+jobs were done in 10.5 to 16.5 s, against the hosted pushes' 15 to 20 s,
+mostly through a quicker install (a median of 2.75 s against 7 s). The other
+cued pushes missed for two reasons:
+
+- **Slow launches, in both arms.** In cued pushes 0 and 9, jobs waited 21
+  to 167 s and 72 to 227 s for a runner. Uncued pushes 10 and 19 waited up
+  to 263 and 244 s, while an uncued job usually waits 35 to 46 s. That fits
+  the cloud refusing spot capacity while the launch retries, but the run
+  kept no listener or launch logs, so it isn't confirmed.
+- **Partial misses.** In cued pushes 15, 18 and 24, a cue's runners took 7,
+  3 and 2 jobs within 2 to 5 s, and the rest waited 8 to 52 s, well under a
+  cold start. The cue aims each runner to be ready at the push (lead after
+  the cue) and starts it at that minus the label's p75 boot time, so about
+  1 in 4 runners comes up after its job queues, and with 8 runners one late
+  is likely.
+
+Even so, cued pushes 18 and 24 (31.5 and 36.5 s) beat every uncued push
+(47.5 s at least). The runners also differ in size: `ubuntu-latest` on a
+public repo has 4 vCPUs, `backmesh-16` 16.
 
 ### 2026-11-23, backmesh 0.5.7, 3 rounds
 
