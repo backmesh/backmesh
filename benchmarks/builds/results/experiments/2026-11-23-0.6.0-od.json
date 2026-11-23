@@ -1,0 +1,4590 @@
+{
+  "date": "2026-11-23",
+  "backmesh": "0.6.0",
+  "anycloud": "0.1.82",
+  "installation": "backmesh org CI, AWS",
+  "repo": "backmesh/benchmarks",
+  "commit": "4d847e7d54706ba9bce3bb78ea8edf8868b3cba2",
+  "labels": {
+    "backmesh-od-4": [
+      {
+        "round": 1,
+        "branch": "builds/backmesh-od-4/1795472741782",
+        "cold": {
+          "runId": 45279597170,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45279597170",
+          "jobs": {
+            "go": {
+              "id": 138060231649,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45279597170/job/138060231649",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-a53tgx2o",
+              "createdAt": "2026-11-23T22:25:51Z",
+              "startedAt": "2026-11-23T22:26:26Z",
+              "completedAt": "2026-11-23T22:27:14Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:26:27Z",
+                  "completedAt": "2026-11-23T22:26:28Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:26:28Z",
+                  "completedAt": "2026-11-23T22:26:28Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:26:28Z",
+                  "completedAt": "2026-11-23T22:26:28Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:26:28Z",
+                  "completedAt": "2026-11-23T22:26:28Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:26:28Z",
+                  "completedAt": "2026-11-23T22:26:29Z"
+                },
+                {
+                  "name": "Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:26:29Z",
+                  "completedAt": "2026-11-23T22:26:33Z"
+                },
+                {
+                  "name": "Run go build ./...",
+                  "startedAt": "2026-11-23T22:26:33Z",
+                  "completedAt": "2026-11-23T22:27:07Z"
+                },
+                {
+                  "name": "Run go test ./pkg/cmd/pr/...",
+                  "startedAt": "2026-11-23T22:27:07Z",
+                  "completedAt": "2026-11-23T22:27:12Z"
+                },
+                {
+                  "name": "Post Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:27:12Z",
+                  "completedAt": "2026-11-23T22:27:12Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:27:12Z",
+                  "completedAt": "2026-11-23T22:27:12Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:27:12Z",
+                  "completedAt": "2026-11-23T22:27:13Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:27:13Z",
+                  "completedAt": "2026-11-23T22:27:13Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:27:13Z",
+                  "completedAt": "2026-11-23T22:27:13Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795472754547000,
+                "vm_booted": 1795472764000000,
+                "container_started": 1795472783140000,
+                "job_started": 1795472783894543,
+                "runner_listening": 1795472785940699,
+                "job_received": 1795472788121951,
+                "hook_done": 1795472788124171
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +17.3 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "docker": {
+              "id": 138060231862,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45279597170/job/138060231862",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-8rju31ms",
+              "createdAt": "2026-11-23T22:25:51Z",
+              "startedAt": "2026-11-23T22:26:25Z",
+              "completedAt": "2026-11-23T22:27:37Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:26:26Z",
+                  "completedAt": "2026-11-23T22:26:26Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:26:26Z",
+                  "completedAt": "2026-11-23T22:26:26Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:26:26Z",
+                  "completedAt": "2026-11-23T22:26:26Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:26:26Z",
+                  "completedAt": "2026-11-23T22:26:27Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:26:27Z",
+                  "completedAt": "2026-11-23T22:26:28Z"
+                },
+                {
+                  "name": "Run docker build -t bench .",
+                  "startedAt": "2026-11-23T22:26:28Z",
+                  "completedAt": "2026-11-23T22:27:35Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:27:35Z",
+                  "completedAt": "2026-11-23T22:27:35Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:27:35Z",
+                  "completedAt": "2026-11-23T22:27:35Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:27:35Z",
+                  "completedAt": "2026-11-23T22:27:36Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:27:36Z",
+                  "completedAt": "2026-11-23T22:27:36Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795472754869000,
+                "vm_booted": 1795472764000000,
+                "container_started": 1795472781660000,
+                "job_started": 1795472782546855,
+                "runner_listening": 1795472784653252,
+                "job_received": 1795472786713071,
+                "hook_done": 1795472786715319
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +18.7 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "typescript": {
+              "id": 138060231971,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45279597170/job/138060231971",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-zk56nc8v",
+              "createdAt": "2026-11-23T22:25:51Z",
+              "startedAt": "2026-11-23T22:26:27Z",
+              "completedAt": "2026-11-23T22:27:02Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:26:28Z",
+                  "completedAt": "2026-11-23T22:26:28Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:26:28Z",
+                  "completedAt": "2026-11-23T22:26:28Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:26:28Z",
+                  "completedAt": "2026-11-23T22:26:28Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:26:28Z",
+                  "completedAt": "2026-11-23T22:26:29Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:26:29Z",
+                  "completedAt": "2026-11-23T22:26:38Z"
+                },
+                {
+                  "name": "Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:26:38Z",
+                  "completedAt": "2026-11-23T22:26:41Z"
+                },
+                {
+                  "name": "Run npm ci --no-audit --no-fund",
+                  "startedAt": "2026-11-23T22:26:41Z",
+                  "completedAt": "2026-11-23T22:26:44Z"
+                },
+                {
+                  "name": "Run npx hereby local",
+                  "startedAt": "2026-11-23T22:26:44Z",
+                  "completedAt": "2026-11-23T22:26:59Z"
+                },
+                {
+                  "name": "Post Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:26:59Z",
+                  "completedAt": "2026-11-23T22:26:59Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:26:59Z",
+                  "completedAt": "2026-11-23T22:27:00Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:27:00Z",
+                  "completedAt": "2026-11-23T22:27:00Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:27:00Z",
+                  "completedAt": "2026-11-23T22:27:00Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:27:00Z",
+                  "completedAt": "2026-11-23T22:27:00Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795472753986000,
+                "vm_booted": 1795472765000000,
+                "container_started": 1795472784290000,
+                "job_started": 1795472784420171,
+                "runner_listening": 1795472786575336,
+                "job_received": 1795472788808964,
+                "hook_done": 1795472788811060
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +16.7 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "rust": {
+              "id": 138060232019,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45279597170/job/138060232019",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-w1s04rev",
+              "createdAt": "2026-11-23T22:25:51Z",
+              "startedAt": "2026-11-23T22:26:27Z",
+              "completedAt": "2026-11-23T22:27:13Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:26:28Z",
+                  "completedAt": "2026-11-23T22:26:28Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:26:28Z",
+                  "completedAt": "2026-11-23T22:26:28Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:26:28Z",
+                  "completedAt": "2026-11-23T22:26:28Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:26:28Z",
+                  "completedAt": "2026-11-23T22:26:29Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:26:29Z",
+                  "completedAt": "2026-11-23T22:26:29Z"
+                },
+                {
+                  "name": "Run cargo build --release --locked",
+                  "startedAt": "2026-11-23T22:26:29Z",
+                  "completedAt": "2026-11-23T22:27:12Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:27:12Z",
+                  "completedAt": "2026-11-23T22:27:12Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:27:12Z",
+                  "completedAt": "2026-11-23T22:27:12Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:27:12Z",
+                  "completedAt": "2026-11-23T22:27:12Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:27:12Z",
+                  "completedAt": "2026-11-23T22:27:12Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795472753952000,
+                "vm_booted": 1795472765000000,
+                "container_started": 1795472784360000,
+                "job_started": 1795472784468531,
+                "runner_listening": 1795472786587805,
+                "job_received": 1795472788755655,
+                "hook_done": 1795472788757773
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +16.8 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "python": {
+              "id": 138060232030,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45279597170/job/138060232030",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-vrzqahib",
+              "createdAt": "2026-11-23T22:25:51Z",
+              "startedAt": "2026-11-23T22:26:27Z",
+              "completedAt": "2026-11-23T22:26:44Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:26:27Z",
+                  "completedAt": "2026-11-23T22:26:28Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:26:28Z",
+                  "completedAt": "2026-11-23T22:26:28Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:26:28Z",
+                  "completedAt": "2026-11-23T22:26:28Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:26:28Z",
+                  "completedAt": "2026-11-23T22:26:29Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:26:29Z",
+                  "completedAt": "2026-11-23T22:26:29Z"
+                },
+                {
+                  "name": "Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:26:29Z",
+                  "completedAt": "2026-11-23T22:26:34Z"
+                },
+                {
+                  "name": "Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:26:34Z",
+                  "completedAt": "2026-11-23T22:26:35Z"
+                },
+                {
+                  "name": "Run uv sync --frozen",
+                  "startedAt": "2026-11-23T22:26:35Z",
+                  "completedAt": "2026-11-23T22:26:35Z"
+                },
+                {
+                  "name": "Run uv run --frozen pytest -q -p no:cacheprovider tests/test_main.py tests/test_types.py tests/test_json_schema.py",
+                  "startedAt": "2026-11-23T22:26:35Z",
+                  "completedAt": "2026-11-23T22:26:42Z"
+                },
+                {
+                  "name": "Post Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:26:42Z",
+                  "completedAt": "2026-11-23T22:26:42Z"
+                },
+                {
+                  "name": "Post Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:26:42Z",
+                  "completedAt": "2026-11-23T22:26:42Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:26:42Z",
+                  "completedAt": "2026-11-23T22:26:42Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:26:42Z",
+                  "completedAt": "2026-11-23T22:26:42Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:26:42Z",
+                  "completedAt": "2026-11-23T22:26:42Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:26:42Z",
+                  "completedAt": "2026-11-23T22:26:42Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795472754097000,
+                "vm_booted": 1795472764000000,
+                "container_started": 1795472783830000,
+                "job_started": 1795472784015565,
+                "runner_listening": 1795472786232380,
+                "job_received": 1795472788862474,
+                "hook_done": 1795472788864720
+              },
+              "cache": [],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        },
+        "warm": {
+          "runId": 45280122349,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45280122349",
+          "jobs": {
+            "typescript": {
+              "id": 138062081845,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45280122349/job/138062081845",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-gwnpzg00",
+              "createdAt": "2026-11-23T22:29:12Z",
+              "startedAt": "2026-11-23T22:29:58Z",
+              "completedAt": "2026-11-23T22:30:26Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:29:59Z",
+                  "completedAt": "2026-11-23T22:29:59Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:29:59Z",
+                  "completedAt": "2026-11-23T22:29:59Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:29:59Z",
+                  "completedAt": "2026-11-23T22:29:59Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:29:59Z",
+                  "completedAt": "2026-11-23T22:30:00Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:30:00Z",
+                  "completedAt": "2026-11-23T22:30:04Z"
+                },
+                {
+                  "name": "Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:30:04Z",
+                  "completedAt": "2026-11-23T22:30:07Z"
+                },
+                {
+                  "name": "Run npm ci --no-audit --no-fund",
+                  "startedAt": "2026-11-23T22:30:07Z",
+                  "completedAt": "2026-11-23T22:30:09Z"
+                },
+                {
+                  "name": "Run npx hereby local",
+                  "startedAt": "2026-11-23T22:30:09Z",
+                  "completedAt": "2026-11-23T22:30:24Z"
+                },
+                {
+                  "name": "Post Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:30:24Z",
+                  "completedAt": "2026-11-23T22:30:24Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:30:24Z",
+                  "completedAt": "2026-11-23T22:30:24Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:30:24Z",
+                  "completedAt": "2026-11-23T22:30:24Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:30:24Z",
+                  "completedAt": "2026-11-23T22:30:24Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:30:24Z",
+                  "completedAt": "2026-11-23T22:30:24Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795472953660000,
+                "vm_booted": 1795472962000000,
+                "container_started": 1795472980010000,
+                "job_started": 1795472980184415,
+                "runner_listening": 1795472982426955,
+                "job_received": 1795472999947011,
+                "hook_done": 1795472999949247
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +4.2 s",
+                "backmesh cache: auto restored npm (own)  41 MB in 0.6 s, at +5.0 s",
+                "backmesh cache: auto restored node 22.23.5 (own)  196 MB in 0.9 s, at +5.3 s"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "rust": {
+              "id": 138062082180,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45280122349/job/138062082180",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-ph6fnasm",
+              "createdAt": "2026-11-23T22:29:12Z",
+              "startedAt": "2026-11-23T22:29:53Z",
+              "completedAt": "2026-11-23T22:30:39Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:29:54Z",
+                  "completedAt": "2026-11-23T22:29:54Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:29:54Z",
+                  "completedAt": "2026-11-23T22:29:54Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:29:54Z",
+                  "completedAt": "2026-11-23T22:29:54Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:29:54Z",
+                  "completedAt": "2026-11-23T22:29:55Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:29:55Z",
+                  "completedAt": "2026-11-23T22:29:55Z"
+                },
+                {
+                  "name": "Run cargo build --release --locked",
+                  "startedAt": "2026-11-23T22:29:55Z",
+                  "completedAt": "2026-11-23T22:30:37Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:30:37Z",
+                  "completedAt": "2026-11-23T22:30:37Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:30:37Z",
+                  "completedAt": "2026-11-23T22:30:38Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:30:38Z",
+                  "completedAt": "2026-11-23T22:30:38Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:30:38Z",
+                  "completedAt": "2026-11-23T22:30:38Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795472954331000,
+                "vm_booted": 1795472962000000,
+                "container_started": 1795472981300000,
+                "job_started": 1795472981518954,
+                "runner_listening": 1795472983674212,
+                "job_received": 1795472994856146,
+                "hook_done": 1795472994858550
+              },
+              "cache": ["backmesh cache: auto the cache token came at +9.3 s"],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "python": {
+              "id": 138062082264,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45280122349/job/138062082264",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-8xdezzhr",
+              "createdAt": "2026-11-23T22:29:12Z",
+              "startedAt": "2026-11-23T22:29:45Z",
+              "completedAt": "2026-11-23T22:30:02Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:29:45Z",
+                  "completedAt": "2026-11-23T22:29:46Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:29:46Z",
+                  "completedAt": "2026-11-23T22:29:46Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:29:46Z",
+                  "completedAt": "2026-11-23T22:29:46Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:29:46Z",
+                  "completedAt": "2026-11-23T22:29:46Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:29:46Z",
+                  "completedAt": "2026-11-23T22:29:47Z"
+                },
+                {
+                  "name": "Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:29:47Z",
+                  "completedAt": "2026-11-23T22:29:52Z"
+                },
+                {
+                  "name": "Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:29:52Z",
+                  "completedAt": "2026-11-23T22:29:53Z"
+                },
+                {
+                  "name": "Run uv sync --frozen",
+                  "startedAt": "2026-11-23T22:29:53Z",
+                  "completedAt": "2026-11-23T22:29:53Z"
+                },
+                {
+                  "name": "Run uv run --frozen pytest -q -p no:cacheprovider tests/test_main.py tests/test_types.py tests/test_json_schema.py",
+                  "startedAt": "2026-11-23T22:29:53Z",
+                  "completedAt": "2026-11-23T22:29:59Z"
+                },
+                {
+                  "name": "Post Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:29:59Z",
+                  "completedAt": "2026-11-23T22:30:00Z"
+                },
+                {
+                  "name": "Post Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:30:00Z",
+                  "completedAt": "2026-11-23T22:30:00Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:30:00Z",
+                  "completedAt": "2026-11-23T22:30:00Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:30:00Z",
+                  "completedAt": "2026-11-23T22:30:00Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:30:00Z",
+                  "completedAt": "2026-11-23T22:30:00Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:30:00Z",
+                  "completedAt": "2026-11-23T22:30:00Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795472953606000,
+                "vm_booted": 1795472963000000,
+                "container_started": 1795472981580000,
+                "job_started": 1795472982010704,
+                "runner_listening": 1795472984010949,
+                "job_received": 1795472986444145,
+                "hook_done": 1795472986446176
+              },
+              "cache": [],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "go": {
+              "id": 138062082375,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45280122349/job/138062082375",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-ldfq9pfq",
+              "createdAt": "2026-11-23T22:29:12Z",
+              "startedAt": "2026-11-23T22:29:53Z",
+              "completedAt": "2026-11-23T22:30:43Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:29:54Z",
+                  "completedAt": "2026-11-23T22:29:55Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:29:55Z",
+                  "completedAt": "2026-11-23T22:29:55Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:29:55Z",
+                  "completedAt": "2026-11-23T22:29:55Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:29:55Z",
+                  "completedAt": "2026-11-23T22:29:55Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:29:55Z",
+                  "completedAt": "2026-11-23T22:29:56Z"
+                },
+                {
+                  "name": "Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:29:56Z",
+                  "completedAt": "2026-11-23T22:30:00Z"
+                },
+                {
+                  "name": "Run go build ./...",
+                  "startedAt": "2026-11-23T22:30:00Z",
+                  "completedAt": "2026-11-23T22:30:36Z"
+                },
+                {
+                  "name": "Run go test ./pkg/cmd/pr/...",
+                  "startedAt": "2026-11-23T22:30:36Z",
+                  "completedAt": "2026-11-23T22:30:41Z"
+                },
+                {
+                  "name": "Post Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:30:41Z",
+                  "completedAt": "2026-11-23T22:30:41Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:30:41Z",
+                  "completedAt": "2026-11-23T22:30:41Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:30:41Z",
+                  "completedAt": "2026-11-23T22:30:41Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:30:41Z",
+                  "completedAt": "2026-11-23T22:30:41Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:30:41Z",
+                  "completedAt": "2026-11-23T22:30:41Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795472953608000,
+                "vm_booted": 1795472963000000,
+                "container_started": 1795472990790000,
+                "job_started": 1795472991009279,
+                "runner_listening": 1795472992992504,
+                "job_received": 1795472995064057,
+                "hook_done": 1795472995066027
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +9.2 s",
+                "backmesh cache: auto gave way go 1.22.6: a step made /workspace/hostedtoolcache/go/1.22.6/x64 first, at +9.3 s"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "docker": {
+              "id": 138062082377,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45280122349/job/138062082377",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-zltet35c",
+              "createdAt": "2026-11-23T22:29:12Z",
+              "startedAt": "2026-11-23T22:29:46Z",
+              "completedAt": "2026-11-23T22:30:56Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:29:46Z",
+                  "completedAt": "2026-11-23T22:29:47Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:29:47Z",
+                  "completedAt": "2026-11-23T22:29:47Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:29:47Z",
+                  "completedAt": "2026-11-23T22:29:47Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:29:47Z",
+                  "completedAt": "2026-11-23T22:29:47Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:29:47Z",
+                  "completedAt": "2026-11-23T22:29:49Z"
+                },
+                {
+                  "name": "Run docker build -t bench .",
+                  "startedAt": "2026-11-23T22:29:49Z",
+                  "completedAt": "2026-11-23T22:30:55Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:30:55Z",
+                  "completedAt": "2026-11-23T22:30:55Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:30:55Z",
+                  "completedAt": "2026-11-23T22:30:55Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:30:55Z",
+                  "completedAt": "2026-11-23T22:30:55Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:30:55Z",
+                  "completedAt": "2026-11-23T22:30:55Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795472953615000,
+                "vm_booted": 1795472963000000,
+                "container_started": 1795472982690000,
+                "job_started": 1795472983227276,
+                "runner_listening": 1795472985280526,
+                "job_received": 1795472987225222,
+                "hook_done": 1795472987227409
+              },
+              "cache": ["backmesh cache: auto the cache token came at +17.1 s"],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        }
+      },
+      {
+        "round": 2,
+        "branch": "builds/backmesh-od-4/1795473064550",
+        "cold": {
+          "runId": 45280437640,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45280437640",
+          "jobs": {
+            "docker": {
+              "id": 138063163119,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45280437640/job/138063163119",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-8ln85nau",
+              "createdAt": "2026-11-23T22:31:08Z",
+              "startedAt": "2026-11-23T22:31:39Z",
+              "completedAt": "2026-11-23T22:32:56Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:31:39Z",
+                  "completedAt": "2026-11-23T22:31:40Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:31:40Z",
+                  "completedAt": "2026-11-23T22:31:40Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:31:40Z",
+                  "completedAt": "2026-11-23T22:31:40Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:31:40Z",
+                  "completedAt": "2026-11-23T22:31:45Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:31:45Z",
+                  "completedAt": "2026-11-23T22:31:47Z"
+                },
+                {
+                  "name": "Run docker build -t bench .",
+                  "startedAt": "2026-11-23T22:31:47Z",
+                  "completedAt": "2026-11-23T22:32:54Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:32:54Z",
+                  "completedAt": "2026-11-23T22:32:54Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:32:54Z",
+                  "completedAt": "2026-11-23T22:32:54Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:32:54Z",
+                  "completedAt": "2026-11-23T22:32:54Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:32:54Z",
+                  "completedAt": "2026-11-23T22:32:54Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473069362000,
+                "vm_booted": 1795473078000000,
+                "container_started": 1795473095660000,
+                "job_started": 1795473096323077,
+                "runner_listening": 1795473098264160,
+                "job_received": 1795473100342588,
+                "hook_done": 1795473100344606
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +19.7 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "rust": {
+              "id": 138063163195,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45280437640/job/138063163195",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-kctjjnks",
+              "createdAt": "2026-11-23T22:31:08Z",
+              "startedAt": "2026-11-23T22:31:41Z",
+              "completedAt": "2026-11-23T22:32:27Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:31:41Z",
+                  "completedAt": "2026-11-23T22:31:42Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:31:42Z",
+                  "completedAt": "2026-11-23T22:31:42Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:31:42Z",
+                  "completedAt": "2026-11-23T22:31:42Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:31:42Z",
+                  "completedAt": "2026-11-23T22:31:42Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:31:42Z",
+                  "completedAt": "2026-11-23T22:31:43Z"
+                },
+                {
+                  "name": "Run cargo build --release --locked",
+                  "startedAt": "2026-11-23T22:31:43Z",
+                  "completedAt": "2026-11-23T22:32:25Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:32:25Z",
+                  "completedAt": "2026-11-23T22:32:25Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:32:25Z",
+                  "completedAt": "2026-11-23T22:32:25Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:32:25Z",
+                  "completedAt": "2026-11-23T22:32:25Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:32:25Z",
+                  "completedAt": "2026-11-23T22:32:25Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473069367000,
+                "vm_booted": 1795473078000000,
+                "container_started": 1795473097340000,
+                "job_started": 1795473098272903,
+                "runner_listening": 1795473100318011,
+                "job_received": 1795473102334999,
+                "hook_done": 1795473102337192
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +17.8 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "go": {
+              "id": 138063163244,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45280437640/job/138063163244",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-76xsyavt",
+              "createdAt": "2026-11-23T22:31:08Z",
+              "startedAt": "2026-11-23T22:31:41Z",
+              "completedAt": "2026-11-23T22:32:26Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:31:41Z",
+                  "completedAt": "2026-11-23T22:31:42Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:31:42Z",
+                  "completedAt": "2026-11-23T22:31:42Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:31:42Z",
+                  "completedAt": "2026-11-23T22:31:42Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:31:42Z",
+                  "completedAt": "2026-11-23T22:31:42Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:31:42Z",
+                  "completedAt": "2026-11-23T22:31:43Z"
+                },
+                {
+                  "name": "Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:31:43Z",
+                  "completedAt": "2026-11-23T22:31:47Z"
+                },
+                {
+                  "name": "Run go build ./...",
+                  "startedAt": "2026-11-23T22:31:47Z",
+                  "completedAt": "2026-11-23T22:32:19Z"
+                },
+                {
+                  "name": "Run go test ./pkg/cmd/pr/...",
+                  "startedAt": "2026-11-23T22:32:19Z",
+                  "completedAt": "2026-11-23T22:32:24Z"
+                },
+                {
+                  "name": "Post Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:32:24Z",
+                  "completedAt": "2026-11-23T22:32:24Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:32:24Z",
+                  "completedAt": "2026-11-23T22:32:24Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:32:24Z",
+                  "completedAt": "2026-11-23T22:32:24Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:32:24Z",
+                  "completedAt": "2026-11-23T22:32:24Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:32:24Z",
+                  "completedAt": "2026-11-23T22:32:24Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473069384000,
+                "vm_booted": 1795473078000000,
+                "container_started": 1795473097320000,
+                "job_started": 1795473098084807,
+                "runner_listening": 1795473100307099,
+                "job_received": 1795473102501055,
+                "hook_done": 1795473102502991
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +17.7 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "typescript": {
+              "id": 138063163340,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45280437640/job/138063163340",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-9tuxc9h4",
+              "createdAt": "2026-11-23T22:31:08Z",
+              "startedAt": "2026-11-23T22:31:44Z",
+              "completedAt": "2026-11-23T22:32:12Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:31:44Z",
+                  "completedAt": "2026-11-23T22:31:45Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:31:45Z",
+                  "completedAt": "2026-11-23T22:31:45Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:31:45Z",
+                  "completedAt": "2026-11-23T22:31:45Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:31:45Z",
+                  "completedAt": "2026-11-23T22:31:45Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:31:45Z",
+                  "completedAt": "2026-11-23T22:31:49Z"
+                },
+                {
+                  "name": "Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:31:49Z",
+                  "completedAt": "2026-11-23T22:31:52Z"
+                },
+                {
+                  "name": "Run npm ci --no-audit --no-fund",
+                  "startedAt": "2026-11-23T22:31:52Z",
+                  "completedAt": "2026-11-23T22:31:55Z"
+                },
+                {
+                  "name": "Run npx hereby local",
+                  "startedAt": "2026-11-23T22:31:55Z",
+                  "completedAt": "2026-11-23T22:32:10Z"
+                },
+                {
+                  "name": "Post Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:32:10Z",
+                  "completedAt": "2026-11-23T22:32:10Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:32:10Z",
+                  "completedAt": "2026-11-23T22:32:11Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:32:11Z",
+                  "completedAt": "2026-11-23T22:32:11Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:32:11Z",
+                  "completedAt": "2026-11-23T22:32:11Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:32:11Z",
+                  "completedAt": "2026-11-23T22:32:11Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473070383000,
+                "vm_booted": 1795473081000000,
+                "container_started": 1795473100620000,
+                "job_started": 1795473100862945,
+                "runner_listening": 1795473102854627,
+                "job_received": 1795473105212842,
+                "hook_done": 1795473105214773
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +14.9 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "python": {
+              "id": 138063163353,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45280437640/job/138063163353",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-kjt72sxe",
+              "createdAt": "2026-11-23T22:31:08Z",
+              "startedAt": "2026-11-23T22:31:41Z",
+              "completedAt": "2026-11-23T22:31:57Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:31:41Z",
+                  "completedAt": "2026-11-23T22:31:42Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:31:42Z",
+                  "completedAt": "2026-11-23T22:31:42Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:31:42Z",
+                  "completedAt": "2026-11-23T22:31:42Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:31:42Z",
+                  "completedAt": "2026-11-23T22:31:43Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:31:43Z",
+                  "completedAt": "2026-11-23T22:31:43Z"
+                },
+                {
+                  "name": "Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:31:43Z",
+                  "completedAt": "2026-11-23T22:31:48Z"
+                },
+                {
+                  "name": "Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:31:48Z",
+                  "completedAt": "2026-11-23T22:31:49Z"
+                },
+                {
+                  "name": "Run uv sync --frozen",
+                  "startedAt": "2026-11-23T22:31:49Z",
+                  "completedAt": "2026-11-23T22:31:49Z"
+                },
+                {
+                  "name": "Run uv run --frozen pytest -q -p no:cacheprovider tests/test_main.py tests/test_types.py tests/test_json_schema.py",
+                  "startedAt": "2026-11-23T22:31:49Z",
+                  "completedAt": "2026-11-23T22:31:56Z"
+                },
+                {
+                  "name": "Post Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:31:56Z",
+                  "completedAt": "2026-11-23T22:31:56Z"
+                },
+                {
+                  "name": "Post Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:31:56Z",
+                  "completedAt": "2026-11-23T22:31:56Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:31:56Z",
+                  "completedAt": "2026-11-23T22:31:56Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:31:56Z",
+                  "completedAt": "2026-11-23T22:31:56Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:31:56Z",
+                  "completedAt": "2026-11-23T22:31:56Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:31:56Z",
+                  "completedAt": "2026-11-23T22:31:56Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473069584000,
+                "vm_booted": 1795473078000000,
+                "container_started": 1795473097660000,
+                "job_started": 1795473097859775,
+                "runner_listening": 1795473100004696,
+                "job_received": 1795473102724160,
+                "hook_done": 1795473102726379
+              },
+              "cache": [],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        },
+        "warm": {
+          "runId": 45280924675,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45280924675",
+          "jobs": {
+            "docker": {
+              "id": 138064855535,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45280924675/job/138064855535",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-7v4czgwm",
+              "createdAt": "2026-11-23T22:34:12Z",
+              "startedAt": "2026-11-23T22:34:48Z",
+              "completedAt": "2026-11-23T22:35:57Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:34:48Z",
+                  "completedAt": "2026-11-23T22:34:48Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:34:48Z",
+                  "completedAt": "2026-11-23T22:34:49Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:34:49Z",
+                  "completedAt": "2026-11-23T22:34:49Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:34:49Z",
+                  "completedAt": "2026-11-23T22:34:49Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:34:49Z",
+                  "completedAt": "2026-11-23T22:34:51Z"
+                },
+                {
+                  "name": "Run docker build -t bench .",
+                  "startedAt": "2026-11-23T22:34:51Z",
+                  "completedAt": "2026-11-23T22:35:55Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:35:55Z",
+                  "completedAt": "2026-11-23T22:35:56Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:35:56Z",
+                  "completedAt": "2026-11-23T22:35:56Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:35:56Z",
+                  "completedAt": "2026-11-23T22:35:56Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:35:56Z",
+                  "completedAt": "2026-11-23T22:35:56Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473254086000,
+                "vm_booted": 1795473265000000,
+                "container_started": 1795473284220000,
+                "job_started": 1795473284903823,
+                "runner_listening": 1795473287015553,
+                "job_received": 1795473289026083,
+                "hook_done": 1795473289028053
+              },
+              "cache": ["backmesh cache: auto the cache token came at +16.8 s"],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "rust": {
+              "id": 138064855770,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45280924675/job/138064855770",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-g7mubcc7",
+              "createdAt": "2026-11-23T22:34:12Z",
+              "startedAt": "2026-11-23T22:34:46Z",
+              "completedAt": "2026-11-23T22:35:52Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:34:46Z",
+                  "completedAt": "2026-11-23T22:35:06Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:35:06Z",
+                  "completedAt": "2026-11-23T22:35:06Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:35:06Z",
+                  "completedAt": "2026-11-23T22:35:06Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:35:06Z",
+                  "completedAt": "2026-11-23T22:35:06Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:35:06Z",
+                  "completedAt": "2026-11-23T22:35:07Z"
+                },
+                {
+                  "name": "Run cargo build --release --locked",
+                  "startedAt": "2026-11-23T22:35:07Z",
+                  "completedAt": "2026-11-23T22:35:50Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:35:50Z",
+                  "completedAt": "2026-11-23T22:35:50Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:35:50Z",
+                  "completedAt": "2026-11-23T22:35:50Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:35:50Z",
+                  "completedAt": "2026-11-23T22:35:50Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:35:50Z",
+                  "completedAt": "2026-11-23T22:35:50Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473254711000,
+                "vm_booted": 1795473265000000,
+                "container_started": 1795473282390000,
+                "job_started": 1795473282752426,
+                "runner_listening": 1795473285040164,
+                "job_received": 1795473306595412,
+                "hook_done": 1795473306597505
+              },
+              "cache": ["backmesh cache: auto the cache token came at +0.0 s"],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "python": {
+              "id": 138064855856,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45280924675/job/138064855856",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-kd9jjol3",
+              "createdAt": "2026-11-23T22:34:12Z",
+              "startedAt": "2026-11-23T22:34:46Z",
+              "completedAt": "2026-11-23T22:35:06Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:34:46Z",
+                  "completedAt": "2026-11-23T22:34:47Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:34:47Z",
+                  "completedAt": "2026-11-23T22:34:47Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:34:47Z",
+                  "completedAt": "2026-11-23T22:34:47Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:34:47Z",
+                  "completedAt": "2026-11-23T22:34:48Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:34:48Z",
+                  "completedAt": "2026-11-23T22:34:48Z"
+                },
+                {
+                  "name": "Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:34:48Z",
+                  "completedAt": "2026-11-23T22:34:56Z"
+                },
+                {
+                  "name": "Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:34:56Z",
+                  "completedAt": "2026-11-23T22:34:57Z"
+                },
+                {
+                  "name": "Run uv sync --frozen",
+                  "startedAt": "2026-11-23T22:34:57Z",
+                  "completedAt": "2026-11-23T22:34:57Z"
+                },
+                {
+                  "name": "Run uv run --frozen pytest -q -p no:cacheprovider tests/test_main.py tests/test_types.py tests/test_json_schema.py",
+                  "startedAt": "2026-11-23T22:34:57Z",
+                  "completedAt": "2026-11-23T22:35:04Z"
+                },
+                {
+                  "name": "Post Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:35:04Z",
+                  "completedAt": "2026-11-23T22:35:04Z"
+                },
+                {
+                  "name": "Post Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:35:04Z",
+                  "completedAt": "2026-11-23T22:35:04Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:35:04Z",
+                  "completedAt": "2026-11-23T22:35:04Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:35:04Z",
+                  "completedAt": "2026-11-23T22:35:04Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:35:04Z",
+                  "completedAt": "2026-11-23T22:35:04Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:35:04Z",
+                  "completedAt": "2026-11-23T22:35:04Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473254344000,
+                "vm_booted": 1795473265000000,
+                "container_started": 1795473282790000,
+                "job_started": 1795473283246081,
+                "runner_listening": 1795473285274216,
+                "job_received": 1795473287741794,
+                "hook_done": 1795473287743791
+              },
+              "cache": [],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "go": {
+              "id": 138064856106,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45280924675/job/138064856106",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-1e4u5ujl",
+              "createdAt": "2026-11-23T22:34:12Z",
+              "startedAt": "2026-11-23T22:34:59Z",
+              "completedAt": "2026-11-23T22:36:04Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:34:59Z",
+                  "completedAt": "2026-11-23T22:35:00Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:35:00Z",
+                  "completedAt": "2026-11-23T22:35:00Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:35:00Z",
+                  "completedAt": "2026-11-23T22:35:00Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:35:00Z",
+                  "completedAt": "2026-11-23T22:35:00Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:35:00Z",
+                  "completedAt": "2026-11-23T22:35:01Z"
+                },
+                {
+                  "name": "Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:35:01Z",
+                  "completedAt": "2026-11-23T22:35:05Z"
+                },
+                {
+                  "name": "Run go build ./...",
+                  "startedAt": "2026-11-23T22:35:05Z",
+                  "completedAt": "2026-11-23T22:35:56Z"
+                },
+                {
+                  "name": "Run go test ./pkg/cmd/pr/...",
+                  "startedAt": "2026-11-23T22:35:56Z",
+                  "completedAt": "2026-11-23T22:36:02Z"
+                },
+                {
+                  "name": "Post Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:36:02Z",
+                  "completedAt": "2026-11-23T22:36:02Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:36:02Z",
+                  "completedAt": "2026-11-23T22:36:02Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:36:02Z",
+                  "completedAt": "2026-11-23T22:36:02Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:36:02Z",
+                  "completedAt": "2026-11-23T22:36:02Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:36:02Z",
+                  "completedAt": "2026-11-23T22:36:02Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473254394000,
+                "vm_booted": 1795473266000000,
+                "container_started": 1795473295350000,
+                "job_started": 1795473296213239,
+                "runner_listening": 1795473298149730,
+                "job_received": 1795473300360542,
+                "hook_done": 1795473300362733
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +5.5 s",
+                "backmesh cache: auto gave way go 1.22.6: a step made /workspace/hostedtoolcache/go/1.22.6/x64 first, at +5.6 s"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "typescript": {
+              "id": 138064856350,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45280924675/job/138064856350",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-8uxyvuv1",
+              "createdAt": "2026-11-23T22:34:12Z",
+              "startedAt": "2026-11-23T22:34:48Z",
+              "completedAt": "2026-11-23T22:35:22Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:34:48Z",
+                  "completedAt": "2026-11-23T22:34:49Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:34:49Z",
+                  "completedAt": "2026-11-23T22:34:49Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:34:49Z",
+                  "completedAt": "2026-11-23T22:34:49Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:34:49Z",
+                  "completedAt": "2026-11-23T22:34:49Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:34:49Z",
+                  "completedAt": "2026-11-23T22:34:59Z"
+                },
+                {
+                  "name": "Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:34:59Z",
+                  "completedAt": "2026-11-23T22:35:02Z"
+                },
+                {
+                  "name": "Run npm ci --no-audit --no-fund",
+                  "startedAt": "2026-11-23T22:35:02Z",
+                  "completedAt": "2026-11-23T22:35:05Z"
+                },
+                {
+                  "name": "Run npx hereby local",
+                  "startedAt": "2026-11-23T22:35:05Z",
+                  "completedAt": "2026-11-23T22:35:20Z"
+                },
+                {
+                  "name": "Post Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:35:20Z",
+                  "completedAt": "2026-11-23T22:35:21Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:35:21Z",
+                  "completedAt": "2026-11-23T22:35:21Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:35:21Z",
+                  "completedAt": "2026-11-23T22:35:21Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:35:21Z",
+                  "completedAt": "2026-11-23T22:35:21Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:35:21Z",
+                  "completedAt": "2026-11-23T22:35:21Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473254230000,
+                "vm_booted": 1795473265000000,
+                "container_started": 1795473284900000,
+                "job_started": 1795473285391425,
+                "runner_listening": 1795473287351738,
+                "job_received": 1795473289573196,
+                "hook_done": 1795473289575397
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +16.1 s",
+                "backmesh cache: auto gave way node 22.23.5: a step made /workspace/hostedtoolcache/node/22.23.5/x64 first, at +16.3 s",
+                "backmesh cache: auto gave way npm: a step made /workspace/home/.npm/_cacache first, at +16.3 s"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        }
+      },
+      {
+        "round": 3,
+        "branch": "builds/backmesh-od-4/1795473379461",
+        "cold": {
+          "runId": 45281273439,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45281273439",
+          "jobs": {
+            "go": {
+              "id": 138066042980,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45281273439/job/138066042980",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-pjfhiu97",
+              "createdAt": "2026-11-23T22:36:22Z",
+              "startedAt": "2026-11-23T22:36:53Z",
+              "completedAt": "2026-11-23T22:37:39Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:36:54Z",
+                  "completedAt": "2026-11-23T22:36:54Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:36:54Z",
+                  "completedAt": "2026-11-23T22:36:55Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:36:55Z",
+                  "completedAt": "2026-11-23T22:36:55Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:36:55Z",
+                  "completedAt": "2026-11-23T22:36:55Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:36:55Z",
+                  "completedAt": "2026-11-23T22:36:56Z"
+                },
+                {
+                  "name": "Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:36:56Z",
+                  "completedAt": "2026-11-23T22:37:00Z"
+                },
+                {
+                  "name": "Run go build ./...",
+                  "startedAt": "2026-11-23T22:37:00Z",
+                  "completedAt": "2026-11-23T22:37:32Z"
+                },
+                {
+                  "name": "Run go test ./pkg/cmd/pr/...",
+                  "startedAt": "2026-11-23T22:37:32Z",
+                  "completedAt": "2026-11-23T22:37:37Z"
+                },
+                {
+                  "name": "Post Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:37:37Z",
+                  "completedAt": "2026-11-23T22:37:37Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:37:37Z",
+                  "completedAt": "2026-11-23T22:37:37Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:37:37Z",
+                  "completedAt": "2026-11-23T22:37:37Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:37:37Z",
+                  "completedAt": "2026-11-23T22:37:37Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:37:37Z",
+                  "completedAt": "2026-11-23T22:37:37Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473384073000,
+                "vm_booted": 1795473392000000,
+                "container_started": 1795473410200000,
+                "job_started": 1795473410732024,
+                "runner_listening": 1795473412719024,
+                "job_received": 1795473415002078,
+                "hook_done": 1795473415004438
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +21.7 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "docker": {
+              "id": 138066043299,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45281273439/job/138066043299",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-w7r4qgjx",
+              "createdAt": "2026-11-23T22:36:22Z",
+              "startedAt": "2026-11-23T22:36:54Z",
+              "completedAt": "2026-11-23T22:38:12Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:37:00Z",
+                  "completedAt": "2026-11-23T22:37:01Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:37:01Z",
+                  "completedAt": "2026-11-23T22:37:01Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:37:01Z",
+                  "completedAt": "2026-11-23T22:37:01Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:37:01Z",
+                  "completedAt": "2026-11-23T22:37:01Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:37:01Z",
+                  "completedAt": "2026-11-23T22:37:03Z"
+                },
+                {
+                  "name": "Run docker build -t bench .",
+                  "startedAt": "2026-11-23T22:37:03Z",
+                  "completedAt": "2026-11-23T22:38:10Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:38:10Z",
+                  "completedAt": "2026-11-23T22:38:10Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:38:10Z",
+                  "completedAt": "2026-11-23T22:38:10Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:38:10Z",
+                  "completedAt": "2026-11-23T22:38:10Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:38:10Z",
+                  "completedAt": "2026-11-23T22:38:10Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473384219000,
+                "vm_booted": 1795473392000000,
+                "container_started": 1795473411180000,
+                "job_started": 1795473411853655,
+                "runner_listening": 1795473413876376,
+                "job_received": 1795473421065854,
+                "hook_done": 1795473421067895
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +15.5 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "python": {
+              "id": 138066043337,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45281273439/job/138066043337",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-8wtxwczx",
+              "createdAt": "2026-11-23T22:36:22Z",
+              "startedAt": "2026-11-23T22:36:53Z",
+              "completedAt": "2026-11-23T22:37:26Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:36:54Z",
+                  "completedAt": "2026-11-23T22:37:10Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:37:10Z",
+                  "completedAt": "2026-11-23T22:37:10Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:37:10Z",
+                  "completedAt": "2026-11-23T22:37:10Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:37:10Z",
+                  "completedAt": "2026-11-23T22:37:11Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:37:11Z",
+                  "completedAt": "2026-11-23T22:37:11Z"
+                },
+                {
+                  "name": "Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:37:11Z",
+                  "completedAt": "2026-11-23T22:37:16Z"
+                },
+                {
+                  "name": "Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:37:16Z",
+                  "completedAt": "2026-11-23T22:37:17Z"
+                },
+                {
+                  "name": "Run uv sync --frozen",
+                  "startedAt": "2026-11-23T22:37:17Z",
+                  "completedAt": "2026-11-23T22:37:17Z"
+                },
+                {
+                  "name": "Run uv run --frozen pytest -q -p no:cacheprovider tests/test_main.py tests/test_types.py tests/test_json_schema.py",
+                  "startedAt": "2026-11-23T22:37:17Z",
+                  "completedAt": "2026-11-23T22:37:24Z"
+                },
+                {
+                  "name": "Post Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:37:24Z",
+                  "completedAt": "2026-11-23T22:37:24Z"
+                },
+                {
+                  "name": "Post Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:37:24Z",
+                  "completedAt": "2026-11-23T22:37:24Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:37:24Z",
+                  "completedAt": "2026-11-23T22:37:24Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:37:24Z",
+                  "completedAt": "2026-11-23T22:37:24Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:37:24Z",
+                  "completedAt": "2026-11-23T22:37:24Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:37:24Z",
+                  "completedAt": "2026-11-23T22:37:24Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473384140000,
+                "vm_booted": 1795473392000000,
+                "container_started": 1795473410190000,
+                "job_started": 1795473410630693,
+                "runner_listening": 1795473412883140,
+                "job_received": 1795473430737837,
+                "hook_done": 1795473430740029
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +5.6 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "typescript": {
+              "id": 138066043350,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45281273439/job/138066043350",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-kx6ipvah",
+              "createdAt": "2026-11-23T22:36:22Z",
+              "startedAt": "2026-11-23T22:37:01Z",
+              "completedAt": "2026-11-23T22:37:41Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:37:02Z",
+                  "completedAt": "2026-11-23T22:37:03Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:37:03Z",
+                  "completedAt": "2026-11-23T22:37:03Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:37:03Z",
+                  "completedAt": "2026-11-23T22:37:03Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:37:03Z",
+                  "completedAt": "2026-11-23T22:37:14Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:37:14Z",
+                  "completedAt": "2026-11-23T22:37:18Z"
+                },
+                {
+                  "name": "Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:37:18Z",
+                  "completedAt": "2026-11-23T22:37:21Z"
+                },
+                {
+                  "name": "Run npm ci --no-audit --no-fund",
+                  "startedAt": "2026-11-23T22:37:21Z",
+                  "completedAt": "2026-11-23T22:37:23Z"
+                },
+                {
+                  "name": "Run npx hereby local",
+                  "startedAt": "2026-11-23T22:37:23Z",
+                  "completedAt": "2026-11-23T22:37:39Z"
+                },
+                {
+                  "name": "Post Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:37:39Z",
+                  "completedAt": "2026-11-23T22:37:39Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:37:39Z",
+                  "completedAt": "2026-11-23T22:37:39Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:37:39Z",
+                  "completedAt": "2026-11-23T22:37:39Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:37:39Z",
+                  "completedAt": "2026-11-23T22:37:39Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:37:39Z",
+                  "completedAt": "2026-11-23T22:37:39Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473384307000,
+                "vm_booted": 1795473392000000,
+                "container_started": 1795473418270000,
+                "job_started": 1795473418746363,
+                "runner_listening": 1795473420757069,
+                "job_received": 1795473423041169,
+                "hook_done": 1795473423043205
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +13.6 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "rust": {
+              "id": 138066043384,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45281273439/job/138066043384",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-w43rmwyk",
+              "createdAt": "2026-11-23T22:36:22Z",
+              "startedAt": "2026-11-23T22:37:00Z",
+              "completedAt": "2026-11-23T22:37:47Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:37:01Z",
+                  "completedAt": "2026-11-23T22:37:01Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:37:01Z",
+                  "completedAt": "2026-11-23T22:37:01Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:37:01Z",
+                  "completedAt": "2026-11-23T22:37:02Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:37:02Z",
+                  "completedAt": "2026-11-23T22:37:02Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:37:02Z",
+                  "completedAt": "2026-11-23T22:37:03Z"
+                },
+                {
+                  "name": "Run cargo build --release --locked",
+                  "startedAt": "2026-11-23T22:37:03Z",
+                  "completedAt": "2026-11-23T22:37:45Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:37:45Z",
+                  "completedAt": "2026-11-23T22:37:45Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:37:45Z",
+                  "completedAt": "2026-11-23T22:37:45Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:37:45Z",
+                  "completedAt": "2026-11-23T22:37:45Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:37:45Z",
+                  "completedAt": "2026-11-23T22:37:45Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473384739000,
+                "vm_booted": 1795473397000000,
+                "container_started": 1795473417080000,
+                "job_started": 1795473417705736,
+                "runner_listening": 1795473419933956,
+                "job_received": 1795473421968201,
+                "hook_done": 1795473421970224
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +14.6 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        },
+        "warm": {
+          "runId": 45281754074,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45281754074",
+          "jobs": {
+            "python": {
+              "id": 138067706301,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45281754074/job/138067706301",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-f95e7avo",
+              "createdAt": "2026-11-23T22:39:27Z",
+              "startedAt": "2026-11-23T22:40:19Z",
+              "completedAt": "2026-11-23T22:41:07Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:40:39Z",
+                  "completedAt": "2026-11-23T22:40:40Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:40:40Z",
+                  "completedAt": "2026-11-23T22:40:40Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:40:40Z",
+                  "completedAt": "2026-11-23T22:40:40Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:40:40Z",
+                  "completedAt": "2026-11-23T22:40:40Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:40:40Z",
+                  "completedAt": "2026-11-23T22:40:41Z"
+                },
+                {
+                  "name": "Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:40:41Z",
+                  "completedAt": "2026-11-23T22:40:57Z"
+                },
+                {
+                  "name": "Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:40:57Z",
+                  "completedAt": "2026-11-23T22:40:58Z"
+                },
+                {
+                  "name": "Run uv sync --frozen",
+                  "startedAt": "2026-11-23T22:40:58Z",
+                  "completedAt": "2026-11-23T22:40:58Z"
+                },
+                {
+                  "name": "Run uv run --frozen pytest -q -p no:cacheprovider tests/test_main.py tests/test_types.py tests/test_json_schema.py",
+                  "startedAt": "2026-11-23T22:40:58Z",
+                  "completedAt": "2026-11-23T22:41:05Z"
+                },
+                {
+                  "name": "Post Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:41:05Z",
+                  "completedAt": "2026-11-23T22:41:05Z"
+                },
+                {
+                  "name": "Post Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:41:05Z",
+                  "completedAt": "2026-11-23T22:41:05Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:41:05Z",
+                  "completedAt": "2026-11-23T22:41:05Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:41:05Z",
+                  "completedAt": "2026-11-23T22:41:05Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:41:05Z",
+                  "completedAt": "2026-11-23T22:41:05Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:41:05Z",
+                  "completedAt": "2026-11-23T22:41:05Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473569174000,
+                "vm_booted": 1795473579000000,
+                "container_started": 1795473606290000,
+                "job_started": 1795473606648212,
+                "runner_listening": 1795473609016648,
+                "job_received": 1795473640350910,
+                "hook_done": 1795473640352867
+              },
+              "cache": [],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "typescript": {
+              "id": 138067706655,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45281754074/job/138067706655",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-0eaqk4go",
+              "createdAt": "2026-11-23T22:39:27Z",
+              "startedAt": "2026-11-23T22:40:40Z",
+              "completedAt": "2026-11-23T22:41:41Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:40:41Z",
+                  "completedAt": "2026-11-23T22:41:17Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:41:17Z",
+                  "completedAt": "2026-11-23T22:41:18Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:41:18Z",
+                  "completedAt": "2026-11-23T22:41:18Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:41:18Z",
+                  "completedAt": "2026-11-23T22:41:18Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:41:18Z",
+                  "completedAt": "2026-11-23T22:41:22Z"
+                },
+                {
+                  "name": "Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:41:22Z",
+                  "completedAt": "2026-11-23T22:41:22Z"
+                },
+                {
+                  "name": "Run npm ci --no-audit --no-fund",
+                  "startedAt": "2026-11-23T22:41:22Z",
+                  "completedAt": "2026-11-23T22:41:24Z"
+                },
+                {
+                  "name": "Run npx hereby local",
+                  "startedAt": "2026-11-23T22:41:24Z",
+                  "completedAt": "2026-11-23T22:41:39Z"
+                },
+                {
+                  "name": "Post Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:41:39Z",
+                  "completedAt": "2026-11-23T22:41:39Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:41:39Z",
+                  "completedAt": "2026-11-23T22:41:40Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:41:40Z",
+                  "completedAt": "2026-11-23T22:41:40Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:41:40Z",
+                  "completedAt": "2026-11-23T22:41:40Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:41:40Z",
+                  "completedAt": "2026-11-23T22:41:40Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473568953000,
+                "vm_booted": 1795473579000000,
+                "container_started": 1795473637300000,
+                "job_started": 1795473637571815,
+                "runner_listening": 1795473639691536,
+                "job_received": 1795473678016667,
+                "hook_done": 1795473678018732
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +0.0 s",
+                "backmesh cache: auto restored npm (own)  41 MB in 0.6 s, at +32.2 s",
+                "backmesh cache: auto restored node 22.23.5 (own)  196 MB in 0.8 s, at +32.5 s"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "rust": {
+              "id": 138067706732,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45281754074/job/138067706732",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-q8wqikbj",
+              "createdAt": "2026-11-23T22:39:27Z",
+              "startedAt": "2026-11-23T22:40:51Z",
+              "completedAt": "2026-11-23T22:41:38Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:40:52Z",
+                  "completedAt": "2026-11-23T22:40:52Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:40:52Z",
+                  "completedAt": "2026-11-23T22:40:52Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:40:52Z",
+                  "completedAt": "2026-11-23T22:40:52Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:40:52Z",
+                  "completedAt": "2026-11-23T22:40:53Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:40:53Z",
+                  "completedAt": "2026-11-23T22:40:53Z"
+                },
+                {
+                  "name": "Run cargo build --release --locked",
+                  "startedAt": "2026-11-23T22:40:53Z",
+                  "completedAt": "2026-11-23T22:41:36Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:41:36Z",
+                  "completedAt": "2026-11-23T22:41:36Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:41:36Z",
+                  "completedAt": "2026-11-23T22:41:36Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:41:36Z",
+                  "completedAt": "2026-11-23T22:41:36Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:41:36Z",
+                  "completedAt": "2026-11-23T22:41:36Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473568871000,
+                "vm_booted": 1795473580000000,
+                "container_started": 1795473611680000,
+                "job_started": 1795473612610841,
+                "runner_listening": 1795473650707506,
+                "job_received": 1795473652773884,
+                "hook_done": 1795473652775956
+              },
+              "cache": ["backmesh cache: auto the cache token came at +17.0 s"],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "docker": {
+              "id": 138067706831,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45281754074/job/138067706831",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-kf662m2q",
+              "createdAt": "2026-11-23T22:39:27Z",
+              "startedAt": "2026-11-23T22:41:16Z",
+              "completedAt": "2026-11-23T22:42:27Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:41:17Z",
+                  "completedAt": "2026-11-23T22:41:17Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:41:17Z",
+                  "completedAt": "2026-11-23T22:41:17Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:41:17Z",
+                  "completedAt": "2026-11-23T22:41:17Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:41:17Z",
+                  "completedAt": "2026-11-23T22:41:18Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:41:18Z",
+                  "completedAt": "2026-11-23T22:41:19Z"
+                },
+                {
+                  "name": "Run docker build -t bench .",
+                  "startedAt": "2026-11-23T22:41:19Z",
+                  "completedAt": "2026-11-23T22:42:25Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:42:25Z",
+                  "completedAt": "2026-11-23T22:42:25Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:42:25Z",
+                  "completedAt": "2026-11-23T22:42:25Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:42:25Z",
+                  "completedAt": "2026-11-23T22:42:25Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:42:25Z",
+                  "completedAt": "2026-11-23T22:42:25Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473568337000,
+                "vm_booted": 1795473580000000,
+                "container_started": 1795473673420000,
+                "job_started": 1795473673590704,
+                "runner_listening": 1795473675617050,
+                "job_received": 1795473677687253,
+                "hook_done": 1795473677689144
+              },
+              "cache": ["backmesh cache: auto the cache token came at +20.6 s"],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "go": {
+              "id": 138067706849,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45281754074/job/138067706849",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-bo11rtam",
+              "createdAt": "2026-11-23T22:39:27Z",
+              "startedAt": "2026-11-23T22:40:47Z",
+              "completedAt": "2026-11-23T22:41:36Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:40:48Z",
+                  "completedAt": "2026-11-23T22:40:48Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:40:48Z",
+                  "completedAt": "2026-11-23T22:40:48Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:40:48Z",
+                  "completedAt": "2026-11-23T22:40:48Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:40:48Z",
+                  "completedAt": "2026-11-23T22:40:49Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:40:49Z",
+                  "completedAt": "2026-11-23T22:40:49Z"
+                },
+                {
+                  "name": "Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:40:49Z",
+                  "completedAt": "2026-11-23T22:40:54Z"
+                },
+                {
+                  "name": "Run go build ./...",
+                  "startedAt": "2026-11-23T22:40:54Z",
+                  "completedAt": "2026-11-23T22:41:29Z"
+                },
+                {
+                  "name": "Run go test ./pkg/cmd/pr/...",
+                  "startedAt": "2026-11-23T22:41:29Z",
+                  "completedAt": "2026-11-23T22:41:34Z"
+                },
+                {
+                  "name": "Post Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:41:34Z",
+                  "completedAt": "2026-11-23T22:41:34Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:41:34Z",
+                  "completedAt": "2026-11-23T22:41:34Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:41:34Z",
+                  "completedAt": "2026-11-23T22:41:34Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:41:34Z",
+                  "completedAt": "2026-11-23T22:41:34Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:41:34Z",
+                  "completedAt": "2026-11-23T22:41:34Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473568226000,
+                "vm_booted": 1795473579000000,
+                "container_started": 1795473608360000,
+                "job_started": 1795473608693991,
+                "runner_listening": 1795473646541502,
+                "job_received": 1795473648711340,
+                "hook_done": 1795473648713223
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +21.1 s",
+                "backmesh cache: auto gave way go 1.22.6: a step made /workspace/hostedtoolcache/go/1.22.6/x64 first, at +21.4 s"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        }
+      },
+      {
+        "round": 4,
+        "branch": "builds/backmesh-od-4/1795473755213",
+        "cold": {
+          "runId": 45282237646,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45282237646",
+          "jobs": {
+            "go": {
+              "id": 138069395948,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45282237646/job/138069395948",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-jl4kgywj",
+              "createdAt": "2026-11-23T22:42:38Z",
+              "startedAt": "2026-11-23T22:43:12Z",
+              "completedAt": "2026-11-23T22:43:59Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:43:13Z",
+                  "completedAt": "2026-11-23T22:43:13Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:43:13Z",
+                  "completedAt": "2026-11-23T22:43:13Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:43:13Z",
+                  "completedAt": "2026-11-23T22:43:14Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:43:14Z",
+                  "completedAt": "2026-11-23T22:43:14Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:43:14Z",
+                  "completedAt": "2026-11-23T22:43:15Z"
+                },
+                {
+                  "name": "Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:43:15Z",
+                  "completedAt": "2026-11-23T22:43:19Z"
+                },
+                {
+                  "name": "Run go build ./...",
+                  "startedAt": "2026-11-23T22:43:19Z",
+                  "completedAt": "2026-11-23T22:43:51Z"
+                },
+                {
+                  "name": "Run go test ./pkg/cmd/pr/...",
+                  "startedAt": "2026-11-23T22:43:51Z",
+                  "completedAt": "2026-11-23T22:43:57Z"
+                },
+                {
+                  "name": "Post Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:43:57Z",
+                  "completedAt": "2026-11-23T22:43:57Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:43:57Z",
+                  "completedAt": "2026-11-23T22:43:57Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:43:57Z",
+                  "completedAt": "2026-11-23T22:43:57Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:43:57Z",
+                  "completedAt": "2026-11-23T22:43:57Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:43:57Z",
+                  "completedAt": "2026-11-23T22:43:57Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473760768000,
+                "vm_booted": 1795473772000000,
+                "container_started": 1795473789510000,
+                "job_started": 1795473789702937,
+                "runner_listening": 1795473791816273,
+                "job_received": 1795473793969128,
+                "hook_done": 1795473793971348
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +17.7 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "docker": {
+              "id": 138069395991,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45282237646/job/138069395991",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-aazurtsh",
+              "createdAt": "2026-11-23T22:42:38Z",
+              "startedAt": "2026-11-23T22:43:32Z",
+              "completedAt": "2026-11-23T22:44:42Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:43:32Z",
+                  "completedAt": "2026-11-23T22:43:33Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:43:33Z",
+                  "completedAt": "2026-11-23T22:43:33Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:43:33Z",
+                  "completedAt": "2026-11-23T22:43:33Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:43:33Z",
+                  "completedAt": "2026-11-23T22:43:33Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:43:33Z",
+                  "completedAt": "2026-11-23T22:43:35Z"
+                },
+                {
+                  "name": "Run docker build -t bench .",
+                  "startedAt": "2026-11-23T22:43:35Z",
+                  "completedAt": "2026-11-23T22:44:41Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:44:41Z",
+                  "completedAt": "2026-11-23T22:44:41Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:44:41Z",
+                  "completedAt": "2026-11-23T22:44:41Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:44:41Z",
+                  "completedAt": "2026-11-23T22:44:41Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:44:41Z",
+                  "completedAt": "2026-11-23T22:44:41Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473760000000,
+                "vm_booted": 1795473771000000,
+                "container_started": 1795473788670000,
+                "job_started": 1795473789700356,
+                "runner_listening": 1795473811109142,
+                "job_received": 1795473813223096,
+                "hook_done": 1795473813225348
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +17.7 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "typescript": {
+              "id": 138069396076,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45282237646/job/138069396076",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-r048sexi",
+              "createdAt": "2026-11-23T22:42:38Z",
+              "startedAt": "2026-11-23T22:43:14Z",
+              "completedAt": "2026-11-23T22:43:49Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:43:15Z",
+                  "completedAt": "2026-11-23T22:43:15Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:43:15Z",
+                  "completedAt": "2026-11-23T22:43:15Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:43:15Z",
+                  "completedAt": "2026-11-23T22:43:15Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:43:15Z",
+                  "completedAt": "2026-11-23T22:43:16Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:43:16Z",
+                  "completedAt": "2026-11-23T22:43:25Z"
+                },
+                {
+                  "name": "Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:43:25Z",
+                  "completedAt": "2026-11-23T22:43:28Z"
+                },
+                {
+                  "name": "Run npm ci --no-audit --no-fund",
+                  "startedAt": "2026-11-23T22:43:28Z",
+                  "completedAt": "2026-11-23T22:43:31Z"
+                },
+                {
+                  "name": "Run npx hereby local",
+                  "startedAt": "2026-11-23T22:43:31Z",
+                  "completedAt": "2026-11-23T22:43:46Z"
+                },
+                {
+                  "name": "Post Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:43:46Z",
+                  "completedAt": "2026-11-23T22:43:46Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:43:46Z",
+                  "completedAt": "2026-11-23T22:43:47Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:43:47Z",
+                  "completedAt": "2026-11-23T22:43:47Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:43:47Z",
+                  "completedAt": "2026-11-23T22:43:47Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:43:47Z",
+                  "completedAt": "2026-11-23T22:43:47Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473759890000,
+                "vm_booted": 1795473772000000,
+                "container_started": 1795473791230000,
+                "job_started": 1795473791584066,
+                "runner_listening": 1795473793540290,
+                "job_received": 1795473795737761,
+                "hook_done": 1795473795740033
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +15.9 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "rust": {
+              "id": 138069396178,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45282237646/job/138069396178",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-tsyp218x",
+              "createdAt": "2026-11-23T22:42:38Z",
+              "startedAt": "2026-11-23T22:43:47Z",
+              "completedAt": "2026-11-23T22:44:33Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:43:48Z",
+                  "completedAt": "2026-11-23T22:43:48Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:43:48Z",
+                  "completedAt": "2026-11-23T22:43:48Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:43:48Z",
+                  "completedAt": "2026-11-23T22:43:48Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:43:48Z",
+                  "completedAt": "2026-11-23T22:43:49Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:43:49Z",
+                  "completedAt": "2026-11-23T22:43:49Z"
+                },
+                {
+                  "name": "Run cargo build --release --locked",
+                  "startedAt": "2026-11-23T22:43:49Z",
+                  "completedAt": "2026-11-23T22:44:31Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:44:31Z",
+                  "completedAt": "2026-11-23T22:44:31Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:44:31Z",
+                  "completedAt": "2026-11-23T22:44:31Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:44:31Z",
+                  "completedAt": "2026-11-23T22:44:31Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:44:31Z",
+                  "completedAt": "2026-11-23T22:44:31Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473759909000,
+                "vm_booted": 1795473771000000,
+                "container_started": 1795473788060000,
+                "job_started": 1795473788982761,
+                "runner_listening": 1795473826837489,
+                "job_received": 1795473828940761,
+                "hook_done": 1795473828942670
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +2.0 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "python": {
+              "id": 138069396225,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45282237646/job/138069396225",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-ycz9coh0",
+              "createdAt": "2026-11-23T22:42:38Z",
+              "startedAt": "2026-11-23T22:44:16Z",
+              "completedAt": "2026-11-23T22:44:33Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:44:16Z",
+                  "completedAt": "2026-11-23T22:44:17Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:44:17Z",
+                  "completedAt": "2026-11-23T22:44:17Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:44:17Z",
+                  "completedAt": "2026-11-23T22:44:17Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:44:17Z",
+                  "completedAt": "2026-11-23T22:44:17Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:44:17Z",
+                  "completedAt": "2026-11-23T22:44:18Z"
+                },
+                {
+                  "name": "Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:44:18Z",
+                  "completedAt": "2026-11-23T22:44:23Z"
+                },
+                {
+                  "name": "Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:44:23Z",
+                  "completedAt": "2026-11-23T22:44:23Z"
+                },
+                {
+                  "name": "Run uv sync --frozen",
+                  "startedAt": "2026-11-23T22:44:23Z",
+                  "completedAt": "2026-11-23T22:44:24Z"
+                },
+                {
+                  "name": "Run uv run --frozen pytest -q -p no:cacheprovider tests/test_main.py tests/test_types.py tests/test_json_schema.py",
+                  "startedAt": "2026-11-23T22:44:24Z",
+                  "completedAt": "2026-11-23T22:44:30Z"
+                },
+                {
+                  "name": "Post Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:44:30Z",
+                  "completedAt": "2026-11-23T22:44:30Z"
+                },
+                {
+                  "name": "Post Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:44:30Z",
+                  "completedAt": "2026-11-23T22:44:30Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:44:30Z",
+                  "completedAt": "2026-11-23T22:44:31Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:44:31Z",
+                  "completedAt": "2026-11-23T22:44:31Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:44:31Z",
+                  "completedAt": "2026-11-23T22:44:31Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:44:31Z",
+                  "completedAt": "2026-11-23T22:44:31Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473759873000,
+                "vm_booted": 1795473771000000,
+                "container_started": 1795473788150000,
+                "job_started": 1795473788322336,
+                "runner_listening": 1795473855218257,
+                "job_received": 1795473857484737,
+                "hook_done": 1795473857487060
+              },
+              "cache": [],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        },
+        "warm": {
+          "runId": 45282754487,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45282754487",
+          "jobs": {
+            "typescript": {
+              "id": 138071169909,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45282754487/job/138071169909",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-i84rwcvg",
+              "createdAt": "2026-11-23T22:45:57Z",
+              "startedAt": "2026-11-23T22:46:30Z",
+              "completedAt": "2026-11-23T22:46:58Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:46:30Z",
+                  "completedAt": "2026-11-23T22:46:31Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:46:31Z",
+                  "completedAt": "2026-11-23T22:46:31Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:46:31Z",
+                  "completedAt": "2026-11-23T22:46:31Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:46:31Z",
+                  "completedAt": "2026-11-23T22:46:31Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:46:31Z",
+                  "completedAt": "2026-11-23T22:46:35Z"
+                },
+                {
+                  "name": "Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:46:35Z",
+                  "completedAt": "2026-11-23T22:46:38Z"
+                },
+                {
+                  "name": "Run npm ci --no-audit --no-fund",
+                  "startedAt": "2026-11-23T22:46:38Z",
+                  "completedAt": "2026-11-23T22:46:41Z"
+                },
+                {
+                  "name": "Run npx hereby local",
+                  "startedAt": "2026-11-23T22:46:41Z",
+                  "completedAt": "2026-11-23T22:46:56Z"
+                },
+                {
+                  "name": "Post Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:46:56Z",
+                  "completedAt": "2026-11-23T22:46:56Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:46:56Z",
+                  "completedAt": "2026-11-23T22:46:56Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:46:56Z",
+                  "completedAt": "2026-11-23T22:46:56Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:46:56Z",
+                  "completedAt": "2026-11-23T22:46:56Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:46:56Z",
+                  "completedAt": "2026-11-23T22:46:56Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473959053000,
+                "vm_booted": 1795473968000000,
+                "container_started": 1795473986160000,
+                "job_started": 1795473987165221,
+                "runner_listening": 1795473989145546,
+                "job_received": 1795473991517772,
+                "hook_done": 1795473991519708
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +18.5 s",
+                "backmesh cache: auto gave way node 22.23.5: a step made /workspace/hostedtoolcache/node/22.23.5/x64 first, at +18.7 s",
+                "backmesh cache: auto gave way npm: a step made /workspace/home/.npm/_cacache first, at +18.7 s"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "go": {
+              "id": 138071170277,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45282754487/job/138071170277",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-pss9nxks",
+              "createdAt": "2026-11-23T22:45:57Z",
+              "startedAt": "2026-11-23T22:46:31Z",
+              "completedAt": "2026-11-23T22:47:17Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:46:31Z",
+                  "completedAt": "2026-11-23T22:46:32Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:46:32Z",
+                  "completedAt": "2026-11-23T22:46:32Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:46:32Z",
+                  "completedAt": "2026-11-23T22:46:32Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:46:32Z",
+                  "completedAt": "2026-11-23T22:46:32Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:46:32Z",
+                  "completedAt": "2026-11-23T22:46:33Z"
+                },
+                {
+                  "name": "Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:46:33Z",
+                  "completedAt": "2026-11-23T22:46:38Z"
+                },
+                {
+                  "name": "Run go build ./...",
+                  "startedAt": "2026-11-23T22:46:38Z",
+                  "completedAt": "2026-11-23T22:47:10Z"
+                },
+                {
+                  "name": "Run go test ./pkg/cmd/pr/...",
+                  "startedAt": "2026-11-23T22:47:10Z",
+                  "completedAt": "2026-11-23T22:47:15Z"
+                },
+                {
+                  "name": "Post Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:47:15Z",
+                  "completedAt": "2026-11-23T22:47:15Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:47:15Z",
+                  "completedAt": "2026-11-23T22:47:15Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:47:15Z",
+                  "completedAt": "2026-11-23T22:47:16Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:47:16Z",
+                  "completedAt": "2026-11-23T22:47:16Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:47:16Z",
+                  "completedAt": "2026-11-23T22:47:16Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473959097000,
+                "vm_booted": 1795473968000000,
+                "container_started": 1795473987370000,
+                "job_started": 1795473987556730,
+                "runner_listening": 1795473989853614,
+                "job_received": 1795473992120428,
+                "hook_done": 1795473992122350
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +17.8 s",
+                "backmesh cache: auto gave way go 1.22.6: a step made /workspace/hostedtoolcache/go/1.22.6/x64 first, at +18.2 s"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "docker": {
+              "id": 138071170401,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45282754487/job/138071170401",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-hihpy87t",
+              "createdAt": "2026-11-23T22:45:57Z",
+              "startedAt": "2026-11-23T22:46:32Z",
+              "completedAt": "2026-11-23T22:47:43Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:46:32Z",
+                  "completedAt": "2026-11-23T22:46:33Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:46:33Z",
+                  "completedAt": "2026-11-23T22:46:33Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:46:33Z",
+                  "completedAt": "2026-11-23T22:46:33Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:46:33Z",
+                  "completedAt": "2026-11-23T22:46:33Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:46:33Z",
+                  "completedAt": "2026-11-23T22:46:35Z"
+                },
+                {
+                  "name": "Run docker build -t bench .",
+                  "startedAt": "2026-11-23T22:46:35Z",
+                  "completedAt": "2026-11-23T22:47:41Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:47:41Z",
+                  "completedAt": "2026-11-23T22:47:42Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:47:42Z",
+                  "completedAt": "2026-11-23T22:47:42Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:47:42Z",
+                  "completedAt": "2026-11-23T22:47:42Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:47:42Z",
+                  "completedAt": "2026-11-23T22:47:42Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473959893000,
+                "vm_booted": 1795473969000000,
+                "container_started": 1795473988980000,
+                "job_started": 1795473989190554,
+                "runner_listening": 1795473991230879,
+                "job_received": 1795473993219874,
+                "hook_done": 1795473993222110
+              },
+              "cache": ["backmesh cache: auto the cache token came at +16.8 s"],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "python": {
+              "id": 138071170436,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45282754487/job/138071170436",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-s32fru42",
+              "createdAt": "2026-11-23T22:45:57Z",
+              "startedAt": "2026-11-23T22:46:31Z",
+              "completedAt": "2026-11-23T22:46:48Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:46:31Z",
+                  "completedAt": "2026-11-23T22:46:32Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:46:32Z",
+                  "completedAt": "2026-11-23T22:46:32Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:46:32Z",
+                  "completedAt": "2026-11-23T22:46:32Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:46:32Z",
+                  "completedAt": "2026-11-23T22:46:33Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:46:33Z",
+                  "completedAt": "2026-11-23T22:46:33Z"
+                },
+                {
+                  "name": "Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:46:33Z",
+                  "completedAt": "2026-11-23T22:46:38Z"
+                },
+                {
+                  "name": "Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:46:38Z",
+                  "completedAt": "2026-11-23T22:46:39Z"
+                },
+                {
+                  "name": "Run uv sync --frozen",
+                  "startedAt": "2026-11-23T22:46:39Z",
+                  "completedAt": "2026-11-23T22:46:39Z"
+                },
+                {
+                  "name": "Run uv run --frozen pytest -q -p no:cacheprovider tests/test_main.py tests/test_types.py tests/test_json_schema.py",
+                  "startedAt": "2026-11-23T22:46:39Z",
+                  "completedAt": "2026-11-23T22:46:46Z"
+                },
+                {
+                  "name": "Post Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:46:46Z",
+                  "completedAt": "2026-11-23T22:46:46Z"
+                },
+                {
+                  "name": "Post Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:46:46Z",
+                  "completedAt": "2026-11-23T22:46:46Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:46:46Z",
+                  "completedAt": "2026-11-23T22:46:46Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:46:46Z",
+                  "completedAt": "2026-11-23T22:46:46Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:46:46Z",
+                  "completedAt": "2026-11-23T22:46:46Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:46:46Z",
+                  "completedAt": "2026-11-23T22:46:46Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473959348000,
+                "vm_booted": 1795473968000000,
+                "container_started": 1795473987550000,
+                "job_started": 1795473987771524,
+                "runner_listening": 1795473990003933,
+                "job_received": 1795473992673894,
+                "hook_done": 1795473992676021
+              },
+              "cache": [],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "rust": {
+              "id": 138071170498,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45282754487/job/138071170498",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-gebeb7sn",
+              "createdAt": "2026-11-23T22:45:57Z",
+              "startedAt": "2026-11-23T22:46:34Z",
+              "completedAt": "2026-11-23T22:47:21Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:46:34Z",
+                  "completedAt": "2026-11-23T22:46:35Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:46:35Z",
+                  "completedAt": "2026-11-23T22:46:35Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:46:35Z",
+                  "completedAt": "2026-11-23T22:46:35Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:46:35Z",
+                  "completedAt": "2026-11-23T22:46:35Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:46:35Z",
+                  "completedAt": "2026-11-23T22:46:36Z"
+                },
+                {
+                  "name": "Run cargo build --release --locked",
+                  "startedAt": "2026-11-23T22:46:36Z",
+                  "completedAt": "2026-11-23T22:47:20Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:47:20Z",
+                  "completedAt": "2026-11-23T22:47:20Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:47:20Z",
+                  "completedAt": "2026-11-23T22:47:20Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:47:20Z",
+                  "completedAt": "2026-11-23T22:47:20Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:47:20Z",
+                  "completedAt": "2026-11-23T22:47:20Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795473959011000,
+                "vm_booted": 1795473969000000,
+                "container_started": 1795473991180000,
+                "job_started": 1795473991299310,
+                "runner_listening": 1795473993353802,
+                "job_received": 1795473995413079,
+                "hook_done": 1795473995415096
+              },
+              "cache": ["backmesh cache: auto the cache token came at +14.6 s"],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        }
+      },
+      {
+        "round": 5,
+        "branch": "builds/backmesh-od-4/1795474085331",
+        "cold": {
+          "runId": 45283099333,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45283099333",
+          "jobs": {
+            "typescript": {
+              "id": 138072346922,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45283099333/job/138072346922",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-1cwqi4ry",
+              "createdAt": "2026-11-23T22:48:08Z",
+              "startedAt": "2026-11-23T22:48:41Z",
+              "completedAt": "2026-11-23T22:49:45Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:48:41Z",
+                  "completedAt": "2026-11-23T22:48:42Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:48:42Z",
+                  "completedAt": "2026-11-23T22:48:42Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:48:42Z",
+                  "completedAt": "2026-11-23T22:48:42Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:48:42Z",
+                  "completedAt": "2026-11-23T22:48:42Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:48:42Z",
+                  "completedAt": "2026-11-23T22:48:52Z"
+                },
+                {
+                  "name": "Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:48:52Z",
+                  "completedAt": "2026-11-23T22:48:54Z"
+                },
+                {
+                  "name": "Run npm ci --no-audit --no-fund",
+                  "startedAt": "2026-11-23T22:48:54Z",
+                  "completedAt": "2026-11-23T22:48:57Z"
+                },
+                {
+                  "name": "Run npx hereby local",
+                  "startedAt": "2026-11-23T22:48:57Z",
+                  "completedAt": "2026-11-23T22:49:12Z"
+                },
+                {
+                  "name": "Post Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:49:12Z",
+                  "completedAt": "2026-11-23T22:49:12Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:49:12Z",
+                  "completedAt": "2026-11-23T22:49:13Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:49:13Z",
+                  "completedAt": "2026-11-23T22:49:13Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:49:13Z",
+                  "completedAt": "2026-11-23T22:49:13Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:49:13Z",
+                  "completedAt": "2026-11-23T22:49:13Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795474090983000,
+                "vm_booted": 1795474099000000,
+                "container_started": 1795474117630000,
+                "job_started": 1795474118274724,
+                "runner_listening": 1795474120174991,
+                "job_received": 1795474122321997,
+                "hook_done": 1795474122324092
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +18.8 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "docker": {
+              "id": 138072347118,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45283099333/job/138072347118",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-aen5lret",
+              "createdAt": "2026-11-23T22:48:08Z",
+              "startedAt": "2026-11-23T22:48:41Z",
+              "completedAt": "2026-11-23T22:49:53Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:48:41Z",
+                  "completedAt": "2026-11-23T22:48:42Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:48:42Z",
+                  "completedAt": "2026-11-23T22:48:42Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:48:42Z",
+                  "completedAt": "2026-11-23T22:48:42Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:48:42Z",
+                  "completedAt": "2026-11-23T22:48:42Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:48:42Z",
+                  "completedAt": "2026-11-23T22:48:44Z"
+                },
+                {
+                  "name": "Run docker build -t bench .",
+                  "startedAt": "2026-11-23T22:48:44Z",
+                  "completedAt": "2026-11-23T22:49:51Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:49:51Z",
+                  "completedAt": "2026-11-23T22:49:51Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:49:51Z",
+                  "completedAt": "2026-11-23T22:49:51Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:49:51Z",
+                  "completedAt": "2026-11-23T22:49:51Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:49:51Z",
+                  "completedAt": "2026-11-23T22:49:51Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795474090365000,
+                "vm_booted": 1795474099000000,
+                "container_started": 1795474117240000,
+                "job_started": 1795474118018492,
+                "runner_listening": 1795474119993740,
+                "job_received": 1795474122123572,
+                "hook_done": 1795474122125503
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +19.2 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "python": {
+              "id": 138072347356,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45283099333/job/138072347356",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-eghqomyc",
+              "createdAt": "2026-11-23T22:48:08Z",
+              "startedAt": "2026-11-23T22:48:41Z",
+              "completedAt": "2026-11-23T22:48:59Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:48:42Z",
+                  "completedAt": "2026-11-23T22:48:43Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:48:43Z",
+                  "completedAt": "2026-11-23T22:48:43Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:48:43Z",
+                  "completedAt": "2026-11-23T22:48:43Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:48:43Z",
+                  "completedAt": "2026-11-23T22:48:43Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:48:43Z",
+                  "completedAt": "2026-11-23T22:48:44Z"
+                },
+                {
+                  "name": "Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:48:44Z",
+                  "completedAt": "2026-11-23T22:48:48Z"
+                },
+                {
+                  "name": "Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:48:48Z",
+                  "completedAt": "2026-11-23T22:48:49Z"
+                },
+                {
+                  "name": "Run uv sync --frozen",
+                  "startedAt": "2026-11-23T22:48:49Z",
+                  "completedAt": "2026-11-23T22:48:50Z"
+                },
+                {
+                  "name": "Run uv run --frozen pytest -q -p no:cacheprovider tests/test_main.py tests/test_types.py tests/test_json_schema.py",
+                  "startedAt": "2026-11-23T22:48:50Z",
+                  "completedAt": "2026-11-23T22:48:56Z"
+                },
+                {
+                  "name": "Post Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:48:56Z",
+                  "completedAt": "2026-11-23T22:48:56Z"
+                },
+                {
+                  "name": "Post Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:48:56Z",
+                  "completedAt": "2026-11-23T22:48:56Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:48:56Z",
+                  "completedAt": "2026-11-23T22:48:57Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:48:57Z",
+                  "completedAt": "2026-11-23T22:48:57Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:48:57Z",
+                  "completedAt": "2026-11-23T22:48:57Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:48:57Z",
+                  "completedAt": "2026-11-23T22:48:57Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795474090542000,
+                "vm_booted": 1795474099000000,
+                "container_started": 1795474118300000,
+                "job_started": 1795474118516688,
+                "runner_listening": 1795474120616815,
+                "job_received": 1795474123142306,
+                "hook_done": 1795474123144309
+              },
+              "cache": [],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "go": {
+              "id": 138072347393,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45283099333/job/138072347393",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-w0ame4po",
+              "createdAt": "2026-11-23T22:48:08Z",
+              "startedAt": "2026-11-23T22:48:41Z",
+              "completedAt": "2026-11-23T22:49:27Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:48:41Z",
+                  "completedAt": "2026-11-23T22:48:42Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:48:42Z",
+                  "completedAt": "2026-11-23T22:48:42Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:48:42Z",
+                  "completedAt": "2026-11-23T22:48:42Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:48:42Z",
+                  "completedAt": "2026-11-23T22:48:42Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:48:42Z",
+                  "completedAt": "2026-11-23T22:48:43Z"
+                },
+                {
+                  "name": "Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:48:43Z",
+                  "completedAt": "2026-11-23T22:48:47Z"
+                },
+                {
+                  "name": "Run go build ./...",
+                  "startedAt": "2026-11-23T22:48:47Z",
+                  "completedAt": "2026-11-23T22:49:20Z"
+                },
+                {
+                  "name": "Run go test ./pkg/cmd/pr/...",
+                  "startedAt": "2026-11-23T22:49:20Z",
+                  "completedAt": "2026-11-23T22:49:25Z"
+                },
+                {
+                  "name": "Post Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:49:25Z",
+                  "completedAt": "2026-11-23T22:49:25Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:49:25Z",
+                  "completedAt": "2026-11-23T22:49:25Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:49:25Z",
+                  "completedAt": "2026-11-23T22:49:25Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:49:25Z",
+                  "completedAt": "2026-11-23T22:49:25Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:49:25Z",
+                  "completedAt": "2026-11-23T22:49:25Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795474090260000,
+                "vm_booted": 1795474099000000,
+                "container_started": 1795474117830000,
+                "job_started": 1795474118022207,
+                "runner_listening": 1795474120197656,
+                "job_received": 1795474122404875,
+                "hook_done": 1795474122406812
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +18.8 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "rust": {
+              "id": 138072347472,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45283099333/job/138072347472",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-69t6jxjj",
+              "createdAt": "2026-11-23T22:48:09Z",
+              "startedAt": "2026-11-23T22:48:41Z",
+              "completedAt": "2026-11-23T22:49:35Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:48:49Z",
+                  "completedAt": "2026-11-23T22:48:50Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:48:50Z",
+                  "completedAt": "2026-11-23T22:48:50Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:48:50Z",
+                  "completedAt": "2026-11-23T22:48:50Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:48:50Z",
+                  "completedAt": "2026-11-23T22:48:50Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:48:50Z",
+                  "completedAt": "2026-11-23T22:48:51Z"
+                },
+                {
+                  "name": "Run cargo build --release --locked",
+                  "startedAt": "2026-11-23T22:48:51Z",
+                  "completedAt": "2026-11-23T22:49:33Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:49:33Z",
+                  "completedAt": "2026-11-23T22:49:33Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:49:33Z",
+                  "completedAt": "2026-11-23T22:49:33Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:49:33Z",
+                  "completedAt": "2026-11-23T22:49:33Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:49:33Z",
+                  "completedAt": "2026-11-23T22:49:33Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795474090104000,
+                "vm_booted": 1795474099000000,
+                "container_started": 1795474118070000,
+                "job_started": 1795474118775050,
+                "runner_listening": 1795474120792662,
+                "job_received": 1795474130059895,
+                "hook_done": 1795474130061944
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +11.0 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        },
+        "warm": {
+          "runId": 45283565746,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45283565746",
+          "jobs": {
+            "python": {
+              "id": 138073951225,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45283565746/job/138073951225",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-03kictgc",
+              "createdAt": "2026-11-23T22:51:12Z",
+              "startedAt": "2026-11-23T22:51:48Z",
+              "completedAt": "2026-11-23T22:52:04Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:51:48Z",
+                  "completedAt": "2026-11-23T22:51:49Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:51:49Z",
+                  "completedAt": "2026-11-23T22:51:49Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:51:49Z",
+                  "completedAt": "2026-11-23T22:51:49Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:51:49Z",
+                  "completedAt": "2026-11-23T22:51:49Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:51:49Z",
+                  "completedAt": "2026-11-23T22:51:50Z"
+                },
+                {
+                  "name": "Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:51:50Z",
+                  "completedAt": "2026-11-23T22:51:55Z"
+                },
+                {
+                  "name": "Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:51:55Z",
+                  "completedAt": "2026-11-23T22:51:56Z"
+                },
+                {
+                  "name": "Run uv sync --frozen",
+                  "startedAt": "2026-11-23T22:51:56Z",
+                  "completedAt": "2026-11-23T22:51:56Z"
+                },
+                {
+                  "name": "Run uv run --frozen pytest -q -p no:cacheprovider tests/test_main.py tests/test_types.py tests/test_json_schema.py",
+                  "startedAt": "2026-11-23T22:51:56Z",
+                  "completedAt": "2026-11-23T22:52:03Z"
+                },
+                {
+                  "name": "Post Run astral-sh/setup-uv@v7",
+                  "startedAt": "2026-11-23T22:52:03Z",
+                  "completedAt": "2026-11-23T22:52:03Z"
+                },
+                {
+                  "name": "Post Run actions/setup-python@v6",
+                  "startedAt": "2026-11-23T22:52:03Z",
+                  "completedAt": "2026-11-23T22:52:03Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:52:03Z",
+                  "completedAt": "2026-11-23T22:52:03Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:52:03Z",
+                  "completedAt": "2026-11-23T22:52:03Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:52:03Z",
+                  "completedAt": "2026-11-23T22:52:03Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:52:03Z",
+                  "completedAt": "2026-11-23T22:52:03Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795474275055000,
+                "vm_booted": 1795474286000000,
+                "container_started": 1795474304500000,
+                "job_started": 1795474304964248,
+                "runner_listening": 1795474306957050,
+                "job_received": 1795474309435952,
+                "hook_done": 1795474309438210
+              },
+              "cache": [],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "typescript": {
+              "id": 138073951496,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45283565746/job/138073951496",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-dhbumbo4",
+              "createdAt": "2026-11-23T22:51:12Z",
+              "startedAt": "2026-11-23T22:51:48Z",
+              "completedAt": "2026-11-23T22:52:27Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:51:49Z",
+                  "completedAt": "2026-11-23T22:51:55Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:51:55Z",
+                  "completedAt": "2026-11-23T22:51:55Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:51:55Z",
+                  "completedAt": "2026-11-23T22:51:55Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:51:55Z",
+                  "completedAt": "2026-11-23T22:51:55Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:51:55Z",
+                  "completedAt": "2026-11-23T22:52:04Z"
+                },
+                {
+                  "name": "Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:52:04Z",
+                  "completedAt": "2026-11-23T22:52:08Z"
+                },
+                {
+                  "name": "Run npm ci --no-audit --no-fund",
+                  "startedAt": "2026-11-23T22:52:08Z",
+                  "completedAt": "2026-11-23T22:52:09Z"
+                },
+                {
+                  "name": "Run npx hereby local",
+                  "startedAt": "2026-11-23T22:52:09Z",
+                  "completedAt": "2026-11-23T22:52:25Z"
+                },
+                {
+                  "name": "Post Run actions/setup-node@v5",
+                  "startedAt": "2026-11-23T22:52:25Z",
+                  "completedAt": "2026-11-23T22:52:25Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:52:25Z",
+                  "completedAt": "2026-11-23T22:52:25Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:52:25Z",
+                  "completedAt": "2026-11-23T22:52:25Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:52:25Z",
+                  "completedAt": "2026-11-23T22:52:26Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:52:26Z",
+                  "completedAt": "2026-11-23T22:52:26Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795474273981000,
+                "vm_booted": 1795474286000000,
+                "container_started": 1795474305100000,
+                "job_started": 1795474305706988,
+                "runner_listening": 1795474307845853,
+                "job_received": 1795474315280403,
+                "hook_done": 1795474315282671
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +10.9 s",
+                "backmesh cache: auto restored npm (own)  41 MB in 0.6 s, at +11.7 s",
+                "backmesh cache: auto gave way node 22.23.5: a step made /workspace/hostedtoolcache/node/22.23.5/x64 first, at +12.0 s"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "rust": {
+              "id": 138073951515,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45283565746/job/138073951515",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-gywwah4d",
+              "createdAt": "2026-11-23T22:51:12Z",
+              "startedAt": "2026-11-23T22:51:48Z",
+              "completedAt": "2026-11-23T22:52:35Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:51:49Z",
+                  "completedAt": "2026-11-23T22:51:49Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:51:49Z",
+                  "completedAt": "2026-11-23T22:51:49Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:51:49Z",
+                  "completedAt": "2026-11-23T22:51:49Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:51:49Z",
+                  "completedAt": "2026-11-23T22:51:50Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:51:50Z",
+                  "completedAt": "2026-11-23T22:51:50Z"
+                },
+                {
+                  "name": "Run cargo build --release --locked",
+                  "startedAt": "2026-11-23T22:51:50Z",
+                  "completedAt": "2026-11-23T22:52:33Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:52:33Z",
+                  "completedAt": "2026-11-23T22:52:33Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:52:33Z",
+                  "completedAt": "2026-11-23T22:52:33Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:52:33Z",
+                  "completedAt": "2026-11-23T22:52:33Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:52:33Z",
+                  "completedAt": "2026-11-23T22:52:33Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795474274848000,
+                "vm_booted": 1795474286000000,
+                "container_started": 1795474305310000,
+                "job_started": 1795474305496163,
+                "runner_listening": 1795474307686844,
+                "job_received": 1795474309901782,
+                "hook_done": 1795474309903784
+              },
+              "cache": ["backmesh cache: auto the cache token came at +16.4 s"],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "docker": {
+              "id": 138073951518,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45283565746/job/138073951518",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-9putqm3x",
+              "createdAt": "2026-11-23T22:51:12Z",
+              "startedAt": "2026-11-23T22:51:50Z",
+              "completedAt": "2026-11-23T22:53:01Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:51:51Z",
+                  "completedAt": "2026-11-23T22:51:51Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:51:51Z",
+                  "completedAt": "2026-11-23T22:51:51Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:51:51Z",
+                  "completedAt": "2026-11-23T22:51:51Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:51:51Z",
+                  "completedAt": "2026-11-23T22:51:52Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:51:52Z",
+                  "completedAt": "2026-11-23T22:51:53Z"
+                },
+                {
+                  "name": "Run docker build -t bench .",
+                  "startedAt": "2026-11-23T22:51:53Z",
+                  "completedAt": "2026-11-23T22:52:59Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:52:59Z",
+                  "completedAt": "2026-11-23T22:52:59Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:52:59Z",
+                  "completedAt": "2026-11-23T22:52:59Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:52:59Z",
+                  "completedAt": "2026-11-23T22:52:59Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:52:59Z",
+                  "completedAt": "2026-11-23T22:52:59Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795474274143000,
+                "vm_booted": 1795474286000000,
+                "container_started": 1795474306870000,
+                "job_started": 1795474307547947,
+                "runner_listening": 1795474309664429,
+                "job_received": 1795474311688942,
+                "hook_done": 1795474311691163
+              },
+              "cache": ["backmesh cache: auto the cache token came at +14.5 s"],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "go": {
+              "id": 138073951951,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45283565746/job/138073951951",
+              "conclusion": "success",
+              "runner": "bm8ot2o-b4-0ykhkgoy",
+              "createdAt": "2026-11-23T22:51:12Z",
+              "startedAt": "2026-11-23T22:51:51Z",
+              "completedAt": "2026-11-23T22:52:37Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-23T22:51:52Z",
+                  "completedAt": "2026-11-23T22:51:52Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-23T22:51:52Z",
+                  "completedAt": "2026-11-23T22:51:53Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-23T22:51:53Z",
+                  "completedAt": "2026-11-23T22:51:53Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:51:53Z",
+                  "completedAt": "2026-11-23T22:51:53Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:51:53Z",
+                  "completedAt": "2026-11-23T22:51:54Z"
+                },
+                {
+                  "name": "Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:51:54Z",
+                  "completedAt": "2026-11-23T22:51:58Z"
+                },
+                {
+                  "name": "Run go build ./...",
+                  "startedAt": "2026-11-23T22:51:58Z",
+                  "completedAt": "2026-11-23T22:52:30Z"
+                },
+                {
+                  "name": "Run go test ./pkg/cmd/pr/...",
+                  "startedAt": "2026-11-23T22:52:30Z",
+                  "completedAt": "2026-11-23T22:52:35Z"
+                },
+                {
+                  "name": "Post Run actions/setup-go@v6",
+                  "startedAt": "2026-11-23T22:52:35Z",
+                  "completedAt": "2026-11-23T22:52:35Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:52:35Z",
+                  "completedAt": "2026-11-23T22:52:35Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-23T22:52:35Z",
+                  "completedAt": "2026-11-23T22:52:35Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-23T22:52:35Z",
+                  "completedAt": "2026-11-23T22:52:36Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-23T22:52:36Z",
+                  "completedAt": "2026-11-23T22:52:36Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795474273748000,
+                "vm_booted": 1795474286000000,
+                "container_started": 1795474308470000,
+                "job_started": 1795474308639166,
+                "runner_listening": 1795474310906714,
+                "job_received": 1795474313014744,
+                "hook_done": 1795474313016757
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +13.3 s",
+                "backmesh cache: auto gave way go 1.22.6: a step made /workspace/hostedtoolcache/go/1.22.6/x64 first, at +13.6 s"
+              ],
+              "nproc": 4,
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "region": "aws us-east-1",
+              "vm": "m8i.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        }
+      }
+    ]
+  }
+}
