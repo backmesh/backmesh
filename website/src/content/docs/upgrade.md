@@ -33,14 +33,17 @@ changes reaches an existing org on its next `upgrade`. To add a cloud, run
 `backmesh install`.
 
 Right after the control plane updates, and before any listener restarts,
-`upgrade` re-applies the role setup of each cloud your runners use, through
-your signed-in cloud CLI, as install made it: a release's runners can need
-rights the role doesn't have yet. So `upgrade` needs each runner cloud's CLI
-signed in to the account, project or subscription install used, and `--plan`
-names each one. It runs on every `upgrade`, and changes nothing when the role
-already matches. If it stops there, sign in as it says and run
-`backmesh upgrade` again; runners that start before it finishes can fail to
-launch, and their jobs get new runners once it has.
+`upgrade` re-applies the role setup of each runner cloud whose role this
+release changes, through your signed-in cloud CLI, as install made it: a
+release's runners can need rights the role doesn't have yet. So `upgrade`
+needs that cloud's CLI signed in, AWS's to the account install used, and it
+checks this before the control plane updates. Once the control plane is
+current, `--plan` names each role. It runs on every `upgrade`, and changes
+nothing when the role already matches. If it stops there, sign in as it says
+and run `backmesh upgrade` again; runners that start before it finishes can
+fail to launch, and their jobs get new runners once it has. A cloud connected
+with keys instead of a role has no setup to re-apply: `upgrade` prints the
+rights its identity needs and the command that grants them.
 
 Pass `--runners <cloud>` (repeatable) to list every cloud the runners keep: a
 cloud you leave out is removed. Its labels stop taking jobs, its runners

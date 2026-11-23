@@ -11,7 +11,7 @@ import { writeFileSync } from 'node:fs';
 import { format, resolveConfig } from 'prettier';
 
 const OPERATIONS = [
-  ...['listSecrets', 'saveSecret', 'deleteSecret'],
+  ...['listSecrets', 'saveSecret', 'deleteSecret', 'listCredentials'],
   // The cache.
   ...['mintStorageTokens', 'listBuckets', 'createBucket', 'deleteBucket'],
   ...['listBucketObjects', 'deleteBucketObject'],

@@ -400,14 +400,19 @@ export const SIGNED_IN: Record<Cloud, string> = {
 const GCP_ROLES =
   'roles/compute.instanceAdmin.v1 roles/compute.securityAdmin roles/storage.admin';
 
+// The grants upgrade names for a key connection's identity (`keyLine`):
+// AWS's inline policy and GCP's custom role, which the user makes.
+export const AWS_NETWORK_POLICY = 'AnycloudJobsNetwork';
+export const GCP_NETWORK_ROLE = 'anycloudJobsNetwork';
+
 export function deleteIdentity(cloud: Cloud, connection: string): string {
   const name = generatedIdentity(connection);
   const command = (() => {
     if (cloud === 'aws') {
-      return `for key in $(aws iam list-access-keys --user-name ${name} --query 'AccessKeyMetadata[].AccessKeyId' --output text); do aws iam delete-access-key --user-name ${name} --access-key-id "$key"; done; aws iam delete-user-policy --user-name ${name} --policy-name AnycloudAccess; aws iam delete-user --user-name ${name}`;
+      return `for key in $(aws iam list-access-keys --user-name ${name} --query 'AccessKeyMetadata[].AccessKeyId' --output text); do aws iam delete-access-key --user-name ${name} --access-key-id "$key"; done; for policy in $(aws iam list-user-policies --user-name ${name} --query PolicyNames --output text); do aws iam delete-user-policy --user-name ${name} --policy-name "$policy"; done; aws iam delete-user --user-name ${name}`;
     }
     if (cloud === 'gcp') {
-      return `PROJECT=$(gcloud config get-value project); SA=${name}@$PROJECT.iam.gserviceaccount.com; for role in ${GCP_ROLES}; do gcloud projects remove-iam-policy-binding "$PROJECT" --member "serviceAccount:$SA" --role "$role" --condition None --format none; done; gcloud iam service-accounts delete "$SA" --project "$PROJECT" --quiet`;
+      return `PROJECT=$(gcloud config get-value project); SA=${name}@$PROJECT.iam.gserviceaccount.com; for role in ${GCP_ROLES} projects/$PROJECT/roles/${GCP_NETWORK_ROLE}; do gcloud projects remove-iam-policy-binding "$PROJECT" --member "serviceAccount:$SA" --role "$role" --condition None --format none; done; gcloud iam service-accounts delete "$SA" --project "$PROJECT" --quiet`;
     }
     return `for app in $(az ad app list --display-name ${name} --query '[].appId' --output tsv); do az role assignment delete --assignee "$app" --scope "/subscriptions/$(az account show --query id --output tsv)"; az ad app delete --id "$app"; done`;
   })();

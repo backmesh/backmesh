@@ -52,6 +52,54 @@ export const anycloudContract = {
     .input(
       type<{ params: { name: string }; query: { force?: 'true' | 'false' } }>(),
     ),
+  listCredentials: oc
+    .route({
+      method: 'GET',
+      path: '/credentials',
+      inputStructure: 'detailed',
+      successStatus: 200,
+    })
+    .output(
+      type<
+        Array<
+          | {
+              accessKeyId?: string;
+              authFailedAt?: number;
+              cloudProvider: 'AWS';
+              kind?: 'role';
+              name: string;
+              roleArn?: string;
+            }
+          | {
+              authFailedAt?: number;
+              clientEmail?: string;
+              cloudProvider: 'GCP';
+              kind?: 'role';
+              name: string;
+              projectId?: string;
+              serviceAccountEmail?: string;
+              workloadIdentityProvider?: string;
+            }
+          | {
+              applicationId?: string;
+              authFailedAt?: number;
+              cloudProvider: 'Azure';
+              directoryId?: string;
+              kind?: 'role';
+              name: string;
+              subscriptionId?: string;
+            }
+          | { authFailedAt?: number; cloudProvider: 'Lambda'; name: string }
+          | {
+              accountId?: string;
+              authFailedAt?: number;
+              cloudProvider: 'Cloudflare';
+              jurisdiction?: 'default' | 'eu' | 'fedramp';
+              name: string;
+            }
+        >
+      >(),
+    ),
   mintStorageTokens: oc
     .route({
       method: 'POST',

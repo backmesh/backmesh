@@ -28,6 +28,7 @@ import { z } from 'zod';
 import { NeedsPlan, PlanChanged, UsageError } from './errors.js';
 import { hashPlan, type UpgradePlan } from './plan.js';
 import {
+  checkClouds,
   checkHosted,
   checkPinned,
   hostedApi,
@@ -54,6 +55,7 @@ import {
   startListener,
 } from './listener-vm.js';
 import type { Cloud, CloudTarget } from '../runners/classes.js';
+import type { RunCommand } from '../runners/regions.js';
 import { keyFrom, type SignInCheck } from './github-sign-in.js';
 import {
   clusterIdOf,
@@ -69,9 +71,11 @@ import {
 import { readApiVersion, readListener, type StatusReport } from './status.js';
 import {
   applyRole,
+  AWS_NETWORK_POLICY,
+  GCP_NETWORK_ROLE,
   classesOf,
+  generatedIdentity,
   listedAccount,
-  type Listed,
   noGpuLine,
   noKvmLine,
   planRegions,
@@ -93,6 +97,8 @@ import { anycloudRunners } from '../runners/anycloud.js';
 export interface UpgradeDeps {
   env: NodeJS.ProcessEnv;
   run: RunAnycloud;
+  // Each cloud's own CLI, for the role clouds' sign-in check.
+  command: RunCommand;
   // For `api upgrade`, `api status --watch` and `vm --wait`.
   runLong: RunAnycloud;
   release: () => Promise<Compatibility>;
@@ -246,6 +252,11 @@ export async function upgrade(
       `There's no listener on ${url}; run \`backmesh install\`.`,
     );
   }
+  // The connections whose setup this release changes, read and their
+  // clouds' CLIs checked before the API moves: a re-apply that can't run
+  // after it would leave the runners' launches denied.
+  const setups = await changedConnections(as(from), clusterIdOf(url));
+  await checkRoleClouds(setups, deps);
   const apiUpgraded = await upgradeApi(from, release.anycloud, deps);
   const installation = await readInstallation(api);
   if (!installation.orgs.length) {
@@ -312,11 +323,27 @@ export async function upgrade(
       }
     }
   }
-  const roles = await roleConnections([...connections.values()], run);
-  for (const { cloud, credentials, account } of roles) {
+  // Only the runners' connections: their VM Jobs need the new rights.
+  const roles = setups.flatMap(({ credentials, account }) => {
+    const target = connections.get(credentials);
+    return target && account ? [{ ...target, account }] : [];
+  });
+  for (const role of roles) {
+    const { cloud, credentials, account } = role;
+    const { AWS_REGION, AWS_DEFAULT_REGION } = {
+      ...deps.env,
+      ...regionEnv(role, deps.env),
+    };
+    const stack =
+      cloud === 'aws'
+        ? ` (its stack in ${AWS_REGION ?? AWS_DEFAULT_REGION})`
+        : '';
     print(
-      `${cloud}'s role connection ${credentials} in ${SIGNED_IN[cloud]} ${account}: upgrade re-applies its setup through your ${LOGINS[cloud][0][0]} CLI, for this release's runner permissions.`,
+      `${cloud}'s role connection ${credentials} in ${SIGNED_IN[cloud]} ${account}${stack}: upgrade re-applies its setup through your ${LOGINS[cloud][0][0]} CLI, for this release's runner permissions.`,
     );
+  }
+  for (const key of setups) {
+    if (!key.account && connections.has(key.credentials)) print(keyLine(key));
   }
   if (!planOnly) await reapplyRoles(roles, deps);
   // Each org's classes, planned again with the pinned catalog's types,
@@ -699,17 +726,70 @@ async function connectionOf(cloud: Cloud, url: string, deps: UpgradeDeps) {
   return installConnection(cloud, clusterIdOf(url), listed)?.name;
 }
 
-// The runner clouds' role connections, with their accounts; a key
-// connection, as our CI's override has, has no setup to re-apply.
-async function roleConnections(targets: CloudTarget[], run: RunAnycloud) {
-  const listed = JSON.parse(
-    await run(['credentials', 'list', '--json']),
-  ) as Listed[];
-  return targets.flatMap((target) => {
-    const entry = listed.find((e) => e.name === target.credentials);
-    const account = entry && listedAccount(target.cloud, entry);
-    return account ? [{ ...target, account }] : [];
+// What anycloud 0.1.81 (ANYCLOUD_VERSION) adds to each cloud's role
+// setup, for its VM Job network (RFC 0053): upgrade re-applies those
+// clouds' role connections, and names the rights a key connection's
+// identity needs. Azure's is unchanged. A pin that adds none empties it.
+const NEW_RIGHTS: Partial<Record<Cloud, string[]>> = {
+  aws: [
+    ...['ec2:CreateVpc', 'ec2:CreateSubnet', 'ec2:CreateInternetGateway'],
+    ...['ec2:AttachInternetGateway', 'ec2:CreateRoute'],
+    ...['ec2:DescribeAvailabilityZones', 'ec2:DescribeInternetGateways'],
+    ...['ec2:DescribeRouteTables', 'ec2:DescribeSubnets'],
+  ],
+  gcp: ['compute.networks.create', 'compute.networks.get'],
+};
+
+type Changed = { cloud: Cloud; credentials: string; account?: string };
+
+// This control plane's connection in each cloud NEW_RIGHTS names, read
+// through the API at its own release: a role connection has its account,
+// a key connection (our CI's override) none.
+async function changedConnections(
+  api: AnycloudApi,
+  clusterId: string,
+): Promise<Changed[]> {
+  const listed = await api.listCredentials({});
+  return (Object.keys(NEW_RIGHTS) as Cloud[]).flatMap((cloud) => {
+    const entry = installConnection(cloud, clusterId, listed);
+    if (!entry) return [];
+    const account = listedAccount(cloud, entry);
+    return [{ cloud, credentials: entry.name, account }];
   });
+}
+
+// Each role cloud's CLI signed in, and AWS's to the role's account, as
+// install checks before it bills. GCP's re-apply names its project itself.
+async function checkRoleClouds(changed: Changed[], deps: UpgradeDeps) {
+  const roles = changed.filter((c) => c.account);
+  if (!roles.length) return;
+  // sts answers in any region; the stack's is the runners' (reapplyRoles).
+  const identities = await checkClouds(
+    roles.map(({ cloud }) => ({ cloud, region: 'us-east-1' })),
+    deps,
+  );
+  const aws = roles.find((r) => r.cloud === 'aws');
+  const { Account } = JSON.parse(identities.get('aws') ?? '{}') as {
+    Account?: string;
+  };
+  if (aws && Account !== aws.account) {
+    throw new UsageError(
+      `aws's CLI is signed in to account ${Account ?? 'unknown'}, not ${aws.account}, where ${aws.credentials}'s role is: sign it in to ${aws.account}, then run \`backmesh upgrade\` again.`,
+    );
+  }
+}
+
+// A key connection has no setup to re-apply, so the user grants its
+// generated identity the new rights, once, in the account install used.
+// uninstall's `removeIdentity` deletes the grant with the identity.
+function keyLine({ cloud, credentials }: Changed) {
+  const rights = NEW_RIGHTS[cloud]!;
+  const name = generatedIdentity(credentials);
+  const command =
+    cloud === 'aws'
+      ? `aws iam put-user-policy --user-name ${name} --policy-name ${AWS_NETWORK_POLICY} --policy-document '${JSON.stringify({ Version: '2012-10-17', Statement: [{ Effect: 'Allow', Action: rights, Resource: '*' }] })}'`
+      : `PROJECT=$(gcloud config get-value project); gcloud iam roles describe ${GCP_NETWORK_ROLE} --project "$PROJECT" --format none || gcloud iam roles create ${GCP_NETWORK_ROLE} --project "$PROJECT" --permissions ${rights.join(',')} --format none; gcloud projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:${name}@$PROJECT.iam.gserviceaccount.com" --role "projects/$PROJECT/roles/${GCP_NETWORK_ROLE}" --condition None --format none`;
+  return `${cloud}'s key connection ${credentials} has no setup to re-apply, and its runners need ${rights.join(', ')}. Unless its identity ${name} has them, grant them, signed in to the ${SIGNED_IN[cloud]} install used:\n  ${command}`;
 }
 
 // A release's runners can need new permissions, as anycloud 0.1.81's VM Job
@@ -719,24 +799,32 @@ async function roleConnections(targets: CloudTarget[], run: RunAnycloud) {
 // side and saves the same connection again. The AWS stack's region is
 // install's: the runners' first region, unless the user set one.
 async function reapplyRoles(
-  roles: Awaited<ReturnType<typeof roleConnections>>,
+  roles: (CloudTarget & { account: string })[],
   deps: UpgradeDeps,
 ) {
+  const again =
+    "This release's runners need its role setup; run `backmesh upgrade` again.";
   for (const role of roles) {
     const { cloud, account } = role;
     const where = `${SIGNED_IN[cloud]} ${account}`;
-    await applyRole(role, account, regionEnv(role, deps.env), deps).catch(
-      (error: unknown) => {
-        const login = signInRequired(error);
-        const again =
-          "This release's runners need its role setup; run `backmesh upgrade` again.";
-        throw new Error(
-          login
-            ? `${cloud}'s CLI needs a sign-in to ${where}: run \`${login}\`. ${again}`
-            : `${cloud}'s role setup in ${where} wasn't re-applied: ${error instanceof Error ? error.message : String(error)}. ${again}`,
-          { cause: error },
-        );
-      },
-    );
+    const made = await applyRole(
+      role,
+      account,
+      regionEnv(role, deps.env),
+      deps,
+    ).catch((error: unknown) => {
+      const login = signInRequired(error);
+      throw new Error(
+        login
+          ? `${cloud}'s CLI needs a sign-in to ${where}: run \`${login}\`. ${again}`
+          : `${cloud}'s role setup in ${where} wasn't re-applied: ${error instanceof Error ? error.message : String(error)}. ${again}`,
+        { cause: error },
+      );
+    });
+    if (made !== account) {
+      throw new Error(
+        `${cloud}'s CLI re-applied the role setup in ${SIGNED_IN[cloud]} ${made ?? 'unknown'}, not ${account}, where ${role.credentials}'s role is. Sign it in to ${account}. ${again}`,
+      );
+    }
   }
 }
