@@ -167,7 +167,7 @@ describe('anycloudRunnerJobs', () => {
     expect(requests[0]!.body).not.toHaveProperty('gpuType');
   });
 
-  it('leaves GCP and Azure at their default tier, with neither gp3 field', async () => {
+  it("asks for GCP's pd-ssd tier, leaves Azure at its default, with neither gp3 field", async () => {
     const { jobs, requests } = fakeApi(() => json(202, { id: 'x' }));
     const spec: RunnerSpec = {
       id: 'bmabc12-a4-00000000',
@@ -193,6 +193,9 @@ describe('anycloudRunnerJobs', () => {
       expect(body).not.toHaveProperty('cloudConfig.diskIops');
       expect(body).not.toHaveProperty('cloudConfig.diskThroughputMibps');
     }
+    const [gcp, azure] = requests;
+    expect(gcp!.body).toMatchObject({ cloudConfig: { diskTier: 'high' } });
+    expect(azure!.body).not.toHaveProperty('cloudConfig.diskTier');
   });
 
   it("lists the session's unended Jobs and counts every other bm- session's", async () => {

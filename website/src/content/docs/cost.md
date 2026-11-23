@@ -63,7 +63,9 @@ shows the same figures.
 - **Disks.** Each runner has a 100 GB disk while its job runs. On AWS it's gp3
   at 4,000 IOPS and 500 MiB/s, about $0.038 an hour: $0.011 for storage and
   $0.027 for IOPS and throughput above gp3's baseline
-  ([EBS pricing](https://aws.amazon.com/ebs/pricing/)).
+  ([EBS pricing](https://aws.amazon.com/ebs/pricing/)). On GCP it's pd-ssd,
+  $0.17 a GB-month in `us-central1`, about $0.023 an hour
+  ([disk pricing](https://cloud.google.com/compute/disks-image-pricing)).
 - **Runners started ahead** of predicted or cued jobs that no job takes. Each
   bills for its boot and a short idle time.
 - **Buckets.** The checkpoint bucket and the [cache](/cache/) buckets bill for
