@@ -75,6 +75,9 @@ export const per1000 = clouds.map(
 
 export const github1000 = GITHUB_4_CORE_PER_MIN * 1000;
 
+/** The runner's disk on AWS, $ an hour, as above. */
+export const AWS_DISK_PER_HOUR = 0.0384;
+
 /** The headline: a month of 4-vCPU jobs on GitHub and on backmesh, as a
  * lower bound: each cloud's fixed control plane plus the jobs' spot VMs over
  * the cheapest and most expensive types, without disks, boots, or runners the

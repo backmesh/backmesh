@@ -60,9 +60,11 @@ run's jobs saved. So the warm run models a second push to the same branch,
 which reads its own branch's caches; a new pull request's branch reads the
 default branch's instead. The round's figures go to
 `results/<date>-<backmesh version>.json` after each round, and its branch is
-deleted; `RESULTS_SUFFIX` names a second file for the same date and version,
-`<date>-<version><suffix>.json`. [`report.ts`](report.ts) writes the results
-below from every file in [`results/`](results/).
+deleted. A run that isn't a release's figures, such as one with extra arms,
+sets `EXPERIMENT=<name>` and goes to
+`results/experiments/<date>-<version>-<name>.json` instead, which
+backmesh.com and the trend below leave out. [`report.ts`](report.ts) writes
+the results below from every file in [`results/`](results/).
 
 **Re-run it before a release that touches the runners' start-up, the cache or
 scheduling**, on the release's installation, and commit the results file and
@@ -136,13 +138,16 @@ took 12 s rather than 17. npm's cache came in 2 of the 10 warm typescript jobs
 and gave way to `npm ci` in 7. Python jobs end about 15 s in, often before the
 token comes, so their Complete runner step prints no cache line.
 
-On 2026-11-23's second v0.5.7 run (`2026-11-23-0.5.7-cores.json`),
-`backmesh-8`, `backmesh-16` and three cache arms ran alongside `backmesh-4`
-and `ubuntu-latest`, interleaved. The figures below are the cold medians.
+On 2026-11-23's second v0.5.7 run, an experiment
+(`experiments/2026-11-23-0.5.7-cores.json`), `backmesh-8`, `backmesh-16` and
+three cache arms ran alongside `backmesh-4` and `ubuntu-latest`, interleaved,
+so the seven arms' jobs contended for the installation at once. The figures
+below are the cold medians over 5 rounds.
 
 - **More cores speed up the build itself, but not the wait.** From the first step to done,
-  `backmesh-16` was 2.8× `ubuntu-latest` on go, 1.8× on docker, 1.6× on
-  typescript and 1.3× on rust and python. Each job still waits 40 to 45 s for
+  `backmesh-16` was 2.8× `ubuntu-latest` on go, 1.8× on docker and 1.6× on
+  typescript. On rust and python there was no measurable difference: their
+  1.3× medians are within the rounds' spread. Each job still waits 40 to 45 s for
   its VM, against `ubuntu-latest`'s 4 s, so from the queueing to done no label
   beat `ubuntu-latest` by more than 1.3× (go on `backmesh-16`, warm). On most
   builds they took longer.
@@ -152,7 +157,7 @@ and `ubuntu-latest`, interleaved. The figures below are the cold medians.
   starts with 5 s installing Ubuntu's `cargo` on first use. Ubuntu's `rustc`
   is older than GitHub's. ripgrep's own crate compiles on one core for about
   17 s, so `backmesh-4` (45 s) is slower than `ubuntu-latest` (31 s), and
-  `backmesh-16` reaches 23 s.
+  `backmesh-16`'s 23 s isn't measurably faster.
 - **The CPU.** `backmesh-4`, `-8` and `-16` ran on `m8i` (Intel Xeon 6975P-C)
   in 143 of 150 jobs; the other 7, on `-8` and `-16`, fell back to `m7a` (AMD EPYC
   9R14). `ubuntu-latest`'s 50 jobs ran on seven different CPUs, from AMD EPYC
@@ -160,25 +165,107 @@ and `ubuntu-latest`, interleaved. The figures below are the cold medians.
   typescript at 44 s on the EPYC 7763 and 32 to 33 s on the EPYC 9V45 and 9V74,
   but no CPU model has more than a few jobs. AWS's 8th-generation AMD (`m8a`, `c8a`) and
   `c8i` aren't among backmesh's types, and a label can't choose a VM family.
-- **Cache.** GitHub's cache hit in all 25 warm `ubuntu-latest/cache` jobs. It
-  brought go to 21 s and rust to 24 s, and made docker's `type=gha` build slower
-  (113 s warm, 179 s cold, against 87 to 90 s without). `backmesh/cache` hit in
-  29 of 50 warm jobs. A restore waits for the job's cache token, which came a
-  median 14 s and up to 45 s into the job. 12 warm jobs had no token by
+- **Cache.** The arms cache differently, so they compare setups rather than
+  caches alone: GitHub's runners use GitHub's cache and Docker's `type=gha`,
+  backmesh's `backmesh/cache` and a local Docker cache directory. GitHub's
+  cache hit in all 20 warm `ubuntu-latest/cache` jobs whose `cache-hit` output
+  shows it; docker's `type=gha` has no such output, though its warm builds had
+  5 `CACHED` steps. It brought go to 21 s and rust to 24 s, and made docker's
+  `type=gha` build slower (113 s warm, 179 s cold, against 87 to 90 s
+  without). `backmesh/cache` hit in 29 of 50 warm jobs, a figure that reflects
+  0.5.7's late cache token more than the cache: a restore waits for the
+  token, which came a median 14 s and up to 45 s into the job. 12 warm jobs had no token by
   then and fell back to GitHub's cache, which was empty. 9 more followed a cold
   job that had fallen back and so saved to GitHub's cache. When it hit, warm
   `backmesh-16/cache` builds took 19 s for go and rust, 59 s for docker and 29 s
   for typescript.
-- **Cost.** A build on `backmesh-4`, at spot prices, was 1/10 to 1/19 of what
-  GitHub's 4-vCPU runner costs a private repository. It was 1/6 to 1/12 on
-  `backmesh-8` and 1/3 to 1/7 on `backmesh-16`. The fastest speedup per dollar:
-  go, 2.8× faster from the first step at 1/7 of the price, on `backmesh-16`.
+- **Cost.** At spot prices with the disk, each VM billed for at least a
+  minute, a build on `backmesh-4` cost 1/6 to 1/11 of GitHub's 4-core price,
+  what a private repository pays for a 4-core larger runner (a public
+  repository's `ubuntu-latest`, as here, has 4 vCPUs and is free). It was 1/5
+  to 1/9 on `backmesh-8` and 1/3 to 1/5 on `backmesh-16`. The fastest speedup
+  per dollar: go, 2.8× faster from the first step at 1/5.3 of the price, on
+  `backmesh-16`. A private repository's default `ubuntu-latest` has 2 vCPUs at
+  about $0.006 to $0.008 a minute, a half to two thirds of the 4-core price:
+  for as many minutes the ratios would shrink by as much, to 1/3 to 1/8 on
+  `backmesh-4`, but a build on 2 vCPUs takes longer, and these runs don't
+  measure it.
 
 <!-- results:start -->
 
 Generated by [`report.ts`](report.ts) from [`results/`](results/); don't edit by hand.
 
 ### Latest: 2026-11-23, backmesh 0.5.7
+
+backmesh 0.5.7 on anycloud 0.1.80, backmesh org CI, AWS;
+5 rounds on each label in [backmesh/benchmarks](https://github.com/backmesh/benchmarks),
+from bench.yml at dfe01a3. Medians, in seconds.
+
+**Queued to done** (queued to first step + first step to done):
+
+| Build      | backmesh-4, cold    | backmesh-4, warm    | ubuntu-latest, cold | ubuntu-latest, warm | backmesh-2, cold     | backmesh-2, warm     |
+| ---------- | ------------------- | ------------------- | ------------------- | ------------------- | -------------------- | -------------------- |
+| docker     | 105 s (35 s + 69 s) | 107 s (35 s + 71 s) | 98 s (4 s + 94 s)   | 101 s (4 s + 98 s)  | 141 s (39 s + 103 s) | 136 s (35 s + 103 s) |
+| go         | 84 s (35 s + 48 s)  | 82 s (34 s + 48 s)  | 68 s (5 s + 64 s)   | 56 s (4 s + 51 s)   | 121 s (37 s + 82 s)  | 118 s (35 s + 83 s)  |
+| python     | 53 s (36 s + 17 s)  | 53 s (37 s + 16 s)  | 23 s (5 s + 18 s)   | 22 s (5 s + 18 s)   | 55 s (37 s + 17 s)   | 54 s (37 s + 18 s)   |
+| rust       | 87 s (35 s + 49 s)  | 86 s (34 s + 49 s)  | 36 s (4 s + 32 s)   | 38 s (4 s + 34 s)   | 149 s (38 s + 111 s) | 121 s (37 s + 85 s)  |
+| typescript | 70 s (36 s + 34 s)  | 69 s (35 s + 34 s)  | 47 s (4 s + 43 s)   | 41 s (3 s + 38 s)   | 84 s (40 s + 43 s)   | 80 s (38 s + 42 s)   |
+
+**Speed and cost a build.** Each label's medians, and their speed against
+ubuntu-latest's (its time over the label's), a `/cache` arm's against
+`ubuntu-latest/cache`'s. A backmesh job's cost is its VM's spot
+price from the kernel's start to the job's end, at
+[`cost.ts`](../../website/src/cost.ts)'s `backmesh-4` price for the VM's
+family times its vCPUs over 4, plus its disk's $0.0384 an hour,
+for at least a minute, as AWS bills both. ubuntu-latest's is what GitHub charges for
+its 4-vCPU runner, $0.012 a minute, each job rounded up to
+a whole minute: a private repository pays it for a 4-core larger runner, while
+a public one's `ubuntu-latest`, as here, has 4 vCPUs and is free. A private
+repository's `ubuntu-latest` has 2 vCPUs at about $0.006 to $0.008 a minute,
+which these runs don't measure. Costs are medians over the cold and warm jobs.
+
+| Build      | Label         | First step to done, cold | First step to done, warm | Queued to done, cold | Queued to done, warm | Cost a build | Price against ubuntu-latest |
+| ---------- | ------------- | ------------------------ | ------------------------ | -------------------- | -------------------- | ------------ | --------------------------- |
+| docker     | backmesh-4    | 69 s, 1.4×               | 71 s, 1.4×               | 105 s, 0.9×          | 107 s, 0.9×          | $0.0025      | 1/9.6                       |
+| docker     | ubuntu-latest | 94 s, 1.0×               | 98 s, 1.0×               | 98 s, 1.0×           | 101 s, 1.0×          | $0.0240      | 1/1.0                       |
+| docker     | backmesh-2    | 103 s, 0.9×              | 103 s, 1.0×              | 141 s, 0.7×          | 136 s, 0.7×          | $0.0024      | 1/9.8                       |
+| go         | backmesh-4    | 48 s, 1.3×               | 48 s, 1.1×               | 84 s, 0.8×           | 82 s, 0.7×           | $0.0019      | 1/12.6                      |
+| go         | ubuntu-latest | 64 s, 1.0×               | 51 s, 1.0×               | 68 s, 1.0×           | 56 s, 1.0×           | $0.0240      | 1/1.0                       |
+| go         | backmesh-2    | 82 s, 0.8×               | 83 s, 0.6×               | 121 s, 0.6×          | 118 s, 0.5×          | $0.0021      | 1/11.4                      |
+| python     | backmesh-4    | 17 s, 1.1×               | 16 s, 1.1×               | 53 s, 0.4×           | 53 s, 0.4×           | $0.0016      | 1/7.4                       |
+| python     | ubuntu-latest | 18 s, 1.0×               | 18 s, 1.0×               | 23 s, 1.0×           | 22 s, 1.0×           | $0.0120      | 1/1.0                       |
+| python     | backmesh-2    | 17 s, 1.1×               | 18 s, 1.0×               | 55 s, 0.4×           | 54 s, 0.4×           | $0.0011      | 1/10.7                      |
+| rust       | backmesh-4    | 49 s, 0.7×               | 49 s, 0.7×               | 87 s, 0.4×           | 86 s, 0.4×           | $0.0019      | 1/6.2                       |
+| rust       | ubuntu-latest | 32 s, 1.0×               | 34 s, 1.0×               | 36 s, 1.0×           | 38 s, 1.0×           | $0.0120      | 1/1.0                       |
+| rust       | backmesh-2    | 111 s, 0.3×              | 85 s, 0.4×               | 149 s, 0.2×          | 121 s, 0.3×          | $0.0024      | 1/5.0                       |
+| typescript | backmesh-4    | 34 s, 1.3×               | 34 s, 1.1×               | 70 s, 0.7×           | 69 s, 0.6×           | $0.0016      | 1/7.4                       |
+| typescript | ubuntu-latest | 43 s, 1.0×               | 38 s, 1.0×               | 47 s, 1.0×           | 41 s, 1.0×           | $0.0120      | 1/1.0                       |
+| typescript | backmesh-2    | 43 s, 1.0×               | 42 s, 0.9×               | 84 s, 0.6×           | 80 s, 0.5×           | $0.0013      | 1/9.3                       |
+
+**Queued to the first step, by piece.** Each piece's median, over every
+build's jobs; the pieces' medians needn't add up to the total's.
+
+| Piece                                                | backmesh-4, cold | backmesh-4, warm | ubuntu-latest, cold | ubuntu-latest, warm | backmesh-2, cold | backmesh-2, warm |
+| ---------------------------------------------------- | ---------------- | ---------------- | ------------------- | ------------------- | ---------------- | ---------------- |
+| Queued to runner submitted                           | 2 s              | 2 s              | n/a                 | n/a                 | 2 s              | 2 s              |
+| VM launched (submitted to kernel start)              | 10 s             | 9 s              | n/a                 | n/a                 | 9 s              | 8 s              |
+| OS boot, Docker install, image pull, container start | 19 s             | 19 s             | n/a                 | n/a                 | 21 s             | 20 s             |
+| Runner connected to GitHub                           | 3 s              | 3 s              | n/a                 | n/a                 | 3 s              | 3 s              |
+| GitHub assigned the job                              | 0 s              | 1 s              | 3 s                 | 2 s                 | 1 s              | 1 s              |
+| Set up job (actions downloaded)                      | 2 s              | 2 s              | n/a                 | n/a                 | 2 s              | 2 s              |
+| Cache hold (automatic restores)                      | n/a              | n/a              | n/a                 | n/a                 | n/a              | n/a              |
+| Rest of the setup, to the first step                 | 0 s              | 0 s              | 2 s                 | 2 s                 | 0 s              | 0 s              |
+| **Queued to first step**                             | **36 s**         | **35 s**         | **5 s**             | **4 s**             | **38 s**         | **36 s**         |
+
+`backmesh-4` ran on m8i.xlarge in aws us-east-2 (50). `backmesh-2` ran on m8i.large in aws us-east-2 (50). Warm jobs on `backmesh-4` that restored an automatic cache: docker 0 of 5, go 0 of 5, python 0 of 5, rust 0 of 5, typescript 0 of 5. Warm jobs on `backmesh-2` that restored an automatic cache: docker 0 of 5, go 1 of 5, python 1 of 5, rust 0 of 5, typescript 2 of 5.
+
+The runs, a cold and a warm one a round:
+
+- `backmesh-4`: [cold](https://github.com/backmesh/benchmarks/actions/runs/45099514365) and [warm](https://github.com/backmesh/benchmarks/actions/runs/45099786483), [cold](https://github.com/backmesh/benchmarks/actions/runs/45099992945) and [warm](https://github.com/backmesh/benchmarks/actions/runs/45100291887), [cold](https://github.com/backmesh/benchmarks/actions/runs/45100490570) and [warm](https://github.com/backmesh/benchmarks/actions/runs/45100798142), [cold](https://github.com/backmesh/benchmarks/actions/runs/45100979655) and [warm](https://github.com/backmesh/benchmarks/actions/runs/45101258377), [cold](https://github.com/backmesh/benchmarks/actions/runs/45101454496) and [warm](https://github.com/backmesh/benchmarks/actions/runs/45101739974)
+- `ubuntu-latest`: [cold](https://github.com/backmesh/benchmarks/actions/runs/45099514434) and [warm](https://github.com/backmesh/benchmarks/actions/runs/45099762791), [cold](https://github.com/backmesh/benchmarks/actions/runs/45099943236) and [warm](https://github.com/backmesh/benchmarks/actions/runs/45100195524), [cold](https://github.com/backmesh/benchmarks/actions/runs/45100400369) and [warm](https://github.com/backmesh/benchmarks/actions/runs/45100700071), [cold](https://github.com/backmesh/benchmarks/actions/runs/45100858394) and [warm](https://github.com/backmesh/benchmarks/actions/runs/45101151427), [cold](https://github.com/backmesh/benchmarks/actions/runs/45101357083) and [warm](https://github.com/backmesh/benchmarks/actions/runs/45101612859)
+- `backmesh-2`: [cold](https://github.com/backmesh/benchmarks/actions/runs/45099514445) and [warm](https://github.com/backmesh/benchmarks/actions/runs/45099861541), [cold](https://github.com/backmesh/benchmarks/actions/runs/45100062616) and [warm](https://github.com/backmesh/benchmarks/actions/runs/45100360015), [cold](https://github.com/backmesh/benchmarks/actions/runs/45100623535) and [warm](https://github.com/backmesh/benchmarks/actions/runs/45100990921), [cold](https://github.com/backmesh/benchmarks/actions/runs/45101258773) and [warm](https://github.com/backmesh/benchmarks/actions/runs/45101586937), [cold](https://github.com/backmesh/benchmarks/actions/runs/45101833077) and [warm](https://github.com/backmesh/benchmarks/actions/runs/45102164371)
+
+### Experiment: `experiments/2026-11-23-0.5.7-cores.json`
 
 backmesh 0.5.7 on anycloud 0.1.80, backmesh org CI, AWS;
 5 rounds on each label in [backmesh/benchmarks](https://github.com/backmesh/benchmarks),
@@ -199,47 +286,50 @@ ubuntu-latest's (its time over the label's), a `/cache` arm's against
 `ubuntu-latest/cache`'s. A backmesh job's cost is its VM's spot
 price from the kernel's start to the job's end, at
 [`cost.ts`](../../website/src/cost.ts)'s `backmesh-4` price for the VM's
-family times its vCPUs over 4, without the disk; ubuntu-latest's is what a
-private repository pays for GitHub's 4-vCPU runner, $0.012 a
-minute, each job rounded up to a whole minute (in a public one it's free).
-Costs are medians over the cold and warm jobs.
+family times its vCPUs over 4, plus its disk's $0.0384 an hour,
+for at least a minute, as AWS bills both. ubuntu-latest's is what GitHub charges for
+its 4-vCPU runner, $0.012 a minute, each job rounded up to
+a whole minute: a private repository pays it for a 4-core larger runner, while
+a public one's `ubuntu-latest`, as here, has 4 vCPUs and is free. A private
+repository's `ubuntu-latest` has 2 vCPUs at about $0.006 to $0.008 a minute,
+which these runs don't measure. Costs are medians over the cold and warm jobs.
 
 | Build      | Label               | First step to done, cold | First step to done, warm | Queued to done, cold | Queued to done, warm | Cost a build | Price against ubuntu-latest |
 | ---------- | ------------------- | ------------------------ | ------------------------ | -------------------- | -------------------- | ------------ | --------------------------- |
-| docker     | backmesh-4          | 69 s, 1.3×               | 69 s, 1.3×               | 111 s, 0.8×          | 105 s, 0.9×          | $0.0015      | 1/15.8                      |
-| docker     | backmesh-8          | 55 s, 1.6×               | 56 s, 1.6×               | 92 s, 1.0×           | 95 s, 1.0×           | $0.0026      | 1/9.2                       |
-| docker     | backmesh-16         | 50 s, 1.8×               | 49 s, 1.8×               | 93 s, 1.0×           | 89 s, 1.0×           | $0.0051      | 1/4.7                       |
+| docker     | backmesh-4          | 69 s, 1.3×               | 69 s, 1.3×               | 111 s, 0.8×          | 105 s, 0.9×          | $0.0025      | 1/9.5                       |
+| docker     | backmesh-8          | 55 s, 1.6×               | 56 s, 1.6×               | 92 s, 1.0×           | 95 s, 1.0×           | $0.0035      | 1/6.9                       |
+| docker     | backmesh-16         | 50 s, 1.8×               | 49 s, 1.8×               | 93 s, 1.0×           | 89 s, 1.0×           | $0.0060      | 1/4.0                       |
 | docker     | ubuntu-latest       | 90 s, 1.0×               | 87 s, 1.0×               | 94 s, 1.0×           | 91 s, 1.0×           | $0.0240      | 1/1.0                       |
-| docker     | backmesh-4/cache    | 108 s, 1.7×              | 114 s, 1.0×              | 144 s, 1.3×          | 156 s, 0.8×          | $0.0022      | 1/16.4                      |
-| docker     | backmesh-16/cache   | 86 s, 2.1×               | 63 s, 1.8×               | 124 s, 1.5×          | 111 s, 1.1×          | $0.0070      | 1/5.1                       |
+| docker     | backmesh-4/cache    | 108 s, 1.7×              | 114 s, 1.0×              | 144 s, 1.3×          | 156 s, 0.8×          | $0.0036      | 1/9.9                       |
+| docker     | backmesh-16/cache   | 86 s, 2.1×               | 63 s, 1.8×               | 124 s, 1.5×          | 111 s, 1.1×          | $0.0082      | 1/4.4                       |
 | docker     | ubuntu-latest/cache | 179 s, 1.0×              | 113 s, 1.0×              | 186 s, 1.0×          | 118 s, 1.0×          | $0.0360      | 1/1.0                       |
-| go         | backmesh-4          | 49 s, 1.3×               | 48 s, 1.5×               | 90 s, 0.8×           | 89 s, 0.9×           | $0.0013      | 1/18.8                      |
-| go         | backmesh-8          | 31 s, 2.1×               | 31 s, 2.4×               | 74 s, 0.9×           | 72 s, 1.1×           | $0.0020      | 1/12.0                      |
-| go         | backmesh-16         | 23 s, 2.8×               | 22 s, 3.4×               | 74 s, 0.9×           | 63 s, 1.3×           | $0.0032      | 1/7.4                       |
+| go         | backmesh-4          | 49 s, 1.3×               | 48 s, 1.5×               | 90 s, 0.8×           | 89 s, 0.9×           | $0.0021      | 1/11.3                      |
+| go         | backmesh-8          | 31 s, 2.1×               | 31 s, 2.4×               | 74 s, 0.9×           | 72 s, 1.1×           | $0.0026      | 1/9.1                       |
+| go         | backmesh-16         | 23 s, 2.8×               | 22 s, 3.4×               | 74 s, 0.9×           | 63 s, 1.3×           | $0.0045      | 1/5.3                       |
 | go         | ubuntu-latest       | 64 s, 1.0×               | 74 s, 1.0×               | 69 s, 1.0×           | 79 s, 1.0×           | $0.0240      | 1/1.0                       |
-| go         | backmesh-4/cache    | 61 s, 1.3×               | 31 s, 0.7×               | 98 s, 0.8×           | 77 s, 0.3×           | $0.0014      | 1/13.3                      |
-| go         | backmesh-16/cache   | 33 s, 2.3×               | 20 s, 1.1×               | 77 s, 1.1×           | 61 s, 0.4×           | $0.0039      | 1/4.7                       |
+| go         | backmesh-4/cache    | 61 s, 1.3×               | 31 s, 0.7×               | 98 s, 0.8×           | 77 s, 0.3×           | $0.0022      | 1/8.0                       |
+| go         | backmesh-16/cache   | 33 s, 2.3×               | 20 s, 1.1×               | 77 s, 1.1×           | 61 s, 0.4×           | $0.0045      | 1/4.0                       |
 | go         | ubuntu-latest/cache | 77 s, 1.0×               | 21 s, 1.0×               | 81 s, 1.0×           | 25 s, 1.0×           | $0.0180      | 1/1.0                       |
-| python     | backmesh-4          | 17 s, 1.3×               | 17 s, 1.1×               | 56 s, 0.5×           | 61 s, 0.4×           | $0.0007      | 1/16.1                      |
-| python     | backmesh-8          | 16 s, 1.4×               | 17 s, 1.1×               | 59 s, 0.5×           | 59 s, 0.4×           | $0.0015      | 1/8.2                       |
-| python     | backmesh-16         | 17 s, 1.3×               | 17 s, 1.1×               | 64 s, 0.4×           | 64 s, 0.3×           | $0.0034      | 1/3.5                       |
+| python     | backmesh-4          | 17 s, 1.3×               | 17 s, 1.1×               | 56 s, 0.5×           | 61 s, 0.4×           | $0.0016      | 1/7.4                       |
+| python     | backmesh-8          | 16 s, 1.4×               | 17 s, 1.1×               | 59 s, 0.5×           | 59 s, 0.4×           | $0.0026      | 1/4.6                       |
+| python     | backmesh-16         | 17 s, 1.3×               | 17 s, 1.1×               | 64 s, 0.4×           | 64 s, 0.3×           | $0.0045      | 1/2.7                       |
 | python     | ubuntu-latest       | 22 s, 1.0×               | 18 s, 1.0×               | 28 s, 1.0×           | 22 s, 1.0×           | $0.0120      | 1/1.0                       |
-| python     | backmesh-4/cache    | 24 s, 0.8×               | 35 s, 0.5×               | 65 s, 0.3×           | 75 s, 0.3×           | $0.0009      | 1/13.6                      |
-| python     | backmesh-16/cache   | 24 s, 0.8×               | 24 s, 0.8×               | 65 s, 0.3×           | 65 s, 0.4×           | $0.0033      | 1/3.6                       |
+| python     | backmesh-4/cache    | 24 s, 0.8×               | 35 s, 0.5×               | 65 s, 0.3×           | 75 s, 0.3×           | $0.0016      | 1/7.4                       |
+| python     | backmesh-16/cache   | 24 s, 0.8×               | 24 s, 0.8×               | 65 s, 0.3×           | 65 s, 0.4×           | $0.0045      | 1/2.7                       |
 | python     | ubuntu-latest/cache | 18 s, 1.0×               | 19 s, 1.0×               | 22 s, 1.0×           | 24 s, 1.0×           | $0.0120      | 1/1.0                       |
-| rust       | backmesh-4          | 45 s, 0.7×               | 45 s, 0.7×               | 87 s, 0.4×           | 83 s, 0.4×           | $0.0012      | 1/9.8                       |
-| rust       | backmesh-8          | 29 s, 1.1×               | 29 s, 1.1×               | 68 s, 0.5×           | 71 s, 0.5×           | $0.0018      | 1/6.6                       |
-| rust       | backmesh-16         | 23 s, 1.3×               | 23 s, 1.4×               | 62 s, 0.5×           | 63 s, 0.6×           | $0.0033      | 1/3.6                       |
+| rust       | backmesh-4          | 45 s, 0.7×               | 45 s, 0.7×               | 87 s, 0.4×           | 83 s, 0.4×           | $0.0020      | 1/5.9                       |
+| rust       | backmesh-8          | 29 s, 1.1×               | 29 s, 1.1×               | 68 s, 0.5×           | 71 s, 0.5×           | $0.0026      | 1/4.6                       |
+| rust       | backmesh-16         | 23 s, 1.3×               | 23 s, 1.4×               | 62 s, 0.5×           | 63 s, 0.6×           | $0.0045      | 1/2.7                       |
 | rust       | ubuntu-latest       | 31 s, 1.0×               | 33 s, 1.0×               | 34 s, 1.0×           | 36 s, 1.0×           | $0.0120      | 1/1.0                       |
-| rust       | backmesh-4/cache    | 58 s, 0.6×               | 67 s, 0.4×               | 100 s, 0.4×          | 103 s, 0.3×          | $0.0014      | 1/8.4                       |
-| rust       | backmesh-16/cache   | 34 s, 1.0×               | 23 s, 1.0×               | 76 s, 0.5×           | 69 s, 0.4×           | $0.0039      | 1/3.1                       |
+| rust       | backmesh-4/cache    | 58 s, 0.6×               | 67 s, 0.4×               | 100 s, 0.4×          | 103 s, 0.3×          | $0.0024      | 1/5.0                       |
+| rust       | backmesh-16/cache   | 34 s, 1.0×               | 23 s, 1.0×               | 76 s, 0.5×           | 69 s, 0.4×           | $0.0046      | 1/2.6                       |
 | rust       | ubuntu-latest/cache | 33 s, 1.0×               | 24 s, 1.0×               | 37 s, 1.0×           | 28 s, 1.0×           | $0.0120      | 1/1.0                       |
-| typescript | backmesh-4          | 28 s, 1.4×               | 32 s, 1.1×               | 71 s, 0.6×           | 71 s, 0.5×           | $0.0010      | 1/12.6                      |
-| typescript | backmesh-8          | 30 s, 1.3×               | 25 s, 1.4×               | 75 s, 0.6×           | 71 s, 0.5×           | $0.0020      | 1/6.1                       |
-| typescript | backmesh-16         | 25 s, 1.6×               | 30 s, 1.1×               | 75 s, 0.6×           | 72 s, 0.5×           | $0.0040      | 1/3.0                       |
+| typescript | backmesh-4          | 28 s, 1.4×               | 32 s, 1.1×               | 71 s, 0.6×           | 71 s, 0.5×           | $0.0016      | 1/7.4                       |
+| typescript | backmesh-8          | 30 s, 1.3×               | 25 s, 1.4×               | 75 s, 0.6×           | 71 s, 0.5×           | $0.0026      | 1/4.6                       |
+| typescript | backmesh-16         | 25 s, 1.6×               | 30 s, 1.1×               | 75 s, 0.6×           | 72 s, 0.5×           | $0.0046      | 1/2.6                       |
 | typescript | ubuntu-latest       | 39 s, 1.0×               | 34 s, 1.0×               | 43 s, 1.0×           | 38 s, 1.0×           | $0.0120      | 1/1.0                       |
-| typescript | backmesh-4/cache    | 36 s, 1.2×               | 43 s, 0.8×               | 80 s, 0.6×           | 90 s, 0.4×           | $0.0011      | 1/11.0                      |
-| typescript | backmesh-16/cache   | 31 s, 1.4×               | 31 s, 1.1×               | 77 s, 0.6×           | 71 s, 0.5×           | $0.0041      | 1/2.9                       |
+| typescript | backmesh-4/cache    | 36 s, 1.2×               | 43 s, 0.8×               | 80 s, 0.6×           | 90 s, 0.4×           | $0.0018      | 1/6.6                       |
+| typescript | backmesh-16/cache   | 31 s, 1.4×               | 31 s, 1.1×               | 77 s, 0.6×           | 71 s, 0.5×           | $0.0048      | 1/2.5                       |
 | typescript | ubuntu-latest/cache | 42 s, 1.0×               | 35 s, 1.0×               | 48 s, 1.0×           | 39 s, 1.0×           | $0.0120      | 1/1.0                       |
 
 **Queued to the first step, by piece.** Each piece's median, over every
@@ -274,24 +364,17 @@ The runs, a cold and a warm one a round:
 Medians over every build's jobs, so they mix the builds: compare a label
 across versions only while bench.yml's builds are the same.
 
-| Date       | backmesh | anycloud | Label               | Jobs | Wait, cold | Wait, warm | Total, cold | Total, warm |
-| ---------- | -------- | -------- | ------------------- | ---- | ---------- | ---------- | ----------- | ----------- |
-| 2026-11-22 | 0.5.5    | 0.1.80   | backmesh-4          | 50   | 44 s       | 44 s       | 89 s        | 88 s        |
-| 2026-11-22 | 0.5.5    | 0.1.80   | ubuntu-latest       | 50   | 4 s        | 4 s        | 41 s        | 41 s        |
-| 2026-11-22 | 0.5.5    | 0.1.80   | backmesh-2          | 50   | 47 s       | 48 s       | 128 s       | 130 s       |
-| 2026-11-22 | 0.5.6    | 0.1.80   | backmesh-4          | 50   | 43 s       | 45 s       | 83 s        | 89 s        |
-| 2026-11-22 | 0.5.6    | 0.1.80   | ubuntu-latest       | 50   | 4 s        | 4 s        | 44 s        | 46 s        |
-| 2026-11-22 | 0.5.6    | 0.1.80   | backmesh-2          | 50   | 47 s       | 48 s       | 129 s       | 99 s        |
-| 2026-11-23 | 0.5.7    | 0.1.80   | backmesh-4          | 50   | 36 s       | 35 s       | 82 s        | 81 s        |
-| 2026-11-23 | 0.5.7    | 0.1.80   | ubuntu-latest       | 50   | 5 s        | 4 s        | 47 s        | 43 s        |
-| 2026-11-23 | 0.5.7    | 0.1.80   | backmesh-2          | 50   | 38 s       | 36 s       | 107 s       | 89 s        |
-| 2026-11-23 | 0.5.7    | 0.1.80   | backmesh-4          | 50   | 42 s       | 40 s       | 87 s        | 83 s        |
-| 2026-11-23 | 0.5.7    | 0.1.80   | backmesh-8          | 50   | 43 s       | 41 s       | 75 s        | 71 s        |
-| 2026-11-23 | 0.5.7    | 0.1.80   | backmesh-16         | 50   | 45 s       | 41 s       | 75 s        | 65 s        |
-| 2026-11-23 | 0.5.7    | 0.1.80   | ubuntu-latest       | 50   | 4 s        | 4 s        | 43 s        | 47 s        |
-| 2026-11-23 | 0.5.7    | 0.1.80   | backmesh-4/cache    | 50   | 41 s       | 44 s       | 92 s        | 90 s        |
-| 2026-11-23 | 0.5.7    | 0.1.80   | backmesh-16/cache   | 50   | 41 s       | 40 s       | 79 s        | 69 s        |
-| 2026-11-23 | 0.5.7    | 0.1.80   | ubuntu-latest/cache | 50   | 5 s        | 4 s        | 48 s        | 29 s        |
+| Date       | backmesh | anycloud | Label         | Jobs | Wait, cold | Wait, warm | Total, cold | Total, warm |
+| ---------- | -------- | -------- | ------------- | ---- | ---------- | ---------- | ----------- | ----------- |
+| 2026-11-22 | 0.5.5    | 0.1.80   | backmesh-4    | 50   | 44 s       | 44 s       | 89 s        | 88 s        |
+| 2026-11-22 | 0.5.5    | 0.1.80   | ubuntu-latest | 50   | 4 s        | 4 s        | 41 s        | 41 s        |
+| 2026-11-22 | 0.5.5    | 0.1.80   | backmesh-2    | 50   | 47 s       | 48 s       | 128 s       | 130 s       |
+| 2026-11-22 | 0.5.6    | 0.1.80   | backmesh-4    | 50   | 43 s       | 45 s       | 83 s        | 89 s        |
+| 2026-11-22 | 0.5.6    | 0.1.80   | ubuntu-latest | 50   | 4 s        | 4 s        | 44 s        | 46 s        |
+| 2026-11-22 | 0.5.6    | 0.1.80   | backmesh-2    | 50   | 47 s       | 48 s       | 129 s       | 99 s        |
+| 2026-11-23 | 0.5.7    | 0.1.80   | backmesh-4    | 50   | 36 s       | 35 s       | 82 s        | 81 s        |
+| 2026-11-23 | 0.5.7    | 0.1.80   | ubuntu-latest | 50   | 5 s        | 4 s        | 47 s        | 43 s        |
+| 2026-11-23 | 0.5.7    | 0.1.80   | backmesh-2    | 50   | 38 s       | 36 s       | 107 s       | 89 s        |
 
 <!-- results:end -->
 

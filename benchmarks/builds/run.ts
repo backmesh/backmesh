@@ -11,7 +11,7 @@
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { Octokit } from '@octokit/rest';
@@ -36,10 +36,13 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const run = promisify(execFile);
 const here = new URL('.', import.meta.url).pathname;
 const date = new Date().toISOString().slice(0, 10);
+// An experiment (EXPERIMENT=<name>) goes to results/experiments/, which
+// neither the site nor report.ts's trend reads.
+const experiment = process.env.EXPERIMENT;
 const file = join(
   here,
-  'results',
-  `${date}-${env('BACKMESH_VERSION')}${process.env.RESULTS_SUFFIX ?? ''}.json`,
+  experiment ? 'results/experiments' : 'results',
+  `${date}-${env('BACKMESH_VERSION')}${experiment ? `-${experiment}` : ''}.json`,
 );
 const commit = (
   await run('git', ['rev-parse', 'HEAD'], { cwd: here })
@@ -58,7 +61,7 @@ const results: Results = {
   commit,
   labels: Object.fromEntries(labels.map((l) => [l, []])),
 };
-await mkdir(join(here, 'results'), { recursive: true });
+await mkdir(dirname(file), { recursive: true });
 const save = () => writeFile(file, `${JSON.stringify(results, null, 2)}\n`);
 
 // A git checkout of the target, for the round branches' commits.
