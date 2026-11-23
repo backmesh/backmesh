@@ -567,7 +567,7 @@ describe('install', () => {
     // The only monthly cost is the control plane's; runner VMs bill per use.
     expect(lines).toEqual(
       expect.arrayContaining([
-        'aws us-east-2: no VM while idle; while its job runs, a backmesh-4 VM costs about $0.05–0.07 an hour on spot and $0.17–0.23 on demand, plus its disk, and the other sizes scale with their vCPUs',
+        'aws us-east-2: no VM while idle; while its job runs, a backmesh-4 VM costs about $0.05–0.07 an hour on spot and $0.17–0.24 on demand, plus its disk, and the other sizes scale with their vCPUs',
         'aws us-east-2 quota: 640 spot vCPUs (160 backmesh-4 jobs at once), 128 on-demand vCPUs (32 backmesh-4 jobs at once)',
         "Always on: the control plane's VM (t3.large) on aws us-east-2, about $69 a month with its disk and address.",
         "Always on: acme's listener VM (t3.small) on aws us-east-2, about $17 a month with its disk and address.",

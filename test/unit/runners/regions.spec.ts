@@ -39,8 +39,10 @@ function fits(type: VmTypeDetails | undefined, vcpus: number): boolean {
 /** Whether `details` offers every type of every `backmesh-N` and KVM class. */
 function qualifies(cloud: Cloud, details: readonly VmTypeDetails[]): boolean {
   return CLASS_VCPUS.every((vcpus) => {
-    const general = VM_TYPES[cloud](vcpus).every((t) =>
-      fits(findVmType(details, t), vcpus),
+    const general = [true, false].every((spot) =>
+      VM_TYPES[cloud](vcpus, spot).every((t) =>
+        fits(findVmType(details, t), vcpus),
+      ),
     );
     const kvm = KVM_TYPES[cloud](vcpus).every((t) => {
       const type = findVmType(details, t);
@@ -53,7 +55,7 @@ function qualifies(cloud: Cloud, details: readonly VmTypeDetails[]): boolean {
 }
 
 // A pinned snapshot of the real catalog's US regions (~/.anycloud/catalogs,
-// 2026-11-13), hand-written like `runners/fixtures.ts`'s. Refresh it, and
+// 2026-11-13; m8a 2026-11-23), hand-written like `runners/fixtures.ts`'s. Refresh it, and
 // RUNNER_REGIONS with it, when the pinned anycloud version's catalog
 // changes which of these a region offers.
 function family(
@@ -71,13 +73,16 @@ function family(
   }));
 }
 const AWS_FULL = [
+  ...family('m8a', false),
   ...family('m8i', true),
   ...family('m7a', false),
   ...family('m7i', true),
   ...family('m6a', false),
 ];
-// us-west-1: every real AWS region but this one offers m7a.
-const AWS_NO_M7A = AWS_FULL.filter((t) => !t.vmType.startsWith('m7a.'));
+// us-west-1: every real AWS region but this one offers m7a and m8a.
+const AWS_NO_M7A = AWS_FULL.filter(
+  (t) => !t.vmType.startsWith('m7a.') && !t.vmType.startsWith('m8a.'),
+);
 
 function azureType(fam: string, nests: boolean, vcpus: number): VmTypeDetails {
   return {
@@ -158,6 +163,12 @@ describe('runner regions', () => {
 
   it('excludes us-west-1 for AWS specifically because it lacks m7a', () => {
     expect(qualifies('aws', PINNED.aws['us-west-1']!)).toBe(false);
+    // On-demand m8a is offered in every AWS runner region.
+    for (const region of RUNNER_REGIONS.aws) {
+      expect(PINNED.aws[region]!.some((t) => t.vmType === 'm8a.xlarge')).toBe(
+        true,
+      );
+    }
     expect(RUNNER_REGIONS.aws).not.toContain('us-west-1');
   });
 

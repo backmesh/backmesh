@@ -72,7 +72,9 @@ shows why runners are short. Each cloud's page lists every size's types:
 
 Each size also has an on-demand label, with the same types on on-demand VMs:
 `backmesh-od-2` to `backmesh-od-16`, or `backmesh-gcp-od-4` and so on on
-another cloud. On demand costs about 2 to 5 times spot, so use it for long jobs
+another cloud. On AWS they try `m8a` first, such as `m8a.xlarge` for
+`backmesh-od-4`: it builds faster than `m8i` but has too little spot capacity
+to lead the spot labels. On demand costs about 2 to 5 times spot, so use it for long jobs
 on the critical path, where a reclaim would cost more than it saves.
 
 backmesh also reruns a run's failed jobs on demand when spot reclaims were its

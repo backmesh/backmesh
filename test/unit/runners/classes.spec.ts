@@ -55,6 +55,14 @@ describe('runner classes', () => {
       vmTypes: ['m8i.xlarge', 'm7a.xlarge', 'm7i.xlarge', 'm6a.xlarge'],
       regions: ['us-east-2'],
     });
+    // On demand tries m8a first; spot doesn't, since m8a's spot capacity is scarce.
+    expect(classes.find((c) => c.label === 'backmesh-od-4')?.vmTypes).toEqual([
+      'm8a.xlarge',
+      'm8i.xlarge',
+      'm7a.xlarge',
+      'm7i.xlarge',
+      'm6a.xlarge',
+    ]);
     expect(classes.find((c) => c.label === 'backmesh-kvm-od-16')).toEqual(
       expect.objectContaining({
         spot: false,
@@ -171,6 +179,36 @@ describe('runner classes', () => {
       [8, ['m8i.2xlarge']],
       [16, ['m8i.4xlarge']],
     ]);
+  });
+
+  it('keeps an on-demand class in a region without m8a, on the types after it', () => {
+    const noM8a = CATALOG.aws.filter((type) => !type.vmType.startsWith('m8a.'));
+    const { classes, problems } = planClasses(
+      [AWS],
+      new Map([
+        [
+          'aws',
+          new Map([
+            ['us-east-2', CATALOG.aws],
+            ['us-west-2', noM8a],
+          ]),
+        ],
+      ]),
+      'aws',
+    );
+    expect(problems).toEqual([]);
+    expect(classes.find((c) => c.label === 'backmesh-od-4')?.regions).toEqual([
+      'us-east-2',
+      'us-west-2',
+    ]);
+    // With no region offering it, install names it like any other type.
+    expect(
+      planClasses([AWS], catalogs({ aws: noM8a }), 'aws').problems,
+    ).toEqual(
+      ['large', 'xlarge', '2xlarge', '4xlarge'].map(
+        (size) => `m8a.${size} isn't offered in aws us-east-2`,
+      ),
+    );
   });
 
   it('names each type a region lacks or offers in the wrong shape', () => {
