@@ -1,12 +1,12 @@
 # backmesh's runner image: Ubuntu, the actions runner,
-# Docker's CLI with buildx and compose from the pinned Docker CLI image (jobs
-# use the VM's Docker through its socket), the apt packages
+# Docker's CLI from the pinned Docker CLI image with pinned buildx and compose
+# (jobs use the VM's Docker through its socket), the apt packages
 # GitHub's Ubuntu 24.04 image installs (parity/toolset.lock), Node with
 # corepack, and a few CLIs. Languages come from actions/setup-* into the tool
 # cache; any other command in Ubuntu's archive installs on first use
 # (first-use.bash). From anycloud's docker/github-actions-runner/Dockerfile and
 # pool/Dockerfile.
-ARG DOCKER_CLI_IMAGE=mirror.gcr.io/library/docker:27-cli@sha256:851f91d241214e7c6db86513b270d58776379aacc5eb9c4a87e5b47115e3065c
+ARG DOCKER_CLI_IMAGE=mirror.gcr.io/library/docker:28.0.4-cli@sha256:2bccc79fc5fed23d876bf244fa5fbe78c54bf6b6145a9483604306fd797237d5
 ARG UBUNTU_IMAGE=mirror.gcr.io/library/ubuntu:24.04@sha256:d78ab76437b1afc5f01e223d6bf0172763f404bb166441328845adbef44518cb
 
 FROM ${DOCKER_CLI_IMAGE} AS cli
@@ -26,6 +26,14 @@ ARG HELM_VERSION=3.22.1
 ARG HELM_SHA256=896cf63684a42a723d61c980369d6e588330927deb13676ca0d85006dd6da0ea
 ARG YQ_VERSION=4.54.1
 ARG YQ_SHA256=8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f
+# gh, Buildx and Compose: the versions in the README of GitHub's image's
+# release ubuntu24/20261122.23, not toolset.lock's revision; bump them by hand.
+ARG GH_VERSION=2.105.0
+ARG GH_SHA256=79e7ab5db738c48777b696e374f8b428f0647debfb424f44d2f426370407fe2f
+ARG BUILDX_VERSION=0.39.1
+ARG BUILDX_SHA256=903090816da68f8bc1a2ff5346dd163a5adacfce4548d003c75df42cd47a9bf4
+ARG COMPOSE_VERSION=2.38.2
+ARG COMPOSE_SHA256=486b3ffc0f806ca2efbc430cef89955386011662f0c76bad17c103d059cfa9cf
 # The cloud CLIs, installed on first use (cloud-cli.sh): Microsoft's noble
 # package, Google's x86-64 archive, and AWS's x86-64 zip, which AWS's key
 # signs. Their versions are runner-images main's README's on 2026-11-23, not
@@ -74,7 +82,6 @@ RUN echo 'Acquire::IndexTargets::deb::CNF { MetaKey "$(COMPONENT)/cnf/Commands-$
         ca-certificates \
         curl \
         gettext-base \
-        gh \
         git \
         git-lfs \
         jq \
@@ -106,7 +113,7 @@ RUN echo 'Acquire::IndexTargets::deb::CNF { MetaKey "$(COMPONENT)/cnf/Commands-$
 
 # Node and npm with corepack's yarn and pnpm. npm's global directories are the
 # runner user's, so `npm install --global` needs no sudo, as on GitHub's image.
-# kubectl, helm and yq.
+# kubectl, helm, yq and gh, and Docker's buildx and compose plugins.
 RUN curl --fail --location --retry 5 --output /tmp/node.tar.xz \
         "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
     && echo "${NODE_SHA256}  /tmp/node.tar.xz" | sha256sum --check --strict \
@@ -126,15 +133,26 @@ RUN curl --fail --location --retry 5 --output /tmp/node.tar.xz \
     && curl --fail --location --retry 5 --output /usr/local/bin/yq \
         "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64" \
     && echo "${YQ_SHA256}  /usr/local/bin/yq" | sha256sum --check --strict \
-    && chmod 0755 /usr/local/bin/kubectl /usr/local/bin/yq \
-    && rm /tmp/node.tar.xz /tmp/helm.tar.gz \
-    && node --version && yarn --version && pnpm --version && kubectl version --client && helm version && yq --version
+    && curl --fail --location --retry 5 --output /tmp/gh.tar.gz \
+        "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" \
+    && echo "${GH_SHA256}  /tmp/gh.tar.gz" | sha256sum --check --strict \
+    && tar --extract --gzip --file /tmp/gh.tar.gz --directory /usr/local/bin --strip-components 2 "gh_${GH_VERSION}_linux_amd64/bin/gh" \
+    && install -d /usr/local/libexec/docker/cli-plugins \
+    && curl --fail --location --retry 5 --output /usr/local/libexec/docker/cli-plugins/docker-buildx \
+        "https://github.com/docker/buildx/releases/download/v${BUILDX_VERSION}/buildx-v${BUILDX_VERSION}.linux-amd64" \
+    && echo "${BUILDX_SHA256}  /usr/local/libexec/docker/cli-plugins/docker-buildx" | sha256sum --check --strict \
+    && curl --fail --location --retry 5 --output /usr/local/libexec/docker/cli-plugins/docker-compose \
+        "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64" \
+    && echo "${COMPOSE_SHA256}  /usr/local/libexec/docker/cli-plugins/docker-compose" | sha256sum --check --strict \
+    && chmod 0755 /usr/local/bin/kubectl /usr/local/bin/yq /usr/local/libexec/docker/cli-plugins/* \
+    && rm /tmp/node.tar.xz /tmp/helm.tar.gz /tmp/gh.tar.gz \
+    && node --version && yarn --version && pnpm --version && kubectl version --client && helm version && yq --version \
+    && gh --version
 
 # The real CLI, behind the image's `docker` (docker.sh), which keeps the
 # runner's own container out of the job's `docker ps` and `docker kill`.
 COPY --from=cli /usr/local/bin/docker /usr/local/libexec/backmesh/
 COPY docker.sh /usr/local/bin/docker
-COPY --from=cli /usr/local/libexec/docker/cli-plugins /usr/local/libexec/docker/cli-plugins
 
 RUN archive="actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz" \
     && curl --fail --location --retry 5 --output "/tmp/${archive}" \
