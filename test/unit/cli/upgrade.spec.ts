@@ -382,8 +382,8 @@ function setUp({
           ? githubOrg(new URL(String(url)).pathname)
           : Response.json({ version: served }),
     wait: async () => {},
-    // `version`'s default is the release before RELEASE.anycloud.
-    previous: '0.1.70',
+    // `version`'s default, two releases before RELEASE.anycloud.
+    oldest: '0.1.70',
     // As if RELEASE.anycloud changed the role setup, as 0.1.81 does.
     roleSetup: { ...ROLE_SETUP, since: RELEASE.anycloud },
     features: {
@@ -1409,8 +1409,7 @@ describe('upgrade', () => {
       expect(worker.calls).toEqual([]);
     });
 
-    it('refuses one more than a release behind before moving it', async () => {
-      // Its listeners' anycloud would be outside the new API's client window.
+    it('refuses a control plane older than the oldest a move starts from', async () => {
       const { deps, calls, worker } = setUp({ version: '0.1.69' });
       const error = await upgrade(deps).catch((e: unknown) => e);
       expect(error).toBeInstanceOf(UsageError);
@@ -1716,13 +1715,22 @@ describe('upgrade', () => {
       expect(calls.some((c) => /^(credentials new|az )/.test(c))).toBe(false);
     });
 
-    it('re-applies nothing and checks no CLI past the release that changed the setup', async () => {
-      const { deps, calls, lines, requests } = withRoles({
+    it('re-applies again on a re-run on the pinned release, which retries a failed one', async () => {
+      const { deps, calls } = withRoles({
         version: RELEASE.anycloud,
         image: RELEASE.listenerImage,
         runnerImage: RELEASE.runnerImage,
       });
-      deps.roleSetup = { ...ROLE_SETUP, since: '0.1.71' };
+      await upgrade(deps);
+      expect(calls.filter((c) => c.startsWith('credentials new'))).toEqual(
+        REAPPLIED,
+      );
+    });
+
+    it('re-applies nothing and checks no CLI for a setup no move crosses', async () => {
+      const { deps, calls, lines, requests } = withRoles();
+      // A change at the oldest release a move starts from is already there.
+      deps.roleSetup = { ...ROLE_SETUP, since: '0.1.70' };
       await upgrade(deps);
       expect(calls.some((c) => /^(credentials new|aws|gcloud)/.test(c))).toBe(
         false,

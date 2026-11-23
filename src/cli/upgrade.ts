@@ -4,7 +4,6 @@
 // refuses a new service token.
 // There's no `--to`: it moves to the running CLI's own release.
 import type { RunAnycloud } from '../anycloud/binary.js';
-import { ANYCLOUD_PREVIOUS_VERSION } from '../anycloud/contract.generated.js';
 import {
   type AnycloudApi,
   type AnycloudExec,
@@ -113,8 +112,8 @@ export interface UpgradeDeps {
   signInCheck?: SignInCheck;
   // Undefined without a TTY: upgrade never asks there.
   confirm?: (question: string) => Promise<boolean>;
-  // The release before the pinned anycloud, the oldest a move starts from.
-  previous?: string;
+  // The oldest anycloud a move starts from (OLDEST).
+  oldest?: string;
   // The role setup the pinned anycloud's release window changed.
   roleSetup?: typeof ROLE_SETUP;
 }
@@ -198,6 +197,11 @@ export interface UpgradeOptions {
   publicRepos?: boolean;
 }
 
+// The oldest anycloud a move starts from: backmesh v0.5.7's. The pinned
+// release's own previous (ANYCLOUD_PREVIOUS_VERSION) is 0.1.81, which no
+// backmesh release pinned, and `api upgrade` skips releases.
+const OLDEST = '0.1.80';
+
 export async function upgrade(
   deps: UpgradeDeps,
   {
@@ -224,13 +228,12 @@ export async function upgrade(
   // Only checks that need no read come before it, and that a backmesh
   // listener is there, read with the API's own client version; a refusal
   // after it leaves the new API with the old listener, which a later upgrade
-  // resumes. That holds for an API one release behind, whose listeners the
-  // new one's client window still takes; one further back is refused.
+  // resumes. The new API's window takes only the release before it, so a
+  // listener from further back, as 0.1.80's, has its launches and cache
+  // tokens refused until upgrade rolls it.
   const behind = from !== release.anycloud;
-  // A listener keeps working only on an API whose client window holds its
-  // own anycloud: the move's from one release back at most.
-  const previous = deps.previous ?? ANYCLOUD_PREVIOUS_VERSION;
-  if (behind && from !== previous) {
+  const oldest = deps.oldest ?? OLDEST;
+  if (behind && newer(oldest, from)) {
     throw new UsageError(
       'This control plane is too old for this backmesh to upgrade; run `backmesh uninstall` with the backmesh release that installed it, then `backmesh install`.',
     );
@@ -259,7 +262,7 @@ export async function upgrade(
   const setups = await changedConnections(
     as(from),
     clusterIdOf(url),
-    from,
+    oldest,
     release.anycloud,
     deps.roleSetup ?? ROLE_SETUP,
   );
@@ -739,17 +742,17 @@ type Changed = { cloud: Cloud; credentials: string; account?: string };
 
 // This control plane's connection in each cloud whose role setup changed,
 // read through the API at its own release: a role connection has its
-// account, a key connection (our CI's override) none. Only a move across
-// the release that changed it, and a re-run on that release, which retries
-// a re-apply that failed after the API moved.
+// account, a key connection (our CI's override) none. Only while the
+// release that changed it is past the oldest a move starts from: every run,
+// so a re-run retries a re-apply that failed after the API moved.
 async function changedConnections(
   api: AnycloudApi,
   clusterId: string,
-  from: string,
+  oldest: string,
   to: string,
   { since, rights }: typeof ROLE_SETUP,
 ): Promise<Changed[]> {
-  if (newer(from, since) || newer(since, to)) return [];
+  if (!newer(since, oldest) || newer(since, to)) return [];
   const listed = await api.listCredentials({});
   return (Object.keys(rights) as Cloud[]).flatMap((cloud) => {
     const entry = installConnection(cloud, clusterId, listed);
