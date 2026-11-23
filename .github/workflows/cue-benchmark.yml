@@ -2,8 +2,9 @@ name: Cue benchmark
 
 # The cue benchmark (benchmarks/cue/README.md): from a GitHub-hosted runner,
 # pushes to the `target` repo's bench branch, alternately with
-# `backmesh cue` sent `lead` seconds ahead and without, and reports push to
-# the job's first real step and queued to assigned, cued against not, in the
+# `backmesh cue` sent `lead` seconds ahead and without, and reports, cued
+# against not, the share of each push's `width` first-wave jobs a runner took
+# within 10 s of their queueing and their queued to first real step, in the
 # job summary. The target's jobs run on `label` in our CI installation.
 # Dispatch only. The e2e environment holds E2E_SIGN_IN_TOKEN, the owner's
 # backmesh sign-in, which cues as them, and CUE_BENCH_DEPLOY_KEY, the
@@ -21,6 +22,9 @@ on:
       lead:
         description: seconds from the cue to the push, 30 to 600
         default: '75'
+      width:
+        description: the first wave's jobs a push, a matrix on `label`, 1 to 32
+        default: '8'
       label:
         description: >-
           the backmesh label the target's job runs on; must be one no other
@@ -51,12 +55,14 @@ jobs:
         env:
           ROUNDS: ${{ inputs.rounds }}
           LEAD_S: ${{ inputs.lead }}
+          WIDTH: ${{ inputs.width }}
           LABEL: ${{ inputs.label }}
           TARGET_REPO: ${{ inputs.target }}
         run: |
           [[ $TARGET_REPO =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || exit 1
           [[ $ROUNDS =~ ^[0-9]+$ ]] && ((ROUNDS >= 1 && ROUNDS <= 10)) || exit 1
           [[ $LEAD_S =~ ^[0-9]+$ ]] && ((LEAD_S >= 30 && LEAD_S <= 600)) || exit 1
+          [[ $WIDTH =~ ^[0-9]+$ ]] && ((WIDTH >= 1 && WIDTH <= 32)) || exit 1
           [[ $LABEL =~ ^backmesh-[a-z0-9-]+$ ]]
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -89,6 +95,7 @@ jobs:
           TARGET_REPO: ${{ inputs.target }}
           ROUNDS: ${{ inputs.rounds }}
           LEAD_S: ${{ inputs.lead }}
+          WIDTH: ${{ inputs.width }}
           LABEL: ${{ inputs.label }}
           BACKMESH_CLI: dist/cli/index.js
           BACKMESH_CUE_TOKEN: ${{ secrets.E2E_SIGN_IN_TOKEN }}

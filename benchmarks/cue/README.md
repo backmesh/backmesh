@@ -1,8 +1,9 @@
 # Cue benchmark
 
-A performance probe for `backmesh cue`: how much sooner a
-push's job reaches its first real step when a cue warned the listener ahead
-of the push, against the same push without one.
+A performance probe for `backmesh cue`: how many of a push's first-wave
+jobs start on a runner already waiting, and how much sooner they reach their
+first real step, when a cue warned the listener ahead of the push, against
+the same push without one.
 
 [`cue-benchmark.yml`](../../.github/workflows/cue-benchmark.yml) runs
 [`run.ts`](run.ts) on a GitHub-hosted runner. It pushes to the `bench` branch
@@ -12,18 +13,22 @@ the push through the CLI built from the dispatched commit, then one without a
 cue. A warm-up push comes first, so the planner has
 learned the workflow's first wave before the first cue.
 
-The target is [`target/`](target/): `bench.yml`, written as `bench-<label>.yml` with
-the `label` input for `runs-on`, runs checkout, setup-node with Node 22, `yarn install
+The target is [`target/`](target/): `bench.yml`, written as `bench-<label>-w<width>.yml` with
+the `label` input for `runs-on`, runs a matrix of `width` `bench` jobs, the
+run's first wave. Each runs checkout, setup-node with Node 22, `yarn install
 --frozen-lockfile` of a 2,500-line lockfile (246 packages), and a `Marker`
-step. Its last step, `report.mjs`, reads its job's times from the
-API and writes them to the target's `results` branch. `run.ts` fetches them
-over git, as its deploy key can't read the API.
+step. A `report` job on `ubuntu-latest` needs them all: its `report.mjs`
+reads their times from the API and writes them to the target's `results`
+branch. `run.ts` fetches them over git, as its deploy key can't read the API.
 
 ## Figures
 
-For each round, in seconds, from GitHub's job and step times (whole
-seconds) and the driver's clock at `git push`:
+For each push, in seconds, from GitHub's job and step times (whole
+seconds) and the driver's clock at `git push`, each the median over the
+push's jobs:
 
+- **Queued to first real step**: the job's `created_at` to the `Marker`
+  step's start.
 - **Push to first real step**: `git push` to the `Marker` step's start.
 - **Queued to assigned**: the job's `created_at` to its `started_at`, when a
   runner took it.
@@ -32,13 +37,15 @@ seconds) and the driver's clock at `git push`:
   runner's setup, checkout, setup-node and the install, which a cue can't
   hide today. **Of which yarn install** is the `Install` step alone.
 
-The job summary has the median and range of each, for cued rounds, for cued
-rounds a runner served, and for rounds without a cue. A round is **served**
-when a runner took its job within 10 s of its queueing. The CLI's `sent` only
-means the relay took the cue. An offline listener or the cue guard starts
-nothing for it, and another job on the label may take the cue's runner. An
-uncued round can also be served by another job's early runner. The artifact has
-every round's figures and the cue CLI's outcome, written after each round.
+A job is **served** when a runner took it within 10 s of its queueing. The
+job summary has, for cued pushes and for pushes without a cue, the share of
+their jobs served and the median and range over pushes of each figure, then
+each push's served count and queued to first real step. The CLI's `sent`
+only means the relay took the cue. An offline listener or the cue guard
+starts nothing for it, and another job on the label may take the cue's
+runners. An uncued push's jobs can also be served by another job's early
+runner. The artifact has every push's figures and the cue CLI's outcome,
+written after each round.
 
 The label is shared with real CI: a cue's runner may take a real job, and a
 benchmark job may take a runner started for a real one. The default,
@@ -47,13 +54,14 @@ the figures aren't skewed by real jobs taking the cue's runners (our CI uses
 `backmesh-4` and `backmesh-2` heavily). Give `label` a different value, keep
 it one nothing else uses. The listener's planner keeps a label's
 workflow history until it restarts, so after a dispatch on another label, a
-cue also starts a runner on the earlier label, which idles; the **Cued,
-served** count shows any effect.
+cue also starts a runner on the earlier label, which idles; the cued
+**Jobs served** share shows any effect.
 
 ## Running it
 
 Dispatch **Cue benchmark** with `target`, `rounds` (cued and uncued pushes each,
-default 5), `lead` (default 75 s) and `label` (default `backmesh-16`). It
+default 5), `lead` (default 75 s), `width` (default 8 jobs a push) and
+`label` (default `backmesh-16`). It
 takes about 12 minutes a round (one cued push at its default 75 s lead, one not, each a ~2-minute job plus a 200 s gap after). It needs, in the `e2e` environment:
 
 - `E2E_SIGN_IN_TOKEN`: a backmesh sign-in (`read:org`) of an active member of
@@ -63,8 +71,9 @@ takes about 12 minutes a round (one cued push at its default 75 s lead, one not,
   starts the target's workflow, where a push with this workflow's own token
   wouldn't.
 
-Cost: the target's jobs run for about 2 minutes each on the label's spot VMs,
-and a cued round's runner idles at most 180 s before its push; the driver's
+Cost: the target's `width` jobs a push run for about 2 minutes each on the
+label's spot VMs,
+and a cued round's runners idle at most 180 s before its push; the driver's
 hosted runner is billed per minute.
 
 ## Results
