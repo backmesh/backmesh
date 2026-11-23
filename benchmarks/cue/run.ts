@@ -1,6 +1,7 @@
 // The cue benchmark (README.md): pushes to the target repo's bench branch,
 // alternately with `backmesh cue` sent LEAD_S before the push and without,
-// and reads each push's job times from the row the target's report.mjs
+// then the same workload to its bench-hosted branch on ubuntu-latest, and
+// reads each push's job times from the row the target's report.mjs
 // writes. Run by cue-benchmark.yml:
 //
 //   TARGET_REPO=<owner>/<repo> LABEL=backmesh-16 ROUNDS=5 WIDTH=8 \
@@ -35,6 +36,10 @@ const width = Number(env('WIDTH'));
 const cli = resolve(env('BACKMESH_CLI'));
 const out = env('OUTPUT_DIR');
 const BRANCH = 'bench';
+// The hosted arm: the same jobs on GitHub's runner, on a branch of its own,
+// so the label's workflow, the one the planner learns, never runs for it.
+const HOSTED = 'ubuntu-latest';
+const HOSTED_BRANCH = 'bench-hosted';
 // A push's row comes once its job is done; a job that never starts fails
 // the round.
 const RESULT_WAIT_MS = 20 * 60_000;
@@ -66,7 +71,7 @@ const remoteBench = await git('ls-remote', 'origin', `refs/heads/${BRANCH}`);
 await (remoteBench ? git('switch', BRANCH) : git('switch', '--orphan', BRANCH));
 
 // The target's files, with the label and width, as the warm-up's commit: the
-// planner learns the workflow's first wave from that push. The workflow is
+// planner learns the workflow's first wave from that push. Each workflow is
 // named for its label and width, as the planner keys history by workflow
 // file: a new label's cues don't start runners on the old one, and a new
 // width's first wave isn't sized from the old one's runs.
@@ -76,21 +81,28 @@ for (const file of ['package.json', 'yarn.lock', 'report.mjs']) {
   await copyFile(join(target, file), join(work, file));
 }
 const workflow = await readFile(join(target, 'bench.yml'), 'utf8');
-await writeFile(
-  join(work, `.github/workflows/bench-${label}-w${width}.yml`),
-  workflow
-    .replace('__LABEL__', label)
-    .replace(
-      '__SHARDS__',
-      JSON.stringify(Array.from({ length: width }, (_, i) => i + 1)),
-    ),
-);
+for (const [runsOn, branch] of [
+  [label, BRANCH],
+  [HOSTED, HOSTED_BRANCH],
+] as const) {
+  await writeFile(
+    join(work, `.github/workflows/bench-${runsOn}-w${width}.yml`),
+    workflow
+      .replace('__LABEL__', runsOn)
+      .replace('__BRANCH__', branch)
+      .replace(
+        '__SHARDS__',
+        JSON.stringify(Array.from({ length: width }, (_, i) => i + 1)),
+      ),
+  );
+}
 await git('add', '-A');
 
 interface Job {
   name: string;
   createdAt: string;
   startedAt: string;
+  completedAt: string;
   runner: string | null;
   steps: {
     name: string;
@@ -103,12 +115,14 @@ interface Row {
   jobs: Job[];
 }
 
-// Commits, pushes and waits for the push's row.
-async function push(message: string) {
+// Commits, pushes to `branch` and waits for the push's row. The branches
+// share one local history, so a push may rewind a branch's last run's
+// commits: forced, as both are the benchmark's alone.
+async function push(message: string, branch = BRANCH) {
   await git('commit', '--allow-empty', '-m', message);
   const sha = await git('rev-parse', 'HEAD');
   const pushedAt = Date.now();
-  await git('push', 'origin', `HEAD:refs/heads/${BRANCH}`);
+  await git('push', '-f', 'origin', `HEAD:refs/heads/${branch}`);
   const deadline = pushedAt + RESULT_WAIT_MS;
   while (Date.now() < deadline) {
     await sleep(10_000);
@@ -141,8 +155,9 @@ const seconds = (from: string | number, to: string | null | undefined) =>
 
 // One job's figures, in seconds: push to the job queued, queued to a
 // runner taking it, queued to the marker's start, the job's setup (its
-// steps before the marker) and push to the marker's start. A failed install
-// or marker fails the round: GitHub gives a skipped step a start too.
+// steps before the marker), push to the marker's start and queued to
+// done. A failed install or marker fails the round: GitHub gives a skipped
+// step a start too.
 function jobFigures(pushedAt: number, job: Job) {
   const step = (name: string) => job.steps.find((s) => s.name === name);
   for (const name of ['Install', 'Marker']) {
@@ -159,6 +174,7 @@ function jobFigures(pushedAt: number, job: Job) {
     queuedToMarker: seconds(job.createdAt, marker),
     setup: seconds(job.startedAt, marker),
     install: seconds(install!, marker),
+    queuedToDone: seconds(job.createdAt, job.completedAt),
   };
 }
 type Figures = ReturnType<typeof jobFigures>;
@@ -180,25 +196,27 @@ function figures(pushedAt: number, row: Row) {
     pushToQueued: of('pushToQueued'),
     setup: of('setup'),
     install: of('install'),
+    queuedToDone: of('queuedToDone'),
   };
 }
 
 const results: {
   round: number;
-  cued: boolean;
+  arm: Arm;
   cue?: { outcome: string; message: string };
   sha: string;
   runners: (string | null)[];
   figures: ReturnType<typeof figures>;
 }[] = [];
 
-// Median and range per figure, cued against not.
+// Median and range per figure, per arm.
 const median = (v: number[]) => {
   const s = [...v].sort((a, b) => a - b);
   const mid = Math.floor(s.length / 2);
   return s.length % 2 ? s[mid]! : (s[mid - 1]! + s[mid]!) / 2;
 };
 const NAMES = {
+  queuedToDone: 'Queued to done',
   queuedToMarker: 'Queued to first real step',
   pushToMarker: 'Push to first real step',
   queuedToAssigned: 'Queued to assigned',
@@ -223,10 +241,13 @@ const cell = (which: (r: Result) => boolean, key: keyof typeof NAMES) => {
   return `${median(v)} s (${Math.min(...v)}–${Math.max(...v)})`;
 };
 
+const ARMS = ['Cued', 'Not cued', 'GitHub-hosted'] as const;
+type Arm = (typeof ARMS)[number];
+
 async function benchmark() {
-  for (let round = 0; round < 2 * rounds; round++) {
-    const cued = round % 2 === 0;
-    const sent = cued ? await cue() : undefined;
+  for (let round = 0; round < 3 * rounds; round++) {
+    const arm = ARMS[round % 3]!;
+    const sent = arm === 'Cued' ? await cue() : undefined;
     if (sent) {
       console.log(`round ${round}: cue ${sent.outcome}: ${sent.message}`);
       // Without a cue the round would measure nothing cued.
@@ -234,11 +255,12 @@ async function benchmark() {
       await sleep(leadS * 1000);
     }
     const { pushedAt, row } = await push(
-      `Cue benchmark round ${round}, ${cued ? 'cued' : 'not cued'}`,
+      `Cue benchmark round ${round}, ${arm}`,
+      arm === 'GitHub-hosted' ? HOSTED_BRANCH : BRANCH,
     );
     const result = {
       round,
-      cued,
+      arm,
       ...(sent && { cue: sent }),
       sha: row.sha,
       runners: row.jobs.map((job) => job.runner),
@@ -250,17 +272,17 @@ async function benchmark() {
       join(out, 'results.json'),
       JSON.stringify(results, null, 2),
     );
-    await sleep(GAP_MS);
+    // The hosted push starts no runner on the label.
+    if (arm !== 'GitHub-hosted') await sleep(GAP_MS);
   }
 }
 
 async function summarize() {
-  const columns: [string, (r: Result) => boolean][] = [
-    ['Cued', (r) => r.cued],
-    ['Not cued', (r) => !r.cued],
-  ];
+  const columns = ARMS.map(
+    (arm) => [arm, (r: Result) => r.arm === arm] as const,
+  );
   const table = [
-    `### Cue benchmark: ${label}, ${width} jobs a push, ${rounds} × 2 pushes, cue ${leadS} s ahead`,
+    `### Cue benchmark: ${label} against ${HOSTED}, ${width} jobs a push, ${rounds} × 3 pushes, cue ${leadS} s ahead`,
     '',
     `Per push, its jobs' median; then the median (min–max) over pushes, in seconds. Served: a runner took the job within ${SERVED_S} s of its queueing.`,
     '',
@@ -272,11 +294,11 @@ async function summarize() {
         `| ${name} | ${columns.map(([, which]) => cell(which, key as keyof typeof NAMES)).join(' | ')} |`,
     ),
     '',
-    '| Round | Cued | Served | Queued to first real step |',
-    '| --- | --- | --- | --- |',
+    '| Round | Arm | Served | Queued to first real step | Queued to done |',
+    '| --- | --- | --- | --- | --- |',
     ...results.map(
       (r) =>
-        `| ${r.round} | ${r.cued ? 'yes' : 'no'} | ${r.figures.served} of ${width} | ${r.figures.queuedToMarker} s |`,
+        `| ${r.round} | ${r.arm} | ${r.figures.served} of ${width} | ${r.figures.queuedToMarker} s | ${r.figures.queuedToDone} s |`,
     ),
     '',
   ].join('\n');

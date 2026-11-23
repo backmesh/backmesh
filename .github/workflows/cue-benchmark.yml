@@ -1,11 +1,12 @@
 name: Cue benchmark
 
 # The cue benchmark (benchmarks/cue/README.md): from a GitHub-hosted runner,
-# pushes to the `target` repo's bench branch, alternately with
-# `backmesh cue` sent `lead` seconds ahead and without, and reports, cued
-# against not, the share of each push's `width` first-wave jobs a runner took
-# within 10 s of their queueing and their queued to first real step, in the
-# job summary. The target's jobs run on `label` in our CI installation.
+# pushes to the `target` repo's bench branch, in turn with `backmesh cue`
+# sent `lead` seconds ahead, without, and to its bench-hosted branch on
+# ubuntu-latest, and reports per arm the share of each push's `width`
+# first-wave jobs a runner took within 10 s of their queueing, their queued
+# to first real step and queued to done, in the job summary. The target's
+# jobs run on `label` in our CI installation.
 # Dispatch only. The e2e environment holds E2E_SIGN_IN_TOKEN, the owner's
 # backmesh sign-in, which cues as them, and CUE_BENCH_DEPLOY_KEY, the
 # target repo's write deploy key: a deploy key's push starts workflows,
@@ -17,7 +18,7 @@ on:
         description: the target repo, owner/name, whose write deploy key is CUE_BENCH_DEPLOY_KEY
         required: true
       rounds:
-        description: cued and uncued pushes each, 1 to 10
+        description: cued, uncued and GitHub-hosted pushes each, 1 to 10
         default: '5'
       lead:
         description: seconds from the cue to the push, 30 to 600
@@ -46,7 +47,8 @@ jobs:
     runs-on: ubuntu-24.04
     environment: e2e
     # Covers the worst case (rounds=10, lead=600 s): about 210 minutes,
-    # mostly the 200 s GAP_MS between each of up to 20 pushes.
+    # mostly the leads and the 200 s GAP_MS after each of up to 20 pushes
+    # on the label.
     timeout-minutes: 300
     permissions:
       contents: read
