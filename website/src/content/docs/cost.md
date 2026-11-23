@@ -23,11 +23,11 @@ floor. backmesh's core features are free; your clouds bill you for the VMs.
   (refreshed with the 2026-11-13 VM type reorder; `m8a` from the catalog on
   2026-11-23):
 
-| Cloud | Region        | `backmesh-4` types and spot $/h                                                                      |
-| ----- | ------------- | ---------------------------------------------------------------------------------------------------- |
-| AWS   | `us-east-2`   | `m8a.xlarge` 0.065, `m8i.xlarge` 0.0583, `m7a.xlarge` 0.07, `m7i.xlarge` 0.0497, `m6a.xlarge` 0.0547 |
-| Azure | `westus2`     | `Standard_D4ads_v5` 0.0381, `Standard_D4as_v5` 0.0318, `Standard_D4s_v5` 0.0355                      |
-| GCP   | `us-central1` | `n2-standard-4` 0.1165, `n2d-standard-4` 0.0899                                                      |
+| Cloud | Region        | `backmesh-4` types and spot $/h                                                                                   |
+| ----- | ------------- | ----------------------------------------------------------------------------------------------------------------- |
+| AWS   | `us-east-2`   | `m8a.xlarge` 0.065 (2026-11-23), `m8i.xlarge` 0.0583, `m7a.xlarge` 0.07, `m7i.xlarge` 0.0497, `m6a.xlarge` 0.0547 |
+| Azure | `westus2`     | `Standard_D4ads_v5` 0.0381, `Standard_D4as_v5` 0.0318, `Standard_D4s_v5` 0.0355                                   |
+| GCP   | `us-central1` | `n2-standard-4` 0.1165, `n2d-standard-4` 0.0899                                                                   |
 
 - **The always-on VMs:** the control plane's VM and one listener VM for each
   org, with their disks and public addresses. For one org that's about $86 a
