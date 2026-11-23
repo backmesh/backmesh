@@ -121,6 +121,8 @@ jobs:
         run: |
           if [[ -n $FROM ]]; then
             [[ -n $VERSION && $FROM =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::from takes a release tag, with a version to upgrade to"; exit 1; }
+            [[ $FROM != "$VERSION" && $(printf '%s\n' "$FROM" "$VERSION" | sort -V | head -n1) == "$FROM" ]] \
+              || { echo "::error::from ($FROM) must be older than version ($VERSION)"; exit 1; }
           fi
           if [[ -n $VERSION ]]; then
             [[ $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] || { echo "::error::$VERSION isn't a release tag"; exit 1; }
@@ -318,7 +320,11 @@ jobs:
             rm anycloud-linux-x64.tar.gz checksums.txt
             install -D -m 755 anycloud ~/.backmesh/bin/"$anycloud"/anycloud
           }
-          [[ -z $FROM ]] || get "$FROM" backmesh-from
+          if [[ -n $FROM ]]; then
+            get "$FROM" backmesh-from
+            # Uninstall's pick, after an upgrade that didn't move the control plane.
+            echo "FROM_ANYCLOUD=$anycloud" >>"$GITHUB_ENV"
+          fi
           get "$VERSION" backmesh
           # A release before it can't uninstall without taking the App.
           env -u GH_TOKEN ./backmesh uninstall --help | grep -q -- --keep-app \
@@ -476,9 +482,13 @@ jobs:
           ISSUE_TOKEN=$t test/e2e/with-sign-in.sh $bm install --org "$ORG" "${placement[@]}" --yes --plan-id "$id"
 
       # With `from`, `version` upgrades what that release installed, before
-      # the label member runs on it; any sign-in it asks for is approved as
-      # install's is.
+      # the label member runs on it (not also before: the upgrade's pause
+      # holds no queued work here); any sign-in it asks for is approved as
+      # install's is. A control plane behind `version` refuses `--plan`, so
+      # `--yes` moves it first, and a change that needs agreement after the
+      # move stops it with exit 2, for the plan.
       - name: backmesh upgrade
+        id: upgrade
         if: env.FROM
         timeout-minutes: 90
         env:
@@ -487,6 +497,8 @@ jobs:
         run: |
           t=$ISSUE_TOKEN
           unset ISSUE_TOKEN
+          ISSUE_TOKEN=$t test/e2e/with-sign-in.sh backmesh upgrade --yes && exit 0 || code=$?
+          ((code == 2)) || exit "$code"
           plan=$(backmesh upgrade --plan --json) || { echo "$plan"; exit 1; }
           id=$(tail -n1 <<<"$plan" | jq -er .planId) || { echo "$plan"; exit 1; }
           ISSUE_TOKEN=$t test/e2e/with-sign-in.sh backmesh upgrade --yes --plan-id "$id"
@@ -546,16 +558,20 @@ jobs:
           t=$ISSUE_TOKEN
           unset ISSUE_TOKEN
           flags=(--org "$ORG" --yes --keep-app --delete-checkpoint-bucket --confirm backmesh)
+          bm=backmesh
           # A control plane that doesn't answer, such as a half-made one, is
           # deleted through the cloud CLI; uninstall refuses that for one that
-          # does.
+          # does. One an upgrade didn't move is `from`'s to uninstall, as
+          # `version`'s is refused by it.
           if [[ -f ~/.anycloud/api-url ]]; then
             url=$(anycloud api status --json | jq -r .url) || url=
-            if [[ -n $url ]] && ! curl -fsS --max-time 10 "$url/v1/version" >/dev/null; then
+            if [[ -n $url ]] && ! served=$(curl -fsS --max-time 10 "$url/v1/version"); then
               flags+=(--control-plane "$CONTROL_PLANE")
+            elif [[ -n $url && -n ${FROM_ANYCLOUD:-} && $(jq -r .version <<<"$served") == "$FROM_ANYCLOUD" ]]; then
+              bm=backmesh-from
             fi
           fi
-          ISSUE_TOKEN=$t test/e2e/with-sign-in.sh backmesh uninstall "${flags[@]}"
+          ISSUE_TOKEN=$t test/e2e/with-sign-in.sh $bm uninstall "${flags[@]}"
 
       # Uninstall leaves each role connection's setup, which trusts only the
       # deleted control plane, and says so. This deletes what anycloud's

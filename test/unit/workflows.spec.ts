@@ -282,7 +282,10 @@ describe("e2e.yml's test-org run", () => {
     expect(uninstall.run).toMatch(
       /flags=\(--org "\$ORG" --yes --keep-app --delete-checkpoint-bucket /,
     );
-    expect(uninstall.run).toMatch(/backmesh uninstall "\$\{flags\[@\]\}"/);
+    expect(uninstall.run).toMatch(/\$bm uninstall "\$\{flags\[@\]\}"/);
+    // After an upgrade that didn't move the control plane, the release that
+    // installed it uninstalls it.
+    expect(uninstall.run).toMatch(/bm=backmesh-from/);
     expect(sweep.if).toMatch(/^\$\{\{ always\(\) &&/);
     expect(roles.if).toBe(uninstall.if);
     expect(steps.indexOf(roles)).toBe(steps.indexOf(uninstall) + 1);
