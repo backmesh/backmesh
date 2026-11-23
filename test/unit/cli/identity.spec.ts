@@ -31,6 +31,8 @@ describe('removeIdentity', () => {
           'roles/compute.instanceAdmin.v1',
           'roles/compute.securityAdmin',
           'roles/storage.admin',
+          // The grant upgrade names for a key connection.
+          'projects/p1/roles/anycloudJobsNetwork',
         ].map(
           (role) =>
             `gcloud projects remove-iam-policy-binding p1 --member serviceAccount:anycloud-bm-gcp-x@p1.iam.gserviceaccount.com --role ${role} --condition None --format none`,

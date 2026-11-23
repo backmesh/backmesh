@@ -50,6 +50,7 @@ async function run(...argv: string[]) {
     upgradeDeps: () => ({
       env: {},
       run: never,
+      command: never,
       runLong: never,
       release: never,
       status: never,

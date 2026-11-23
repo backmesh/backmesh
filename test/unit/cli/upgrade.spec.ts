@@ -232,6 +232,7 @@ function setUp({
     'vm-types aws us-east-1': JSON.stringify(CATALOG.aws),
     'vm-types aws us-west-2': JSON.stringify(CATALOG.aws),
     'vm-types gcp us-central1': JSON.stringify(CATALOG.gcp),
+    'vm-types azure westus2': JSON.stringify(CATALOG.azure),
     'api status --json': JSON.stringify({ url: HOSTED }),
     'api token': 't0ken',
     'api status --watch --json': watch,
@@ -304,7 +305,10 @@ function setUp({
     }
     return JSON.stringify({ code: 200, env: target.env, body: target.body });
   });
-  const routes = {
+  const routes: Record<string, unknown> = {
+    // The connections, as an older API lists them too: bm-aws a key, as
+    // our CI's override makes.
+    'GET /v1/credentials': [{ name: 'bm-aws', cloudProvider: 'AWS' }],
     'GET /v1/workloads': () => workloads,
     'GET /v1/secrets': () =>
       Object.keys(secrets).map((name) => ({
@@ -349,11 +353,18 @@ function setUp({
     codes: [Response.json(DEVICE), Response.json(NEXT_DEVICE)],
     polls: [Response.json({ error: 'expired_token' }), GITHUB_TOKEN],
   });
+  // The user's cloud CLIs, signed in to the roles' account and project.
+  const command = async (args: string[]) => {
+    calls.push(args.join(' '));
+    if (args[0] === 'aws') return JSON.stringify({ Account: '111122223333' });
+    return args[0] === 'gcloud' ? 'proj-1\n' : '{}';
+  };
   const deps: UpgradeDeps = {
     // No saved anycloud files, whatever this machine holds.
     env: { BACKMESH_ANYCLOUD_DIR: mkdtempSync(join(tmpdir(), 'backmesh-')) },
     signInCheck: async () => ({ login: 'octocat', appIds: [] }),
     run,
+    command,
     runLong: run,
     release: async () => RELEASE,
     status: async () => STATUS,
@@ -1571,33 +1582,41 @@ describe('upgrade', () => {
         'aws',
       ).classes,
     );
-    // Role connections, as `credentials list --json` shows them, and each
-    // re-apply's environment.
-    const withRoles = (over: Parameters<typeof setUp>[0] = {}) => {
+    const AWS_ROLE = {
+      name: 'bm-aws',
+      cloudProvider: 'AWS',
+      kind: 'role',
+      roleArn: 'arn:aws:iam::111122223333:role/anycloud-role',
+    };
+    const GCP_ROLE = {
+      name: 'bm-gcp',
+      cloudProvider: 'GCP',
+      kind: 'role',
+      serviceAccountEmail: 'anycloud-role@proj-1.iam.gserviceaccount.com',
+    };
+    // Role connections, as the API and the binary list them, and each
+    // re-apply's environment; a re-apply answers the account it applied in.
+    const withRoles = (
+      over: Parameters<typeof setUp>[0] = {},
+      listed: object[] = [AWS_ROLE, GCP_ROLE],
+      applied: Record<string, string> = {},
+    ) => {
       const set = setUp({ runners: awsAndGcp, ...over });
+      set.routes['GET /v1/credentials'] = listed;
       const run = set.deps.run;
       const envs: Record<string, NodeJS.ProcessEnv | undefined> = {};
       const answer = async (args: string[], env?: NodeJS.ProcessEnv) => {
+        // The binary lists the same connections.
         if (args.join(' ') === 'credentials list --json') {
           await run(args);
-          return JSON.stringify([
-            {
-              name: 'bm-aws',
-              kind: 'role',
-              roleArn: 'arn:aws:iam::111122223333:role/anycloud-role',
-            },
-            {
-              name: 'bm-gcp',
-              kind: 'role',
-              serviceAccountEmail:
-                'anycloud-role@proj-1.iam.gserviceaccount.com',
-            },
-          ]);
+          return JSON.stringify(listed);
         }
         if (args[0] === 'credentials' && args[1] === 'new') {
           envs[args[2]!] = env;
           await run(args);
-          const account = args[2] === 'bm-aws' ? '111122223333' : 'proj-1';
+          const account =
+            applied[args[2]!] ??
+            { 'bm-aws': '111122223333', 'bm-gcp': 'proj-1' }[args[2]!];
           return JSON.stringify({ name: args[2], account });
         }
         return run(args);
@@ -1609,7 +1628,6 @@ describe('upgrade', () => {
       'credentials new bm-aws --provider aws --role --apply --json',
       'credentials new bm-gcp --provider gcp --role --apply --project-id proj-1 --json',
     ];
-
     it('re-applies each role connection right after the API moves, before any roll', async () => {
       const { deps, calls, envs, lines } = withRoles();
       await upgrade(deps);
@@ -1623,7 +1641,7 @@ describe('upgrade', () => {
       expect(envs['bm-aws']).toEqual({ AWS_REGION: 'us-east-2' });
       expect(lines).toEqual(
         expect.arrayContaining([
-          "aws's role connection bm-aws in account 111122223333: upgrade re-applies its setup through your aws CLI, for this release's runner permissions.",
+          "aws's role connection bm-aws in account 111122223333 (its stack in us-east-2): upgrade re-applies its setup through your aws CLI, for this release's runner permissions.",
           "gcp's role connection bm-gcp in project proj-1: upgrade re-applies its setup through your gcloud CLI, for this release's runner permissions.",
         ]),
       );
@@ -1652,15 +1670,90 @@ describe('upgrade', () => {
         ],
       });
       expect(lines).toContain(
-        "aws's role connection bm-aws in account 111122223333: upgrade re-applies its setup through your aws CLI, for this release's runner permissions.",
+        "aws's role connection bm-aws in account 111122223333 (its stack in us-east-2): upgrade re-applies its setup through your aws CLI, for this release's runner permissions.",
       );
       expect(mutations(calls)).toEqual([]);
     });
 
-    it('skips a key connection, as our CI has', async () => {
-      const { deps, calls } = setUp({ runners: awsAndGcp });
+    it("names the grants a key connection's identity needs, as our CI's, and re-applies nothing", async () => {
+      const { deps, calls, lines } = withRoles({}, [
+        { name: 'bm-aws', cloudProvider: 'AWS', accessKeyId: 'AK1' },
+        { name: 'bm-gcp', cloudProvider: 'GCP', clientEmail: 'x@proj-1' },
+      ]);
       await upgrade(deps);
-      expect(calls.some((c) => c.startsWith('credentials new'))).toBe(false);
+      expect(calls.some((c) => /^(credentials new|aws|gcloud)/.test(c))).toBe(
+        false,
+      );
+      expect(lines).toEqual(
+        expect.arrayContaining([
+          `aws's key connection bm-aws has no setup to re-apply, and its runners need ec2:CreateVpc, ec2:CreateSubnet, ec2:CreateInternetGateway, ec2:AttachInternetGateway, ec2:CreateRoute, ec2:DescribeAvailabilityZones, ec2:DescribeInternetGateways, ec2:DescribeRouteTables, ec2:DescribeSubnets. Unless its identity anycloud-bm-aws has them, grant them, signed in to the account install used:
+  aws iam put-user-policy --user-name anycloud-bm-aws --policy-name AnycloudJobsNetwork --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["ec2:CreateVpc","ec2:CreateSubnet","ec2:CreateInternetGateway","ec2:AttachInternetGateway","ec2:CreateRoute","ec2:DescribeAvailabilityZones","ec2:DescribeInternetGateways","ec2:DescribeRouteTables","ec2:DescribeSubnets"],"Resource":"*"}]}'`,
+          `gcp's key connection bm-gcp has no setup to re-apply, and its runners need compute.networks.create, compute.networks.get. Unless its identity anycloud-bm-gcp has them, grant them, signed in to the project install used:
+  PROJECT=$(gcloud config get-value project); gcloud iam roles describe anycloudJobsNetwork --project "$PROJECT" --format none || gcloud iam roles create anycloudJobsNetwork --project "$PROJECT" --permissions compute.networks.create,compute.networks.get --format none; gcloud projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:anycloud-bm-gcp@$PROJECT.iam.gserviceaccount.com" --role "projects/$PROJECT/roles/anycloudJobsNetwork" --condition None --format none`,
+        ]),
+      );
+    });
+
+    it("leaves Azure's role connection, whose setup this release doesn't change, and its CLI alone", async () => {
+      const azure = JSON.stringify(
+        planClasses(
+          [{ cloud: 'azure', region: 'westus2', credentials: 'bm-azure' }],
+          catalogs({ azure: CATALOG.azure }),
+          'azure',
+        ).classes,
+      );
+      const { deps, calls } = withRoles({ runners: azure }, [
+        {
+          name: 'bm-azure',
+          cloudProvider: 'Azure',
+          kind: 'role',
+          subscriptionId: 'sub-1',
+        },
+      ]);
+      await upgrade(deps);
+      expect(calls.some((c) => /^(credentials new|az )/.test(c))).toBe(false);
+    });
+
+    it('re-applies a connection two orgs share once', async () => {
+      const { deps, calls } = withRoles({ beta: true });
+      await upgrade(deps);
+      expect(calls.filter((c) => c.startsWith('credentials new'))).toEqual(
+        REAPPLIED,
+      );
+    });
+
+    it("stops before the API moves when a role cloud's CLI is signed out", async () => {
+      const { deps, calls } = withRoles();
+      const command = deps.command;
+      deps.command = async (args, env) => {
+        if (args.join(' ') === 'gcloud auth print-access-token') {
+          throw new Error('Command failed: not signed in');
+        }
+        return command(args, env);
+      };
+      await expect(upgrade(deps)).rejects.toThrow(
+        "gcloud isn't signed in: run `gcloud auth login`.",
+      );
+      expect(mutations(calls)).toEqual([]);
+    });
+
+    it("stops before the API moves when aws is signed in to another account than the role's", async () => {
+      const { deps, calls } = withRoles();
+      deps.command = async () => JSON.stringify({ Account: '444455556666' });
+      await expect(upgrade(deps)).rejects.toThrow(
+        "aws's CLI is signed in to account 444455556666, not 111122223333, where bm-aws's role is: sign it in to 111122223333, then run `backmesh upgrade` again.",
+      );
+      expect(mutations(calls)).toEqual([]);
+    });
+
+    it('stops before any roll when a re-apply lands in another account', async () => {
+      const { deps, calls } = withRoles({}, undefined, {
+        'bm-gcp': 'proj-2',
+      });
+      await expect(upgrade(deps)).rejects.toThrow(
+        "gcp's CLI re-applied the role setup in project proj-2, not proj-1, where bm-gcp's role is. Sign it in to proj-1. This release's runners need its role setup; run `backmesh upgrade` again.",
+      );
+      expect(rolledAny(calls)).toBe(false);
     });
 
     it('stops before any roll when a re-apply fails, saying to run upgrade again', async () => {

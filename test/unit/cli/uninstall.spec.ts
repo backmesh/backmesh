@@ -1544,7 +1544,11 @@ describe('uninstall', () => {
     const gcp = leftoverIdentity('gcp', 'bm-gcp').split('\n').slice(1);
     expect(gcp).toHaveLength(1);
     expect(gcp[0]).toMatch(
-      /SA=anycloud-bm-gcp@\$PROJECT\.iam\.gserviceaccount\.com; for role in roles\/compute\.instanceAdmin\.v1 roles\/compute\.securityAdmin roles\/storage\.admin; do gcloud projects remove-iam-policy-binding .*; done; gcloud iam service-accounts delete "\$SA"/,
+      /SA=anycloud-bm-gcp@\$PROJECT\.iam\.gserviceaccount\.com; for role in roles\/compute\.instanceAdmin\.v1 roles\/compute\.securityAdmin roles\/storage\.admin projects\/\$PROJECT\/roles\/anycloudJobsNetwork; do gcloud projects remove-iam-policy-binding .*; done; gcloud iam service-accounts delete "\$SA"/,
+    );
+    const aws = leftoverIdentity('aws', 'bm-aws').split('\n').slice(1);
+    expect(aws[0]).toMatch(
+      /for policy in \$\(aws iam list-user-policies --user-name anycloud-bm-aws .*\); do aws iam delete-user-policy --user-name anycloud-bm-aws --policy-name "\$policy"; done; aws iam delete-user/,
     );
     const azure = leftoverIdentity('azure', 'bm-azure').split('\n').slice(1);
     expect(azure[0]).toMatch(
