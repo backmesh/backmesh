@@ -1,5 +1,5 @@
 // The build benchmark (README.md): for each label, ROUNDS rounds of
-// bench.yml in the target repo, each on a new branch: a cold run, then, once
+// bench.yml in the target repo (bench-cache.yml for a `<label>/cache` arm), each on a new branch: a cold run, then, once
 // its caches have uploaded, a warm run of the same commit's workflow. Writes
 // every job's GitHub times, steps and backmesh start-up marks to
 // results/<date>-<backmesh version>.json after each round.
@@ -36,11 +36,18 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const run = promisify(execFile);
 const here = new URL('.', import.meta.url).pathname;
 const date = new Date().toISOString().slice(0, 10);
-const file = join(here, 'results', `${date}-${env('BACKMESH_VERSION')}.json`);
+const file = join(
+  here,
+  'results',
+  `${date}-${env('BACKMESH_VERSION')}${process.env.RESULTS_SUFFIX ?? ''}.json`,
+);
 const commit = (
   await run('git', ['rev-parse', 'HEAD'], { cwd: here })
 ).stdout.trim();
-const template = await readFile(join(here, 'bench.yml'), 'utf8');
+const templates = {
+  plain: await readFile(join(here, 'bench.yml'), 'utf8'),
+  cache: await readFile(join(here, 'bench-cache.yml'), 'utf8'),
+};
 
 const results: Results = {
   date,
@@ -88,6 +95,9 @@ function parseLog(log: string) {
   const marks: Record<string, number> = {};
   const cache: string[] = [];
   let nproc: number | null = null;
+  let cpu: string | null = null;
+  const hits: Record<string, string> = {};
+  let dockerCached = 0;
   let region: string | null = null;
   let vm: string | null = null;
   for (const line of log.split('\n')) {
@@ -96,11 +106,15 @@ function parseLog(log: string) {
     if (mark) marks[mark[1]!] = Number(mark[2]);
     const cpus = /^nproc (\d+)$/.exec(text);
     if (cpus) nproc = Number(cpus[1]);
+    if (text.startsWith('cpu ')) cpu = text.slice(4);
+    const hit = /^cache-hit (\S+) (\S*)$/.exec(text);
+    if (hit) hits[hit[1]!] = hit[2]!;
+    if (/^#\d+ CACHED$/.test(text)) dockerCached++;
     if (text.startsWith('region ')) region = text.slice(7);
     if (text.startsWith('vm ')) vm = text.slice(3);
     if (text.startsWith('backmesh cache: auto ')) cache.push(text);
   }
-  return { marks, cache, nproc, region, vm };
+  return { marks, cache, nproc, cpu, region, vm, hits, dockerCached };
 }
 
 async function collect(runId: number): Promise<Run> {
@@ -139,17 +153,19 @@ async function collect(runId: number): Promise<Run> {
   };
 }
 
-async function benchmark(label: string) {
+// `<label>` runs bench.yml on the label, `<label>/cache` bench-cache.yml.
+async function benchmark(arm: string) {
+  const [label, cache] = arm.split('/') as [string, string?];
   const { dir, git } = await checkout();
   await mkdir(join(dir, '.github/workflows'), { recursive: true });
   await writeFile(
     join(dir, '.github/workflows/bench.yml'),
-    template.replaceAll('__LABEL__', label),
+    templates[cache ? 'cache' : 'plain'].replaceAll('__LABEL__', label),
   );
   for (let round = 1; round <= rounds; round++) {
     // A new branch has no caches of its own, and the default branch none of
     // this workflow's, so its first run is cold.
-    const branch = `builds/${label}/${Date.now()}`;
+    const branch = `builds/${arm}/${Date.now()}`;
     await git('checkout', '-q', '--orphan', branch);
     await git('add', '-A');
     const push = async (message: string) => {
@@ -158,17 +174,17 @@ async function benchmark(label: string) {
       await git('push', '-q', 'origin', `HEAD:refs/heads/${branch}`);
       return completed(sha);
     };
-    const cold = await push(`Build benchmark ${label} round ${round}, cold`);
+    const cold = await push(`Build benchmark ${arm} round ${round}, cold`);
     await sleep(UPLOAD_WAIT_MS);
-    const warm = await push(`Build benchmark ${label} round ${round}, warm`);
-    results.labels[label]!.push({
+    const warm = await push(`Build benchmark ${arm} round ${round}, warm`);
+    results.labels[arm]!.push({
       round,
       branch,
       cold: await collect(cold.id),
       warm: await collect(warm.id),
     });
     await save();
-    console.log(`${label} round ${round}: ${cold.html_url} ${warm.html_url}`);
+    console.log(`${arm} round ${round}: ${cold.html_url} ${warm.html_url}`);
     await git('push', '-q', 'origin', `:refs/heads/${branch}`);
   }
 }

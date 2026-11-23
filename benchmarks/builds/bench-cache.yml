@@ -1,0 +1,158 @@
+name: builds-cache
+on:
+  push:
+    branches: ['builds/**']
+permissions:
+  contents: read
+# bench.yml's builds, each caching what it downloads and builds: on GitHub's
+# runners with GitHub's cache (actions/cache, as setup-*'s own `cache:` does,
+# and Docker's type=gha), on backmesh's with backmesh/cache (Docker's layers
+# through a local cache directory). The Cache hits step prints each cache's
+# hit, and the Docker build its CACHED steps.
+defaults:
+  run:
+    working-directory: project
+env:
+  BACKMESH: ${{ startsWith('__LABEL__', 'backmesh') }}
+jobs:
+  docker:
+    runs-on: __LABEL__
+    steps:
+      - &marks
+        name: Marks
+        working-directory: .
+        run: |
+          cat "${BACKMESH_JOB_MARKS:-/dev/null}"; echo "nproc $(nproc)"
+          echo "cpu $(lscpu | sed -n 's/^Model name: *//p')"
+          imds=http://169.254.169.254/latest
+          [[ -n ${BACKMESH_JOB_MARKS:-} ]] || exit 0
+          t=$(curl -sfm 2 -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' $imds/api/token) || exit 0
+          echo "region aws $(curl -sfm 2 -H "X-aws-ec2-metadata-token: $t" $imds/meta-data/placement/region)"
+          echo "vm $(curl -sfm 2 -H "X-aws-ec2-metadata-token: $t" $imds/meta-data/instance-type)"
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with: { repository: grafana/k6, ref: v0.54.0, path: project }
+      - id: layers
+        if: env.BACKMESH == 'true'
+        uses: backmesh/cache@v1
+        with: { path: /tmp/buildx-cache, key: docker-layers }
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: project
+          tags: bench
+          load: true
+          cache-from: ${{ env.BACKMESH == 'true' && 'type=local,src=/tmp/buildx-cache' || 'type=gha' }}
+          cache-to: ${{ env.BACKMESH == 'true' && 'type=local,dest=/tmp/buildx-cache,mode=max' || 'type=gha,mode=max' }}
+      - name: Cache hits
+        run: echo "cache-hit docker ${{ env.BACKMESH == 'true' && (steps.layers.outputs.cache-hit || 'false') || 'gha' }}"
+  rust:
+    runs-on: __LABEL__
+    steps:
+      - *marks
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with: { repository: BurntSushi/ripgrep, ref: 14.1.1, path: project }
+      - id: github
+        if: env.BACKMESH != 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            project/target
+          key: cargo-${{ hashFiles('project/Cargo.lock') }}
+      - id: backmesh
+        if: env.BACKMESH == 'true'
+        uses: backmesh/cache@v1
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            project/target
+          key: cargo-${{ hashFiles('project/Cargo.lock') }}
+      - run: cargo build --release --locked
+      - &hits
+        name: Cache hits
+        run: echo "cache-hit ${{ github.job }} ${{ steps.github.outputs.cache-hit || steps.backmesh.outputs.cache-hit || 'false' }}"
+  typescript:
+    runs-on: __LABEL__
+    steps:
+      - *marks
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with: { repository: microsoft/TypeScript, ref: v5.6.3, path: project }
+      - uses: actions/setup-node@v5
+        with: { node-version: 22, package-manager-cache: false }
+      - id: github
+        if: env.BACKMESH != 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('project/package-lock.json') }}
+      - id: backmesh
+        if: env.BACKMESH == 'true'
+        uses: backmesh/cache@v1
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('project/package-lock.json') }}
+      - run: npm ci --no-audit --no-fund
+      - run: npx hereby local
+      - *hits
+  python:
+    runs-on: __LABEL__
+    steps:
+      - *marks
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with: { repository: pydantic/pydantic, ref: v2.11.7, path: project }
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.12' }
+      - uses: astral-sh/setup-uv@v7
+        with: { version: 0.13.9, enable-cache: false }
+      - run: echo "UV_CACHE_DIR=$HOME/.cache/uv" >>"$GITHUB_ENV"
+      - id: github
+        if: env.BACKMESH != 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ hashFiles('project/uv.lock') }}
+      - id: backmesh
+        if: env.BACKMESH == 'true'
+        uses: backmesh/cache@v1
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ hashFiles('project/uv.lock') }}
+      - run: uv sync --frozen
+      - run: uv run --frozen pytest -q -p no:cacheprovider tests/test_main.py tests/test_types.py tests/test_json_schema.py
+      - *hits
+  go:
+    runs-on: __LABEL__
+    steps:
+      - *marks
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with: { repository: cli/cli, ref: v2.62.0, path: project }
+      - uses: actions/setup-go@v6
+        with: { go-version-file: project/go.mod, cache: false }
+      - id: github
+        if: env.BACKMESH != 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-${{ hashFiles('project/go.sum') }}
+      - id: backmesh
+        if: env.BACKMESH == 'true'
+        uses: backmesh/cache@v1
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-${{ hashFiles('project/go.sum') }}
+      - run: go build ./...
+      - run: go test ./pkg/cmd/pr/...
+      - *hits
