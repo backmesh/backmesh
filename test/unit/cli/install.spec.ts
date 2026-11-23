@@ -15,7 +15,6 @@ import type { FeatureTable } from '../../../src/anycloud/features.js';
 import { signInCheck } from '../../../src/app/github.js';
 import {
   install,
-  keyLine,
   parseControlPlane,
   parseRunners,
   PUBLIC_REPOS_LINE,
@@ -1979,10 +1978,10 @@ describe('install', () => {
     );
     // Only AWS's disks have provisioned speed to lower.
     expect(gcp.commands.filter((c) => c.startsWith('aws ec2'))).toEqual([]);
-    // anycloud 0.1.81's generated GCP identity lacks the VM Job network's
-    // rights, so install names the grant; AWS's policy has them.
-    expect(gcp.lines).toContain(keyLine('gcp', BM.gcp));
-    expect(aws.lines.some((l) => l.includes('key connection'))).toBe(false);
+    // anycloud generates each identity with the VM Job network's rights.
+    for (const { lines } of [aws, gcp]) {
+      expect(lines.some((l) => l.includes('key connection'))).toBe(false);
+    }
   });
 
   // anycloud 0.1.73's refusals: its own for AWS and Azure, and the IAM

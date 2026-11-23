@@ -670,9 +670,6 @@ export async function connectClouds(
           if (!GENERATED_EXISTS[cloud].test(String(error))) throw error;
           throw new Error(identityLeft(cloud, credentials), { cause: error });
         });
-      // anycloud 0.1.81 generates GCP's identity without the VM Job
-      // network's rights; its next release grants them.
-      if (cloud === 'gcp') deps.ui.print(keyLine(cloud, credentials));
       continue;
     }
     deps.ui.print(
