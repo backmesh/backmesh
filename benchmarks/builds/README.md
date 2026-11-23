@@ -25,6 +25,15 @@ No step caches anything: `setup-node`'s, `setup-go`'s and `setup-uv`'s own
 caches are off, so a warm run gets only what backmesh caches without a
 workflow change.
 
+[`bench-cache.yml`](bench-cache.yml) runs the same builds, each caching what it
+downloads and builds, for a `<label>/cache` arm: Cargo's registry and
+`target`, npm's, uv's, and Go's module and build caches, and Docker's layers.
+On GitHub's runners it uses GitHub's cache, through `actions/cache` (which
+`setup-*`'s own `cache:` uses) and Docker's `type=gha`; on backmesh's,
+`backmesh/cache`, with Docker's layers in a local cache directory. Its Cache
+hits step prints whether each job's cache hit, and the Docker build prints its
+`CACHED` steps.
+
 ## Running it
 
 [`run.ts`](run.ts) runs rounds in a repository in an org with a backmesh
@@ -33,7 +42,7 @@ ours, on each label at once:
 
 ```sh
 GITHUB_TOKEN=$(gh auth token) TARGET_REPO=backmesh/benchmarks \
-LABELS='backmesh-4 ubuntu-latest' ROUNDS=5 \
+LABELS='backmesh-4 ubuntu-latest backmesh-4/cache ubuntu-latest/cache' ROUNDS=5 \
 BACKMESH_VERSION=0.5.5 ANYCLOUD_VERSION=0.1.80 \
 INSTALLATION='backmesh org CI, AWS' node benchmarks/builds/run.ts
 node benchmarks/builds/report.ts
@@ -42,7 +51,8 @@ node benchmarks/builds/report.ts
 The token needs write access to the target. Set the versions to the
 installation's, as `backmesh status` or its last `backmesh upgrade` reports
 them: neither a job nor the token can read them. Each round pushes `bench.yml`,
-with the label for `runs-on`, to a new branch `builds/<label>/<time>`: that
+with the label for `runs-on`, to a new branch `builds/<label>/<time>` (`builds/<label>/cache/<time>` for a
+cache arm): that
 run is **cold**, as the new branch has no caches and the default branch none of
 this workflow's. A minute after it ends, for its caches' uploads, an empty
 commit to the same branch starts the **warm** run, which restores what the cold
@@ -50,8 +60,9 @@ run's jobs saved. So the warm run models a second push to the same branch,
 which reads its own branch's caches; a new pull request's branch reads the
 default branch's instead. The round's figures go to
 `results/<date>-<backmesh version>.json` after each round, and its branch is
-deleted. [`report.ts`](report.ts) writes the results below from every file in
-[`results/`](results/).
+deleted; `RESULTS_SUFFIX` names a second file for the same date and version,
+`<date>-<version><suffix>.json`. [`report.ts`](report.ts) writes the results
+below from every file in [`results/`](results/).
 
 **Re-run it before a release that touches the runners' start-up, the cache or
 scheduling**, on the release's installation, and commit the results file and
@@ -93,8 +104,10 @@ Python for python and Go for go, and npm's cache for typescript; uv's, Go's
 module and build caches, Cargo's and Docker's layers aren't kept.
 `ubuntu-latest` has no automatic cache, so its warm runs repeat its cold
 ones. In a public repository, as backmesh/benchmarks is, `ubuntu-latest` has
-4 vCPUs and is free; in a private one it has 2. `backmesh-2` has 2 vCPUs and 8
-GiB, `backmesh-4` 4 vCPUs and 16 GiB.
+4 vCPUs and is free; in a private one it has 2. `backmesh-<n>` has n vCPUs and 4 GiB
+each, on AWS an `m8i` VM first (Intel Xeon 6), then `m7a`, `m7i` and `m6a`. The
+Marks step prints each job's CPU model (`lscpu`), so a result shows which CPUs
+each label ran on.
 
 ## Results
 

@@ -66,11 +66,22 @@ async function checkout() {
   const dir = await mkdtemp(join(tmpdir(), 'builds-bench-'));
   const git = async (...args: string[]) =>
     (await run('git', args, { cwd: dir })).stdout.trim();
+  // GitHub sometimes rejects a push (`fatal error in commit_refs_rules`) and
+  // takes the same push a moment later.
+  const push = async (...args: string[]) => {
+    for (let attempt = 1; ; attempt++)
+      try {
+        return await git('push', '-q', 'origin', ...args);
+      } catch (e) {
+        if (attempt === 3) throw e;
+        await sleep(10_000);
+      }
+  };
   await git('init', '-q');
   await git('config', 'user.name', 'backmesh build benchmark');
   await git('config', 'user.email', 'builds-bench@users.noreply.github.com');
   await git('remote', 'add', 'origin', `https://github.com/${owner}/${repo}`);
-  return { dir, git };
+  return { dir, git, push };
 }
 
 // The run for a pushed commit, once it's completed.
@@ -156,7 +167,7 @@ async function collect(runId: number): Promise<Run> {
 // `<label>` runs bench.yml on the label, `<label>/cache` bench-cache.yml.
 async function benchmark(arm: string) {
   const [label, cache] = arm.split('/') as [string, string?];
-  const { dir, git } = await checkout();
+  const { dir, git, push: pushRef } = await checkout();
   await mkdir(join(dir, '.github/workflows'), { recursive: true });
   await writeFile(
     join(dir, '.github/workflows/bench.yml'),
@@ -171,7 +182,7 @@ async function benchmark(arm: string) {
     const push = async (message: string) => {
       await git('commit', '-q', '--allow-empty', '-m', message);
       const sha = await git('rev-parse', 'HEAD');
-      await git('push', '-q', 'origin', `HEAD:refs/heads/${branch}`);
+      await pushRef(`HEAD:refs/heads/${branch}`);
       return completed(sha);
     };
     const cold = await push(`Build benchmark ${arm} round ${round}, cold`);
@@ -185,7 +196,7 @@ async function benchmark(arm: string) {
     });
     await save();
     console.log(`${arm} round ${round}: ${cold.html_url} ${warm.html_url}`);
-    await git('push', '-q', 'origin', `:refs/heads/${branch}`);
+    await pushRef(`:refs/heads/${branch}`);
   }
 }
 
