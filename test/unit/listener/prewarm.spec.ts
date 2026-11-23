@@ -1541,12 +1541,24 @@ describe('Planner.cue', () => {
 
   it("frees a cue's runners from the cap once its run takes them", () => {
     const { planner } = make();
-    const t = learnRuns(planner, [matrix(70)]);
-    let at = cueAt(t);
+    const web = 'acme/web/.github/workflows/ci.yml@refs/heads/main';
+    let t = learnRuns(planner, [matrix(70)]);
+    feed(planner, events(900, matrix(70), web));
+    const at = cueAt(t);
     expect(planner.cue('acme/app', 'main', 0, at).added).toBe(64);
-    // The push's run takes them, so the next push's cue has the cap again.
-    at = cueAt(learnRuns(planner, [matrix(70)], 901, t + 20));
-    expect(planner.cue('acme/app', 'main', 0, at).added).toBe(64);
+    expect(planner.cue('acme/web', 'main', 0, at)).toMatchObject({
+      added: 0,
+      capped: 70,
+    });
+    // The push's run arrives: its trigger takes the cue's runners, before
+    // any of its jobs is assigned, so another push's cue has the cap again.
+    t = at / 1000 + 20;
+    const run = events(
+      901,
+      matrix(70).map((j) => ({ ...j, q: t, start: t + 31, end: t + 131 })),
+    );
+    feed(planner, run.slice(0, 1));
+    expect(planner.cue('acme/web', 'main', 0, s(t + 1)).added).toBe(64);
   });
 });
 

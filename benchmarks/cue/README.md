@@ -13,7 +13,7 @@ the push through the CLI built from the dispatched commit, then one without a
 cue. A warm-up push comes first, so the planner has
 learned the workflow's first wave before the first cue.
 
-The target is [`target/`](target/): `bench.yml`, written as `bench-<label>.yml` with
+The target is [`target/`](target/): `bench.yml`, written as `bench-<label>-w<width>.yml` with
 the `label` input for `runs-on`, runs a matrix of `width` `bench` jobs, the
 run's first wave. Each runs checkout, setup-node with Node 22, `yarn install
 --frozen-lockfile` of a 2,500-line lockfile (246 packages), and a `Marker`

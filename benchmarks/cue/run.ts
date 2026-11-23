@@ -65,10 +65,11 @@ if (!(await git('ls-remote', 'origin', 'refs/heads/results'))) {
 const remoteBench = await git('ls-remote', 'origin', `refs/heads/${BRANCH}`);
 await (remoteBench ? git('switch', BRANCH) : git('switch', '--orphan', BRANCH));
 
-// The target's files, with the label and width, as the warm-up's commit: the planner
-// learns the workflow's first wave from that push. The
-// workflow is named for its label, as the planner keys history by workflow
-// file, so a new label's cues don't start runners on the old one.
+// The target's files, with the label and width, as the warm-up's commit: the
+// planner learns the workflow's first wave from that push. The workflow is
+// named for its label and width, as the planner keys history by workflow
+// file: a new label's cues don't start runners on the old one, and a new
+// width's first wave isn't sized from the old one's runs.
 await rm(join(work, '.github/workflows'), { recursive: true, force: true });
 await mkdir(join(work, '.github/workflows'), { recursive: true });
 for (const file of ['package.json', 'yarn.lock', 'report.mjs']) {
@@ -76,7 +77,7 @@ for (const file of ['package.json', 'yarn.lock', 'report.mjs']) {
 }
 const workflow = await readFile(join(target, 'bench.yml'), 'utf8');
 await writeFile(
-  join(work, `.github/workflows/bench-${label}.yml`),
+  join(work, `.github/workflows/bench-${label}-w${width}.yml`),
   workflow
     .replace('__LABEL__', label)
     .replace(

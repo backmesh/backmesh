@@ -1,5 +1,5 @@
 # The cue benchmark's target (benchmarks/cue/README.md): run.ts copies this to
-# the target repo as .github/workflows/bench-<label>.yml, with
+# the target repo as .github/workflows/bench-<label>-w<width>.yml, with
 # the label for runs-on and the width's shards, and pushes to its bench
 # branch. The bench jobs are the run's first wave; report needs them all.
 name: Bench
