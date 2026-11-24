@@ -34,7 +34,7 @@ ARG BUILDX_VERSION=0.39.1
 ARG BUILDX_SHA256=903090816da68f8bc1a2ff5346dd163a5adacfce4548d003c75df42cd47a9bf4
 ARG COMPOSE_VERSION=2.38.2
 ARG COMPOSE_SHA256=486b3ffc0f806ca2efbc430cef89955386011662f0c76bad17c103d059cfa9cf
-# The cloud CLIs, installed on first use (cloud-cli.sh): Microsoft's noble
+# The cloud CLIs, installed on first use (pinned.sh): Microsoft's noble
 # package, Google's x86-64 archive, and AWS's x86-64 zip, which AWS's key
 # signs. Their versions are runner-images main's README's on 2026-11-23, not
 # toolset.lock's revision; bump them by hand.
@@ -43,13 +43,36 @@ ARG AZ_SHA256=a6ed3e2d3eca33c6e3b40d0534d4607048a02d656192accefcb7881ce8679124
 ARG GCLOUD_VERSION=593.0.0
 ARG GCLOUD_SHA256=42c32b7553c712f71fcf6f124546c0519437f53755f47f9bd0c957998cd6b826
 ARG AWS_VERSION=2.40.4
+# Rust, PowerShell, Go, Java and Chrome, installed on first use the same way
+# (pinned.sh), at the versions of GitHub's image's release ubuntu24/20261122.23:
+# rustup's x86-64 rustup-init and Rust's stable toolchain, PowerShell's
+# release, go.dev's archive, Temurin's JDK (GitHub's README shows
+# 17.0.21.1+2 as 17.0.21+2), and Chrome for Testing's Chrome and ChromeDriver.
+ARG RUSTUP_VERSION=1.29.3
+ARG RUSTUP_SHA256=b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55
+ARG RUST_VERSION=1.100.0
+ARG PWSH_VERSION=7.6.10
+ARG PWSH_SHA256=e261cabc91c78a9afe8d1e5f24731ab0d38204735ab2ec94b0af55102652e10d
+ARG GO_VERSION=1.26.11
+ARG GO_SHA256=9849f4e04ee35303714e34fbc3ac8ab44ea3e448a95aa182f91e3b9b79c710ec
+ARG JAVA_VERSION=17.0.21.1+2
+ARG JAVA_SHA256=0b0ac5eab6db6abaec68c9913bcddb31321e5da411c45073d520d9c125e6f7b4
+ARG CHROME_VERSION=158.0.8127.36
+ARG CHROME_SHA256=dba9cc838e1ce269c33ea68170881127bd15d078fc3ca5891c90802819a4d7c7
+ARG CHROMEDRIVER_SHA256=d20e70d69d68c5c983e2526452ed0779fd65dc4ade5d6741f1bb3d0d82754d3a
 # corepack's defaults where a repository names no packageManager.
 ARG YARN_VERSION=1.22.22
 ARG PNPM_VERSION=12.18.0
 
 # PIPX_*: where GitHub's image puts pipx's apps, on PATH, which ends in
-# /usr/games as GitHub's does, for packages such as cowsay. COREPACK_*: yarn and
-# pnpm without a prompt, kept in a directory the runner user writes. The tool
+# /usr/games as GitHub's does, for packages such as cowsay, and has the
+# runner's ~/.cargo/bin, as GitHub's has, so `cargo install` puts its
+# binaries on PATH. It comes after /usr/local/bin's first-use shims, unlike
+# GitHub's, so `cargo` is the shim even when a cache restored rustup's
+# proxies without a toolchain. JAVA_HOME and JAVA_HOME_17_X64, and
+# CHROMEWEBDRIVER, as GitHub's image sets them: each has the image's shims
+# until the first use installs Temurin 17 or ChromeDriver there. COREPACK_*:
+# yarn and pnpm without a prompt, kept in a directory the runner user writes. The tool
 # cache is under the VM's /workspace, at the same path in the container,
 # because the runner mounts it into a job's `container:`. LANG and ImageOS as
 # GitHub's image sets them; actions such as setup-python pick their builds by
@@ -61,9 +84,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     AGENT_TOOLSDIRECTORY=/workspace/hostedtoolcache \
     PIPX_HOME=/opt/pipx \
     PIPX_BIN_DIR=/opt/pipx_bin \
+    JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64 \
+    JAVA_HOME_17_X64=/usr/lib/jvm/temurin-17-jdk-amd64 \
+    CHROMEWEBDRIVER=/usr/local/share/chromedriver-linux64 \
     COREPACK_HOME=/opt/corepack \
     COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
-    PATH=/opt/pipx_bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games
+    PATH=/opt/pipx_bin:/usr/local/sbin:/usr/local/bin:/home/runner/.cargo/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -173,17 +199,30 @@ COPY runner-job.sh /usr/local/bin/runner-job
 COPY runner-job-completed.sh runner-job-started.sh /usr/local/bin/
 COPY dist/auto-cache.mjs dist/LICENSE dist/NOTICE /usr/local/lib/backmesh/
 COPY first-use.bash /etc/backmesh/first-use.bash
-# az, gcloud, gsutil and aws install on first use, from any caller (cloud-cli.sh).
+# The cloud CLIs, Rust, PowerShell, Go, Java and Chrome install on first use,
+# from any caller (pinned.sh).
 COPY keys/ /usr/share/keyrings/backmesh/
-COPY cloud-cli.sh /usr/local/libexec/backmesh/cloud-cli
+COPY pinned.sh /usr/local/libexec/backmesh/pinned
 # apt-get and apt fetch apt's lists on first use (apt.sh). Actions that
 # hardcode GitHub's tool cache path, such as ruby/setup-ruby, find the image's
 # through /opt/hostedtoolcache; the entrypoint creates it as the runner user.
 # en_US.UTF-8 for tools that ask for it by name.
 COPY apt.sh /usr/local/libexec/backmesh/apt
-RUN for cli in az gcloud gsutil aws; do ln -s /usr/local/libexec/backmesh/cloud-cli "/usr/local/bin/$cli"; done \
-    && printf 'az_version=%s\naz_sha256=%s\ngcloud_version=%s\ngcloud_sha256=%s\naws_version=%s\n' \
-        "$AZ_VERSION" "$AZ_SHA256" "$GCLOUD_VERSION" "$GCLOUD_SHA256" "$AWS_VERSION" >/usr/share/backmesh/cloud-cli.env \
+RUN for cmd in az gcloud gsutil aws rustup cargo rustc rustdoc rustfmt cargo-fmt cargo-clippy clippy-driver \
+        pwsh go gofmt java javac jar keytool google-chrome google-chrome-stable chromedriver; do \
+      ln -s /usr/local/libexec/backmesh/pinned "/usr/local/bin/$cmd"; \
+    done \
+    && install -d "$JAVA_HOME/bin" /opt/google/chrome "$CHROMEWEBDRIVER" \
+    && for cmd in "$JAVA_HOME"/bin/{java,javac,jar,keytool} /usr/bin/google-chrome /opt/google/chrome/chrome \
+        "$CHROMEWEBDRIVER/chromedriver"; do \
+      ln -s /usr/local/libexec/backmesh/pinned "$cmd"; \
+    done \
+    && printf '%s\n' "az_version=$AZ_VERSION" "az_sha256=$AZ_SHA256" "gcloud_version=$GCLOUD_VERSION" \
+        "gcloud_sha256=$GCLOUD_SHA256" "aws_version=$AWS_VERSION" "rustup_version=$RUSTUP_VERSION" \
+        "rustup_sha256=$RUSTUP_SHA256" "rust_version=$RUST_VERSION" "pwsh_version=$PWSH_VERSION" \
+        "pwsh_sha256=$PWSH_SHA256" "go_version=$GO_VERSION" "go_sha256=$GO_SHA256" "java_version=$JAVA_VERSION" \
+        "java_sha256=$JAVA_SHA256" "chrome_version=$CHROME_VERSION" "chrome_sha256=$CHROME_SHA256" \
+        "chromedriver_sha256=$CHROMEDRIVER_SHA256" >/usr/share/backmesh/pinned.env \
     && ln -s /usr/local/libexec/backmesh/apt /usr/local/bin/apt-get \
     && ln -s /usr/local/libexec/backmesh/apt /usr/local/bin/apt \
     && ln -s "$RUNNER_TOOL_CACHE" /opt/hostedtoolcache \

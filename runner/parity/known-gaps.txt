@@ -15,8 +15,6 @@ Bicep
 Buildah
 CMake
 Cabal
-Cargo
-ChromeDriver
 Chromium
 Clang
 Clang-format
@@ -30,10 +28,8 @@ GHCup
 GNU Fortran
 Geckodriver
 Git-ftp
-Google Chrome
 Gradle
 Homebrew
-Java
 Julia
 Kind
 Kotlin
@@ -56,14 +52,9 @@ Pip
 Pip3
 Podman
 PostgreSQL
-PowerShell
 Pulumi
 Ruby
 RubyGems
-Rust
-Rustdoc
-Rustfmt
-Rustup
 Selenium server
 Skopeo
 Stack

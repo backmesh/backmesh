@@ -3,8 +3,8 @@
 # `command -v`; anything else runs as a bash command. `-` means it isn't a
 # command, so it's listed but not checked. `apt:<package>=<package>` replaces
 # a package of the toolset's list that Ubuntu can't install by that name.
-# `aws`, `az` and `gcloud` are the image's first-use shims (cloud-cli.sh), so
-# they count as present.
+# The cloud CLIs, Rust's, `pwsh`, `java`, `google-chrome` and `chromedriver`
+# are the image's first-use shims (pinned.sh), so they count as present.
 apt:netcat=netcat-openbsd
 apt:upx=upx-ucl
 .NET Core SDK=dotnet

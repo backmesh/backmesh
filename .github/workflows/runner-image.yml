@@ -36,7 +36,7 @@ jobs:
       - name: Lint the entrypoint, the docker wrapper, the first-use installs, the parity scripts and their tests
         run: >-
           shellcheck -x runner/runner-job.sh runner/runner-job-completed.sh runner/runner-job-started.sh
-          runner/docker.sh runner/cloud-cli.sh runner/apt.sh runner/test/*.sh runner/parity/*.sh
+          runner/docker.sh runner/pinned.sh runner/apt.sh runner/test/*.sh runner/parity/*.sh
           && shellcheck -s bash runner/first-use.bash
       - name: Test the entrypoint
         run: bash runner/test/runner-job.test.sh
