@@ -27,9 +27,6 @@ const RunnerClasses = z.array(
     // is deleted once GitHub counts no job assigned to it, since GitHub accepts
     // deleting a busy scale set and fails its job minutes later.
     retiring: z.boolean().optional(),
-    // The class's label before v0.7.0's upgrade renamed its scale set in
-    // place; read by converge, never written.
-    renamedFrom: z.string().optional(),
     // The class's scale set that keeps an old label: the listener deletes it
     // and creates one under this label (`ensureScaleSet`).
     replaceScaleSetId: z.number().int().positive().optional(),
@@ -40,7 +37,6 @@ const RunnerClasses = z.array(
 
 export interface Route extends RunnerClass {
   retiring?: boolean;
-  renamedFrom?: string;
   replaceScaleSetId?: number;
   // A spot route's on-demand label of the same size and kind: where a retry
   // or a paused spot capacity's runners go, as on-demand VMs.

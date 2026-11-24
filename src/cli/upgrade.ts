@@ -445,7 +445,7 @@ async function upgradeOnce(
       ...entry,
       classes: plan.classes,
       changes: runnerChanges(before, plan.classes),
-      runners: routesJson(plan.classes, before, live, entry.ids),
+      runners: routesJson(plan.classes, before, live, entry.ids, running.image),
     });
   }
   const upgradePlan: UpgradePlan = {
@@ -636,6 +636,7 @@ async function upgradeOnce(
       running.runners ? parseRoutes(running.runners) : [],
       new Set(running.status.scaleSets.map((set) => set.label)),
       ids,
+      running.image,
     );
     // The listener mints for every route region, so their cache buckets
     // come first; already created or
