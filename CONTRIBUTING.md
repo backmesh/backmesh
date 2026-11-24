@@ -27,8 +27,9 @@ release is tagged. Don't hand-build a CLI for it.
    this repository only, on the staging Worker, with no mirror, so `install.sh`
    and Homebrew don't see it.
 
-2. Run [`e2e.yml`](.github/workflows/e2e.yml) on the test org twice: a fresh
-   install, and an upgrade from the latest release.
+2. Run [`e2e.yml`](.github/workflows/e2e.yml) on the test org twice, one
+   after the other, since it holds one installation at a time: a fresh install,
+   and an upgrade from the latest release.
 
    ```sh
    gh workflow run e2e.yml -f org=backmesh-dryrun -f version=v0.6.2-rc.1
