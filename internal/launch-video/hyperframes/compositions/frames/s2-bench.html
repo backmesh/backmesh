@@ -10,11 +10,13 @@
       #s2-key { margin-top: 40px; display: flex; gap: 48px; font: 400 26px "Fragment Mono", monospace; color: #5f6670; }
       #s2-key span { display: flex; align-items: center; gap: 14px; }
       #s2-key i { width: 30px; height: 20px; display: block; }
-      /* One bar pair per workload, on one shared scale (148 s is the longest). */
+      /* One bar pair per workload, on one shared scale (99 s is the longest). */
       #s2-chart { margin-top: 44px; border-top: 3px solid #15171a; padding-top: 22px; }
       .s2-group { display: grid; grid-template-columns: 330px 1270px; align-items: center; padding: 22px 0; }
       .s2-group + .s2-group { border-top: 1.5px solid #e6e8eb; }
       .s2-name { color: #15171a; font-size: 36px; font-weight: 600; letter-spacing: -0.01em; }
+      .s2-nb { white-space: nowrap; }
+      .s2-note { display: block; margin-top: 6px; font: 400 24px "Fragment Mono", monospace; letter-spacing: 0; color: #0e6ba8; }
       .s2-bars { display: grid; gap: 10px; }
       .s2-row { position: relative; height: 40px; }
       .s2-bar { position: absolute; left: 0; top: 0; bottom: 0; transform-origin: 0% 50%; display: block; }
@@ -26,13 +28,13 @@
     </style>
     <div id="s2-stage" class="clip" data-start="0" data-duration="4.4" data-track-index="0">
       <div id="s2-col">
-        <!-- index.astro's benchmarks array at 9ac927b: secs [backmesh-4, GitHub-hosted]. -->
-        <h2 id="s2-h2">Builds against GitHub's ubuntu-latest.</h2>
-        <div id="s2-key"><span><i class="s2-bm"></i>backmesh-4</span><span><i class="s2-gh"></i>GitHub-hosted</span></div>
+        <!-- index.astro's speed chart at 784f9f63 (bench.ts): secs [backmesh 4 vCPU, GitHub-hosted] and backmesh's "faster". -->
+        <h2 id="s2-h2">Same 4 vCPUs: backmesh vs <span class="s2-nb">GitHub-hosted.</span></h2>
+        <div id="s2-key"><span><i class="s2-bm"></i>backmesh, 4 vCPUs</span><span><i class="s2-gh"></i>GitHub-hosted ubuntu-latest, 4 vCPUs</span></div>
         <div id="s2-chart">
-          <div class="s2-group" data-bm="71" data-gh="148"><div class="s2-name">Docker build</div><div class="s2-bars"><div class="s2-row bm"><i class="s2-bar s2-bm"></i><span class="s2-val">71 s</span></div><div class="s2-row gh"><i class="s2-bar s2-gh"></i><span class="s2-val">148 s</span></div></div></div>
-          <div class="s2-group" data-bm="49" data-gh="70"><div class="s2-name">Rust</div><div class="s2-bars"><div class="s2-row bm"><i class="s2-bar s2-bm"></i><span class="s2-val">49 s</span></div><div class="s2-row gh"><i class="s2-bar s2-gh"></i><span class="s2-val">70 s</span></div></div></div>
-          <div class="s2-group" data-bm="35" data-gh="56"><div class="s2-name">TypeScript</div><div class="s2-bars"><div class="s2-row bm"><i class="s2-bar s2-bm"></i><span class="s2-val">35 s</span></div><div class="s2-row gh"><i class="s2-bar s2-gh"></i><span class="s2-val">56 s</span></div></div></div>
+          <div class="s2-group" data-bm="57" data-gh="99"><div class="s2-name">Docker build<span class="s2-note">1.7× faster</span></div><div class="s2-bars"><div class="s2-row bm"><i class="s2-bar s2-bm"></i><span class="s2-val">57 s</span></div><div class="s2-row gh"><i class="s2-bar s2-gh"></i><span class="s2-val">99 s</span></div></div></div>
+          <div class="s2-group" data-bm="38" data-gh="73"><div class="s2-name">Go<span class="s2-note">1.9× faster</span></div><div class="s2-bars"><div class="s2-row bm"><i class="s2-bar s2-bm"></i><span class="s2-val">38 s</span></div><div class="s2-row gh"><i class="s2-bar s2-gh"></i><span class="s2-val">73 s</span></div></div></div>
+          <div class="s2-group" data-bm="28" data-gh="43"><div class="s2-name">TypeScript<span class="s2-note">1.5× faster</span></div><div class="s2-bars"><div class="s2-row bm"><i class="s2-bar s2-bm"></i><span class="s2-val">28 s</span></div><div class="s2-row gh"><i class="s2-bar s2-gh"></i><span class="s2-val">43 s</span></div></div></div>
         </div>
       </div>
     </div>
@@ -42,7 +44,7 @@
     (function () {
       const tl = gsap.timeline({ paused: true });
       const root = document.querySelector('[data-composition-id="s2-bench"]');
-      const MAX = 148, W = 1100;
+      const MAX = 99, W = 1100;
       tl.fromTo("#s2-h2", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0.4);
       tl.fromTo("#s2-key", { opacity: 0 }, { opacity: 1, duration: 0.35 }, 0.6);
       tl.fromTo("#s2-chart", { borderTopColor: "rgba(21, 23, 26, 0)" }, { borderTopColor: "rgba(21, 23, 26, 1)", duration: 0.35 }, 0.6);

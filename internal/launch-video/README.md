@@ -19,7 +19,7 @@ cloud logos (`website/src/assets/clouds/`). Each scene is a headline and one
 figure, with no sub-lines or captions. The scenes sit on the light ground; the
 end card is the page's one dark closing band.
 
-The repository holds text only. Fonts, GSAP and the sound effects are fetched
+The repository holds text only, apart from `website/public/launch.gif`. Fonts, GSAP and the sound effects are fetched
 into the cut's git-ignored `assets/` folder; the brand files are copied there
 from `website/`.
 
@@ -45,6 +45,13 @@ AV1 and H.264 at 1080p and 720p, a poster from the last second, and
 `SHA256SUMS`. Pass another input as a second argument. FFmpeg needs
 `libaom-av1`, `libopus` and `libx264`.
 
+`website/public/launch.gif` (backmesh.com/launch.gif) is the cut as a GIF for
+the README, 960 px wide at 12 fps:
+
+```bash
+ffmpeg -i renders/launch.mp4 -vf "fps=12,format=rgb24,scale=960:-1:flags=lanczos+accurate_rnd+full_chroma_int,split[a][b];[a]palettegen=max_colors=128:reserve_transparent=0:stats_mode=full[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" -loop 0 ../../website/public/launch.gif
+```
+
 ## Publish the cut
 
 Not approved yet: the maintainers approve the final cut and the site placement
@@ -59,11 +66,12 @@ folder per version.
 Every line on screen is the landing page's own words, or a number it
 computes; `storyboard.md` maps each one to its section.
 
-- **Benchmarks.** Scene 2's seconds are the page's `benchmarks` array
-  (2026-11-18, medians of 5 rounds each, `backmesh-4` on AWS against
+- **Benchmarks.** Scene 2's seconds and "faster" ratios are the page's
+  `bench` (`website/src/bench.ts`): the newest build benchmark results file
+  (2026-11-24, backmesh v0.6.1, `backmesh-ubuntu-2404-4vcpu` on AWS against
   `ubuntu-latest`); `website/src/content/docs/benchmarks.mdx` has the method
-  and the runs. The hero's "Up to 2× faster, 5× cheaper builds" is the
-  page's headline over them.
+  and the runs. The hero's "Up to 2× faster builds, up to 10× cheaper" is
+  `bench.headline` over them.
 - **Cost.** "$1,800 on GitHub, $191–$365 on backmesh" and the per-cloud bars
   are `website/src/cost.ts` (`headline`, `totals`), rounded as the page rounds
   them, with its catalog date, 2026-11-13.
