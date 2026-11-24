@@ -1,49 +1,38 @@
 # backmesh
 
-Self-hosted GitHub Actions runners in your own AWS, GCP or Azure account. Each
-job runs on its own spot VM, which is deleted when the job ends.
+GitHub Actions runners on spot VMs in your own AWS, GCP or Azure account.
 
-- <!-- bench:start -->**Up to 2× faster builds, up to 10× cheaper**, in our build benchmarks on 2026-11-24, backmesh 0.6.1. Build steps vs GitHub's 4-core runner, same vCPU count. Jobs still wait ~40 s for a VM. [How we measured →](https://backmesh.com/benchmarks/)<!-- bench:end -->
-  Your cloud bills you, so your cloud credits apply.
-- **Shorter waits.** backmesh learns each workflow's shape and starts runners
-  ahead of its predicted jobs. Your coding agent can cue backmesh as its checks
-  start, so runners boot before the push. The cache keeps your dependencies
-  in a bucket next to the runners.
-- **Your cloud.** Your code, secrets, caches and logs stay in your accounts, and
-  no cloud keys are stored.
+[![Release](https://img.shields.io/github/v/release/backmesh/backmesh)](https://github.com/backmesh/backmesh/releases/latest)
+[![License](https://img.shields.io/github/license/backmesh/backmesh)](LICENSE)
+[![CI](https://github.com/backmesh/backmesh/actions/workflows/ci.yml/badge.svg)](https://github.com/backmesh/backmesh/actions/workflows/ci.yml)
+[![Discord](https://img.shields.io/badge/Discord-chat-5865F2?logo=discord&logoColor=white)](https://discord.backmesh.com)
 
-backmesh's core features are free. See [backmesh.com](https://backmesh.com) for
-costs and the [docs](https://backmesh.com/install/).
+<!-- bench:start -->
 
-## Install
+| Build        | GitHub-hosted `ubuntu-latest`, 4 vCPUs | backmesh, 4 vCPUs | backmesh vs GitHub         |
+| ------------ | -------------------------------------- | ----------------- | -------------------------- |
+| Docker build | 99 s, $0.024                           | 57 s, $0.0025     | 1.7× faster, 9.6× cheaper  |
+| Go           | 73 s, $0.024                           | 38 s, $0.0020     | 1.9× faster, 11.8× cheaper |
+| TypeScript   | 43 s, $0.012                           | 28 s, $0.0017     | 1.5× faster, 7.0× cheaper  |
 
-On macOS or Linux:
+Medians of 10 runs, 4 vCPUs each. [How we measured →](https://backmesh.com/benchmarks/)
 
-```sh
-curl -fsSL https://backmesh.com/install.sh | sh
-```
+<!-- bench:end -->
 
-Or with Homebrew: `brew install backmesh/tap/backmesh`.
-
-Then install backmesh for your GitHub org:
-
-```sh
-backmesh install --org acme
-```
-
-Or paste `set up https://backmesh.com/SKILL.md` into Claude Code, Codex or
-another coding agent.
+## Quickstart
 
 You need:
 
-- An owner of the GitHub org, who signs in and installs backmesh's GitHub App
-  during install.
-- An AWS, GCP or Azure account, with its CLI (`aws`, `gcloud` or `az`) signed
-  in on your `PATH`.
-- If the org restricts OAuth apps, an owner grants backmesh access at sign-in
-  ([how](https://backmesh.com/faq/#installing)).
+- An owner of the GitHub org, who signs in during install.
+- An AWS, GCP or Azure CLI (`aws`, `gcloud` or `az`) signed in.
 
-Then use a label in a workflow:
+```sh
+curl -fsSL https://backmesh.com/install.sh | sh   # or: brew install backmesh/tap/backmesh
+backmesh install --org acme
+```
+
+Or paste `set up https://backmesh.com/SKILL.md` into your coding agent. Then
+use a label in a workflow:
 
 ```yaml
 jobs:
@@ -54,44 +43,39 @@ jobs:
       - run: make test
 ```
 
-Only Linux x86-64 jobs can use the runners, in private repositories unless
-you turn on [public repositories](https://backmesh.com/public-repos/). See
-[Install](https://backmesh.com/install/) for the options and
-[Labels](https://backmesh.com/labels/) for the sizes.
+Linux x86-64 jobs in private repositories, or
+[public ones](https://backmesh.com/public-repos/) if you turn them on. See
+[Install](https://backmesh.com/install/), [Labels](https://backmesh.com/labels/)
+and the [FAQ](https://backmesh.com/faq/#installing), such as for orgs that
+restrict OAuth apps.
 
 ## How it works
 
-Install creates backmesh's control plane in your account: an always-on VM
-(t3.large on AWS), and for each org a listener on a small always-on VM of its
-own (t3.small on AWS), together about $74–$111 a month for one org. The listener
-long-polls GitHub for queued jobs, so nothing needs an inbound port or a
-webhook. For each job, it starts a VM in the cheapest region with capacity, and
-the VM is deleted when the job ends. Runners can be in other clouds than the
-control plane. Every job gets
-automatic caches for `setup-*` tools and npm, Yarn and pnpm downloads; replace
-`actions/cache` with [`backmesh/cache`](https://backmesh.com/cache/) to keep
-your own caches in a bucket in the runner's region too. The
+Install creates a control plane in your account, about $74–$111 a month for one
+org. Its listener long-polls GitHub for queued jobs, with no inbound port or
+webhook, and starts each job on its own spot VM in the cheapest region with
+capacity, deleted when the job ends. Your code, secrets, caches and logs stay in
+your cloud. backmesh's core features are free, and it's built on
+[anycloud](https://github.com/anycloud-sh/anycloud). The
 [security model](https://backmesh.com/security/) says what runs where.
-
-backmesh is built on [anycloud](https://github.com/anycloud-sh/anycloud), which
-it downloads and runs for you, so you only use the `backmesh` CLI.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). backmesh follows anycloud's
-[CONTRIBUTING.md](https://github.com/anycloud-sh/anycloud/blob/main/CONTRIBUTING.md).
-Run `yarn verify` before you open a pull request. Questions are welcome on
+See [CONTRIBUTING.md](CONTRIBUTING.md), and run `yarn verify` before you open a
+pull request.
+[Good first issues](https://github.com/backmesh/backmesh/labels/good%20first%20issue)
+need no cloud account. Ask questions in
+[Discussions](https://github.com/backmesh/backmesh/discussions) or on
 [Discord](https://discord.backmesh.com).
 
 ## Security
 
-Please report a vulnerability privately to
+Report a vulnerability privately to
 [luis@backmesh.com](mailto:luis@backmesh.com), not in a public issue. See
 [SECURITY.md](SECURITY.md).
 
-## Licence
+## License
 
-backmesh is licensed under the [Apache License 2.0](LICENSE), except the cache
-action in [`cache/`](cache/), which is under the [MIT License](cache/LICENSE).
-[NOTICE](NOTICE) lists the third-party code bundled in `cache/dist` and
-`runner/dist`.
+Apache License 2.0 ([LICENSE](LICENSE)), except [`cache/`](cache/), which is
+MIT ([cache/LICENSE](cache/LICENSE)). [NOTICE](NOTICE) lists bundled
+third-party code.

@@ -1,7 +1,7 @@
 // Writes README.md's results, between its markers: the latest file in
 // results/'s tables and runs, each file in results/experiments/'s, and a trend
-// over results/; and the repository README's headline from the latest file
-// (website/src/benchmarks.ts). An experiment (run.ts's EXPERIMENT) isn't a
+// over results/; and the repository README's headline and table from the
+// latest file (website/src/benchmarks.ts). An experiment (run.ts's EXPERIMENT) isn't a
 // release's figures, so the trend leaves it out; the site reads the latest
 // release's `-od` experiment for its on-demand figures.
 //
@@ -321,12 +321,16 @@ await writeFile(
   await format(before + section + after, { filepath: readme }),
 );
 
-// The repository README's headline, from the same figures as the site.
+// The repository README's headline and table, from the same figures as the
+// site.
 const top = join(here, '../../README.md');
 await writeFile(
   top,
-  (await readFile(top, 'utf8')).replace(
-    README_BENCH,
-    `<!-- bench:start -->${headline(published(...newest(releases, experiments)))}<!-- bench:end -->`,
+  await format(
+    (await readFile(top, 'utf8')).replace(
+      README_BENCH,
+      headline(published(...newest(releases, experiments))),
+    ),
+    { filepath: top },
   ),
 );
