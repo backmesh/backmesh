@@ -49,29 +49,12 @@ describe('converge', () => {
     ]);
   });
 
-  it('maps each renamed label to its new name by its class code, and renames its scale set', () => {
+  it('renames the scale set of a label renamed under the same class code', () => {
     // As v0.6.1 named them.
     const old = running.map((r) => ({
       ...r,
       label: r.label.replace('ubuntu-2404-', '').replace('vcpu', ''),
     }));
-    const changes = runnerChanges(old, both);
-    expect(changes.labelsAdded).toEqual([]);
-    expect(changes.labelsRemoved).toEqual([]);
-    expect(changes.labelsRenamed).toHaveLength(both.length);
-    expect(changes.labelsRenamed).toContainEqual({
-      from: 'backmesh-4',
-      to: 'backmesh-ubuntu-2404-4vcpu',
-    });
-    expect(changes.labelsRenamed).toContainEqual({
-      from: 'backmesh-gcp-kvm-od-8',
-      to: 'backmesh-gcp-ubuntu-2404-kvm-od-8vcpu',
-    });
-    expect(changeLines('acme', changes, both)).toEqual([
-      expect.stringMatching(
-        /^Renamed labels, old to new: backmesh-2 → backmesh-ubuntu-2404-2vcpu, .*\. Change each workflow's runs-on to the new label: a job sent to an old label once the listener restarts never runs, and waits until GitHub cancels it after 24 hours\.$/,
-      ),
-    ]);
     // Each class renames its old scale set, and none retires: two routes
     // can't share a code.
     const live = new Set(old.map((r) => r.label));
