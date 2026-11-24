@@ -11,7 +11,7 @@ on:
       label:
         description: The backmesh label to run on
         required: true
-        default: backmesh-4
+        default: backmesh-ubuntu-2404-4vcpu
       step:
         description: What the waiting step runs, sleep or a container that ignores INT (docker), which takes the runner's whole stop window
         type: choice
