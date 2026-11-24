@@ -11,6 +11,8 @@ Keep this file small and durable.
   for code quality, pull requests, size estimates and justification tables, and
   code review.
 - Run `yarn verify` (lint, format check, typecheck, tests) before pushing.
+- [CONTRIBUTING.md](CONTRIBUTING.md) has how a change is live-tested with a
+  release candidate before it ships.
 - A change that claims a speedup gets its own A/B before it merges: run
   `benchmarks/` (builds, cue) on a build of the change and on main, and put the
   numbers in the PR body. No measured gain, no speed claim: reconsider the
