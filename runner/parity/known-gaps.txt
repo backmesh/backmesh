@@ -9,11 +9,8 @@ Android SDK Platform-Tools
 Ansible
 Ant
 AzCopy
-Bazel
-Bazelisk
 Bicep
 Buildah
-CMake
 Cabal
 Chromium
 Clang
@@ -31,11 +28,8 @@ Git-ftp
 Gradle
 Homebrew
 Julia
-Kind
 Kotlin
-Kustomize
 Lerna
-Maven
 Microsoft Edge
 Microsoft Edge WebDriver
 Miniconda
@@ -43,7 +37,6 @@ Minikube
 Mozilla Firefox
 MySQL
 Newman
-Ninja
 PHP
 PHPUnit
 Packer

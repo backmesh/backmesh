@@ -2,9 +2,9 @@
 # The built image's first-use install, for real: a step run as the runner runs
 # one, `bash --noprofile --norc -e -o pipefail <file>`, installs hello from
 # Ubuntu's archive and runs it, and leaves a typo alone; the cloud CLIs, Rust,
-# PowerShell, Go, Java and Chrome install on first use from node; the index's
-# corrections hold. Then the image's gaps against GitHub's
-# (runner/parity/gaps.sh).
+# PowerShell, Go, Java and Chrome install on first use from node; the build
+# tools run from sh; the index's corrections hold. Then the image's gaps
+# against GitHub's (runner/parity/gaps.sh).
 # Run: runner/test/image.test.sh <image>
 set -Eeuo pipefail
 
@@ -78,8 +78,9 @@ docker run --rm --entrypoint node "$image" -e '
 
 # After the first use: a cache that restored ~/.cargo/bin without ~/.rustup,
 # as caching ~/.cargo often does, gets the toolchain again; it's stable's, so
-# dtolnay/rust-toolchain@stable's install finds it unchanged; ~/.cargo/env
-# names ~/.cargo/bin. ./mvnw, a sh script, finds Temurin through JAVA_HOME.
+# dtolnay/rust-toolchain@stable's install finds it unchanged; a restored
+# default other than stable stays the default; ~/.cargo/env names
+# ~/.cargo/bin. ./mvnw, a sh script, finds Temurin through JAVA_HOME.
 # ChromeDriver, from CHROMEWEBDRIVER, installs Chrome with it and runs a
 # headless session in the Chrome it finds itself.
 docker run --rm -i --entrypoint sh "$image" \
@@ -88,7 +89,12 @@ cargo --version >/dev/null 2>&1
 rm -rf "$HOME/.rustup"
 out=$(cargo --version 2>&1)
 [[ $out == *"backmesh: installing cargo"*"cargo 1.100.0 "* ]] || { echo "cargo after a restore of ~/.cargo/bin: $out"; exit 1; }
+# This fails once stable moves past RUST_VERSION: the signal to bump it.
 [[ $(rustup toolchain install stable --profile minimal --no-self-update 2>&1) == *'stable-x86_64-unknown-linux-gnu unchanged'* ]]
+cp -a "$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu" /tmp/mine
+rustup toolchain link mine /tmp/mine && rustup default mine >/dev/null 2>&1
+rm -rf "$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu"
+[[ $(cargo --version 2>&1) == *"backmesh: installing cargo"* && $(rustup default) == mine* ]] || { echo "the restored default: $(rustup default)"; exit 1; }
 ! grep -q rust.new "$HOME/.cargo/env"
 mkdir -p /tmp/mvnw/.mvn/wrapper && cd /tmp/mvnw
 curl -fsSL -o mvnw https://raw.githubusercontent.com/apache/maven-wrapper/maven-wrapper-3.3.2/maven-wrapper-distribution/src/resources/only-mvnw
@@ -109,6 +115,21 @@ wd "/$id" -X DELETE >/dev/null
 /usr/bin/google-chrome --version >/dev/null
 echo 'after first use: passed'
 EOF
+
+# The preinstalled build tools, from a caller that isn't bash, at GitHub's
+# image's versions: mvn finds java's first-use install, and bazel, which is
+# Bazelisk, runs the Bazel it's asked for.
+# shellcheck disable=SC2016 # in the image
+docker run --rm --entrypoint sh "$image" -c '
+  set -e
+  cmake --version | grep -qx "cmake version 3.31.6"
+  ctest --version >/dev/null && cpack --version >/dev/null
+  [ "$(ninja --version)" = 1.13.2 ]
+  mvn --version 2>/dev/null | grep -q "^Apache Maven 3.10.2 "
+  kind version | grep -q "^kind v0.33.0 "
+  [ "$(kustomize version)" = v5.8.3 ]
+  [ "$(USE_BAZEL_VERSION=9.3.3 bazel --version)" = "bazel 9.3.3" ]
+  echo "build tools: passed"' || fail "the preinstalled build tools"
 
 # The tool cache's link, GitHub's variables, apt's shims ahead of the real
 # apt-get for sudo, Ubuntu's archive as the only apt source, and a gh with

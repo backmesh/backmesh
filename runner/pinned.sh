@@ -85,7 +85,8 @@ aws_install() {
 # install stable` (dtolnay/rust-toolchain@stable) finds it unchanged while
 # stable is that release, and updates it once stable moves on, as on GitHub's
 # image. It installs into a stage of the runner's, then into the homes, which
-# a cache restore may have made already, with the proxies last.
+# a cache restore may have made already, with the proxies last; a restored
+# settings.toml that names a default keeps it.
 rust_install() {
   local stage=/home/runner/.rust.new t=x86_64-unknown-linux-gnu
   pinned "https://static.rust-lang.org/rustup/archive/${rustup_version}/x86_64-unknown-linux-gnu/rustup-init" "$rustup_sha256" \
@@ -97,6 +98,7 @@ rust_install() {
     && sudo -n -u runner mv "$stage/rustup/toolchains/$rust_version-$t" "$stage/rustup/toolchains/stable-$t" \
     && sudo -n -u runner mv "$stage/rustup/update-hashes/$rust_version-$t" "$stage/rustup/update-hashes/stable-$t" \
     && sudo -n -u runner env CARGO_HOME="$stage/cargo" RUSTUP_HOME="$stage/rustup" "$stage/cargo/bin/rustup" default stable \
+    && if grep -qs '^default_toolchain' "$RUSTUP_HOME/settings.toml"; then sudo -n -u runner rm "$stage/rustup/settings.toml"; fi \
     && sudo -n -u runner cp -a "$stage/rustup/." "$RUSTUP_HOME/" \
     && sed "s#$stage/cargo#$CARGO_HOME#g" "$stage/cargo/env" | sudo -n -u runner tee "$CARGO_HOME/env" >/dev/null \
     && sudo -n -u runner mv "$stage"/cargo/bin/* "$CARGO_HOME/bin/" \
