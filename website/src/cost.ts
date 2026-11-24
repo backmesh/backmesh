@@ -90,6 +90,45 @@ export const per1000 = clouds.map(
 
 export const github1000 = GITHUB_4_CORE_PER_MIN * 1000;
 
+/** GitHub-hosted Linux GPU runner (`linux_4_core_gpu`: 4 vCPUs, one Tesla
+ * T4 with 16 GB of VRAM, 28 GB of RAM), $/minute.
+ * docs.github.com/en/billing/reference/actions-runner-pricing, read
+ * 2026-11-24. */
+export const GITHUB_T4_PER_MIN = 0.052;
+
+/** The GPU labels' types (src/runners/classes.ts GPU_TYPES), $/hour, from
+ * the catalog on 2026-11-18: spot in the lowest zone and on demand, in the
+ * same regions as above. AWS tries `g4dn.2xlarge`, the fallback, when no
+ * `g4dn.xlarge` is free. */
+export const GPU_CATALOG_DATE = '2026-11-18';
+export const GPU_PRICES = [
+  { cloud: 'AWS', type: 'g4dn.xlarge', spot: 0.2732, onDemand: 0.526 },
+  {
+    cloud: 'AWS',
+    type: 'g4dn.2xlarge',
+    spot: 0.3696,
+    onDemand: 0.752,
+    fallback: true,
+  },
+  {
+    cloud: 'Azure',
+    type: 'Standard_NC4as_T4_v3',
+    spot: 0.1766,
+    onDemand: 0.526,
+  },
+];
+
+/** A cold `backmesh-ubuntu-2404-gpu-t4` job on AWS, 10 samples on 2026-11-21, none
+ * refused spot capacity (benchmarks/gpu-t4): the median and p90 queued to
+ * started, and the median VM launch to started, in seconds. */
+export const AWS_GPU_WAIT_S = 130.5;
+export const AWS_GPU_WAIT_P90_S = 138;
+export const AWS_GPU_BOOT_S = 122;
+
+/** scripts/check-gpu.mjs checks, in the build, that the GPU page, the GPU
+ * posts and docs/cost.md's GPU table repeat the figures above, and that each
+ * of those pages' FAQ structured data matches its visible FAQ. */
+
 /** The runner's disk on AWS, $ an hour, as above. */
 export const AWS_DISK_PER_HOUR = 0.0384;
 

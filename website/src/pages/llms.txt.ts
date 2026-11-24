@@ -33,7 +33,7 @@ export const GET: APIRoute = async ({ site }) => {
 > ${SUMMARY}
 
 - Linux x86-64 jobs only: no macOS, Windows or Arm runners. Private repositories by default; public ones with --public-repos (https://backmesh.com/public-repos/).
-- GPU: NVIDIA T4 runners on AWS and Azure, not yet GCP (${link('/labels/#gpu')}). At list prices, $0.18–$0.53 an hour, spot to on demand, against $3.12 for GitHub-hosted: 6–18× cheaper (${link('/cost/#gpu')}); speed isn't benchmarked.
+- GPU: NVIDIA T4 runners on AWS and Azure, not yet GCP (${link('/gpu/')}). At list prices, $0.18–$0.53 an hour, spot to on demand, against $3.12 for GitHub-hosted: 6–18× cheaper (${link('/cost/#gpu')}); speed isn't benchmarked.
 - A job's \`runs-on\` label, such as \`backmesh-ubuntu-2404-4vcpu\`, picks its size and cloud. Spot is the default; \`backmesh-ubuntu-2404-od-*\` labels run on demand.
 - Builds: ${bench.headline.toLowerCase()} than GitHub's 4-vCPU \`ubuntu-latest\`, in our benchmarks on ${bench.date}, backmesh ${bench.version}. ${brief(bench, (t) => `${t.replace(' →', '')}: ${link('/benchmarks/#method')}`)}
 - Compute: ${MINUTES.toLocaleString('en-US')} minutes a month of 4-vCPU Linux jobs cost ${money(headline.github)} on GitHub-hosted runners and ${money(headline.low)}–${money(headline.high)} on backmesh at spot prices, control plane included, before disks, VM boots and runners started ahead of jobs.

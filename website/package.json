@@ -5,7 +5,7 @@
   "scripts": {
     "brand": "node scripts/brand.mjs",
     "dev": "astro dev",
-    "build": "astro build && node scripts/check-links.mjs dist"
+    "build": "astro build && node scripts/check-links.mjs dist && node scripts/check-gpu.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "0.42.9",
