@@ -4,7 +4,8 @@
 # any, provides it.
 # A wrapper without the client.
 postgresql-client-common postgresql-client
-# The `dotnet` host without an SDK.
+# The `dotnet` host without an SDK. Ubuntu's newest SDK is 10.0; GitHub's
+# image's default is 11.0.100.
 dotnet-host-10.0 dotnet-sdk-10.0
 # OpenStack's `swift`, not Swift.
 python3-swiftclient -
@@ -16,3 +17,5 @@ thunderbird -
 lxd-installer -
 # Bazel 4.2.3, which ignores .bazelversion.
 bazel-bootstrap -
+# Gradle 4.4.1, which fails on the image's Java 17; ./gradlew brings its own.
+gradle -
