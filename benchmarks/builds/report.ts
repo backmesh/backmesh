@@ -267,7 +267,8 @@ ${
   costTable &&
   `**Speed and cost a build.** Each label's medians, and their speed against
 ${BASE}'s (its time over the label's), a \`/cache\` arm's against
-\`${BASE}/cache\`'s, with a two-sided Mann-Whitney p. A backmesh job's cost is
+\`${BASE}/cache\`'s, with a two-sided Mann-Whitney p
+(the normal approximation, which at 5 jobs a side can understate the exact p). A backmesh job's cost is
 its VM's spot price (on-demand on a \`-od-\` label) from the kernel's start to
 the job's end, at [\`cost.ts\`](../../website/src/cost.ts)'s \`backmesh-4\`
 price for the VM's family times its vCPUs over 4, plus its disk's $${AWS_DISK_PER_HOUR} an hour,

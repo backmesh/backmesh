@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { figures, type Job } from '../../benchmarks/builds/results.ts';
+import {
+  figures,
+  mannWhitney,
+  type Job,
+} from '../../benchmarks/builds/results.ts';
 
 const us = (iso: string) => Date.parse(iso) * 1000;
 const job = (marks: Record<string, number>): Job => ({
@@ -72,5 +76,18 @@ describe('build benchmark figures', () => {
 
   it('has no figures for a failed job', () => {
     expect(figures({ ...job({}), conclusion: 'failure' })).toBeNull();
+  });
+});
+
+describe('mannWhitney', () => {
+  it('matches the tie-corrected normal approximation', () => {
+    // U = 5; ties of 3 and 2 make the variance 25/12 × (11 − 30/90).
+    expect(mannWhitney([1, 2, 2, 3, 5], [2, 4, 4, 6, 7])).toBeCloseTo(
+      0.1376,
+      3,
+    );
+    expect(mannWhitney([1, 2, 3], [4, 5, 6])).toBeCloseTo(0.0809, 3);
+    expect(mannWhitney([4, 5, 6], [1, 2, 3])).toBeCloseTo(0.0809, 3);
+    expect(mannWhitney([1, 2], [1, 2])).toBeCloseTo(1, 5);
   });
 });
