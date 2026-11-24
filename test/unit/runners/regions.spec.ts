@@ -43,9 +43,10 @@ function fits(type: VmTypeDetails | undefined, vcpus: number): boolean {
  */
 function qualifies(cloud: Cloud, details: readonly VmTypeDetails[]): boolean {
   return CLASS_VCPUS.every((vcpus) => {
-    const general = VM_TYPES[cloud](vcpus, true).every((t) =>
-      fits(findVmType(details, t), vcpus),
-    );
+    // GCP's c4d leads where a region offers it; the others fall back.
+    const general = VM_TYPES[cloud](vcpus, true)
+      .filter((t) => !t.startsWith('c4d-'))
+      .every((t) => fits(findVmType(details, t), vcpus));
     const kvm = KVM_TYPES[cloud](vcpus).every((t) => {
       const type = findVmType(details, t);
       return (
@@ -189,11 +190,13 @@ describe('runner regions', () => {
     expect(RUNNER_REGIONS.gcp).not.toContain('us-central2');
   });
 
-  it("ends each on-demand class's types with its spot types, so a region without GCP's c4d or c3d falls back to n2 and n2d", () => {
+  it("keeps each spot class's types, in order, among its on-demand twin's, both ending in the same fallbacks, so a region without GCP's c4d or c3d falls back to n2 and n2d", () => {
     for (const cloud of ['aws', 'gcp', 'azure'] as const) {
       for (const vcpus of CLASS_VCPUS) {
         const spot = VM_TYPES[cloud](vcpus, true);
-        expect(VM_TYPES[cloud](vcpus, false).slice(-spot.length)).toEqual(spot);
+        const onDemand = VM_TYPES[cloud](vcpus, false);
+        expect(onDemand.filter((t) => spot.includes(t))).toEqual(spot);
+        expect(onDemand.slice(-2)).toEqual(spot.slice(-2));
       }
     }
     // The anchor offers each on-demand type.

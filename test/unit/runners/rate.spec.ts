@@ -14,7 +14,7 @@ describe('class rate', () => {
   it.each([
     [0, 'spot', { low: 0.05, high: 0.07 }],
     [0, 'on demand', { low: 0.17, high: 0.24 }],
-    [1, 'spot', { low: 0.09, high: 0.12 }],
+    [1, 'spot', { low: 0.08, high: 0.12 }],
     [2, 'on demand', { low: 0.17, high: 0.23 }],
   ] as const)(
     "ranges target %i's backmesh-4 VM over its types on %s",

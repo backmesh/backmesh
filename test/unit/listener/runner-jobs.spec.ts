@@ -198,6 +198,40 @@ describe('anycloudRunnerJobs', () => {
     expect(azure!.body).not.toHaveProperty('cloudConfig.diskTier');
   });
 
+  it('gives a GCP spot class with c4d Hyperdisk at 3,000 IOPS and 750 MiB/s, and on demand or a class without c4d the tier alone', async () => {
+    const { jobs, requests } = fakeApi(() => json(202, { id: 'x' }));
+    const spec: RunnerSpec = {
+      id: 'bmabc12-g4-00000000',
+      cloud: 'gcp',
+      regions: ['us-east4'],
+      credentials: 'bm-gcp',
+      vmTypes: ['c4d-standard-4', 'n2-standard-4', 'n2d-standard-4'],
+      spot: true,
+      kvm: false,
+      vcpus: 4,
+      jitConfig: 'jit',
+    };
+    await jobs.submit(spec);
+    await jobs.submit({ ...spec, id: 'b', spot: false });
+    // anycloud refuses the fields for a Job none of whose types takes
+    // Hyperdisk, such as backmesh-2's or a KVM class's.
+    await jobs.submit({ ...spec, id: 'c', vmTypes: ['n2-standard-2'] });
+
+    const [spot, onDemand, noC4d] = requests.map(({ body }) => body);
+    expect(spot).toMatchObject({
+      cloudConfig: {
+        diskTier: 'high',
+        diskIops: 3000,
+        diskThroughputMibps: 750,
+      },
+    });
+    for (const body of [onDemand, noC4d]) {
+      expect(body).toMatchObject({ cloudConfig: { diskTier: 'high' } });
+      expect(body).not.toHaveProperty('cloudConfig.diskIops');
+      expect(body).not.toHaveProperty('cloudConfig.diskThroughputMibps');
+    }
+  });
+
   it("lists the session's unended Jobs and counts every other bm- session's", async () => {
     const row = (id: string, state: string, session = 'bm-abc12') => ({
       id,

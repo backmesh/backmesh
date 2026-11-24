@@ -152,7 +152,7 @@ describe('runner classes', () => {
     );
   });
 
-  it("tries c4d, then c3d, before n2 and n2d on GCP's on-demand classes only", () => {
+  it("tries c4d, then c3d, before n2 and n2d on GCP's on-demand classes, and c4d alone first on spot", () => {
     const { classes, problems } = planClasses([GCP], catalog, 'gcp', true);
     // c4d's 3.875 GiB a vCPU passes for 4 GiB.
     expect(problems).toEqual([]);
@@ -166,11 +166,15 @@ describe('runner classes', () => {
       'n2-standard-16',
       'n2d-standard-16',
     ]);
-    expect(types('backmesh-4')).toEqual(['n2-standard-4', 'n2d-standard-4']);
-    expect(types('backmesh-public-4')).toEqual([
-      'n2-standard-4',
-      'n2d-standard-4',
-    ]);
+    // Spot c4d launched 13 of 13 (anycloud#38); c3d spot wasn't measured.
+    for (const label of ['backmesh-4', 'backmesh-public-4'])
+      expect(types(label)).toEqual([
+        'c4d-standard-4',
+        'n2-standard-4',
+        'n2d-standard-4',
+      ]);
+    expect(types('backmesh-2')).toEqual(['n2-standard-2', 'n2d-standard-2']);
+    expect(types('backmesh-kvm-4')).toEqual(['n2-standard-4']);
     // Neither nests.
     expect(types('backmesh-kvm-od-4')).toEqual(['n2-standard-4']);
     // AWS's and Azure's on-demand classes keep their spot types.
