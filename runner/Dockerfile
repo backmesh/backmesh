@@ -34,9 +34,12 @@ ARG BUILDX_VERSION=0.39.1
 ARG BUILDX_SHA256=903090816da68f8bc1a2ff5346dd163a5adacfce4548d003c75df42cd47a9bf4
 ARG COMPOSE_VERSION=2.38.2
 ARG COMPOSE_SHA256=486b3ffc0f806ca2efbc430cef89955386011662f0c76bad17c103d059cfa9cf
-# Build tools GitHub's image has, at its release ubuntu24/20261122.23's
-# versions: Kitware's CMake, Ninja, Apache's Maven (SHA-512, from Maven
-# Central), Kind, Kustomize and Bazelisk.
+# Build tools GitHub's image has, at the versions in the README of its release
+# ubuntu24/20261122.23, not toolset.lock's revision; bump them by hand. The
+# checksums are Kitware's SHA-256.txt for CMake, Maven Central's .sha512,
+# Kind's .sha256sum and Kustomize's checksums.txt; Ninja and Bazelisk publish
+# none, so theirs are the SHA-256 digests GitHub's release API gives. Bazel
+# itself isn't in the image: Bazelisk downloads .bazelversion's on first call.
 ARG CMAKE_VERSION=3.31.6
 ARG CMAKE_SHA256=5a1133ff103c71eb5120e2cc3de922733e7d8a26a98ae716397e8676adb367bf
 ARG NINJA_VERSION=1.13.2

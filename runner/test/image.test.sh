@@ -78,8 +78,9 @@ docker run --rm --entrypoint node "$image" -e '
 
 # After the first use: a cache that restored ~/.cargo/bin without ~/.rustup,
 # as caching ~/.cargo often does, gets the toolchain again; it's stable's, so
-# dtolnay/rust-toolchain@stable's install finds it unchanged; ~/.cargo/env
-# names ~/.cargo/bin. ./mvnw, a sh script, finds Temurin through JAVA_HOME.
+# dtolnay/rust-toolchain@stable's install finds it unchanged; a restored
+# default other than stable stays the default; ~/.cargo/env names
+# ~/.cargo/bin. ./mvnw, a sh script, finds Temurin through JAVA_HOME.
 # ChromeDriver, from CHROMEWEBDRIVER, installs Chrome with it and runs a
 # headless session in the Chrome it finds itself.
 docker run --rm -i --entrypoint sh "$image" \
@@ -88,7 +89,12 @@ cargo --version >/dev/null 2>&1
 rm -rf "$HOME/.rustup"
 out=$(cargo --version 2>&1)
 [[ $out == *"backmesh: installing cargo"*"cargo 1.100.0 "* ]] || { echo "cargo after a restore of ~/.cargo/bin: $out"; exit 1; }
+# This fails once stable moves past RUST_VERSION: the signal to bump it.
 [[ $(rustup toolchain install stable --profile minimal --no-self-update 2>&1) == *'stable-x86_64-unknown-linux-gnu unchanged'* ]]
+cp -a "$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu" /tmp/mine
+rustup toolchain link mine /tmp/mine && rustup default mine >/dev/null 2>&1
+rm -rf "$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu"
+[[ $(cargo --version 2>&1) == *"backmesh: installing cargo"* && $(rustup default) == mine* ]] || { echo "the restored default: $(rustup default)"; exit 1; }
 ! grep -q rust.new "$HOME/.cargo/env"
 mkdir -p /tmp/mvnw/.mvn/wrapper && cd /tmp/mvnw
 curl -fsSL -o mvnw https://raw.githubusercontent.com/apache/maven-wrapper/maven-wrapper-3.3.2/maven-wrapper-distribution/src/resources/only-mvnw
