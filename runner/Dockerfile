@@ -34,6 +34,21 @@ ARG BUILDX_VERSION=0.39.1
 ARG BUILDX_SHA256=903090816da68f8bc1a2ff5346dd163a5adacfce4548d003c75df42cd47a9bf4
 ARG COMPOSE_VERSION=2.38.2
 ARG COMPOSE_SHA256=486b3ffc0f806ca2efbc430cef89955386011662f0c76bad17c103d059cfa9cf
+# Build tools GitHub's image has, at its release ubuntu24/20261122.23's
+# versions: Kitware's CMake, Ninja, Apache's Maven (SHA-512, from Maven
+# Central), Kind, Kustomize and Bazelisk.
+ARG CMAKE_VERSION=3.31.6
+ARG CMAKE_SHA256=5a1133ff103c71eb5120e2cc3de922733e7d8a26a98ae716397e8676adb367bf
+ARG NINJA_VERSION=1.13.2
+ARG NINJA_SHA256=5749cbc4e668273514150a80e387a957f933c6ed3f5f11e03fb30955e2bbead6
+ARG MAVEN_VERSION=3.10.2
+ARG MAVEN_SHA512=57d2db6b37e7582119137ade544557bba741b29e62109ef81539a2bdfd6d0e641fdd5d8edb014af1816d0510deac6fac8f347433b3a1aa36316ba85aa77b8119
+ARG KIND_VERSION=0.33.0
+ARG KIND_SHA256=aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+ARG KUSTOMIZE_VERSION=5.8.3
+ARG KUSTOMIZE_SHA256=cb9e31198d3f63b44848bd0afc4c8efc56e6cfef9c93a4a39a211940e6decd61
+ARG BAZELISK_VERSION=1.28.1
+ARG BAZELISK_SHA256=22e7d3a188699982f661cf4687137ee52d1f24fec1ec893d91a6c4d791a75de8
 # The cloud CLIs, installed on first use (pinned.sh): Microsoft's noble
 # package, Google's x86-64 archive, and AWS's x86-64 zip, which AWS's key
 # signs. Their versions are runner-images main's README's on 2026-11-23, not
@@ -174,6 +189,41 @@ RUN curl --fail --location --retry 5 --output /tmp/node.tar.xz \
     && rm /tmp/node.tar.xz /tmp/helm.tar.gz /tmp/gh.tar.gz \
     && node --version && yarn --version && pnpm --version && kubectl version --client && helm version && yq --version \
     && gh --version
+
+# CMake without cmake-gui, which needs a display, the interactive ccmake, or
+# its docs; Ninja; Maven where GitHub's image has it, which finds java on
+# PATH; Kind and Kustomize; and Bazelisk as both bazelisk and bazel, as
+# GitHub's image has it, which runs the Bazel a repository's .bazelversion
+# names.
+RUN curl --fail --location --retry 5 --output /tmp/cmake.tar.gz \
+        "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz" \
+    && echo "${CMAKE_SHA256}  /tmp/cmake.tar.gz" | sha256sum --check --strict \
+    && tar --extract --gzip --file /tmp/cmake.tar.gz --directory /usr/local --strip-components 1 \
+        --exclude '*/bin/cmake-gui' --exclude '*/bin/ccmake' --exclude '*/doc' --exclude '*/man' \
+    && curl --fail --location --retry 5 --output /tmp/ninja.zip \
+        "https://github.com/ninja-build/ninja/releases/download/v${NINJA_VERSION}/ninja-linux.zip" \
+    && echo "${NINJA_SHA256}  /tmp/ninja.zip" | sha256sum --check --strict \
+    && unzip -q /tmp/ninja.zip -d /usr/local/bin \
+    && curl --fail --location --retry 5 --output /tmp/maven.tar.gz \
+        "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${MAVEN_VERSION}/apache-maven-${MAVEN_VERSION}-bin.tar.gz" \
+    && echo "${MAVEN_SHA512}  /tmp/maven.tar.gz" | sha512sum --check --strict \
+    && tar --extract --gzip --file /tmp/maven.tar.gz --directory /usr/share \
+    && ln -s "/usr/share/apache-maven-${MAVEN_VERSION}/bin/mvn" /usr/local/bin/mvn \
+    && curl --fail --location --retry 5 --output /usr/local/bin/kind \
+        "https://github.com/kubernetes-sigs/kind/releases/download/v${KIND_VERSION}/kind-linux-amd64" \
+    && echo "${KIND_SHA256}  /usr/local/bin/kind" | sha256sum --check --strict \
+    && curl --fail --location --retry 5 --output /tmp/kustomize.tar.gz \
+        "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" \
+    && echo "${KUSTOMIZE_SHA256}  /tmp/kustomize.tar.gz" | sha256sum --check --strict \
+    && tar --extract --gzip --file /tmp/kustomize.tar.gz --directory /usr/local/bin kustomize \
+    && curl --fail --location --retry 5 --output /usr/local/bin/bazelisk \
+        "https://github.com/bazelbuild/bazelisk/releases/download/v${BAZELISK_VERSION}/bazelisk-linux-amd64" \
+    && echo "${BAZELISK_SHA256}  /usr/local/bin/bazelisk" | sha256sum --check --strict \
+    && chmod 0755 /usr/local/bin/kind /usr/local/bin/bazelisk \
+    && ln -s bazelisk /usr/local/bin/bazel \
+    && rm /tmp/cmake.tar.gz /tmp/ninja.zip /tmp/maven.tar.gz /tmp/kustomize.tar.gz \
+    && cmake --version && ctest --version && cpack --version && ninja --version \
+    && kind version && kustomize version
 
 # The real CLI, behind the image's `docker` (docker.sh), which keeps the
 # runner's own container out of the job's `docker ps` and `docker kill`.

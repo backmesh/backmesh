@@ -2,9 +2,9 @@
 # The built image's first-use install, for real: a step run as the runner runs
 # one, `bash --noprofile --norc -e -o pipefail <file>`, installs hello from
 # Ubuntu's archive and runs it, and leaves a typo alone; the cloud CLIs, Rust,
-# PowerShell, Go, Java and Chrome install on first use from node; the index's
-# corrections hold. Then the image's gaps against GitHub's
-# (runner/parity/gaps.sh).
+# PowerShell, Go, Java and Chrome install on first use from node; the build
+# tools run from sh; the index's corrections hold. Then the image's gaps
+# against GitHub's (runner/parity/gaps.sh).
 # Run: runner/test/image.test.sh <image>
 set -Eeuo pipefail
 
@@ -109,6 +109,21 @@ wd "/$id" -X DELETE >/dev/null
 /usr/bin/google-chrome --version >/dev/null
 echo 'after first use: passed'
 EOF
+
+# The preinstalled build tools, from a caller that isn't bash, at GitHub's
+# image's versions: mvn finds java's first-use install, and bazel, which is
+# Bazelisk, runs the Bazel it's asked for.
+# shellcheck disable=SC2016 # in the image
+docker run --rm --entrypoint sh "$image" -c '
+  set -e
+  cmake --version | grep -qx "cmake version 3.31.6"
+  ctest --version >/dev/null && cpack --version >/dev/null
+  [ "$(ninja --version)" = 1.13.2 ]
+  mvn --version 2>/dev/null | grep -q "^Apache Maven 3.10.2 "
+  kind version | grep -q "^kind v0.33.0 "
+  [ "$(kustomize version)" = v5.8.3 ]
+  [ "$(USE_BAZEL_VERSION=9.3.3 bazel --version)" = "bazel 9.3.3" ]
+  echo "build tools: passed"' || fail "the preinstalled build tools"
 
 # The tool cache's link, GitHub's variables, apt's shims ahead of the real
 # apt-get for sudo, Ubuntu's archive as the only apt source, and a gh with
