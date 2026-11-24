@@ -441,11 +441,24 @@ async function upgradeOnce(
         );
       }
     }
+    const runners = routesJson(
+      plan.classes,
+      before,
+      live,
+      entry.ids,
+      running.image,
+    );
     planned.push({
       ...entry,
       classes: plan.classes,
-      changes: runnerChanges(before, plan.classes),
-      runners: routesJson(plan.classes, before, live, entry.ids, running.image),
+      changes: runnerChanges(
+        before,
+        plan.classes,
+        parseRoutes(runners)
+          .filter((r) => r.replaceScaleSetId)
+          .map((r) => r.label),
+      ),
+      runners,
     });
   }
   const upgradePlan: UpgradePlan = {

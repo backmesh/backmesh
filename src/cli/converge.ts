@@ -77,12 +77,15 @@ export interface RunnerChanges {
   labelsChanged: string[];
   // Per cloud kept, its runner regions added and removed.
   regions: { cloud: string; added: string[]; removed: string[] }[];
+  // Labels whose scale sets are deleted and made again (`routesJson`).
+  replaced?: string[];
 }
 
 /** The difference between the listener's routes and the plan's classes. */
 export function runnerChanges(
   routes: readonly Route[],
   after: readonly RunnerClass[],
+  replaced: readonly string[] = [],
 ): RunnerChanges {
   // A class already retiring was removed by an earlier run.
   const before = routes.filter((r) => !r.retiring);
@@ -130,6 +133,7 @@ export function runnerChanges(
         };
       })
       .filter((r) => r.added.length || r.removed.length),
+    ...(replaced.length && { replaced: [...replaced] }),
   };
 }
 
@@ -140,7 +144,8 @@ export const changed = (c: RunnerChanges) =>
     c.labelsAdded.length ||
     c.labelsRemoved.length ||
     c.labelsChanged.length ||
-    c.regions.length
+    c.regions.length ||
+    c.replaced?.length
   );
 
 /**
@@ -205,6 +210,11 @@ export function changeLines(
   }
   if (c.labelsChanged.length) {
     lines.push(`New VM types or regions for: ${c.labelsChanged.join(', ')}.`);
+  }
+  if (c.replaced?.length) {
+    lines.push(
+      `These labels' scale sets are made again, as their old labels still match: ${c.replaced.join(', ')}. Jobs running on them end.`,
+    );
   }
   if (c.labelsRemoved.length) {
     lines.push(
@@ -466,6 +476,11 @@ export function routesJson(
       }
     } else if (was && image === V0_7_0_LISTENER) {
       id = ids.get(c.label);
+      if (!id && live.has(c.label)) {
+        throw new Error(
+          `The listener's log doesn't name ${c.label}'s scale set, which v0.7.0 renamed in place: restart the listener (\`docker restart backmesh-listener\` on its VM), which logs it as it starts, then run upgrade again.`,
+        );
+      }
     } else if (was?.replaceScaleSetId) {
       const logged = ids.get(c.label);
       if ((logged ?? was.replaceScaleSetId) === was.replaceScaleSetId) {

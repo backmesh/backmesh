@@ -83,10 +83,10 @@ describe('converge', () => {
     ).toBe(false);
   });
 
-  it("replaces each scale set v0.7.0's listener renamed in place", () => {
-    const live = new Set(both.map((c) => c.label));
-    // A set whose rename wasn't applied logged no ready line: it's made
-    // again under its label, with nothing to replace.
+  it("replaces each scale set v0.7.0's listener renamed in place, with consent", () => {
+    // A set whose rename wasn't applied isn't listed and logged no ready
+    // line: it's made under its label, with nothing to replace.
+    const live = new Set(both.slice(1).map((c) => c.label));
     const ids = new Map(both.slice(1).map((c, i) => [c.label, i + 2]));
     const written = parseRoutes(
       routesJson(both, running, live, ids, V0_7_0_LISTENER),
@@ -95,6 +95,27 @@ describe('converge', () => {
       written.map((r) => ids.get(r.label)),
     );
     expect(written[0]?.replaceScaleSetId).toBeUndefined();
+    // Listed without a logged ID, as after the log rotated: refused.
+    expect(() =>
+      routesJson(
+        both,
+        running,
+        new Set([...live, both[0]!.label]),
+        ids,
+        V0_7_0_LISTENER,
+      ),
+    ).toThrow(
+      /^The listener's log doesn't name \S+'s scale set, which v0.7.0 renamed in place: restart the listener/,
+    );
+    // Replacing ends jobs, so it asks first.
+    const replaced = written
+      .filter((r) => r.replaceScaleSetId)
+      .map((r) => r.label);
+    const changes = runnerChanges(running, both, replaced);
+    expect(changed(changes)).toBe(true);
+    expect(changeLines('acme', changes, both)).toEqual([
+      `These labels' scale sets are made again, as their old labels still match: ${replaced.join(', ')}. Jobs running on them end.`,
+    ]);
     // Another release's listener created its sets under their labels.
     expect(
       parseRoutes(routesJson(both, running, live, ids, 'other')).some(
