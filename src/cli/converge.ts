@@ -453,7 +453,7 @@ export function routesJson(
       (r) =>
         !labels.has(r.label) &&
         // A retiring route sharing a class's code under another label is
-        // dropped, not kept: the class renames its scale set instead.
+        // dropped, not kept: the class replaces its scale set instead.
         !codes.has(r.code) &&
         !(r.retiring && gone(r.label)),
     )
