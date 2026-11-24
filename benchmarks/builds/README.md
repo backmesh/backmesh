@@ -68,10 +68,14 @@ the results below from every file in [`results/`](results/).
 
 **Re-run it before a release that touches the runners' start-up, the cache or
 scheduling**, on the release's installation, and commit the results file and
-the README. A release that claims a speedup runs it once on its rc before the
-final tag and compares it with the last release's results file, re-running the
-last release only if the benchmark changed since; it claims only the gain it
-measures.
+both READMEs, with a `backmesh-od-4` experiment alongside it
+(`experiments/<date>-<version>-od.json`): `report.ts` also writes the
+repository README's headline, and [backmesh.com](https://backmesh.com/benchmarks/)
+shows the newest release's figures and its on-demand experiment's when it's
+built, so the new figures ship with the release. A release that claims a
+speedup runs it once on its rc before the final tag and compares it with the
+last release's results file, re-running the last release only if the
+benchmark changed since; it claims only the gain it measures.
 
 ## Figures
 

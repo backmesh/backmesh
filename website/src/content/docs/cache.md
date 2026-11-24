@@ -143,8 +143,10 @@ as `actions/cache` also requires, and GNU `cp` (coreutils) to save.
   saves nothing: `backmesh/cache` prints `not saved (read-only ref)`. Define a
   job that saves in the calling repository's own workflow files.
 - The automatic restores wait for the job's cache token, which reaches the
-  runner when GitHub tells backmesh the job started: a median 12 seconds into
-  the job, and sometimes 45. A `setup-*` step or an install that runs before
-  its cache arrives downloads everything.
+  runner when GitHub tells backmesh the job started, often after the job's
+  first steps, as the
+  [build benchmark](https://github.com/backmesh/backmesh/tree/main/benchmarks/builds#results)
+  measured. A `setup-*` step or an install that runs before its cache
+  arrives downloads everything.
 - Keys starting with `bm-auto-` are reserved for the automatic cache.
 - The upload's result is in the runner Job's log, not the job's log.

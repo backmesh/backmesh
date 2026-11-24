@@ -1,7 +1,9 @@
 // Writes README.md's results, between its markers: the latest file in
 // results/'s tables and runs, each file in results/experiments/'s, and a trend
-// over results/. An experiment (run.ts's EXPERIMENT) isn't a release's
-// figures, so neither the trend nor the site reads it.
+// over results/; and the repository README's headline from the latest file
+// (website/src/benchmarks.ts). An experiment (run.ts's EXPERIMENT) isn't a
+// release's figures, so the trend leaves it out; the site reads the latest
+// release's `-od` experiment for its on-demand figures.
 //
 //   node benchmarks/builds/report.ts
 import { readdir, readFile, writeFile } from 'node:fs/promises';
@@ -10,19 +12,26 @@ import { join } from 'node:path';
 import { format } from 'prettier';
 
 import {
+  newest,
+  published,
+  README_BENCH,
+  readme as headline,
+} from '../../website/src/benchmarks.ts';
+import {
   AWS_DISK_PER_HOUR,
-  AWS_ON_DEMAND_XLARGE,
-  AWS_SPOT_XLARGE,
   GITHUB_4_CORE_PER_MIN,
 } from '../../website/src/cost.ts';
 import {
-  figures,
+  BASE,
+  byName,
+  cost,
+  jobs,
   mannWhitney,
+  med,
   median,
   SEGMENTS,
-  type Job,
+  withBase,
   type Results,
-  type Run,
 } from './results.ts';
 
 const here = new URL('.', import.meta.url).pathname;
@@ -33,7 +42,7 @@ const ARMS = ['cold', 'warm'] as const;
 async function load(dir: string) {
   const files = (await readdir(join(here, dir)))
     .filter((f) => f.endsWith('.json'))
-    .sort();
+    .sort(byName);
   return Promise.all(
     files.map(async (f) => ({
       name: f.slice(0, -5),
@@ -41,7 +50,8 @@ async function load(dir: string) {
     })),
   );
 }
-const all = (await load('results')).map((f) => f.r);
+const releases = await load('results');
+const all = releases.map((f) => f.r);
 const experiments = await load('results/experiments');
 const latest = all.at(-1);
 if (!latest) throw new Error('no results');
@@ -52,54 +62,7 @@ const row = (cells: string[]) => `| ${cells.join(' | ')} |`;
 const head = (cells: string[]) =>
   [row(cells), row(cells.map(() => '---'))].join('\n');
 
-// Every succeeded job's figures in one arm of a label, optionally one build's.
-function jobs(r: Results, label: string, arm: 'cold' | 'warm', build?: string) {
-  return r.labels[label]!.flatMap((round) =>
-    Object.entries((round[arm] as Run).jobs)
-      .filter(([name]) => !build || name === build)
-      .map(([, job]) => ({ job, f: figures(job) })),
-  ).filter((j) => j.f !== null);
-}
-const med = (
-  fs: ReturnType<typeof jobs>,
-  pick: (f: NonNullable<ReturnType<typeof figures>>) => number | undefined,
-) => median(fs.map((j) => pick(j.f!)).filter((v) => v !== undefined));
-
-// Each label's speed against ubuntu-latest's, and a build's cost. A backmesh
-// job costs its VM's spot price (cost.ts's `backmesh-ubuntu-2404-4vcpu` price for the VM's
-// family, times its vCPUs over 4; its on-demand price on a `-od-` label) from
-// the kernel's start to the job's end,
-// with its disk, each for at least a minute as AWS bills them; ubuntu-latest's,
-// what a private repository pays for GitHub's 4-vCPU runner: its per-minute
-// price, each job rounded up to a whole minute.
-// A `<label>/cache` arm (bench-cache.yml) compares with ubuntu-latest's.
-const BASE = 'ubuntu-latest';
 const baseOf = (l: string) => (l.endsWith('/cache') ? `${BASE}/cache` : BASE);
-// An experiment without its own ubuntu-latest compares with the one in the
-// release file it ran alongside: the same date and backmesh version.
-const withBase = (r: Results): Results => {
-  const base = all.find((a) => a.date === r.date && a.backmesh === r.backmesh)
-    ?.labels[BASE];
-  return r.labels[BASE] || !base
-    ? r
-    : { ...r, labels: { ...r.labels, [BASE]: base } };
-};
-function cost(label: string, job: Job) {
-  const end = Date.parse(job.completedAt!);
-  if (label.startsWith(BASE))
-    return (
-      Math.ceil((end - Date.parse(job.startedAt)) / 60_000) *
-      GITHUB_4_CORE_PER_MIN
-    );
-  const prices = label.includes('-od-')
-    ? AWS_ON_DEMAND_XLARGE
-    : AWS_SPOT_XLARGE;
-  const price = prices[job.vm?.split('.')[0] ?? ''];
-  const booted = job.marks.vm_booted;
-  if (!price || !job.nproc || !booted) return undefined;
-  const hours = Math.max(60_000, end - booted / 1000) / 3_600_000;
-  return ((price * job.nproc) / 4 + AWS_DISK_PER_HOUR) * hours;
-}
 const usd = (v: number | null) => (v === null ? 'n/a' : `$${v.toFixed(4)}`);
 const times = (v: number | null, base: number | null, p?: number) =>
   v && base
@@ -334,7 +297,7 @@ ${experiments
   .map(
     ({ name, r }) => `### Experiment: \`experiments/${name}.json\`
 
-${r.labels[BASE] ? '' : `Its \`${BASE}\` is the release file's, run alongside it.\n\n`}${report(withBase(r))}
+${r.labels[BASE] ? '' : `Its \`${BASE}\` is the release file's, run alongside it.\n\n`}${report(withBase(r, all))}
 
 `,
   )
@@ -356,4 +319,14 @@ if (before === undefined || after === undefined)
 await writeFile(
   readme,
   await format(before + section + after, { filepath: readme }),
+);
+
+// The repository README's headline, from the same figures as the site.
+const top = join(here, '../../README.md');
+await writeFile(
+  top,
+  (await readFile(top, 'utf8')).replace(
+    README_BENCH,
+    `<!-- bench:start -->${headline(published(...newest(releases, experiments)))}<!-- bench:end -->`,
+  ),
 );

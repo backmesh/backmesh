@@ -1,13 +1,14 @@
 ---
 title: GitHub Actions cost calculator
 description: Enter your monthly minutes to compare GitHub-hosted runners with backmesh's spot VMs in your own AWS, GCP or Azure account, from dated list and spot prices.
-lastUpdated: 2026-11-18
+lastUpdated: 2026-11-24
 head:
   - tag: title
     content: 'GitHub Actions cost calculator: GitHub-hosted vs your own AWS, GCP or Azure | backmesh'
 ---
 
 import Calculator from '../../components/Calculator.astro';
+import { per1000 } from '../../cost';
 
 Enter how many minutes of 4-vCPU Linux jobs you run a month. The table shows
 what they cost on GitHub-hosted runners and on backmesh's spot VMs in each
@@ -23,8 +24,12 @@ Your GitHub minutes are on your org's billing page, under Actions usage.
 
 Two things move the backmesh range. Spot prices change by the hour, and the
 range spans the VM types a job may get. Shorter jobs pay for more VM boots per
-minute of work: about 30 seconds per job on AWS and 60 to 70 seconds on GCP
-and Azure.
+minute of work. Each job pays its VM's boot, the measured median from the
+kernel's start to the runner's container start:
+{per1000.map((p) => `${p.bootS} s on ${p.cloud}`).join(', ')}
+([vm-boot-marks](https://github.com/anycloud-sh/anycloud/tree/main/experiments/vm-boot-marks#result)).
+The [benchmarks](/benchmarks/) have the whole wait for a VM on AWS, from
+the job's queueing.
 
 The calculator leaves out GitHub's included usage, which is $18 a month on
 Team and $300 on Enterprise Cloud. Subtract it from the GitHub-hosted row if

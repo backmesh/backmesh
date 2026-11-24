@@ -140,7 +140,9 @@ about 1.4 times the price. GCP has no GPU labels yet: anycloud can't launch a
 T4 VM there.
 
 A GPU job starts slower than a CPU one: its VM boots NVIDIA's larger image,
-and pulling and starting the runner's image takes about 90 seconds more. When
+and pulling and starting the runner's image takes longer, as the
+[GPU benchmark](https://github.com/backmesh/backmesh/tree/main/benchmarks/gpu-t4)
+measured. When
 spot T4s are short, a `backmesh-ubuntu-2404-gpu-t4` job waits for one: like every spot
 label, it never falls back on demand. `backmesh-ubuntu-2404-gpu-od-t4` runs on demand
 instead.

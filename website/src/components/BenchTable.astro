@@ -1,0 +1,46 @@
+---
+// The benchmarks page's table, from the newest build benchmark results
+// (src/bench.ts).
+import { bench } from '../bench';
+import { dollars, seconds, speed, times } from '../benchmarks';
+---
+
+<table>
+  <thead>
+    <tr>
+      <th>Build</th>
+      <th><code>ubuntu-latest</code><br />4 vCPUs</th>
+      <th><code>backmesh-ubuntu-2404-4vcpu</code><br />spot</th>
+      <th><code>backmesh-ubuntu-2404-od-4vcpu</code><br />on demand</th>
+    </tr>
+  </thead>
+  <tbody>
+    {
+      bench.rows.map((b) => (
+        <tr id={b.id}>
+          <th>
+            {b.workload}
+            <br />
+            <small>{b.project}</small>
+          </th>
+          <td>
+            <strong>{seconds(b.github.secs)}</strong>
+            <br />
+            {dollars(b.github.cost)}
+            <br />
+            {seconds(b.github.wait)} wait
+          </td>
+          {[b.spot, b.od].map((l) => (
+            <td>
+              <strong>{seconds(l.secs)}</strong> · {speed(l.faster)}
+              <br />
+              {dollars(l.cost)} · {times(l.cheaper)} cheaper
+              <br />
+              {seconds(l.wait)} wait
+            </td>
+          ))}
+        </tr>
+      ))
+    }
+  </tbody>
+</table>

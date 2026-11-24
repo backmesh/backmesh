@@ -58,9 +58,12 @@ shows the same figures.
 
 ## What's left out
 
-- **Boots.** Each job's VM bills from its boot: about 30 seconds on AWS and 60
-  to 70 seconds on GCP and Azure. Per 1,000 jobs, that adds $0.41–$0.58 on
-  AWS, $0.53–$0.74 on Azure and $1.50–$2.27 on GCP.
+- **Boots.** Each job's VM bills from its boot. Each cloud's boot is its
+  measured median from the kernel's start to the runner's container start
+  ([vm-boot-marks](https://github.com/anycloud-sh/anycloud/tree/main/experiments/vm-boot-marks#result));
+  the [benchmarks](/benchmarks/) have the whole wait for a VM on AWS. Per
+  1,000 jobs, the boots add $0.25–$0.36 on AWS, $0.27–$0.32 on Azure and
+  $0.90–$1.17 on GCP.
 - **Disks.** Each runner has a 100 GB disk while its job runs. On AWS it's gp3
   at 4,000 IOPS and 500 MiB/s, about $0.038 an hour: $0.011 for storage and
   $0.027 for IOPS and throughput above gp3's baseline
@@ -102,7 +105,8 @@ backmesh $46 on AWS spot (10,000 × $0.2732 ÷ 60), $29 on Azure spot and $88 on
 demand on either, at each cloud's first type. The control plane is the same one the other labels use, so
 it adds nothing. Left out, as above: disks, on-demand retries, and boots,
 which are longer than the other labels': a GPU VM boots a larger image and
-pulls the runner's image after it, about 90 seconds more.
+pulls the runner's image after it
+([GPU benchmark](https://github.com/backmesh/backmesh/tree/main/benchmarks/gpu-t4)).
 
 ## Estimate your own
 

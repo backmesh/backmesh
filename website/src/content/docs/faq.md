@@ -29,7 +29,7 @@ GitHub Actions runners.
 
 **How does backmesh compare with GitHub-hosted runners?** A workflow changes
 only its `runs-on`. Its jobs run on spot VMs in your accounts. In our [build
-benchmarks](/benchmarks/), builds ran up to 2× faster and 5× cheaper, and your cloud credits apply. Each job waits for its VM to boot, and only
+benchmarks](/benchmarks/), most builds ran faster and every one cheaper, and your cloud credits apply. Each job waits for its VM to boot, and only
 Linux x86-64 jobs can use the runners, in private repositories unless you
 turn on [public repositories](/public-repos/).
 
@@ -51,7 +51,7 @@ $0.052 a minute. `backmesh-ubuntu-2404-gpu-t4` costs about $0.0046 a minute on A
 and $0.0029 on Azure spot, and `backmesh-ubuntu-2404-gpu-od-t4` $0.0088 on demand: 6 to 18
 times less, before disks and boots. See [Cost](/cost/#gpu).
 
-**Can public repositories use backmesh?** Yes, with `--public-repos` on install or upgrade. Pull requests from forks then run only on `backmesh-ubuntu-2404-public-2vcpu` and `-4`, and read the cache without saving to it. Their VMs share your runners' cloud network, so GitHub's "Require approval for all external contributors" setting is required. See [Public repositories](/public-repos/).
+**Can public repositories use backmesh?** Yes, with `--public-repos` on install or upgrade. Pull requests from forks then run only on `backmesh-ubuntu-2404-public-2vcpu` and `-4vcpu`, and read the cache without saving to it. Their VMs share your runners' cloud network, so GitHub's "Require approval for all external contributors" setting is required. See [Public repositories](/public-repos/).
 
 **Will my `ubuntu-latest` jobs work on backmesh?** Most do with only a new `runs-on`. The
 image is Ubuntu 24.04, has no systemd or swap, and lacks some of GitHub's
@@ -122,8 +122,8 @@ within about 10 minutes, with nothing to reinstall.
 
 ## How fast do jobs start?
 
-**How long does a backmesh job wait for its VM?** Each job gets a new VM, which takes
-about 30 seconds to boot on AWS and 60 to 70 seconds on GCP and Azure. For a
+**How long does a backmesh job wait for its VM?** Each job gets a new VM and waits for it to
+boot: the [benchmarks](/benchmarks/) have the latest median wait on AWS. For a
 run's later jobs, backmesh learns each workflow's shape and starts runners ahead
 of predicted jobs, which mostly hides that. This has no settings,
 and [`backmesh status`](/status/) shows only counts: the runners started ahead
@@ -179,8 +179,8 @@ pays only for its always-on VMs, the control plane's and one listener VM per
 org, with their disks and public addresses: for one org about $86 a month on
 AWS, $74 on GCP and $111 on Azure, or up to $151 on Azure when a region doesn't
 offer your subscription the first sizes. Each job's VM
-bills from its boot until the job ends, so every job also pays for its boot:
-about 30 seconds on AWS and 60 to 70 seconds on GCP and Azure. A runner
+bills from its boot until the job ends, so every job also pays for its boot.
+A runner
 started ahead of predicted jobs that no job takes bills for its boot and a short
 idle time.
 These are estimates from cloud list prices; spot prices change by the hour.
