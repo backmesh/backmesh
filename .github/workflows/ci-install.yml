@@ -102,11 +102,11 @@ jobs:
       contents: read # the release's CLI binary
       id-token: write # each cloud's OIDC sign-in
     env:
-      BACKMESH_VERSION: v0.6.1
+      BACKMESH_VERSION: v0.7.0
       # The release's checksums.txt line for backmesh-linux-x64.tar.gz; bump
       # both together. The install step refuses anything but a 64-character
       # digest.
-      BACKMESH_SHA256: 18dcaa65c0575c520e532968cdfa868ac786155a89c01a455547a497ccfa3397
+      BACKMESH_SHA256: a2fb5be0bcfcb3e8818f29a9d6a51597d529a52c0739623f54af971f08d02277
       ANYCLOUD_VERSION: 0.1.83
       ANYCLOUD_SHA256: c4bfc58f29f9ec5c7a9d152a47895d5921a7c3a92e1d5b16ecd7edfa45eb2113
       # backmesh's GitHub App, whose sign-ins the control plane exchanges
