@@ -76,7 +76,7 @@ summary=$(
   echo "At actions/runner-images \`${rev:0:12}\`: $(count "$(list ok)") of $(count "$results") tools and packages present."
   echo
   echo "- **Missing, installs on first use** ($(count "$(list first-use)")): $(inline "$(list first-use)")"
-  echo "- **Missing, not in Ubuntu's archive** ($(count "$(list missing)")): $(inline "$(list missing)")"
+  echo "- **Missing, no first-use install** ($(count "$(list missing)")): $(inline "$(list missing)")"
   echo "- **New gaps**, not in known-gaps.txt ($(count "$regressions")): $(inline "$regressions")"
   echo "- **Known gaps now present**, to drop from known-gaps.txt: $(inline "$(both -13)")"
   echo "- **Not checked**, not a command: $(inline "$(list -)")"

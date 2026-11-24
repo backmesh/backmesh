@@ -14,17 +14,18 @@ const AWS_SIZE: Record<number, string> = {
 };
 
 // Each size of a family: its name, and the 4-vCPU type's spot and on-demand
-// $/hour.
+// $/hour; GCP's c4d has 3.875 GiB a vCPU, rounded down.
 function family(
   name: (vcpus: number) => string,
   region: string,
   [spot, onDemand]: [number, number],
   nestedVirtualization: boolean,
+  { sizes = SIZES, gibPerVcpu = 4 } = {},
 ): VmTypeDetails[] {
-  return SIZES.map((vcpus) => ({
+  return sizes.map((vcpus) => ({
     vmType: name(vcpus),
     vCPUs: vcpus,
-    memoryGiB: vcpus * 4,
+    memoryGiB: Math.floor(vcpus * gibPerVcpu),
     accelerators: [],
     capabilities: { nestedVirtualization },
     regions: [
@@ -81,6 +82,21 @@ export const CATALOG = {
       'us-central1-b',
       [0.1165, 0.1942],
       true,
+    ),
+    // The on-demand classes' first: c3d has no 2-vCPU size.
+    ...family(
+      (n) => `c4d-standard-${n}`,
+      'us-central1-a',
+      [0.0771, 0.1833],
+      false,
+      { gibPerVcpu: 3.875 },
+    ),
+    ...family(
+      (n) => `c3d-standard-${n}`,
+      'us-central1-a',
+      [0.0415, 0.1816],
+      false,
+      { sizes: [4, 8, 16] },
     ),
   ],
   // The catalog may spell a type in another case than the classes' list.

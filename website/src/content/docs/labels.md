@@ -72,7 +72,11 @@ shows why runners are short. Each cloud's page lists every size's types:
 
 Each size also has an on-demand label, with the same types on on-demand VMs:
 `backmesh-od-2` to `backmesh-od-16`, or `backmesh-gcp-od-4` and so on on
-another cloud. On demand costs about 2 to 5 times spot, so use it for long jobs
+another cloud. On GCP, on-demand labels from 4 vCPUs try AMD's `c4d` and `c3d`
+first, which built faster for less per job at 4 vCPUs, then the types above: `backmesh-od-4` tries
+`c4d-standard-4`, `c3d-standard-4`, `n2-standard-4` and `n2d-standard-4`. A
+`c4d` VM has 3.875 GiB a vCPU, so 15 GiB at 4 vCPUs, against GitHub's 4-core
+runner's 16 GiB ([GCP](/gcp/#vm-types)). On demand costs about 2 to 5 times spot, so use it for long jobs
 on the critical path, where a reclaim would cost more than it saves.
 
 backmesh also reruns a run's failed jobs on demand when spot reclaims were its

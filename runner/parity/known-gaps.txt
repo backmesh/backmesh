@@ -9,14 +9,9 @@ Android SDK Platform-Tools
 Ansible
 Ant
 AzCopy
-Bazel
-Bazelisk
 Bicep
 Buildah
-CMake
 Cabal
-Cargo
-ChromeDriver
 Chromium
 Clang
 Clang-format
@@ -30,16 +25,11 @@ GHCup
 GNU Fortran
 Geckodriver
 Git-ftp
-Google Chrome
 Gradle
 Homebrew
-Java
 Julia
-Kind
 Kotlin
-Kustomize
 Lerna
-Maven
 Microsoft Edge
 Microsoft Edge WebDriver
 Miniconda
@@ -47,7 +37,6 @@ Minikube
 Mozilla Firefox
 MySQL
 Newman
-Ninja
 PHP
 PHPUnit
 Packer
@@ -56,14 +45,9 @@ Pip
 Pip3
 Podman
 PostgreSQL
-PowerShell
 Pulumi
 Ruby
 RubyGems
-Rust
-Rustdoc
-Rustfmt
-Rustup
 Selenium server
 Skopeo
 Stack
