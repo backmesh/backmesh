@@ -339,15 +339,15 @@ const jsonLd = {
       </div>
 
       <section id="benchmarks" class="wrap section benchmarks">
-        <h2>backmesh 4 vCPU vs GitHub's ubuntu-latest.</h2>
+        <h2>Same 4 vCPUs: backmesh vs GitHub-hosted.</h2>
         <Chart
           label={`Build time, first step to done: ${speed.map((b) => `${b.workload} ${seconds(b.spot.secs)} on backmesh 4 vCPU against ${seconds(b.github.secs)} on GitHub-hosted, ${times(b.spot.faster)} faster`).join('; ')}.`}
           max={speedMax}
           ticks={speedTicks}
           rows={speedRows}
           legendAbove={[
-            { kind: 'solid', label: 'backmesh 4 vCPU' },
-            { kind: 'track', label: 'GitHub-hosted' },
+            { kind: 'solid', label: 'backmesh, 4 vCPUs' },
+            { kind: 'track', label: 'GitHub-hosted ubuntu-latest, 4 vCPUs' },
           ]}
         />
         <p class="method"><a href="/benchmarks/">How we measured →</a></p>
@@ -369,8 +369,8 @@ const jsonLd = {
           ]}
           rows={gpuRows}
           legendAbove={[
-            { kind: 'solid', label: 'backmesh T4' },
-            { kind: 'track', label: 'GitHub-hosted T4' },
+            { kind: 'solid', label: 'backmesh T4, 4 vCPUs' },
+            { kind: 'track', label: 'GitHub-hosted T4, 4 vCPUs' },
           ]}
         />
         <p class="caption">AWS and Azure. Spot jobs can wait for capacity.</p>
