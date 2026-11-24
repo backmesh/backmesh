@@ -284,8 +284,13 @@ describe("e2e.yml's test-org run", () => {
     );
     expect(uninstall.run).toMatch(/\$bm uninstall "\$\{flags\[@\]\}"/);
     // After an upgrade that didn't move the control plane, the release that
-    // installed it uninstalls it.
+    // installed it uninstalls it, unless both pin one anycloud: then the
+    // release under test does, which knows its own labels.
     expect(uninstall.run).toMatch(/bm=backmesh-from/);
+    expect(uninstall.run).toContain('$FROM_ANYCLOUD != "$VERSION_ANYCLOUD"');
+    expect(step("Install the release's backmesh and anycloud").run).toContain(
+      'echo "VERSION_ANYCLOUD=$anycloud" >>"$GITHUB_ENV"',
+    );
     expect(sweep.if).toMatch(/^\$\{\{ always\(\) &&/);
     expect(roles.if).toBe(uninstall.if);
     expect(steps.indexOf(roles)).toBe(steps.indexOf(uninstall) + 1);

@@ -326,6 +326,7 @@ jobs:
             echo "FROM_ANYCLOUD=$anycloud" >>"$GITHUB_ENV"
           fi
           get "$VERSION" backmesh
+          echo "VERSION_ANYCLOUD=$anycloud" >>"$GITHUB_ENV"
           # A release before it can't uninstall without taking the App.
           env -u GH_TOKEN ./backmesh uninstall --help | grep -q -- --keep-app \
             || { echo "::error::$VERSION has no uninstall --keep-app, which this needs"; exit 1; }
@@ -562,12 +563,13 @@ jobs:
           # A control plane that doesn't answer, such as a half-made one, is
           # deleted through the cloud CLI; uninstall refuses that for one that
           # does. One an upgrade didn't move is `from`'s to uninstall, as
-          # `version`'s is refused by it.
+          # `version`'s is refused by it; when both pin the same anycloud,
+          # `version`'s uninstalls, as only it knows its own labels.
           if [[ -f ~/.anycloud/api-url ]]; then
             url=$(anycloud api status --json | jq -r .url) || url=
             if [[ -n $url ]] && ! served=$(curl -fsS --max-time 10 "$url/v1/version"); then
               flags+=(--control-plane "$CONTROL_PLANE")
-            elif [[ -n $url && -n ${FROM_ANYCLOUD:-} && $(jq -r .version <<<"$served") == "$FROM_ANYCLOUD" ]]; then
+            elif [[ -n $url && -n ${FROM_ANYCLOUD:-} && $FROM_ANYCLOUD != "$VERSION_ANYCLOUD" && $(jq -r .version <<<"$served") == "$FROM_ANYCLOUD" ]]; then
               bm=backmesh-from
             fi
           fi
