@@ -43,10 +43,12 @@ Spot labels from 4 vCPUs try `c4d` first too, with a cheaper disk than on
 demand's: Hyperdisk Balanced at 3,000 IOPS and 750 MiB/s, not 8,000 and
 1,000. Spot `c4d-standard-4` launched 13 times of 13 in `us-east4` with none
 reclaimed ([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38)).
-With that disk, a job's VM time was 1.02 of on-demand's disk's, its image
-pulls 1.04 and its `docker build` 1.03
-([anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)), so a spot
-job on `c4d` costs about 1.05 of one on `n2` for about 0.6 of its VM time.
+With that disk, a job's VM time was 1.02 of on-demand's disk's, its
+kernel-to-container start 1.06 (p = 0.050), its image pulls 1.04 and its
+`docker build` 1.03 ([anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)). A spot job on `c4d` would cost about 1.05 of one
+on `n2` for about 0.6 of its VM time, estimated at `c4d-standard-4`'s catalog spot price ($0.0967 an hour in
+`us-east4`, the VM alone) against `n2`'s VM time and cost per job from
+on-demand runs in `us-central1` ([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38), [anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)).
 `c3d` isn't in the spot lists, as its spot capacity wasn't measured.
 
 The [KVM labels](/labels/#kvm) use `n2` only, since `n2d`, `c4d` and `c3d`
@@ -116,7 +118,8 @@ Other sizes scale with their vCPUs. Each job also pays for its VM's boot and its
 100 GB disk: pd-ssd, about $0.023 an hour, or on `c4d`, which can't take
 pd-ssd, Hyperdisk Balanced: on demand with 8,000 IOPS and 1,000 MB/s
 provisioned, about $0.092 an hour, and on spot with 3,000 and 750, about
-$0.044. In `us-east4`, where `c4d` spot was measured, it cost $0.0967 an hour
+$0.044. `c4d-standard-4`'s catalog spot price in `us-east4`, where its spot
+launches were measured, is $0.0967 an hour for the VM alone
 ([anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)). The control plane and one org's listener VM cost about $74 a
 month. At those prices, 150,000 minutes a month of `backmesh-4` jobs cost at
 least $299–$365 with one org's always-on VMs, before disks, boots and runners started ahead of jobs; see [the
