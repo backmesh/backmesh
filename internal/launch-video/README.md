@@ -19,7 +19,7 @@ cloud logos (`website/src/assets/clouds/`). Each scene is a headline and one
 figure, with no sub-lines or captions. The scenes sit on the light ground; the
 end card is the page's one dark closing band.
 
-The repository holds text only. Fonts, GSAP and the sound effects are fetched
+The repository holds text only, apart from `website/public/launch.gif`. Fonts, GSAP and the sound effects are fetched
 into the cut's git-ignored `assets/` folder; the brand files are copied there
 from `website/`.
 
