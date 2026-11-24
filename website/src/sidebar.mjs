@@ -5,6 +5,7 @@ export const sidebar = [
     items: [
       'install',
       'labels',
+      'gpu',
       'runner-image',
       'cache',
       'public-repos',
