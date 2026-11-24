@@ -13,7 +13,7 @@ const TARGETS = [
 describe('class rate', () => {
   it.each([
     [0, 'spot', { low: 0.05, high: 0.07 }],
-    [0, 'on demand', { low: 0.17, high: 0.23 }],
+    [0, 'on demand', { low: 0.17, high: 0.24 }],
     [1, 'spot', { low: 0.09, high: 0.12 }],
     [2, 'on demand', { low: 0.17, high: 0.23 }],
   ] as const)(
@@ -32,7 +32,7 @@ describe('class rate', () => {
   it('prices the default class and the GPU class per cloud, and says when a region is unpriced', () => {
     const { classes } = planClasses([TARGETS[0]], catalogs(), 'aws');
     expect(formatRate(classes, CATALOG.aws)).toEqual([
-      'aws us-east-2: no VM while idle; while its job runs, a backmesh-4 VM costs about $0.05–0.07 an hour on spot and $0.17–0.23 on demand, plus its disk, and the other sizes scale with their vCPUs',
+      'aws us-east-2: no VM while idle; while its job runs, a backmesh-4 VM costs about $0.05–0.07 an hour on spot and $0.17–0.24 on demand, plus its disk, and the other sizes scale with their vCPUs',
       'aws us-east-2: a backmesh-gpu-t4 VM (g4dn.xlarge, g4dn.2xlarge) costs about $0.27–0.37 an hour on spot and $0.53–0.75 on demand, plus its disk',
     ]);
     const elsewhere = classes.map((c) => ({ ...c, regions: ['eu-west-1'] }));
@@ -57,7 +57,7 @@ describe('class rate', () => {
       'aws',
     );
     expect(formatRate(classes, home)[0]).toMatch(
-      /^aws us-east-2 and us-west-2: .* about \$0\.05–0\.14 an hour on spot and \$0\.17–0\.23 on demand/,
+      /^aws us-east-2 and us-west-2: .* about \$0\.05–0\.14 an hour on spot and \$0\.17–0\.24 on demand/,
     );
   });
 });

@@ -58,11 +58,11 @@ while a named one keeps its cloud.
 Each job's VM is the first type in its label's list that has capacity. The types
 for `backmesh-4` are below; the other sizes use the same families at their size:
 
-| Cloud | Types for `backmesh-4`, in order                           |
-| ----- | ---------------------------------------------------------- |
-| AWS   | `m8i.xlarge`, `m7a.xlarge`, `m7i.xlarge`, `m6a.xlarge`     |
-| GCP   | `n2-standard-4`, `n2d-standard-4`                          |
-| Azure | `Standard_D4ads_v5`, `Standard_D4as_v5`, `Standard_D4s_v5` |
+| Cloud | Types for `backmesh-4`, in order                                     |
+| ----- | -------------------------------------------------------------------- |
+| AWS   | `m8a.xlarge`, `m8i.xlarge`, `m7a.xlarge`, `m7i.xlarge`, `m6a.xlarge` |
+| GCP   | `n2-standard-4`, `n2d-standard-4`                                    |
+| Azure | `Standard_D4ads_v5`, `Standard_D4as_v5`, `Standard_D4s_v5`           |
 
 When no type has capacity, jobs wait at GitHub and [`backmesh status`](/status/)
 shows why runners are short. Each cloud's page lists every size's types:

@@ -33,6 +33,12 @@ const AWS_SIZE: Record<number, string> = {
  * (`moveImageStoresToResourceDisk`), goes first: 21.5 s faster to start than
  * `as_v5` with no anycloud change (the OS disk stays Premium_LRS either way;
  * an actual ephemeral OS disk would save about 6 s more but isn't built).
+ * AWS's classes, spot too, try `m8a` first (owner, 2026-11-23;
+ * anycloud#30, `experiments/m8a-vs-m8i`): it ran backmesh's builds in
+ * 0.64–0.88× `m8i`'s time, and since anycloud fails a spot launch over to the
+ * next target as soon as a zone refuses (anycloud#35), spot `xlarge` landed
+ * on `m8a` 20 of 20 times in about 9.6 s and `4xlarge` 9 of 20 in about
+ * 13.7 s.
  * GCP's on-demand classes try AMD's `c4d` (Zen 5) and `c3d` (Zen 4) first:
  * at 4 vCPUs on demand, anycloud#38 measured 0.50 and 0.71 of `n2`'s build
  * time and 0.78 and 0.76 of its cost per Job, `c4d`'s Hyperdisk Balanced
@@ -45,7 +51,8 @@ export const VM_TYPES: Record<
   Cloud,
   (vcpus: number, spot: boolean) => string[]
 > = {
-  aws: (n) => ['m8i', 'm7a', 'm7i', 'm6a'].map((f) => `${f}.${AWS_SIZE[n]}`),
+  aws: (n) =>
+    ['m8a', 'm8i', 'm7a', 'm7i', 'm6a'].map((f) => `${f}.${AWS_SIZE[n]}`),
   gcp: (n, spot) => [
     ...(spot || n < 4 ? [] : [`c4d-standard-${n}`, `c3d-standard-${n}`]),
     `n2-standard-${n}`,
@@ -270,8 +277,8 @@ export function planClasses(
     // order, filtered to the ones a runner region's catalog reports nested
     // virtualization for: GCP's `n2d` doesn't nest, and `n2` does
     // (anycloud's `src/shared/catalog/nested-virtualization.ts`), nor do
-    // `c4d` and `c3d`. AWS's
-    // `m7a` and `m6a` don't nest, so KVM classes get only `m8i` then `m7i`;
+    // `c4d` and `c3d`. AWS's `m8a`, `m7a` and `m6a` don't nest, so KVM
+    // classes get only `m8i` then `m7i`;
     // Azure's `ads_v5` doesn't nest either, so KVM classes keep `as_v5`
     // then `s_v5`. There's no separate list to keep in step with
     // `VM_TYPES`'s order.

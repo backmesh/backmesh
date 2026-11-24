@@ -24,7 +24,7 @@ export type RunCommand = (
 
 /**
  * Each cloud's runner region candidates, anchor first (`SUGGESTED_REGION`):
- * AWS excludes `us-west-1` (no `m7a`); GCP excludes `us-central2` (almost
+ * AWS excludes `us-west-1` (no `m7a` or `m8a`); GCP excludes `us-central2` (almost
  * no general-purpose types); every US Azure region qualifies.
  */
 export const RUNNER_REGIONS: Record<Cloud, string[]> = {

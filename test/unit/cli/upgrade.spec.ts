@@ -1419,7 +1419,7 @@ describe('upgrade', () => {
       );
     });
 
-    // One behind, as 0.1.81 to 0.1.82: the old listener is in the new API's
+    // One behind, as 0.1.82 to 0.1.83: the old listener is in the new API's
     // window, so nothing pauses.
     it('moves an API one release behind without a pause', async () => {
       const { deps, calls, lines } = setUp({
@@ -1436,15 +1436,26 @@ describe('upgrade', () => {
     // A regenerated contract moves ANYCLOUD_PREVIOUS_VERSION: decide OLDEST
     // again, as the release that backmesh last pinned.
     it('starts from the release backmesh v0.5.7 pinned, under the real constants', async () => {
-      expect(ANYCLOUD_PREVIOUS_VERSION).toBe('0.1.81');
+      expect(ANYCLOUD_PREVIOUS_VERSION).toBe('0.1.82');
       expect(OLDEST).toBe('0.1.80');
       const at = (version: string) => {
-        const { deps, calls } = setUp({ version, listener: 'down' });
+        const { deps, calls, lines } = setUp({ version, listener: 'down' });
         delete deps.oldest;
         delete deps.previous;
-        deps.release = async () => ({ ...RELEASE, anycloud: '0.1.82' });
-        return { deps, calls };
+        deps.release = async () => ({ ...RELEASE, anycloud: '0.1.83' });
+        return { deps, calls, lines };
       };
+      // backmesh v0.6.0's control plane is in 0.1.83's window: no pause.
+      const last = at('0.1.82');
+      await expect(upgrade(last.deps)).rejects.toThrow(
+        new RegExp(`^acme's listener didn't start on ${VM.acme}\\.$`),
+      );
+      expect(mutations(last.calls)).toContain(
+        'api upgrade --sign-in-apps 5622376',
+      );
+      expect(last.lines.some((l) => l.includes('pauses runner starts'))).toBe(
+        false,
+      );
       const old = at('0.1.79');
       await expect(upgrade(old.deps)).rejects.toThrow(
         /too old for this backmesh to upgrade/,

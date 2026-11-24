@@ -22,8 +22,10 @@ export const GITHUB_4_CORE_PER_MIN = 0.012;
  * it (src/cli/install.ts MANAGEMENT_MONTHLY_USD and src/cli/listener-vm.ts
  * LISTENER_VM_MONTHLY_USD). */
 export const CATALOG_DATE = '2026-11-13';
-/** AWS's `backmesh-4` spot prices by VM family, $/hour, as above. */
+/** AWS's `backmesh-4` spot prices by VM family, $/hour, as above; `m8a`'s
+ * from the catalog on 2026-11-23. */
 export const AWS_SPOT_XLARGE: Record<string, number> = {
+  m8a: 0.065,
   m8i: 0.0583,
   m7a: 0.07,
   m7i: 0.0497,

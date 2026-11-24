@@ -64,6 +64,8 @@ export const CATALOG = {
     ...aws('m6i', [0.0691, 0.192]),
     ...aws('m7i', [0.0481, 0.2016], true),
     ...aws('m8i', [0.0543, 0.2117], true),
+    // The catalog's of 2026-11-23.
+    ...aws('m8a', [0.065, 0.2434]),
     t4('g4dn.xlarge', 4, 16, 'us-east-2', [0.2732, 0.526]),
     t4('g4dn.2xlarge', 8, 32, 'us-east-2', [0.3696, 0.752]),
   ],
