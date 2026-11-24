@@ -81,10 +81,10 @@ Shorter jobs pay more boot per minute and move that point up.
 ## What the arithmetic doesn't say
 
 - **Speed.** We haven't compared GitHub's GPU runner and a backmesh T4 on the
-  same tests. A cold `backmesh-gpu-t4` job on AWS waited a median of about
+  same tests. A cold `backmesh-ubuntu-2404-gpu-t4` job on AWS waited a median of about
   2 minutes 10 seconds for its VM, in 10 samples with no spot refusal.
 - **Spot capacity.** When spot T4s are short, a spot job waits.
-  `backmesh-gpu-od-t4` runs on demand instead.
+  `backmesh-ubuntu-2404-gpu-od-t4` runs on demand instead.
 - **Quota.** New AWS accounts and Azure subscriptions usually have 0 GPU
   quota; see [Getting T4 GPU quota on AWS and Azure for CI](/blog/t4-gpu-quota-aws-azure/).
 

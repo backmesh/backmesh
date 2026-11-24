@@ -52,8 +52,8 @@ aws service-quotas request-service-quota-increase \
 ```
 
 Request the spot and on-demand quotas separately; a spot label
-(`backmesh-gpu-t4`) never falls back on demand, and the on-demand label
-(`backmesh-gpu-od-t4`) uses only the on-demand quota.
+(`backmesh-ubuntu-2404-gpu-t4`) never falls back on demand, and the on-demand label
+(`backmesh-ubuntu-2404-gpu-od-t4`) uses only the on-demand quota.
 
 ## Azure
 
@@ -82,7 +82,7 @@ backmesh's Azure T4 runners use the regions that offer the type:
 ## After the increase
 
 Once the quota is there, a waiting GPU job starts on its own; on AWS a cold
-`backmesh-gpu-t4` job took a median of about 2 minutes 10 seconds from
+`backmesh-ubuntu-2404-gpu-t4` job took a median of about 2 minutes 10 seconds from
 queued to started in our
 [benchmark](https://github.com/backmesh/backmesh/tree/main/benchmarks/gpu-t4).
 Quota is only permission: spot capacity can still run short, and then a spot

@@ -116,7 +116,7 @@ export const GPU_PRICES = [
   },
 ];
 
-/** A cold `backmesh-gpu-t4` job on AWS, 10 samples on 2026-11-21, none
+/** A cold `backmesh-ubuntu-2404-gpu-t4` job on AWS, 10 samples on 2026-11-21, none
  * refused spot capacity (benchmarks/gpu-t4): the median and p90 queued to
  * started, and the median VM launch to started, in seconds. */
 export const AWS_GPU_WAIT_S = 130.5;

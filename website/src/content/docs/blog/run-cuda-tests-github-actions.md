@@ -13,7 +13,7 @@ head:
   - tag: script
     attrs:
       type: application/ld+json
-    content: '{"@context":"https://schema.org","@graph":[{"@type":"BlogPosting","headline":"How to run CUDA and PyTorch tests in GitHub Actions","datePublished":"2026-11-24","dateModified":"2026-11-24","author":{"@type":"Organization","name":"backmesh","url":"https://backmesh.com/"},"publisher":{"@id":"https://backmesh.com/#organization"},"mainEntityOfPage":"https://backmesh.com/blog/run-cuda-tests-github-actions/"},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Can GitHub Actions run CUDA tests?","acceptedAnswer":{"@type":"Answer","text":"Yes, on a runner with an NVIDIA GPU: GitHub''s hosted GPU runner, or a self-hosted one such as backmesh''s backmesh-gpu-t4 in your own AWS or Azure account. ubuntu-latest has no GPU."}},{"@type":"Question","name":"Do I need to install CUDA on the runner?","acceptedAnswer":{"@type":"Answer","text":"The runner needs the NVIDIA driver, which backmesh''s GPU VMs have. The CUDA toolkit comes from your job: PyTorch''s pip wheels bundle the CUDA libraries, and an nvidia/cuda container image brings nvcc."}},{"@type":"Question","name":"How do I keep CPU tests off the GPU runner?","acceptedAnswer":{"@type":"Answer","text":"Mark GPU tests with a pytest marker, run pytest -m \"not gpu\" on a CPU runner, and run pytest -m gpu in a separate job on the GPU runner, gated by a pull-request label or a paths filter."}}]}]}'
+    content: '{"@context":"https://schema.org","@graph":[{"@type":"BlogPosting","headline":"How to run CUDA and PyTorch tests in GitHub Actions","datePublished":"2026-11-24","dateModified":"2026-11-24","author":{"@type":"Organization","name":"backmesh","url":"https://backmesh.com/"},"publisher":{"@id":"https://backmesh.com/#organization"},"mainEntityOfPage":"https://backmesh.com/blog/run-cuda-tests-github-actions/"},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Can GitHub Actions run CUDA tests?","acceptedAnswer":{"@type":"Answer","text":"Yes, on a runner with an NVIDIA GPU: GitHub''s hosted GPU runner, or a self-hosted one such as backmesh''s backmesh-ubuntu-2404-gpu-t4 in your own AWS or Azure account. ubuntu-latest has no GPU."}},{"@type":"Question","name":"Do I need to install CUDA on the runner?","acceptedAnswer":{"@type":"Answer","text":"The runner needs the NVIDIA driver, which backmesh''s GPU VMs have. The CUDA toolkit comes from your job: PyTorch''s pip wheels bundle the CUDA libraries, and an nvidia/cuda container image brings nvcc."}},{"@type":"Question","name":"How do I keep CPU tests off the GPU runner?","acceptedAnswer":{"@type":"Answer","text":"Mark GPU tests with a pytest marker, run pytest -m \"not gpu\" on a CPU runner, and run pytest -m gpu in a separate job on the GPU runner, gated by a pull-request label or a paths filter."}}]}]}'
 ---
 
 `ubuntu-latest` has no GPU, so a test that calls CUDA fails or skips there.
@@ -21,7 +21,7 @@ The fix is a second job on a GPU runner that runs only the GPU tests, only
 when they're needed. This post builds that workflow for a PyTorch project,
 then shows the same for CUDA C++ with `nvcc`.
 
-The examples use `backmesh-gpu-t4`, a runner with one NVIDIA T4 on a VM in
+The examples use `backmesh-ubuntu-2404-gpu-t4`, a runner with one NVIDIA T4 on a VM in
 your own AWS or Azure account; see [GPU runners](/gpu/) to set it up. On
 GitHub's hosted GPU runner, use its label in `runs-on` instead; the rest is
 the same.
@@ -67,7 +67,7 @@ jobs:
   cpu:
     # Adding a label shouldn't rerun the CPU tests.
     if: github.event.action != 'labeled'
-    runs-on: backmesh-4
+    runs-on: backmesh-ubuntu-2404-4vcpu
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -84,7 +84,7 @@ jobs:
       github.event_name == 'push' ||
       (contains(github.event.pull_request.labels.*.name, 'gpu') &&
       (github.event.action != 'labeled' || github.event.label.name == 'gpu'))
-    runs-on: backmesh-gpu-t4
+    runs-on: backmesh-ubuntu-2404-gpu-t4
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
@@ -128,7 +128,7 @@ cuda:
   if: >-
     contains(github.event.pull_request.labels.*.name, 'gpu') &&
     (github.event.action != 'labeled' || github.event.label.name == 'gpu')
-  runs-on: backmesh-gpu-t4
+  runs-on: backmesh-ubuntu-2404-gpu-t4
   container:
     image: nvidia/cuda:12.4.1-devel-ubuntu22.04
     options: --gpus all
@@ -154,7 +154,7 @@ a month worked through. New cloud accounts usually have no GPU quota; see
 
 **Can GitHub Actions run CUDA tests?** Yes, on a runner with an NVIDIA GPU:
 GitHub's hosted GPU runner, or a self-hosted one such as backmesh's
-`backmesh-gpu-t4` in your own AWS or Azure account. `ubuntu-latest` has no
+`backmesh-ubuntu-2404-gpu-t4` in your own AWS or Azure account. `ubuntu-latest` has no
 GPU.
 
 **Do I need to install CUDA on the runner?** The runner needs the NVIDIA
