@@ -1,5 +1,11 @@
-// A results file's shape (run.ts writes it, report.ts reads it) and the
-// figures computed from it.
+// A results file's shape (run.ts writes it, report.ts and the site read it)
+// and the figures computed from it.
+import {
+  AWS_DISK_PER_HOUR,
+  AWS_ON_DEMAND_XLARGE,
+  AWS_SPOT_XLARGE,
+  GITHUB_4_CORE_PER_MIN,
+} from '../../website/src/cost.ts';
 
 export interface Job {
   id: number;
@@ -147,3 +153,65 @@ export function mannWhitney(x: readonly number[], y: readonly number[]) {
       t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
   return Math.min(1, 2 * tail);
 }
+
+// Every succeeded job's figures in one arm of a label, optionally one build's.
+export function jobs(
+  r: Results,
+  label: string,
+  arm: 'cold' | 'warm',
+  build?: string,
+) {
+  return r.labels[label]!.flatMap((round) =>
+    Object.entries(round[arm].jobs)
+      .filter(([name]) => !build || name === build)
+      .flatMap(([, job]) => {
+        const f = figures(job);
+        return f ? [{ job, f }] : [];
+      }),
+  );
+}
+export const med = (
+  fs: ReturnType<typeof jobs>,
+  pick: (f: NonNullable<ReturnType<typeof figures>>) => number | undefined,
+) => median(fs.map((j) => pick(j.f)).filter((v) => v !== undefined));
+
+// Each label's speed against ubuntu-latest's, and a build's cost. A backmesh
+// job costs its VM's spot price (cost.ts's `backmesh-ubuntu-2404-4vcpu` price for the VM's
+// family, times its vCPUs over 4; its on-demand price on a `-od-` label) from
+// the kernel's start to the job's end,
+// with its disk, each for at least a minute as AWS bills them; ubuntu-latest's,
+// what a private repository pays for GitHub's 4-vCPU runner: its per-minute
+// price, each job rounded up to a whole minute.
+export const BASE = 'ubuntu-latest';
+export function cost(label: string, job: Job) {
+  const end = Date.parse(job.completedAt!);
+  if (label.startsWith(BASE))
+    return (
+      Math.ceil((end - Date.parse(job.startedAt)) / 60_000) *
+      GITHUB_4_CORE_PER_MIN
+    );
+  const prices = label.includes('-od-')
+    ? AWS_ON_DEMAND_XLARGE
+    : AWS_SPOT_XLARGE;
+  const price = prices[job.vm?.split('.')[0] ?? ''];
+  const booted = job.marks.vm_booted;
+  if (!price || !job.nproc || !booted) return undefined;
+  const hours = Math.max(60_000, end - booted / 1000) / 3_600_000;
+  return ((price * job.nproc) / 4 + AWS_DISK_PER_HOUR) * hours;
+}
+
+// An experiment without its own ubuntu-latest compares with the one in the
+// release file it ran alongside: the same date and backmesh version.
+export function withBase(r: Results, releases: readonly Results[]): Results {
+  const base = releases.find(
+    (a) => a.date === r.date && a.backmesh === r.backmesh,
+  )?.labels[BASE];
+  return r.labels[BASE] || !base
+    ? r
+    : { ...r, labels: { ...r.labels, [BASE]: base } };
+}
+
+// Orders results/'s file names, `<date>-<backmesh version>.json`, oldest
+// first: by date, then version.
+export const byName = (a: string, b: string) =>
+  a.localeCompare(b, 'en', { numeric: true });

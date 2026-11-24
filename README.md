@@ -3,11 +3,8 @@
 Self-hosted GitHub Actions runners in your own AWS, GCP or Azure account. Each
 job runs on its own spot VM, which is deleted when the job ends.
 
-- **Up to 2× faster, 5× cheaper builds.** In our
-  [build benchmarks](https://backmesh.com/benchmarks/), a `backmesh-ubuntu-2404-4vcpu` spot VM ran Docker,
-  Rust and TypeScript builds 1.4 to 2.1× faster than GitHub's `ubuntu-latest`,
-  at 2.8 to 5.5× less per build. Your cloud bills you, so your cloud credits
-  apply.
+- <!-- bench:start -->**Up to 2× faster builds, up to 10× cheaper**, in our build benchmarks on 2026-11-24, backmesh 0.6.1. Build steps vs GitHub's 4-core runner, same vCPU count. Jobs still wait ~40 s for a VM. [How we measured →](https://backmesh.com/benchmarks/)<!-- bench:end -->
+  Your cloud bills you, so your cloud credits apply.
 - **Shorter waits.** backmesh learns each workflow's shape and starts runners
   ahead of its predicted jobs. Your coding agent can cue backmesh as its checks
   start, so runners boot before the push. The cache keeps your dependencies

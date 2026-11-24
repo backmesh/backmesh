@@ -61,7 +61,7 @@ computes; `storyboard.md` maps each one to its section.
 
 - **Benchmarks.** Scene 2's seconds are the page's `benchmarks` array
   (2026-11-18, medians of 5 rounds each, `backmesh-4` on AWS against
-  `ubuntu-latest`); `website/src/content/docs/benchmarks.md` has the method
+  `ubuntu-latest`); `website/src/content/docs/benchmarks.mdx` has the method
   and the runs. The hero's "Up to 2× faster, 5× cheaper builds" is the
   page's headline over them.
 - **Cost.** "$1,800 on GitHub, $191–$365 on backmesh" and the per-cloud bars

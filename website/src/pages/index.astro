@@ -19,9 +19,12 @@ import CloudLanes from '../components/CloudLanes.astro';
 import CueLanes from '../components/CueLanes.astro';
 import HeroDiagram from '../components/HeroDiagram.astro';
 import TrustStrip from '../components/TrustStrip.astro';
+import { bench } from '../bench';
+import { seconds, times } from '../benchmarks';
 import {
   CATALOG_DATE,
   GITHUB_4_CORE_PER_MIN,
+  GPU,
   MINUTES,
   headline,
   per1000,
@@ -29,51 +32,56 @@ import {
 
 const title =
   'backmesh: Free, open-source GitHub Actions runners in your AWS, GCP or Azure';
-const description =
-  'Free and open source (Apache-2.0). Self-hosted GitHub Actions runners on spot VMs in your AWS, GCP or Azure account: up to 2× faster, 5× cheaper builds than GitHub-hosted runners in our benchmarks. Your cloud bills you, so its credits apply.';
+const description = `Free and open source (Apache-2.0). Self-hosted GitHub Actions runners on spot VMs in your AWS, GCP or Azure account: ${bench.headline.toLowerCase()} than GitHub-hosted runners in our benchmarks. Your cloud bills you, so its credits apply.`;
 const og = new URL('/brand/og.png', Astro.site).href;
+// The builds on the speed chart, each backmesh 4 vCPU against GitHub-hosted on a
+// shared axis in steps of 20 s; /benchmarks/ has every build.
+const speed = bench.rows.filter((b) =>
+  ['docker', 'go', 'typescript'].includes(b.id),
+);
+const speedRows: Row[] = speed.flatMap((b): Row[] => [
+  {
+    name: 'backmesh 4 vCPU',
+    value: seconds(b.spot.secs),
+    segments: [{ from: 0, to: b.spot.secs, kind: 'solid' }],
+    head: { name: b.workload, note: `${times(b.spot.faster)} faster` },
+  },
+  {
+    name: 'GitHub-hosted',
+    value: seconds(b.github.secs),
+    segments: [{ from: 0, to: b.github.secs, kind: 'ink' }],
+  },
+]);
+const speedMax =
+  Math.ceil(Math.max(...speed.map((b) => b.github.secs)) / 20) * 20;
+const speedTicks = Array.from({ length: speedMax / 20 + 1 }, (_, i) => ({
+  at: i * 20,
+  label: `${i * 20} s`,
+  narrow: i % 2 === 1 && i * 20 < speedMax,
+}));
 
-// Build benchmarks, 2026-11-18: medians of 5 rounds each, backmesh-ubuntu-2404-4vcpu against
-// GitHub's ubuntu-latest (/benchmarks/ has the method and the runs). Each
-// card's numbers link to its row there.
-const benchmarks = [
+// GPU list prices, not a benchmark (cost.ts): GitHub's T4 against
+// backmesh's spot and on-demand T4, an hour.
+const price = (v: number) => `$${v.toFixed(2)}`;
+const cheaper = (v: number) => `${Math.round(GPU.github / v)}× cheaper`;
+const gpuRows: Row[] = [
   {
-    id: 'docker',
-    workload: 'Docker build',
-    project: 'grafana/k6 v0.54.0 image',
-    secs: [71, 148],
-    wait: 48,
-    cost: ['$0.0032', '$0.018'],
-    faster: '2.1×',
-    cheaper: '5.5×',
+    name: 'GitHub-hosted T4',
+    value: price(GPU.github),
+    segments: [{ from: 0, to: GPU.github, kind: 'ink' }],
   },
-  {
-    id: 'rust',
-    workload: 'Rust',
-    project: 'ripgrep 14.1.1, cargo build --release',
-    secs: [49, 70],
-    wait: 50,
-    cost: ['$0.0027', '$0.012'],
-    faster: '1.4×',
-    cheaper: '4.4×',
-  },
-  {
-    id: 'typescript',
-    workload: 'TypeScript',
-    project: 'TypeScript v5.6.3, npm ci and hereby local',
-    secs: [35, 56],
-    wait: 43,
-    cost: ['$0.0021', '$0.006'],
-    faster: '1.6×',
-    cheaper: '2.8×',
-  },
-];
-// GPU list prices, not a benchmark: GitHub's linux_4_core_gpu ($0.052 a
-// minute) against the catalog's T4 prices on 2026-11-18 (/cost/#gpu): spot
-// $0.1766 on Azure to on demand $0.526 on AWS and Azure.
-const gpu = [
-  { runner: 'GitHub-hosted T4', price: '$3.12', points: [] },
-  { runner: 'backmesh T4', price: '$0.18–0.53', points: ['6–18× cheaper', 'Spot to on demand'] },
+  ...[
+    { sub: 'Spot', v: GPU.spot },
+    { sub: 'On demand', v: GPU.onDemand },
+  ].map(
+    ({ sub, v }): Row => ({
+      name: 'backmesh T4',
+      sub,
+      value: price(v),
+      segments: [{ from: 0, to: v, kind: 'solid' }],
+      note: cheaper(v),
+    }),
+  ),
 ];
 const money = (v: number) => `$${Math.round(v).toLocaleString('en-US')}`;
 const range = (lo: number, hi: number) => `${money(lo)}–${money(hi)}`;
@@ -84,8 +92,6 @@ const caption = `GitHub's list price against spot prices on ${CATALOG_DATE}, wit
 // plus its spot VMs over the cheapest and most expensive types.
 const month = (per1000Usd: number) => (MINUTES / 1000) * per1000Usd;
 const cents = (v: number) => `$${v.toFixed(2)}`;
-const seconds = ([fast, slow]: number[]) =>
-  fast === slow ? `${fast} s` : `${fast}–${slow} s`;
 const clouds = per1000.map((p) => {
   const [lo, hi] = [month(p.low), month(p.high)];
   const fixed = p.controlPlane;
@@ -123,7 +129,7 @@ const faq = [
     short: 'Linux x86-64 only. Public repos with --public-repos.',
     points: [
       'No macOS, Windows or Arm runners.',
-      "Each job waits for its VM to boot: about 30 s on AWS, 60–70 s on GCP and Azure. Starting runners ahead of predicted jobs, and your agent's cue, mostly hide it.",
+      `Each job waits for its VM to boot: about ${seconds(bench.wait)} on AWS, longer on GCP and Azure. Starting runners ahead of predicted jobs, and your agent's cue, mostly hide it.`,
       "A reclaimed spot VM fails its job; if reclaims were the run's only failures, backmesh reruns them, up to twice.",
       'Each job starts with an empty Docker layer cache.',
     ],
@@ -305,7 +311,7 @@ const jsonLd = {
 
     <main>
       <section class="wrap hero">
-        <h1>Up to 2× faster, 5×&nbsp;cheaper builds.</h1>
+        <h1>{bench.headline}.</h1>
         <div class="hero-figure"><HeroDiagram /></div>
         <div class="hero-body">
           <p class="sub">
@@ -330,43 +336,13 @@ const jsonLd = {
       </div>
 
       <section id="benchmarks" class="wrap section benchmarks">
-        <h2>Builds against GitHub's ubuntu-latest.</h2>
-        <p class="lead">
-          Median of 5 runs each, a <code>backmesh-ubuntu-2404-4vcpu</code> spot VM on AWS
-          against GitHub-hosted <code>ubuntu-latest</code>.
-        </p>
-        <ul class="plans bench">
-          {
-            benchmarks.map(({ id, workload, project, secs, wait, cost, faster, cheaper }) => {
-              const row = `/benchmarks/#${id}`;
-              return (
-                <li>
-                  <b>{workload}</b>
-                  <strong>
-                    <a href={row}>
-                      {secs[0]}<span aria-hidden="true"> s</span><span class="sr-only"> seconds</span>
-                    </a>
-                  </strong>
-                  <span class="runner">
-                    on backmesh-ubuntu-2404-4vcpu, plus <a href={row}>{wait} s</a> before the job
-                    starts, about <a href="/benchmarks/#method">17 s</a> when cued
-                  </span>
-                  <ul>
-                    <li>{project}</li>
-                    <li>
-                      <a href={row}>{secs[1]} s</a> on GitHub-hosted:{' '}
-                      <a href={row}>{faster}</a> faster
-                    </li>
-                    <li>
-                      <a href={row}>{cost[0]}</a> a build, against{' '}
-                      <a href={row}>{cost[1]}</a>: <a href={row}>{cheaper}</a> cheaper
-                    </li>
-                  </ul>
-                </li>
-              );
-            })
-          }
-        </ul>
+        <h2>backmesh 4 vCPU vs GitHub's ubuntu-latest.</h2>
+        <Chart
+          label={`Build time, first step to done: ${speed.map((b) => `${b.workload} ${seconds(b.spot.secs)} on backmesh 4 vCPU against ${seconds(b.github.secs)} on GitHub-hosted, ${times(b.spot.faster)} faster`).join('; ')}.`}
+          max={speedMax}
+          ticks={speedTicks}
+          rows={speedRows}
+        />
         <p class="method"><a href="/benchmarks/">How we measured →</a></p>
       </section>
 
@@ -375,24 +351,17 @@ const jsonLd = {
         <p class="lead">
           List prices on 2026-11-18, not a benchmark.
         </p>
-        <ul class="plans">
-          {
-            gpu.map(({ runner, price, points }) => (
-              <li>
-                <b>{runner}</b>
-                <strong>
-                  <a href="/cost/#gpu">{price}</a>
-                  <span class="per">/h</span>
-                </strong>
-                <ul>
-                  {points.map((p) => (
-                    <li>{p}</li>
-                  ))}
-                </ul>
-              </li>
-            ))
-          }
-        </ul>
+        <Chart
+          label={`T4 GPU runners' list price an hour: ${gpuRows.map((r) => `${r.name}${r.sub ? ` ${r.sub.toLowerCase()}` : ''} ${r.value}${r.note ? `, ${r.note}` : ''}`).join('; ')}.`}
+          max={GPU.github}
+          ticks={[
+            { at: 0, label: '$0' },
+            { at: 1, label: '$1' },
+            { at: 2, label: '$2' },
+            { at: GPU.github, label: price(GPU.github) },
+          ]}
+          rows={gpuRows}
+        />
         <p class="caption">AWS and Azure. Spot jobs can wait for capacity.</p>
         <p class="method"><a href="/labels/#gpu">GPU labels →</a></p>
       </section>
@@ -913,7 +882,8 @@ const jsonLd = {
   }
 
   /* Cost */
-  .cost :global(.chart) {
+  .cost :global(.chart),
+  .benchmarks :global(.chart) {
     margin-top: 52px;
   }
   .cost-foot {
@@ -1095,65 +1065,13 @@ const jsonLd = {
     }
   }
 
-  /* Benchmarks: the pricing cards, three across. */
-  .bench {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .bench > li + li {
-    padding: 26px 24px 0;
-  }
-  .bench > li:first-child {
-    padding-right: 24px;
-  }
-  .bench > li:last-child {
-    padding-right: 0;
-  }
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-  }
-  .bench .runner {
-    margin: -8px 0 18px;
-    color: var(--bm-soft);
-    font-size: 14px;
-  }
-  .bench strong a {
-    color: inherit;
-  }
   #gpu .caption {
     margin-top: 32px;
-  }
-  #gpu strong a {
-    color: inherit;
-  }
-  #gpu .per {
-    color: var(--bm-soft);
-    font-size: 24px;
-    letter-spacing: 0;
   }
   .method {
     margin: 32px 0 0;
     font-weight: 600;
   }
-  @media (max-width: 960px) {
-    .bench {
-      grid-template-columns: minmax(0, 1fr);
-    }
-    .bench > li,
-    .bench > li + li {
-      padding: 24px 0 8px;
-      border-left: 0;
-    }
-    .bench > li + li {
-      margin-top: 24px;
-      border-top: 1px solid var(--bm-hair);
-    }
-  }
-
   /* Features: copy left, its figure right. */
   .features {
     display: grid;

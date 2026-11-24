@@ -1,0 +1,106 @@
+---
+title: Build benchmarks against GitHub's ubuntu-latest
+description: Five open-source builds on backmesh-ubuntu-2404-4vcpu spot and backmesh-ubuntu-2404-od-4vcpu on-demand VMs on AWS against GitHub-hosted ubuntu-latest, all 4 vCPUs, from the build benchmark's latest results.
+sidebar:
+  label: Benchmarks
+---
+
+import BenchTable from '../../components/BenchTable.astro';
+import { bench } from '../../bench';
+import { conditions } from '../../benchmarks';
+import {
+  AWS_DISK_PER_HOUR,
+  AWS_ON_DEMAND_XLARGE,
+  AWS_SPOT_XLARGE,
+  CATALOG_DATE,
+  GITHUB_4_CORE_PER_MIN,
+} from '../../cost';
+
+export const landed = (families) =>
+  families.map(([f, n]) => `${f} (${n} jobs)`).join(', ');
+export const prices = (p) =>
+  Object.entries(p)
+    .map(([family, usd]) => `${family} $${usd}`)
+    .join(', ');
+
+We build five pinned open-source projects on GitHub's `ubuntu-latest` and on
+backmesh's `backmesh-ubuntu-2404-4vcpu` spot VMs on AWS, {bench.rounds} rounds each, and on
+`backmesh-ubuntu-2404-od-4vcpu` on-demand VMs in {bench.odRounds} rounds alongside them. These
+are the latest results, from {bench.date} on backmesh {bench.version}. The
+figures are medians, and every run is [linked below](#runs).
+
+The [build benchmark](https://github.com/backmesh/backmesh/tree/main/benchmarks/builds)
+has every result since 2026-11-22, the warm runs, each label's VM types,
+Mann-Whitney p for each speed, and where the wait goes.
+
+## Results
+
+Each cell gives the build's time and the wait before it, medians of the cold
+runs, and its cost, the median over the cold and warm runs. On backmesh, the ×
+after the time is how many times faster or slower than `ubuntu-latest` it
+was, and after the cost how many times cheaper.
+
+<BenchTable />
+
+## Method
+
+- **The headline**, {bench.headline.toLowerCase()}: <span set:html={conditions(bench, (c) => `<code>${c}</code>`).join(' ')} />
+- **Time** is a job's first step to its end, as GitHub records them.
+- **Wait** is a job's queueing to its first step. backmesh's runners started
+  without a cue, so each job waited for its VM to boot. With
+  [`backmesh cue`](/#cue), the runner boots before the push: see the
+  [cue benchmark](https://github.com/backmesh/backmesh/tree/main/benchmarks/cue#results).
+- **Size.** [backmesh/benchmarks](https://github.com/backmesh/benchmarks) is
+  public, so `ubuntu-latest` has 4 vCPUs, as `backmesh-ubuntu-2404-4vcpu` has, with 16 GiB.
+- **GitHub's cost.** `ubuntu-latest` is free in a public repository. In a
+  private one, a 4-vCPU GitHub-hosted runner costs ${GITHUB_4_CORE_PER_MIN} a
+  minute, so each job's start to its end is rounded up to whole minutes at
+  that price.
+- **backmesh's cost** is each job's VM from its kernel's start to the job's
+  end, at least a minute, as AWS bills it, at the VM family's price from the
+  [cost page](/cost/)'s {CATALOG_DATE} catalog: spot on `backmesh-ubuntu-2404-4vcpu`
+  ({prices(AWS_SPOT_XLARGE)} an hour), on demand on `backmesh-ubuntu-2404-od-4vcpu`
+  ({prices(AWS_ON_DEMAND_XLARGE)}). Its disk, 100 GB of gp3 at 4,000 IOPS
+  and 500 MiB/s, adds about ${AWS_DISK_PER_HOUR} an hour. It leaves out
+  backmesh's always-on control plane, on the [cost page](/cost/).
+- **CPUs.** `backmesh-ubuntu-2404-od-4vcpu`'s jobs landed on {landed(bench.odFamilies)}, and
+  `backmesh-ubuntu-2404-4vcpu`'s on {landed(bench.spotFamilies)}. An `m8a`'s or `m7a`'s vCPUs
+  are full cores; an `m8i`'s are hyperthreads. The
+  [build benchmark](https://github.com/backmesh/backmesh/tree/main/benchmarks/builds#results)
+  lists them, and `ubuntu-latest`'s CPUs.
+- **Ratios** compare the unrounded medians, to one decimal; the headline
+  rounds the largest down to one significant figure.
+- **Caches.** Each cold run is on a new branch, with no caches. No step
+  caches anything: `setup-node`'s, `setup-go`'s and `setup-uv`'s own caches
+  are off.
+- **Toolchains.** `ubuntu-latest` has Rust preinstalled. backmesh's image
+  doesn't: it installs Rust from a pinned release when the job first calls
+  it, inside the measured time
+  ([backmesh#124](https://github.com/backmesh/backmesh/pull/124)).
+
+## The workflow
+
+[`benchmarks/builds/bench.yml`](https://github.com/backmesh/backmesh/blob/main/benchmarks/builds/bench.yml)
+has a job for each build, and
+[`run.ts`](https://github.com/backmesh/backmesh/blob/main/benchmarks/builds/run.ts)
+pushes it to a new branch of
+[backmesh/benchmarks](https://github.com/backmesh/benchmarks) for each round,
+with the label for `runs-on`.
+
+## Runs
+
+Each round's cold run, its jobs in parallel:
+
+<ul>
+  {bench.runs.map(({ label, urls }) => (
+    <li>
+      <code>{label}</code>:{' '}
+      {urls.map((url, i) => (
+        <>
+          {i > 0 && ', '}
+          <a href={url}>round {i + 1}</a>
+        </>
+      ))}
+    </li>
+  ))}
+</ul>

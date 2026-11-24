@@ -15,8 +15,11 @@ export const GITHUB_4_CORE_PER_MIN = 0.012;
  * 500 MiB/s (src/listener/runner-jobs.ts), adds about $0.038 an hour on AWS,
  * and its 100 GB pd-ssd disk about $0.023 an hour on GCP ($0.17 a GB-month in
  * us-central1, cloud.google.com/compute/disks-image-pricing, read 2026-11-23).
- * `bootS` is the VM boot each job pays, as measured (coordinator,
- * 2026-11-07): about 30 s on AWS, 60–70 s on GCP and Azure. `controlPlane` is
+ * `bootS` is the VM boot each job pays: the median from the kernel's start to
+ * the runner's container start on each cloud, on anycloud 0.1.83, in
+ * anycloud's experiments/vm-boot-marks (2026-11-23). The VM's launch, before
+ * its kernel starts, comes on top; the build benchmark's queued to first step
+ * (benchmarks/builds) is the whole wait. `controlPlane` is
  * the fixed monthly cost while runners have no VM: the management VM and one
  * org's listener VM with their disks and public addresses, as install prints
  * it (src/cli/install.ts MANAGEMENT_MONTHLY_USD and src/cli/listener-vm.ts
@@ -46,7 +49,7 @@ const clouds = [
     region: 'us-east-2',
     // No m6i.
     spot: Object.values(AWS_SPOT_XLARGE),
-    bootS: [30, 30],
+    bootS: 18.3,
     controlPlane: 86,
   },
   {
@@ -54,7 +57,7 @@ const clouds = [
     region: 'westus2',
     // ads_v5, as_v5, s_v5.
     spot: [0.0381, 0.0318, 0.0355],
-    bootS: [60, 70],
+    bootS: 30.7,
     controlPlane: 111,
   },
   {
@@ -62,7 +65,7 @@ const clouds = [
     region: 'us-central1',
     // n2, n2d.
     spot: [0.1165, 0.0899],
-    bootS: [60, 70],
+    bootS: 36.1,
     controlPlane: 74,
   },
 ];
@@ -72,7 +75,6 @@ const clouds = [
 export const per1000 = clouds.map(
   ({ cloud, region, spot, bootS, controlPlane }) => {
     const [low, high] = [Math.min(...spot), Math.max(...spot)];
-    const [fast, slow] = bootS as [number, number];
     return {
       cloud,
       region,
@@ -80,8 +82,8 @@ export const per1000 = clouds.map(
       low: (low / 60) * 1000,
       high: (high / 60) * 1000,
       bootS,
-      bootLow: (low / 3600) * fast * 1000,
-      bootHigh: (high / 3600) * slow * 1000,
+      bootLow: (low / 3600) * bootS * 1000,
+      bootHigh: (high / 3600) * bootS * 1000,
     };
   },
 );
@@ -106,4 +108,14 @@ export const headline = {
   github: MINUTES * GITHUB_4_CORE_PER_MIN,
   low: Math.min(...totals.map((t) => t.low)),
   high: Math.max(...totals.map((t) => t.high)),
+};
+
+/** GPU list prices, not a benchmark (src/content/docs/cost.md#gpu, same
+ * figures): GitHub's `linux_4_core_gpu`, $0.052 a minute, read 2026-11-18,
+ * against the catalog's T4 prices on 2026-11-18 at each cloud's first type,
+ * $/hour: spot from $0.1766 on Azure, on demand $0.526 on AWS and Azure. */
+export const GPU = {
+  github: 0.052 * 60,
+  spot: 0.1766,
+  onDemand: 0.526,
 };

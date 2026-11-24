@@ -1,6 +1,7 @@
 ---
 // A horizontal bar chart on one shared axis: each row a label, a bar of
 // segments and its value at the bar's end; a hairline grid under the ticks.
+// A row's `head` starts a group of rows, such as a pair to compare.
 // The markup is complete; with motion allowed, the bars grow in once, the
 // first time the chart scrolls into view.
 import { clouds } from './clouds';
@@ -18,9 +19,11 @@ export type Row = {
   value: string;
   segments: Segment[];
   note?: string;
+  /** A group's name and its note, such as a ratio, above its first row. */
+  head?: { name: string; note: string };
 };
 interface Props {
-  title: string;
+  title?: string;
   label: string;
   max: number;
   ticks: { at: number; label: string; narrow?: boolean }[];
@@ -32,10 +35,11 @@ interface Props {
 const { title, label, max, ticks, rows, legend, note, compact } = Astro.props;
 const pct = (v: number) => `${((v / max) * 100).toFixed(3)}%`;
 const mark = (key?: string) => clouds.find((c) => c.key === key)?.svg;
+const grouped = rows.some((r) => r.head);
 ---
 
 <figure class:list={['chart', { compact }]} aria-label={label}>
-  <p class="title">{title}</p>
+  {title && <p class="title">{title}</p>}
   <div class="rows">
     <div class="grid" aria-hidden="true">
       {ticks.map((t) => <i style={`left:${pct(t.at)}`} />)}
@@ -45,36 +49,44 @@ const mark = (key?: string) => clouds.find((c) => c.key === key)?.svg;
         const end = Math.max(...row.segments.map((s) => s.to));
         const ink = row.segments.every((s) => s.kind === 'ink');
         return (
-          <div class:list={['row', { 'ink-row': ink }]}>
-            <div class="name">
-              {row.cloud && (
-                <span class="mark" set:html={mark(row.cloud)} aria-hidden="true" />
-              )}
-              <span>
-                {row.name}
-                {row.sub && <small>{row.sub}</small>}
-              </span>
-              <span class="value-inline">{row.value}</span>
-            </div>
-            <div class="plot">
-              <div class="bar" aria-hidden="true">
-                {row.segments.map((s, i) => (
-                  <i
-                    class={s.kind}
-                    style={`left:${pct(s.from)};width:${pct(s.to - s.from)};--delay:${r * 90 + i * 140}ms`}
-                  />
-                ))}
-                <span class="value" style={`left:${pct(end)}`}>
-                  {row.value}
+          <>
+            {row.head && (
+              <p class="head">
+                <span>{row.head.name}</span>
+                <span class="head-note">{row.head.note}</span>
+              </p>
+            )}
+            <div class:list={['row', { 'ink-row': ink, grouped }]}>
+              <div class="name">
+                {row.cloud && (
+                  <span class="mark" set:html={mark(row.cloud)} aria-hidden="true" />
+                )}
+                <span>
+                  {row.name}
+                  {row.sub && <small>{row.sub}</small>}
                 </span>
+                <span class="value-inline">{row.value}</span>
               </div>
-              {row.note && (
-                <p class="note">
-                  <span>{row.note}</span>
-                </p>
-              )}
+              <div class="plot">
+                <div class="bar" aria-hidden="true">
+                  {row.segments.map((s, i) => (
+                    <i
+                      class={s.kind}
+                      style={`left:${pct(s.from)};width:${pct(s.to - s.from)};--delay:${r * 90 + i * 140}ms`}
+                    />
+                  ))}
+                  <span class="value" style={`left:${pct(end)}`}>
+                    {row.value}
+                  </span>
+                </div>
+                {row.note && (
+                  <p class="note">
+                    <span>{row.note}</span>
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
+          </>
         );
       })
     }
@@ -169,6 +181,30 @@ const mark = (key?: string) => clouds.find((c) => c.key === key)?.svg;
     column-gap: var(--gap);
     align-items: start;
     padding: 14px 0;
+  }
+  /* A group's rows sit closer together under its head. */
+  .row.grouped {
+    padding: 5px 0;
+  }
+  .head {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 12px;
+    width: var(--label);
+    margin: 18px 0 4px;
+    color: var(--bm-ink);
+    font-weight: 600;
+    font-size: 16px;
+    line-height: 1.3;
+  }
+  .grid + .head {
+    margin-top: 0;
+  }
+  .head-note {
+    font: 400 15px var(--bm-mono);
+    color: var(--bm-accent);
   }
   .name {
     display: flex;
@@ -358,8 +394,16 @@ const mark = (key?: string) => clouds.find((c) => c.key === key)?.svg;
       row-gap: 10px;
       padding: 12px 0;
     }
-    .name > span:not(.value-inline) {
+    .name > span:not(.value-inline),
+    .head span {
       background: var(--bm-bg);
+    }
+    .head {
+      width: auto;
+    }
+    .row.grouped {
+      padding: 4px 0;
+      row-gap: 6px;
     }
     .value-inline {
       position: static;
