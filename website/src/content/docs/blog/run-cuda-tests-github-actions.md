@@ -78,10 +78,12 @@ jobs:
       - run: pytest -m "not gpu"
 
   gpu:
-    # On main, and on pull requests labelled `gpu`.
+    # On main, and on pull requests labelled `gpu`: when the label is
+    # added, not when another one is.
     if: >-
       github.event_name == 'push' ||
-      contains(github.event.pull_request.labels.*.name, 'gpu')
+      (contains(github.event.pull_request.labels.*.name, 'gpu') &&
+      (github.event.action != 'labeled' || github.event.label.name == 'gpu'))
     runs-on: backmesh-gpu-t4
     timeout-minutes: 30
     steps:
@@ -123,7 +125,9 @@ has the toolkit. A job's container sees the GPU only with `--gpus all`:
 
 ```yaml
 cuda:
-  if: contains(github.event.pull_request.labels.*.name, 'gpu')
+  if: >-
+    contains(github.event.pull_request.labels.*.name, 'gpu') &&
+    (github.event.action != 'labeled' || github.event.label.name == 'gpu')
   runs-on: backmesh-gpu-t4
   container:
     image: nvidia/cuda:12.4.1-devel-ubuntu22.04
@@ -145,3 +149,20 @@ lists at $0.0029 to $0.0088 a minute, spot to on demand, on 2026-11-18. See
 [GitHub Actions GPU pricing explained](/blog/github-actions-gpu-pricing/) for
 a month worked through. New cloud accounts usually have no GPU quota; see
 [Getting T4 GPU quota on AWS and Azure for CI](/blog/t4-gpu-quota-aws-azure/).
+
+## FAQ
+
+**Can GitHub Actions run CUDA tests?** Yes, on a runner with an NVIDIA GPU:
+GitHub's hosted GPU runner, or a self-hosted one such as backmesh's
+`backmesh-gpu-t4` in your own AWS or Azure account. `ubuntu-latest` has no
+GPU.
+
+**Do I need to install CUDA on the runner?** The runner needs the NVIDIA
+driver, which backmesh's GPU VMs have. The CUDA toolkit comes from your job:
+PyTorch's pip wheels bundle the CUDA libraries, and an `nvidia/cuda` container
+image brings `nvcc`.
+
+**How do I keep CPU tests off the GPU runner?** Mark GPU tests with a pytest
+marker, run `pytest -m "not gpu"` on a CPU runner, and run `pytest -m gpu` in a
+separate job on the GPU runner, gated by a pull-request label or a paths
+filter.

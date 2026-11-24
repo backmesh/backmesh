@@ -24,8 +24,10 @@ list-price arithmetic from the dated sources below, not a measured bill.
 
 ## The prices
 
-- **GitHub-hosted:** `linux_4_core_gpu`, 4 vCPUs, one Tesla T4 and 28 GB of
-  RAM, at $0.052 a minute, $3.12 an hour
+- **GitHub-hosted:** `linux_4_core_gpu`, 4 vCPUs, one Tesla T4 with 16 GB of
+  VRAM and 28 GB of RAM
+  ([docs.github.com](https://docs.github.com/en/actions/reference/runners/larger-runners)),
+  at $0.052 a minute, $3.12 an hour
   ([docs.github.com](https://docs.github.com/en/billing/reference/actions-runner-pricing),
   read 2026-11-24). GitHub bills from the job's start, per minute.
 - **Your own T4:** backmesh's catalog prices on 2026-11-18, spot in the
@@ -89,3 +91,19 @@ Shorter jobs pay more boot per minute and move that point up.
 To keep the GPU minutes low in the first place, run only GPU tests on the GPU:
 [How to run CUDA and PyTorch tests in GitHub Actions](/blog/run-cuda-tests-github-actions/).
 The [GPU runners](/gpu/) page has the labels and prices in one place.
+
+## FAQ
+
+**How much does a GitHub Actions GPU runner cost?** GitHub lists its Linux GPU
+runner, `linux_4_core_gpu`, at $0.052 a minute ($3.12 an hour) as of
+2026-11-24. It has 4 vCPUs, one Tesla T4 with 16 GB of VRAM and 28 GB of RAM.
+
+**What does a T4 cost on AWS or Azure?** At catalog prices on 2026-11-18: AWS
+`g4dn.xlarge` $0.2732 an hour on spot and $0.526 on demand; Azure
+`Standard_NC4as_T4_v3` $0.1766 on spot and $0.526 on demand.
+
+**Is a self-hosted GPU runner cheaper than GitHub's?** At list prices, for
+10,000 GPU minutes a month in 10-minute jobs: $520 on GitHub against about $62
+on AWS spot with boots and disks, before backmesh's control plane of about $86
+a month on AWS. Below about 1,900 GPU minutes a month, a control plane run only
+for GPU jobs costs more than it saves. This is arithmetic, not a measurement.

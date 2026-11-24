@@ -13,7 +13,7 @@ head:
   - tag: script
     attrs:
       type: application/ld+json
-    content: '{"@context":"https://schema.org","@graph":[{"@type":"BlogPosting","headline":"Getting T4 GPU quota on AWS and Azure for CI","datePublished":"2026-11-24","dateModified":"2026-11-24","author":{"@type":"Organization","name":"backmesh","url":"https://backmesh.com/"},"publisher":{"@id":"https://backmesh.com/#organization"},"mainEntityOfPage":"https://backmesh.com/blog/t4-gpu-quota-aws-azure/"},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Which AWS quota covers g4dn instances?","acceptedAnswer":{"@type":"Answer","text":"Spot g4dn instances count against All G and VT Spot Instance Requests (L-3819A6DF), on-demand ones against Running On-Demand G and VT instances (L-DB2E81BA). Both are in vCPUs per region."}},{"@type":"Question","name":"Which Azure quota covers Standard_NC4as_T4_v3?","acceptedAnswer":{"@type":"Answer","text":"On demand, Standard NCASv3_T4 Family vCPUs and Total Regional vCPUs. Spot VMs count against Total Regional Low-priority vCPUs instead, shared with every other spot VM in the region."}},{"@type":"Question","name":"How many vCPUs of GPU quota does a CI runner need?","acceptedAnswer":{"@type":"Answer","text":"4 per T4 job running at once for g4dn.xlarge or Standard_NC4as_T4_v3. On AWS, backmesh falls back to g4dn.2xlarge, 8 vCPUs, when no g4dn.xlarge is free."}}]}]}'
+    content: '{"@context":"https://schema.org","@graph":[{"@type":"BlogPosting","headline":"Getting T4 GPU quota on AWS and Azure for CI","datePublished":"2026-11-24","dateModified":"2026-11-24","author":{"@type":"Organization","name":"backmesh","url":"https://backmesh.com/"},"publisher":{"@id":"https://backmesh.com/#organization"},"mainEntityOfPage":"https://backmesh.com/blog/t4-gpu-quota-aws-azure/"},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Which AWS quota covers g4dn instances?","acceptedAnswer":{"@type":"Answer","text":"Spot g4dn instances count against \"All G and VT Spot Instance Requests\" (L-3819A6DF), on-demand ones against \"Running On-Demand G and VT instances\" (L-DB2E81BA). Both are in vCPUs per region."}},{"@type":"Question","name":"Which Azure quota covers Standard_NC4as_T4_v3?","acceptedAnswer":{"@type":"Answer","text":"On demand, \"Standard NCASv3_T4 Family vCPUs\" and \"Total Regional vCPUs\". Spot VMs count against \"Total Regional Low-priority vCPUs\" instead, shared with every other spot VM in the region."}},{"@type":"Question","name":"How many vCPUs of GPU quota does a CI runner need?","acceptedAnswer":{"@type":"Answer","text":"4 per T4 job running at once for g4dn.xlarge or Standard_NC4as_T4_v3. On AWS, backmesh falls back to g4dn.2xlarge, 8 vCPUs, when no g4dn.xlarge is free."}}]}]}'
 ---
 
 A GPU job on your own cloud account needs GPU quota, and most new AWS
@@ -91,3 +91,19 @@ job waits for a T4 while an on-demand one doesn't.
 The [GPU runners](/gpu/) page has the labels and prices;
 [How to run CUDA and PyTorch tests in GitHub Actions](/blog/run-cuda-tests-github-actions/)
 has a workflow to run on them.
+
+## FAQ
+
+**Which AWS quota covers g4dn instances?** Spot `g4dn` instances count against
+"All G and VT Spot Instance Requests" (`L-3819A6DF`), on-demand ones against
+"Running On-Demand G and VT instances" (`L-DB2E81BA`). Both are in vCPUs per
+region.
+
+**Which Azure quota covers Standard_NC4as_T4_v3?** On demand, "Standard
+NCASv3_T4 Family vCPUs" and "Total Regional vCPUs". Spot VMs count against
+"Total Regional Low-priority vCPUs" instead, shared with every other spot VM in
+the region.
+
+**How many vCPUs of GPU quota does a CI runner need?** 4 per T4 job running at
+once for `g4dn.xlarge` or `Standard_NC4as_T4_v3`. On AWS, backmesh falls back
+to `g4dn.2xlarge`, 8 vCPUs, when no `g4dn.xlarge` is free.
