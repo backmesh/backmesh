@@ -83,6 +83,90 @@ vendor release once per job.
 - github/codeql-action (719 repos) finds its bundle in GitHub's tool cache;
   here it downloads it whenever the tool cache lacks it.
 
+## arm64 demand, 2026-11-24
+
+Of the same 3,872 repositories (see Method and limits), 1,247 (32%) build or
+test for Linux arm64 in some job, and 663 (17%) run a job on a Linux arm64
+runner. backmesh runs Linux x86-64 only. 216 (6%) run a job on Windows arm64.
+macOS is left out: GitHub's `macos-14` and later are arm64 by default, which
+1,364 repositories use.
+
+| Linux arm64 in a workflow                                                                    | Repos | Share |
+| -------------------------------------------------------------------------------------------- | ----- | ----- |
+| (a) A job on a Linux arm64 runner                                                            | 663   | 17.1% |
+| – GitHub's `ubuntu-24.04-arm`, `ubuntu-22.04-arm` or `ubuntu-26.04-arm`                      | 593   | 15.3% |
+| – Self-hosted or larger-runner labels (`[self-hosted, ARM64]`, `ubuntu-arm64`, ...)          | 86    | 2.2%  |
+| – Another provider's arm label                                                               | 49    | 1.3%  |
+| (b) Multi-arch images: build-push or bake with an arm `platforms`, or `buildx --platform`    | 419   | 10.8% |
+| (b) QEMU: docker/setup-qemu-action, binfmt or run-on-arch-action                             | 524   | 13.5% |
+| (c) A matrix over a Linux arm64 or armv7 value on an Ubuntu or arm job                       | 781   | 20.2% |
+| Cross-compiling to Linux arm64 on x64 (Rust/C target triples, `manylinux_*_aarch64`, GOARCH) | 238   | 6.1%  |
+| Any of these                                                                                 | 1,247 | 32.2% |
+| Any of these, but no job on a Linux arm64 runner                                             | 584   | 15.1% |
+
+Of the 524 using QEMU, 372 have no arm64 runner: they emulate arm64 on x64,
+which is slower than building on arm64. 300 build multi-arch images
+with no arm64 runner. These are the jobs an arm64 runner speeds up; a
+cross-compile (most of the Go and much of the Rust counts) needs none.
+
+By primary language, share of that language's repositories:
+
+| Language   | Repos | Any Linux arm64 | Linux arm64 runner | arm64 output, no arm64 runner |
+| ---------- | ----- | --------------- | ------------------ | ----------------------------- |
+| Rust       | 271   | 69%             | 43%                | 27%                           |
+| Go         | 376   | 56%             | 20%                | 36%                           |
+| C++        | 203   | 42%             | 33%                | 9%                            |
+| C          | 121   | 39%             | 22%                | 17%                           |
+| TypeScript | 756   | 33%             | 20%                | 13%                           |
+| Python     | 777   | 31%             | 15%                | 16%                           |
+| Java       | 158   | 22%             | 9%                 | 13%                           |
+| JavaScript | 395   | 13%             | 4%                 | 9%                            |
+
+Rust, C and C++ repositories most often run a job on an arm64 runner. Go and
+Python ones more often produce arm64 output without one: by cross-compiling,
+multi-arch images, or `manylinux` aarch64 wheels under QEMU.
+
+GitHub's own arm64 labels dominate because they're free in public repositories
+(4 vCPU); in private repositories they're 2 vCPU at $0.005 a minute, 17% under
+x64 ([GitHub's runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)).
+Across all public workflows, GitHub's code search finds `ubuntu-24.04-arm` in
+103k files, `ubuntu-22.04-arm` 15k, `ubuntu-26.04-arm` 8k, `windows-11-arm`
+22k, `docker/setup-qemu-action` 125k and `linux/arm64` 143k, against 8.6M with
+`runs-on: ubuntu-latest`.
+
+How other providers expose arm64, from their docs on 2026-11-24, with files in
+GitHub's code search:
+
+| Provider                                                                             | Linux arm64 label                                                                      | Sizes                    | Code search                       |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- | ------------------------ | --------------------------------- |
+| [GitHub](https://docs.github.com/en/actions/reference/runners/github-hosted-runners) | `ubuntu-24.04-arm`, `ubuntu-22.04-arm`, `ubuntu-26.04-arm`; Windows `windows-11-arm`   | 4 vCPU public, 2 private | above                             |
+| [Blacksmith](https://docs.blacksmith.sh/blacksmith-runners/overview)                 | `blacksmith-4vcpu-ubuntu-2404-arm`                                                     | 2–32 vCPU                | 1,040 (`ubuntu-2404-arm`)         |
+| [Depot](https://depot.dev/docs/github-actions/runner-types)                          | `depot-ubuntu-24.04-arm`, `depot-ubuntu-24.04-arm-16`                                  | 2–64 vCPU, Graviton4     | 284 (`depot-ubuntu-24.04-arm`)    |
+| [RunsOn](https://runs-on.com/runners/linux/)                                         | `runs-on=${{ github.run_id }}/runner=2cpu-linux-arm64`, `image=ubuntu24-full-arm64`    | 1–64 vCPU, Graviton      | 296 (`cpu-linux-arm64`)           |
+| [WarpBuild](https://www.warpbuild.com/docs/ci/cloud-runners)                         | `warp-ubuntu-latest-arm64-4x`, `warp-ubuntu-2604-arm64-4x`                             | 2–32 vCPU                | 174 (`warp-ubuntu-latest-arm64`)  |
+| [Ubicloud](https://www.ubicloud.com/docs/github-actions-integration/runner-types)    | `ubicloud-standard-4-arm`, `ubicloud-standard-4-arm-ubuntu-2404`                       | 2–30 vCPU                | 74 (`ubicloud-standard-2-arm`)    |
+| [Namespace](https://namespace.so/docs/reference/github-actions/runner-configuration) | `nscloud-ubuntu-22.04-arm64-4x8`, or a `namespace-profile-*` label configured as arm64 | shape `{vCPU}x{GB}`      | 13 (`nscloud-ubuntu-22.04-arm64`) |
+
+All of them name the architecture in the label, as GitHub does; none of
+Blacksmith, WarpBuild or Ubicloud lists Windows arm64. In the sample, 21
+repositories use Blacksmith's arm labels, 12 Depot's, 7 Namespace's, 5
+WarpBuild's, 2 RunsOn's and 2 Ubicloud's. A Namespace profile label hides its
+architecture, so it's undercounted.
+
+Method: the same workflow files. A job counts for (a) when a label its
+`runs-on` can take, including the matrix values it references and the quoted
+results of an expression, matches an arm label above or names arm64, aarch64
+or arm. (b) and (c) look at a job's steps and matrix; values naming macOS,
+Windows, iOS or Android are left out of (c). Limits, besides those below:
+
+- Free arm64 runners in public repositories inflate (a) against private repos,
+  backmesh's users, where arm64 is paid and smaller.
+- Pattern matching: a spot check of 5 repositories counted only by (c) found
+  one false positive (an Android arm64 matrix) and one arm64 runner missed (a
+  matrix in a `fromJSON` string). Arm
+  builds in scripts, Makefiles, GoReleaser or bake files aren't seen, so
+  (b) and the cross-compile row are lower bounds.
+
 ## Method and limits
 
 The 5,755 non-fork, non-archived repositories with 5,000 or more stars
