@@ -47,7 +47,8 @@ docker run --rm --entrypoint node "$image" -e '
   })().catch((e) => { console.log(`::error::cloud CLI first use: ${e.message}`); process.exit(1); });'
 
 # The tool cache's link, GitHub's variables, apt's shims ahead of the real
-# apt-get for sudo, and Ubuntu's archive as the only apt source.
+# apt-get for sudo, Ubuntu's archive as the only apt source, and a gh with
+# `gh attestation`, which Ubuntu's 2.45 lacks.
 # shellcheck disable=SC2016 # in the image
 docker run --rm --entrypoint bash "$image" -c '
   set -e
@@ -55,7 +56,8 @@ docker run --rm --entrypoint bash "$image" -c '
   locale -a | grep -qx en_US.utf8
   [[ $(sudo -n sh -c "command -v apt-get") == /usr/local/bin/apt-get ]]
   [[ $(ls /etc/apt/sources.list.d) == ubuntu.sources ]]
-  echo "environment and apt: passed"' || fail "the image's environment or apt sources"
+  gh attestation --help >/dev/null
+  echo "environment, apt and gh: passed"' || fail "the image's environment, apt sources or gh"
 
 # The first-use index's corrections (first-use-packages.txt): psql installs
 # the client and runs; OpenStack's swift, Ubuntu's snap stubs and Bazel 4.2.3
