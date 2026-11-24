@@ -65,11 +65,14 @@ ARG YARN_VERSION=1.22.22
 ARG PNPM_VERSION=12.18.0
 
 # PIPX_*: where GitHub's image puts pipx's apps, on PATH, which ends in
-# /usr/games as GitHub's does, for packages such as cowsay, with the runner's
-# ~/.cargo/bin ahead of /usr/local/bin's first-use shims, as GitHub's has it:
-# rustup's proxies take over once installed, and `cargo install` puts its
-# binaries on PATH. COREPACK_*: yarn and
-# pnpm without a prompt, kept in a directory the runner user writes. The tool
+# /usr/games as GitHub's does, for packages such as cowsay, and has the
+# runner's ~/.cargo/bin, as GitHub's has, so `cargo install` puts its
+# binaries on PATH. It comes after /usr/local/bin's first-use shims, unlike
+# GitHub's, so `cargo` is the shim even when a cache restored rustup's
+# proxies without a toolchain. JAVA_HOME and JAVA_HOME_17_X64, and
+# CHROMEWEBDRIVER, as GitHub's image sets them: each has the image's shims
+# until the first use installs Temurin 17 or ChromeDriver there. COREPACK_*:
+# yarn and pnpm without a prompt, kept in a directory the runner user writes. The tool
 # cache is under the VM's /workspace, at the same path in the container,
 # because the runner mounts it into a job's `container:`. LANG and ImageOS as
 # GitHub's image sets them; actions such as setup-python pick their builds by
@@ -81,9 +84,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     AGENT_TOOLSDIRECTORY=/workspace/hostedtoolcache \
     PIPX_HOME=/opt/pipx \
     PIPX_BIN_DIR=/opt/pipx_bin \
+    JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64 \
+    JAVA_HOME_17_X64=/usr/lib/jvm/temurin-17-jdk-amd64 \
+    CHROMEWEBDRIVER=/usr/local/share/chromedriver-linux64 \
     COREPACK_HOME=/opt/corepack \
     COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
-    PATH=/opt/pipx_bin:/home/runner/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games
+    PATH=/opt/pipx_bin:/usr/local/sbin:/usr/local/bin:/home/runner/.cargo/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -205,6 +211,11 @@ COPY apt.sh /usr/local/libexec/backmesh/apt
 RUN for cmd in az gcloud gsutil aws rustup cargo rustc rustdoc rustfmt cargo-fmt cargo-clippy clippy-driver \
         pwsh go gofmt java javac jar keytool google-chrome google-chrome-stable chromedriver; do \
       ln -s /usr/local/libexec/backmesh/pinned "/usr/local/bin/$cmd"; \
+    done \
+    && install -d "$JAVA_HOME/bin" /opt/google/chrome "$CHROMEWEBDRIVER" \
+    && for cmd in "$JAVA_HOME"/bin/{java,javac,jar,keytool} /usr/bin/google-chrome /opt/google/chrome/chrome \
+        "$CHROMEWEBDRIVER/chromedriver"; do \
+      ln -s /usr/local/libexec/backmesh/pinned "$cmd"; \
     done \
     && printf '%s\n' "az_version=$AZ_VERSION" "az_sha256=$AZ_SHA256" "gcloud_version=$GCLOUD_VERSION" \
         "gcloud_sha256=$GCLOUD_SHA256" "aws_version=$AWS_VERSION" "rustup_version=$RUSTUP_VERSION" \

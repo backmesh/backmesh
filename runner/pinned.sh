@@ -81,19 +81,24 @@ aws_install() {
 
 # rustup and the pinned stable toolchain with clippy and rustfmt, as GitHub's
 # image has them, owned by the runner user. rustup checks the toolchain
-# against its release's manifest. It installs into a stage of the runner's,
-# then into the homes, which a cache restore may have made already, with the
-# proxies last.
+# against its release's manifest, under stable's name, so `rustup toolchain
+# install stable` (dtolnay/rust-toolchain@stable) finds it unchanged while
+# stable is that release, and updates it once stable moves on, as on GitHub's
+# image. It installs into a stage of the runner's, then into the homes, which
+# a cache restore may have made already, with the proxies last.
 rust_install() {
-  local stage=/home/runner/.rust.new
+  local stage=/home/runner/.rust.new t=x86_64-unknown-linux-gnu
   pinned "https://static.rust-lang.org/rustup/archive/${rustup_version}/x86_64-unknown-linux-gnu/rustup-init" "$rustup_sha256" \
     && sudo -n rm -rf "$stage" \
     && sudo -n install -d -o runner -g runner "$stage" "$RUSTUP_HOME" "$CARGO_HOME" "$CARGO_HOME/bin" \
     && sudo -n install -o runner -m 0755 "$dir/rustup-init" "$stage/" \
     && sudo -n -u runner env CARGO_HOME="$stage/cargo" RUSTUP_HOME="$stage/rustup" "$stage/rustup-init" -y --no-modify-path \
       --profile minimal --default-toolchain "$rust_version" --component clippy,rustfmt \
+    && sudo -n -u runner mv "$stage/rustup/toolchains/$rust_version-$t" "$stage/rustup/toolchains/stable-$t" \
+    && sudo -n -u runner mv "$stage/rustup/update-hashes/$rust_version-$t" "$stage/rustup/update-hashes/stable-$t" \
+    && sudo -n -u runner env CARGO_HOME="$stage/cargo" RUSTUP_HOME="$stage/rustup" "$stage/cargo/bin/rustup" default stable \
     && sudo -n -u runner cp -a "$stage/rustup/." "$RUSTUP_HOME/" \
-    && sudo -n -u runner cp -a "$stage/cargo/env" "$CARGO_HOME/" \
+    && sed "s#$stage/cargo#$CARGO_HOME#g" "$stage/cargo/env" | sudo -n -u runner tee "$CARGO_HOME/env" >/dev/null \
     && sudo -n -u runner mv "$stage"/cargo/bin/* "$CARGO_HOME/bin/" \
     && sudo -n rm -rf "$stage"
 }
@@ -113,8 +118,8 @@ go_install() {
   tarball "https://go.dev/dl/go${go_version}.linux-amd64.tar.gz" "$go_sha256" /usr/local/go
 }
 
-# Temurin's JDK, where GitHub's image has its default one. JAVA_HOME stays
-# unset, as a path that doesn't exist yet fails ./gradlew; it finds java on PATH.
+# Temurin's JDK, where GitHub's image has its default one: JAVA_HOME, whose
+# bin has the image's shims for java, javac, jar and keytool until it's in.
 java_install() {
   local tag=jdk-${java_version} file=OpenJDK17U-jdk_x64_linux_hotspot_${java_version/+/_}.tar.gz
   tarball "https://github.com/adoptium/temurin17-binaries/releases/download/${tag/+/%2B}/$file" "$java_sha256" \
@@ -136,48 +141,60 @@ chrome_install() {
       "$chrome_version" "$(paste -sd , "$dir/chrome-linux64/deb.deps" | sed 's/,/, /g')" >"$dir/deps/DEBIAN/control" \
     && dpkg-deb --build "$dir/deps" "$dir/chrome-deps.deb" \
     && sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=120 install -yq --no-install-recommends "$dir/chrome-deps.deb" \
-    && sudo -n rm -rf /opt/google/chrome.new /opt/google/chrome \
-    && sudo -n mkdir -p /opt/google \
-    && sudo -n mv "$dir/chrome-linux64" /opt/google/chrome.new \
-    && sudo -n chown -R root:root /opt/google/chrome.new \
-    && sudo -n mv /opt/google/chrome.new /opt/google/chrome
+    && sudo -n rm -rf /opt/google/chrome-for-testing \
+    && sudo -n chown -R root:root "$dir/chrome-linux64" \
+    && sudo -n mv "$dir/chrome-linux64" /opt/google/chrome-for-testing
 }
 
-# Chrome for Testing's driver for the same version, where GitHub's image has it.
+# Chrome for Testing's driver for the same version, where GitHub's image has it
+# (CHROMEWEBDRIVER), in place of the image's shim there. Chrome first, whose
+# libraries it needs too.
 chromedriver_install() {
-  pinned "https://storage.googleapis.com/chrome-for-testing-public/${chrome_version}/linux64/chromedriver-linux64.zip" "$chromedriver_sha256" \
+  { [[ -x /opt/google/chrome-for-testing/chrome ]] || chrome_install; } \
+    && pinned "https://storage.googleapis.com/chrome-for-testing-public/${chrome_version}/linux64/chromedriver-linux64.zip" "$chromedriver_sha256" \
     && unzip -q "$dir/chromedriver-linux64.zip" -d "$dir" \
     && sudo -n rm -rf /usr/local/share/chromedriver-linux64 \
     && sudo -n mv "$dir/chromedriver-linux64" /usr/local/share/chromedriver-linux64
 }
 
+# $real runs the command once $ready, by default $real, exists.
 case $name in
   az) real=/usr/bin/az install=(az_install) ;;
   gcloud | gsutil) real=/usr/lib/google-cloud-sdk/bin/$name install=(gcloud_install) ;;
   aws) real=/usr/local/aws-cli/v2/current/bin/aws install=(aws_install) ;;
-  # After the install, $CARGO_HOME/bin, ahead on PATH, has rustup's proxies.
+  # rustup's proxies, once the toolchain is in: a cache may restore
+  # $CARGO_HOME/bin without $RUSTUP_HOME.
   rustup | cargo | rustc | rustdoc | rustfmt | cargo-fmt | cargo-clippy | clippy-driver)
-    real=$CARGO_HOME/bin/$name install=(rust_install) ;;
+    real=$CARGO_HOME/bin/$name ready=$RUSTUP_HOME/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc
+    install=(rust_install) ;;
   pwsh) real=/opt/microsoft/powershell/7/pwsh install=(pwsh_install) ;;
   go | gofmt) real=/usr/local/go/bin/$name install=(go_install) ;;
-  java | javac | jar | keytool) real=/usr/lib/jvm/temurin-17-jdk-amd64/bin/$name install=(java_install) ;;
+  java | javac | jar | keytool)
+    real=/usr/lib/jvm/temurin-17-jdk-amd64/bin/$name ready=/usr/lib/jvm/temurin-17-jdk-amd64/release
+    install=(java_install) ;;
   # The job's container can't make the namespaces Chrome's sandbox needs, so
-  # Chrome runs without it, also when ChromeDriver finds it here on PATH.
-  google-chrome | google-chrome-stable) real=/opt/google/chrome/chrome install=(chrome_install) args=(--no-sandbox) ;;
-  chromedriver) real=/usr/local/share/chromedriver-linux64/chromedriver install=(chromedriver_install) ;;
+  # Chrome runs without it, whether called by name, as /usr/bin/google-chrome,
+  # or as /opt/google/chrome/chrome, where Playwright's and Puppeteer's
+  # `channel: 'chrome'` and ChromeDriver look.
+  google-chrome | google-chrome-stable | chrome)
+    real=/opt/google/chrome-for-testing/chrome install=(chrome_install) args=(--no-sandbox) ;;
+  chromedriver)
+    real=/usr/local/share/chromedriver-linux64/chromedriver ready=/usr/local/share/chromedriver-linux64/LICENSE.chromedriver
+    install=(chromedriver_install) ;;
   *) echo "backmesh: no first-use install for $name" >&2; exit 127 ;;
 esac
 
-if [[ ! -x $real ]]; then
+installed() { [[ -x $real && -e ${ready:-$real} ]]; }
+if ! installed; then
   # Concurrent first calls install once: the rest wait, then find it. The lock
   # is this script, which every user can open, whoever called first.
   exec 9<"${BASH_SOURCE[0]}"
   flock 9
-  if [[ ! -x $real ]]; then
+  if ! installed; then
     echo "backmesh: installing $name on first use" >&2
     log=$(mktemp) dir=$(mktemp -d)
     status=0
-    "${install[@]}" >"$log" 2>&1 && [[ -x $real ]] || status=1
+    "${install[@]}" >"$log" 2>&1 && installed || status=1
     rm -rf "$dir"
     if ((status)); then
       echo "backmesh: couldn't install $name; the end of its output:" >&2

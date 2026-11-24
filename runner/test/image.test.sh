@@ -76,6 +76,40 @@ docker run --rm --entrypoint node "$image" -e '
     }
   })().catch((e) => { console.log(`::error::pinned first use: ${e.message}`); process.exit(1); });'
 
+# After the first use: a cache that restored ~/.cargo/bin without ~/.rustup,
+# as caching ~/.cargo often does, gets the toolchain again; it's stable's, so
+# dtolnay/rust-toolchain@stable's install finds it unchanged; ~/.cargo/env
+# names ~/.cargo/bin. ./mvnw, a sh script, finds Temurin through JAVA_HOME.
+# ChromeDriver, from CHROMEWEBDRIVER, installs Chrome with it and runs a
+# headless session in the Chrome it finds itself.
+docker run --rm -i --entrypoint sh "$image" \
+  -c 'cat >/tmp/step.sh && exec bash --noprofile --norc -e -o pipefail /tmp/step.sh' <<'EOF' || fail "Rust after a restore, ./mvnw or a WebDriver session"
+cargo --version >/dev/null 2>&1
+rm -rf "$HOME/.rustup"
+out=$(cargo --version 2>&1)
+[[ $out == *"backmesh: installing cargo"*"cargo 1.100.0 "* ]] || { echo "cargo after a restore of ~/.cargo/bin: $out"; exit 1; }
+[[ $(rustup toolchain install stable --profile minimal --no-self-update 2>&1) == *'stable-x86_64-unknown-linux-gnu unchanged'* ]]
+! grep -q rust.new "$HOME/.cargo/env"
+mkdir -p /tmp/mvnw/.mvn/wrapper && cd /tmp/mvnw
+curl -fsSL -o mvnw https://raw.githubusercontent.com/apache/maven-wrapper/maven-wrapper-3.3.2/maven-wrapper-distribution/src/resources/only-mvnw
+echo 'd552912fe186f0aeefae6a7d14c6c6639a1c3f9de96469a5ce0d18109ec21fde  mvnw' | sha256sum --check --strict --quiet
+chmod +x mvnw
+printf '%s\n' distributionType=only-script \
+  distributionUrl=https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.11/apache-maven-3.9.11-bin.zip \
+  >.mvn/wrapper/maven-wrapper.properties
+[[ $(./mvnw --version 2>/dev/null) == *"runtime: $JAVA_HOME"* ]]
+"$CHROMEWEBDRIVER/chromedriver" --version >/dev/null 2>&1
+"$CHROMEWEBDRIVER/chromedriver" --port=9515 >/dev/null 2>&1 &
+for _ in $(seq 50); do curl -sf localhost:9515/status >/dev/null && break; sleep 0.2; done
+wd() { curl -sf --max-time 120 "localhost:9515/session$1" "${@:2}"; }
+id=$(wd '' -d '{"capabilities":{"alwaysMatch":{"goog:chromeOptions":{"args":["--headless"]}}}}' | jq -r .value.sessionId)
+wd "/$id/url" -d '{"url":"data:text/html,<title>backmesh</title>"}' >/dev/null
+[[ $(wd "/$id/title" | jq -r .value) == backmesh ]]
+wd "/$id" -X DELETE >/dev/null
+/usr/bin/google-chrome --version >/dev/null
+echo 'after first use: passed'
+EOF
+
 # The tool cache's link, GitHub's variables, apt's shims ahead of the real
 # apt-get for sudo, Ubuntu's archive as the only apt source, and a gh with
 # `gh attestation`, which Ubuntu's 2.45 lacks.
