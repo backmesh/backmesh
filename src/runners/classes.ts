@@ -8,8 +8,9 @@ export type Cloud = (typeof CLOUDS)[number];
 /** The classes' vCPUs, at 4 GiB each; `backmesh-4` is the default. */
 export const CLASS_VCPUS = [2, 4, 8, 16] as const;
 export const GIB_PER_VCPU = 4;
-// GCP's c4d has 3.875 GiB a vCPU, rounded down: 15 GiB at 4 vCPUs.
-const MIN_GIB_PER_VCPU = 3.875;
+// GCP's c4d has 3.875 GiB a vCPU, rounded down: 15 GiB at 4 vCPUs. Only
+// it may have less than 4 GiB a vCPU, so another such type still fails.
+const C4D_GIB_PER_VCPU = 3.875;
 
 const AWS_SIZE: Record<number, string> = {
   2: 'large',
@@ -35,9 +36,10 @@ const AWS_SIZE: Record<number, string> = {
  * GCP's on-demand classes try AMD's `c4d` (Zen 5) and `c3d` (Zen 4) first:
  * at 4 vCPUs on demand, anycloud#38 measured 0.50 and 0.71 of `n2`'s build
  * time and 0.78 and 0.76 of its cost per Job, `c4d`'s Hyperdisk Balanced
- * boot disk included. `c3d` has no 2-vCPU size, and a region without either
- * falls back to `n2` and `n2d`; spot stays as it is until its own
- * measurements land.
+ * boot disk included. `backmesh-od-2` keeps `n2` and `n2d`: `c3d` has no
+ * 2-vCPU size, and `c4d`'s wasn't measured. A region without either falls
+ * back to `n2` and `n2d`; spot stays as it is until its own measurements
+ * land.
  */
 export const VM_TYPES: Record<
   Cloud,
@@ -45,9 +47,7 @@ export const VM_TYPES: Record<
 > = {
   aws: (n) => ['m8i', 'm7a', 'm7i', 'm6a'].map((f) => `${f}.${AWS_SIZE[n]}`),
   gcp: (n, spot) => [
-    ...(spot
-      ? []
-      : [`c4d-standard-${n}`, ...(n > 2 ? [`c3d-standard-${n}`] : [])]),
+    ...(spot || n < 4 ? [] : [`c4d-standard-${n}`, `c3d-standard-${n}`]),
     `n2-standard-${n}`,
     `n2d-standard-${n}`,
   ],
@@ -204,10 +204,13 @@ function shapeProblem(
   if (!type) return;
   const memory = vcpus * GIB_PER_VCPU;
   const gib = type.memoryGiB ?? 0;
+  const least = vmType.startsWith('c4d-')
+    ? Math.floor(vcpus * C4D_GIB_PER_VCPU)
+    : memory;
   const fits =
     type.vCPUs === vcpus &&
     gib <= memory &&
-    gib >= Math.floor(vcpus * MIN_GIB_PER_VCPU) &&
+    gib >= least &&
     !type.accelerators?.length;
   return fits
     ? undefined

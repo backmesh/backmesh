@@ -148,11 +148,8 @@ describe('runner classes', () => {
     expect(problems).toEqual([]);
     const types = (label: string) =>
       classes.find((c) => c.label === label)?.vmTypes;
-    expect(types('backmesh-od-2')).toEqual([
-      'c4d-standard-2',
-      'n2-standard-2',
-      'n2d-standard-2',
-    ]);
+    // c4d-standard-2 wasn't measured, and c3d has no 2-vCPU size.
+    expect(types('backmesh-od-2')).toEqual(['n2-standard-2', 'n2d-standard-2']);
     expect(types('backmesh-od-16')).toEqual([
       'c4d-standard-16',
       'c3d-standard-16',
@@ -223,6 +220,15 @@ describe('runner classes', () => {
     });
     expect(planClasses([GCP], small, 'gcp').problems).toEqual([
       'c4d-standard-4 is 4 vCPU / 14 GiB, not a 4 vCPU / 16 GiB CPU type',
+    ]);
+    // Only c4d may have less than 4 GiB a vCPU.
+    const n2 = catalogs({
+      gcp: CATALOG.gcp.map((type) =>
+        type.vmType === 'n2-standard-4' ? { ...type, memoryGiB: 15 } : type,
+      ),
+    });
+    expect(planClasses([GCP], n2, 'gcp').problems).toEqual([
+      'n2-standard-4 is 4 vCPU / 15 GiB, not a 4 vCPU / 16 GiB CPU type',
     ]);
   });
 

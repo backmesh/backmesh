@@ -21,12 +21,12 @@ A job's VM is the first type in its [label's](/labels/) list that has capacity:
 | `backmesh-8`  | 8    | 32 GiB | `n2-standard-8`, `n2d-standard-8`   |
 | `backmesh-16` | 16   | 64 GiB | `n2-standard-16`, `n2d-standard-16` |
 
-[On-demand labels](/labels/#on-demand) try AMD's `c4d` (Zen 5) and `c3d`
-(Zen 4) first, then the same types:
+[On-demand labels](/labels/#on-demand) from 4 vCPUs try AMD's `c4d` (Zen 5)
+and `c3d` (Zen 4) first, then the same types; `backmesh-od-2` keeps `n2` and
+`n2d`:
 
 | Label            | vCPU | Memory       | Types, in order                                                           |
 | ---------------- | ---- | ------------ | ------------------------------------------------------------------------- |
-| `backmesh-od-2`  | 2    | 7 or 8 GiB   | `c4d-standard-2`, `n2-standard-2`, `n2d-standard-2`                       |
 | `backmesh-od-4`  | 4    | 15 or 16 GiB | `c4d-standard-4`, `c3d-standard-4`, `n2-standard-4`, `n2d-standard-4`     |
 | `backmesh-od-8`  | 8    | 31 or 32 GiB | `c4d-standard-8`, `c3d-standard-8`, `n2-standard-8`, `n2d-standard-8`     |
 | `backmesh-od-16` | 16   | 62 or 64 GiB | `c4d-standard-16`, `c3d-standard-16`, `n2-standard-16`, `n2d-standard-16` |
@@ -34,8 +34,9 @@ A job's VM is the first type in its [label's](/labels/) list that has capacity:
 A `c4d` VM has 3.875 GiB a vCPU, the smaller memory figure; the others have 4.
 At 4 vCPUs on demand, `c4d` builds in half of `n2`'s time and `c3d` in 0.71 of
 it, for 0.78 and 0.76 of its cost per job, disk included
-([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38)). `c3d` has
-no 2-vCPU size. `us-south1` offers neither, and `us-west2` and `us-west3` no
+([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38)); at 16
+vCPUs, a few runs gave 0.52 and 0.75 of its time, and 8 vCPUs wasn't
+measured. `us-south1` offers neither, and `us-west2` and `us-west3` no
 `c3d`, so jobs there start on the next type in the list. Spot labels stay on
 `n2` and `n2d` for now.
 
@@ -77,7 +78,10 @@ Install can't read GCP's quotas, so it names the ones to raise instead. The one
 that bites first is `CPUS_ALL_REGIONS`, 32 vCPUs by default across all regions:
 8 `backmesh-4` jobs at once. Raise it before big bursts. Each runner region
 also has `N2D_CPUS` and `N2_CPUS`, and `PREEMPTIBLE_CPUS` for spot or `CPUS`,
-`C4D_CPUS` and `C3D_CPUS` for on demand. Runners past a quota wait, and [`backmesh status`](/status/) warns
+`C4D_CPUS` and `C3D_CPUS` for on demand. Each on-demand `c4d` runner's disk
+also counts 100 GB, 8,000 IOPS and 1,000 MB/s against the region's
+[Hyperdisk Balanced quotas](https://cloud.google.com/compute/docs/disks/hyperdisks)
+for capacity, IOPS and throughput, which install doesn't name. Runners past a quota wait, and [`backmesh status`](/status/) warns
 when they do, as in this example with illustrative numbers:
 
 ```text
