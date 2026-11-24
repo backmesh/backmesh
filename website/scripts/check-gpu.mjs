@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import {
   AWS_DISK_PER_HOUR,
   AWS_GPU_BOOT_S,
+  AWS_GPU_WAIT_P90_S,
   AWS_GPU_WAIT_S,
   GITHUB_T4_PER_MIN,
   GPU_PRICES,
@@ -88,6 +89,7 @@ contains('gpu.md', [
   `$${aws.onDemand} on demand on either`,
   wait,
   waitRounded,
+  `p90 ${AWS_GPU_WAIT_P90_S} s`,
 ]);
 const minuteRange = `$${(Math.min(...firsts.map((p) => p.spot)) / 60).toFixed(4)} to $${(Math.max(...firsts.map((p) => p.onDemand)) / 60).toFixed(4)} a minute`;
 contains('blog/run-cuda-tests-github-actions.md', [
