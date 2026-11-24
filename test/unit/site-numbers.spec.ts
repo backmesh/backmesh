@@ -10,7 +10,7 @@ import {
   readme,
   README_BENCH,
 } from '../../website/src/benchmarks.ts';
-import { per1000 } from '../../website/src/cost.ts';
+import { AWS_GPU_WAIT_S, per1000 } from '../../website/src/cost.ts';
 
 const root = join(import.meta.dirname, '../..');
 const read = (path: string) => readFileSync(join(root, path), 'utf8');
@@ -69,10 +69,13 @@ describe('published benchmark figures', () => {
     // A time with a word for a start, boot or wait, or a speed ratio.
     const time = /\b\d+(?:(?:–| to )\d+)? ?(?:s|seconds?)\b/;
     const about = /boot|start|wait|queu|cold|faster|slower|cued/i;
+    // cost.ts's GPU wait, which website/scripts/check-gpu.mjs checks.
+    const gpuWait = `${AWS_GPU_WAIT_S} seconds`;
     expect(
       text.filter(
         (s) =>
-          (time.test(s) && about.test(s)) || /\d× (?:faster|slower)/.test(s),
+          !s.includes(gpuWait) &&
+          ((time.test(s) && about.test(s)) || /\d× (?:faster|slower)/.test(s)),
       ),
     ).toEqual([
       ...(page === 'website/src/content/docs/security.md'
