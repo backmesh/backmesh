@@ -1,7 +1,10 @@
 # backmesh's cache: actions/cache's inputs and
 # outputs, against the runner region's bucket; GitHub's cache elsewhere.
 name: backmesh cache
-description: Cache files in the runner region's bucket, saved after the job
+description: actions/cache for backmesh runners, in a bucket in the runner's region; GitHub's cache on other runners
+branding:
+  icon: database
+  color: blue
 inputs:
   path:
     description: A list of files, directories and wildcard patterns to cache and restore
