@@ -73,7 +73,7 @@ We haven't measured ARC or the Terraform module.
 with a keyless role. A listener long-polls GitHub, so nothing needs an
 inbound port. For each job, backmesh starts a VM in the cheapest region with
 capacity and deletes it when the job ends. A job moves over when its
-`runs-on` changes, for example from `ubuntu-latest` to `backmesh-4`.
+`runs-on` changes, for example from `ubuntu-latest` to `backmesh-ubuntu-2404-4vcpu`.
 
 **ARC.** A Kubernetes operator that GitHub maintains. You install it with Helm
 and create a runner scale set. A listener pod holds a long poll open to

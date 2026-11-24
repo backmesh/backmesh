@@ -132,7 +132,11 @@ async function addScaleSets(
         // deleted, a restart skips it.
         const scaleSet = route.retiring
           ? await actions.getScaleSet(groupId, route.label)
-          : await actions.ensureScaleSet(route.label, groupId);
+          : await actions.ensureScaleSet(
+              route.label,
+              groupId,
+              route.renamedFrom,
+            );
         if (scaleSet?.name !== route.label) {
           log({ msg: 'retired scale set gone', label: route.label });
           continue;

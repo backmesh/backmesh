@@ -46,7 +46,7 @@ describe('Scaler', () => {
   it('runs the jobs a retiring scale set already has, and offers it no capacity', async () => {
     const retiring = {
       ...ROUTE,
-      label: 'backmesh-8',
+      label: 'backmesh-ubuntu-2404-8vcpu',
       code: 'a8',
       vcpus: 8,
       retiring: true,
@@ -64,11 +64,11 @@ describe('Scaler', () => {
     expect(scaler.capacity(sets[1]!)).toBeGreaterThan(0);
     expect(
       listenerStatusSchema.shape.scaleSets.parse(scaler.status().scaleSets)[0],
-    ).toMatchObject({ label: 'backmesh-8', retiring: true });
+    ).toMatchObject({ label: 'backmesh-ubuntu-2404-8vcpu', retiring: true });
   });
 
   it('keeps the installation within 500 runners across scale sets', async () => {
-    const other = { ...ROUTE, label: 'backmesh-8', code: 'a8' };
+    const other = { ...ROUTE, label: 'backmesh-ubuntu-2404-8vcpu', code: 'a8' };
     const { anycloud, scaler, sets } = setup([ROUTE, other]);
     sets[0]!.statistics = assigned(400);
     sets[1]!.statistics = assigned(400);
@@ -109,7 +109,7 @@ describe('Scaler', () => {
   });
 
   it('submits at most 50 a tick and asks for another tick when it did', async () => {
-    const other = { ...ROUTE, label: 'backmesh-8', code: 'a8' };
+    const other = { ...ROUTE, label: 'backmesh-ubuntu-2404-8vcpu', code: 'a8' };
     const { anycloud, scaler, sets } = setup([ROUTE, other]);
     sets[0]!.statistics = assigned(40);
     sets[1]!.statistics = assigned(30);
@@ -255,7 +255,7 @@ describe('Scaler', () => {
   });
 
   it('leaves out completed runners from the other scale sets in capacity', async () => {
-    const other = { ...ROUTE, label: 'backmesh-8', code: 'a8' };
+    const other = { ...ROUTE, label: 'backmesh-ubuntu-2404-8vcpu', code: 'a8' };
     const { anycloud, scaler, sets } = setup([ROUTE, other]);
     sets[1]!.statistics = assigned(3);
     await scaler.reconcile();
@@ -269,7 +269,7 @@ describe('Scaler', () => {
   });
 
   it('still scales up when a scale-down lookup fails', async () => {
-    const other = { ...ROUTE, label: 'backmesh-8', code: 'a8' };
+    const other = { ...ROUTE, label: 'backmesh-ubuntu-2404-8vcpu', code: 'a8' };
     const { anycloud, github, scaler, sets } = setup([ROUTE, other]);
     sets[0]!.statistics = assigned(2);
     await scaler.reconcile();
@@ -289,7 +289,7 @@ describe('Scaler', () => {
   });
 
   it("scales down the idle runners of a route that's gone", async () => {
-    const other = { ...ROUTE, label: 'backmesh-8', code: 'a8' };
+    const other = { ...ROUTE, label: 'backmesh-ubuntu-2404-8vcpu', code: 'a8' };
     const { anycloud, github, scaler, sets, make } = setup([ROUTE, other]);
     sets[0]!.statistics = assigned(1);
     sets[1]!.statistics = assigned(2);
@@ -388,7 +388,12 @@ describe('Scaler', () => {
   // Owner, 2026-11-13: a cycle submits its runners before its ends,
   // reclaims and removals, and still does every one of them.
   it('submits runners before the housekeeping, and skips none of it', async () => {
-    const OD = { ...ROUTE, label: 'backmesh-od-4', code: 'b4', spot: false };
+    const OD = {
+      ...ROUTE,
+      label: 'backmesh-ubuntu-2404-od-4vcpu',
+      code: 'b4',
+      spot: false,
+    };
     let calls: string[] = [];
     // The retry's routing: the breaker hears the cycle's reclaims, and its
     // waiting runs are polled.
@@ -526,7 +531,7 @@ describe('Scaler', () => {
       );
     expect(backingOff()).toEqual([
       expect.objectContaining({
-        label: 'backmesh-4',
+        label: 'backmesh-ubuntu-2404-4vcpu',
         failures: 5,
         nextProbeAt: '1970-01-01T00:01:00.000Z',
       }),
@@ -592,7 +597,7 @@ describe('Scaler', () => {
       cap: 500,
       scaleSets: [
         {
-          label: 'backmesh-4',
+          label: 'backmesh-ubuntu-2404-4vcpu',
           cloud: 'aws',
           queued: 2,
           starting: 1,
@@ -704,7 +709,7 @@ describe('Scaler', () => {
         {
           msg: 'job completed',
           at: T + 285_000,
-          label: 'backmesh-4',
+          label: 'backmesh-ubuntu-2404-4vcpu',
           jobId: 'job-1',
           runId: 7,
           org: 'acme',
@@ -932,7 +937,7 @@ describe('Scaler', () => {
       const reclaim = {
         job: 'test',
         runner: id,
-        label: 'backmesh-4',
+        label: 'backmesh-ubuntu-2404-4vcpu',
         spot: true,
         vm: 'aws m6a.xlarge us-east-2',
       };
@@ -1066,7 +1071,7 @@ describe('Scaler', () => {
   });
 
   it('reports the cap holding a scale set back, and formats the reasons', async () => {
-    const other = { ...ROUTE, label: 'backmesh-8', code: 'a8' };
+    const other = { ...ROUTE, label: 'backmesh-ubuntu-2404-8vcpu', code: 'a8' };
     const { scaler, sets } = setup([ROUTE, other]);
     sets[0]!.statistics = assigned(450);
     sets[1]!.statistics = assigned(100);
@@ -1100,17 +1105,19 @@ describe('Scaler', () => {
     };
 
     it("records whether a job's runner was started for a cue, a prediction or the job", async () => {
-      const counts = { 'backmesh-4': 1 };
-      const cues = { 'backmesh-4': 1 };
+      const counts = { 'backmesh-ubuntu-2404-4vcpu': 1 };
+      const cues = { 'backmesh-ubuntu-2404-4vcpu': 1 };
       const planner = planned(counts, cues);
       const env = setup([ROUTE], undefined, undefined, undefined, planner);
       const ids = () => env.anycloud.submitted.map((spec) => spec.id);
       env.sets[0]!.statistics = assigned(0);
       await env.scaler.reconcile();
       // A prediction joins the cue, whose idle runner still fills its slot.
-      counts['backmesh-4'] = 2;
+      counts['backmesh-ubuntu-2404-4vcpu'] = 2;
       await env.scaler.reconcile();
-      counts['backmesh-4'] = cues['backmesh-4'] = 0;
+      counts['backmesh-ubuntu-2404-4vcpu'] = cues[
+        'backmesh-ubuntu-2404-4vcpu'
+      ] = 0;
       env.sets[0]!.statistics = assigned(3);
       await env.scaler.reconcile();
       expect(ids()).toHaveLength(3);
@@ -1139,7 +1146,7 @@ describe('Scaler', () => {
     });
 
     it('adds speculative runners to TotalAssignedJobs, and scales down idle ones when they expire', async () => {
-      const counts = { 'backmesh-4': 3 };
+      const counts = { 'backmesh-ubuntu-2404-4vcpu': 3 };
       const env = setup(
         [ROUTE],
         undefined,
@@ -1156,23 +1163,27 @@ describe('Scaler', () => {
       });
 
       // The slots expire: today's scale-down removes three idle runners.
-      counts['backmesh-4'] = 0;
+      counts['backmesh-ubuntu-2404-4vcpu'] = 0;
       await env.scaler.reconcile();
       expect(env.anycloud.terminated).toHaveLength(3);
       expect(env.anycloud.live.size).toBe(1);
     });
 
     it('gives speculative runners only the room real jobs leave', async () => {
-      const other = { ...ROUTE, label: 'backmesh-8', code: 'a8' };
+      const other = {
+        ...ROUTE,
+        label: 'backmesh-ubuntu-2404-8vcpu',
+        code: 'a8',
+      };
       const env = setup(
         [ROUTE, other],
         undefined,
         undefined,
         undefined,
-        planned({ 'backmesh-4': 5 }),
+        planned({ 'backmesh-ubuntu-2404-4vcpu': 5 }),
       );
       env.anycloud.control.others = 495;
-      // backmesh-4 comes first, but backmesh-8's 3 real jobs go before its
+      // backmesh-ubuntu-2404-4vcpu comes first, but backmesh-ubuntu-2404-8vcpu's 3 real jobs go before its
       // speculation: 2 of the 5 left.
       env.sets[0]!.statistics = assigned(0);
       env.sets[1]!.statistics = assigned(3);
@@ -1189,20 +1200,24 @@ describe('Scaler', () => {
     });
 
     it("gives back speculative runners' room to other scale sets' real jobs", async () => {
-      const other = { ...ROUTE, label: 'backmesh-8', code: 'a8' };
+      const other = {
+        ...ROUTE,
+        label: 'backmesh-ubuntu-2404-8vcpu',
+        code: 'a8',
+      };
       const env = setup(
         [ROUTE, other],
         undefined,
         undefined,
         undefined,
-        planned({ 'backmesh-4': 5 }),
+        planned({ 'backmesh-ubuntu-2404-4vcpu': 5 }),
       );
       env.anycloud.control.others = 495;
       env.sets[0]!.statistics = assigned(0);
       env.sets[1]!.statistics = assigned(0);
       await env.scaler.reconcile();
       expect(env.anycloud.live.size).toBe(5);
-      // 3 real jobs on backmesh-8 at the cap: 3 idle speculative runners
+      // 3 real jobs on backmesh-ubuntu-2404-8vcpu at the cap: 3 idle speculative runners
       // go, and the next tick starts the real jobs' runners.
       env.sets[1]!.statistics = assigned(3);
       await env.scaler.reconcile();
@@ -1216,13 +1231,17 @@ describe('Scaler', () => {
     });
 
     it("leaves real jobs the tick's submissions first", async () => {
-      const other = { ...ROUTE, label: 'backmesh-8', code: 'a8' };
+      const other = {
+        ...ROUTE,
+        label: 'backmesh-ubuntu-2404-8vcpu',
+        code: 'a8',
+      };
       const env = setup(
         [ROUTE, other],
         undefined,
         undefined,
         undefined,
-        planned({ 'backmesh-4': 60 }),
+        planned({ 'backmesh-ubuntu-2404-4vcpu': 60 }),
       );
       env.sets[0]!.statistics = assigned(0);
       env.sets[1]!.statistics = assigned(3);
@@ -1308,13 +1327,13 @@ describe('Scaler', () => {
   describe('public repositories', () => {
     const PUBLIC4 = {
       ...ROUTE,
-      label: 'backmesh-public-4',
+      label: 'backmesh-ubuntu-2404-public-4vcpu',
       code: 'c4',
       public: true,
     };
     const PUBLIC2 = {
       ...PUBLIC4,
-      label: 'backmesh-public-2',
+      label: 'backmesh-ubuntu-2404-public-2vcpu',
       code: 'c2',
       vcpus: 2,
     };

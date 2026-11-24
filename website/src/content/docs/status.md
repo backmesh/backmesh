@@ -43,7 +43,7 @@ It shows the shared control plane once, then one section for each org on it.
   warnings.
 
 ```text
-  backmesh-4: 5 assigned, 2 running; runners 2 queued, 0 starting, 1 running
+  backmesh-ubuntu-2404-4vcpu: 5 assigned, 2 running; runners 2 queued, 0 starting, 1 running
     16 jobs today · start 2.7 min typical, 18.0 min slowest
     ⚠ 9 runners waited for GCP quota in us-east4, up to 16.7 min.
       Raise CPUS_ALL_REGIONS above its default 32 to start them right away.

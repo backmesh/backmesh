@@ -104,19 +104,23 @@ describe('runListener', () => {
       {
         msg: 'scale set ready',
         scaleSetId: 9,
-        name: 'backmesh-4',
+        name: 'backmesh-ubuntu-2404-4vcpu',
         runnerGroupId: 3,
       },
-      { msg: 'session opened', label: 'backmesh-4', scaleSetId: 9 },
+      {
+        msg: 'session opened',
+        label: 'backmesh-ubuntu-2404-4vcpu',
+        scaleSetId: 9,
+      },
     ]);
     // The message's runners don't wait for its ack.
     expect(calls).toEqual([
       'reconcile',
       'poll after 0',
       'acquire 10,11',
-      'gate backmesh-4 job-0',
-      'gate backmesh-4 job-1',
-      'gate backmesh-4 job-2',
+      'gate backmesh-ubuntu-2404-4vcpu job-0',
+      'gate backmesh-ubuntu-2404-4vcpu job-1',
+      'gate backmesh-ubuntu-2404-4vcpu job-2',
       'reconcile',
       'ack 1',
       'poll after 1',
@@ -192,7 +196,7 @@ describe('runListener', () => {
     ]);
     expect(logs).toContainEqual({
       msg: 'scale set retired',
-      label: 'backmesh-4',
+      label: 'backmesh-ubuntu-2404-4vcpu',
       scaleSetId: 9,
     });
     expect(scaler.status().scaleSets).toEqual([]);
@@ -227,7 +231,7 @@ describe('runListener', () => {
       new AbortController().signal,
     );
     expect(logs).toEqual([
-      { msg: 'retired scale set gone', label: 'backmesh-4' },
+      { msg: 'retired scale set gone', label: 'backmesh-ubuntu-2404-4vcpu' },
     ]);
   });
 

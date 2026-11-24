@@ -6,7 +6,8 @@ import {
 } from '../../../test/e2e/test-org-run.ts';
 
 const noSleep = async () => undefined;
-const MATRIX = '{"include":[{"label":"backmesh-4","cloud":"azure"}]}';
+const MATRIX =
+  '{"include":[{"label":"backmesh-ubuntu-2404-4vcpu","cloud":"azure"}]}';
 const URL = 'https://github.com/backmesh-dryrun/e2e/actions/runs/7';
 
 // A test org's branch: run.json as pushed, then the result labels.yml writes

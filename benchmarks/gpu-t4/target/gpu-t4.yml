@@ -12,7 +12,7 @@ permissions: {}
 
 jobs:
   t4:
-    runs-on: backmesh-gpu-t4
+    runs-on: backmesh-ubuntu-2404-gpu-t4
     timeout-minutes: 15
     steps:
       - name: Instance

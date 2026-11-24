@@ -1,8 +1,8 @@
 // The regions backmesh's runners may launch in (owner, 2026-11-13). Each
 // cloud's candidates are fixed in code,
 // not discovered through the user's cloud CLI: every US region whose
-// pinned catalog offers every type of every `backmesh-N` and
-// `backmesh-kvm-N` class, so no class's types ever need a per-region
+// pinned catalog offers every type of every `backmesh-ubuntu-2404-Nvcpu` and
+// `backmesh-ubuntu-2404-kvm-Nvcpu` class, so no class's types ever need a per-region
 // filter (`classes.ts`). `test/unit/runners/regions.spec.ts` checks this
 // list against a pinned snapshot of the real catalog, so a catalog or
 // type change that breaks it fails CI. Install and upgrade narrow it

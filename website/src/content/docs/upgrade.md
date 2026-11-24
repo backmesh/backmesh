@@ -39,6 +39,12 @@ from an earlier run, so a region that's added or an account policy that
 changes reaches an existing org on its next `upgrade`. To add a cloud, run
 `backmesh install`.
 
+A release that renames labels, as v0.7.0 did (`backmesh-4` became
+`backmesh-ubuntu-2404-4vcpu`), lists each old and new name and asks first. The
+listener renames each label's scale set, so jobs GitHub already assigned to it
+still run; a job sent to an old label afterwards waits until GitHub cancels it
+after 24 hours, so change your workflows' `runs-on` right after.
+
 Right after the control plane updates, and before any listener restarts,
 `upgrade` re-applies the role setup of each runner cloud whose role this
 release changes, through your signed-in cloud CLI, as install made it: a

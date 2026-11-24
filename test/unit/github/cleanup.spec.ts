@@ -24,8 +24,8 @@ function fakeOrg(runners: string[], { legacy = false } = {}) {
     [6, 'backmesh-zzzzz-000000'],
   ]);
   // By the group's Actions service ID and the label.
-  const scaleSets = new Map([['30/backmesh-4', 1]]);
-  if (legacy) scaleSets.set('32/backmesh-4', 2);
+  const scaleSets = new Map([['30/backmesh-ubuntu-2404-4vcpu', 1]]);
+  if (legacy) scaleSets.set('32/backmesh-ubuntu-2404-4vcpu', 2);
   let sticky = 0;
   let stickySets = 0;
   // What GitHub names the scale set it returns for a label.
@@ -79,7 +79,7 @@ function fakeOrg(runners: string[], { legacy = false } = {}) {
 }
 
 const deps = (org: ReturnType<typeof fakeOrg>): CleanupDeps => ({
-  labels: ['backmesh-4'],
+  labels: ['backmesh-ubuntu-2404-4vcpu'],
   actions: org.actions,
   rest: org.rest,
   log: () => undefined,
@@ -125,7 +125,7 @@ describe('GitHub cleanup', () => {
     const org = fakeOrg([]);
     org.keepScaleSets(60);
     expect(await cleanUpGitHub(deps(org), ours)).toEqual([
-      `scale set backmesh-4 in ${GROUP}`,
+      `scale set backmesh-ubuntu-2404-4vcpu in ${GROUP}`,
       `runner group ${GROUP}`,
     ]);
     expect(org.calls.filter((c) => !c.startsWith('delete scale set'))).toEqual(

@@ -36,12 +36,12 @@ describe('converge', () => {
   it("diffs the listener's routes against the plan's classes", () => {
     const changes = runnerChanges(running, awsOnly);
     expect(changes).toMatchObject({ added: [], removed: ['gcp'], regions: [] });
-    expect(changes.labelsRemoved).toContain('backmesh-gcp-4');
+    expect(changes.labelsRemoved).toContain('backmesh-gcp-ubuntu-2404-4vcpu');
     expect(changes.labelsAdded).toEqual([]);
     expect(changeLines('acme', changes, awsOnly)).toEqual([
       "acme's runners leave gcp.",
       expect.stringMatching(
-        /^These labels stop taking jobs: backmesh-gcp-2, .*\. Jobs GitHub already assigned to them get runners first; their scale sets are deleted once none is left, and a job sent to them later never runs, so move their workflows to another label\.$/,
+        /^These labels stop taking jobs: backmesh-gcp-ubuntu-2404-2vcpu, .*\. Jobs GitHub already assigned to them get runners first; their scale sets are deleted once none is left, and a job sent to them later never runs, so move their workflows to another label\.$/,
       ),
     ]);
     expect(changeLines('acme', runnerChanges(running, both), both)).toEqual([
@@ -49,11 +49,57 @@ describe('converge', () => {
     ]);
   });
 
+  it('maps each renamed label to its new name by its class code, and renames its scale set', () => {
+    // As v0.6.1 named them.
+    const old = running.map((r) => ({
+      ...r,
+      label: r.label.replace('ubuntu-2404-', '').replace('vcpu', ''),
+    }));
+    const changes = runnerChanges(old, both);
+    expect(changes.labelsAdded).toEqual([]);
+    expect(changes.labelsRemoved).toEqual([]);
+    expect(changes.labelsRenamed).toHaveLength(both.length);
+    expect(changes.labelsRenamed).toContainEqual({
+      from: 'backmesh-4',
+      to: 'backmesh-ubuntu-2404-4vcpu',
+    });
+    expect(changes.labelsRenamed).toContainEqual({
+      from: 'backmesh-gcp-kvm-od-8',
+      to: 'backmesh-gcp-ubuntu-2404-kvm-od-8vcpu',
+    });
+    expect(changeLines('acme', changes, both)).toEqual([
+      expect.stringMatching(
+        /^Renamed labels, old to new: backmesh-2 → backmesh-ubuntu-2404-2vcpu, .*\. Change each workflow's runs-on to the new label: a job sent to an old label once its scale set is deleted never runs, and waits until GitHub cancels it after 24 hours\.$/,
+      ),
+    ]);
+    // Each class renames its old scale set, and none retires: two routes
+    // can't share a code.
+    const live = new Set(old.map((r) => r.label));
+    const written = parseRoutes(routesJson(both, old, live));
+    expect(written.filter((r) => r.retiring)).toEqual([]);
+    expect(
+      written.find((r) => r.label === 'backmesh-ubuntu-2404-4vcpu')
+        ?.renamedFrom,
+    ).toBe('backmesh-4');
+    // A rerun before the listener has renamed them keeps the old names, and
+    // drops them once it lists the new ones.
+    const again = parseRoutes(routesJson(both, written, live));
+    expect(again.map((r) => r.renamedFrom)).toEqual(
+      written.map((r) => r.renamedFrom),
+    );
+    const renamed = new Set(both.map((c) => c.label));
+    expect(
+      parseRoutes(routesJson(both, written, renamed)).some(
+        (r) => r.renamedFrom,
+      ),
+    ).toBe(false);
+  });
+
   it("doesn't flag a label changed when a release only reorders its VM types", () => {
     // Same types, reversed order: a reorder, with nothing added
     // or removed.
     const reordered = running.map((r) =>
-      r.label === 'backmesh-gcp-4'
+      r.label === 'backmesh-gcp-ubuntu-2404-4vcpu'
         ? { ...r, vmTypes: [...r.vmTypes].reverse() }
         : r,
     );
@@ -77,7 +123,10 @@ describe('converge', () => {
 
     // A listener that lists none, or only some, of its scale sets yet
     // can't say they're gone.
-    for (const partial of [new Set<string>(), new Set(['backmesh-4'])]) {
+    for (const partial of [
+      new Set<string>(),
+      new Set(['backmesh-ubuntu-2404-4vcpu']),
+    ]) {
       expect(
         parseRoutes(routesJson(awsOnly, written, partial)).filter(
           (r: Route) => r.retiring,

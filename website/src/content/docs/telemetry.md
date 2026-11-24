@@ -20,7 +20,7 @@ Each event describes one job's runner, never the job itself:
 | `region`          | The cloud region the runner ran in                                            |
 | `vm_type`         | The VM type, such as `m7a.xlarge`                                             |
 | `capacity`        | `spot` or `on-demand`                                                         |
-| `label`           | The runner label the job asked for, such as `backmesh-4`                      |
+| `label`           | The runner label the job asked for, such as `backmesh-ubuntu-2404-4vcpu`      |
 | `queued_ms`       | From GitHub queuing the job to assigning a runner, by GitHub's clock          |
 | `boot_ms`         | From backmesh asking for the runner's VM to its container running             |
 | `launch_refusals` | How many launches the cloud refused, for quota or capacity, before the VM ran |
@@ -42,7 +42,7 @@ as:
       "region": "us-east-2",
       "vm_type": "m7a.xlarge",
       "capacity": "spot",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "queued_ms": 2100,
       "boot_ms": 41000,
       "launch_refusals": 0,

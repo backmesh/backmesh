@@ -487,7 +487,13 @@ describe("e2e.yml's Worker and Azure checks", () => {
       ],
     };
     const matrix = {
-      include: [{ label: 'backmesh-4', cloud: 'aws', regions: ['us-east-2'] }],
+      include: [
+        {
+          label: 'backmesh-ubuntu-2404-4vcpu',
+          cloud: 'aws',
+          regions: ['us-east-2'],
+        },
+      ],
     };
     const args = join(dir, 'args');
     const out = runStep(signedIn(step.run!), {
@@ -519,12 +525,12 @@ describe("e2e.yml's Worker and Azure checks", () => {
   };
 
   // Our Azure CI subscription has 3 spot vCPUs per region until its quota
-  // is raised: the Azure leg's one job runs on backmesh-2, AWS's on `labels`.
+  // is raised: the Azure leg's one job runs on backmesh-ubuntu-2404-2vcpu, AWS's on `labels`.
   it("runs the Azure leg's one job on its leg's label, and AWS's labels unchanged", () => {
     const azure = labelMatrix('azure');
     expect(azure.got.include).toEqual([
       expect.objectContaining({
-        label: 'backmesh-2',
+        label: 'backmesh-ubuntu-2404-2vcpu',
         cloud: 'azure',
         regions: ['eastus'],
       }),
@@ -534,10 +540,10 @@ describe("e2e.yml's Worker and Azure checks", () => {
   });
 
   // GCP's control plane makes it the home cloud, whose labels are plain.
-  it("runs the GCP leg's one job on backmesh-4 in the plan's GCP regions", () => {
+  it("runs the GCP leg's one job on backmesh-ubuntu-2404-4vcpu in the plan's GCP regions", () => {
     expect(labelMatrix('gcp').got.include).toEqual([
       expect.objectContaining({
-        label: 'backmesh-4',
+        label: 'backmesh-ubuntu-2404-4vcpu',
         cloud: 'gcp',
         regions: ['us-central1', 'us-east1'],
         kvm: false,
@@ -1433,7 +1439,9 @@ setInterval(() => {}, 1000);
       'cancel-in-progress': true,
     });
     const dir = mkdtempSync(join(tmpdir(), 'run-'));
-    const matrix = { include: [{ label: 'backmesh-4', cloud: 'azure' }] };
+    const matrix = {
+      include: [{ label: 'backmesh-ubuntu-2404-4vcpu', cloud: 'azure' }],
+    };
     writeFileSync(
       join(dir, 'run.json'),
       JSON.stringify({ matrix, ref: 'a'.repeat(40), nonce: 'n1' }, null, 2),

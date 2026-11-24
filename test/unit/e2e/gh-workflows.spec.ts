@@ -82,7 +82,7 @@ describe('dispatchAndFind', () => {
       listRuns,
       noSleep,
       'lost-runner-check.yml',
-      { label: 'backmesh-4', step: 'docker' },
+      { label: 'backmesh-ubuntu-2404-4vcpu', step: 'docker' },
     );
     expect(runId).toBe(2);
   });

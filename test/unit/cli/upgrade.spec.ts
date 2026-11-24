@@ -537,7 +537,7 @@ describe('upgrade', () => {
       'Upgrade cancelled before anything changed. Raise the quotas named above, then run `backmesh upgrade` again.',
     );
     expect(lines).toContain(
-      "acme: backmesh-4 would start no runners: every runner region's spot quota is under one 4-vCPU runner (us-east-2 2 vCPU); raise L-34B43A08 in us-east-2 to use it.",
+      "acme: backmesh-ubuntu-2404-4vcpu would start no runners: every runner region's spot quota is under one 4-vCPU runner (us-east-2 2 vCPU); raise L-34B43A08 in us-east-2 to use it.",
     );
     expect(confirm).toHaveBeenCalledOnce();
     expect(mutations(calls)).toEqual([]);
@@ -683,13 +683,13 @@ describe('upgrade', () => {
       });
       await upgrade(deps, { plan: true });
       expect(lines).toContain(
-        "acme: 1 public repository (such as acme/site) can't use these runners, and their jobs wait at GitHub. `backmesh upgrade --public-repos` adds backmesh-public-2 and backmesh-public-4 for them to use.",
+        "acme: 1 public repository (such as acme/site) can't use these runners, and their jobs wait at GitHub. `backmesh upgrade --public-repos` adds backmesh-ubuntu-2404-public-2vcpu and backmesh-ubuntu-2404-public-4vcpu for them to use.",
       );
       lines.length = 0;
       const plan = await upgrade(deps, { plan: true, publicRepos: true });
       expect(lines).toContain(PUBLIC_REPOS_LINE);
       expect(lines.join('\n')).not.toContain('public repository (such as');
-      expect(lines.join('\n')).toContain('backmesh-public-4');
+      expect(lines.join('\n')).toContain('backmesh-ubuntu-2404-public-4vcpu');
       await upgrade(deps, {
         publicRepos: true,
         yes: true,
@@ -700,8 +700,8 @@ describe('upgrade', () => {
           .filter((r) => r.public)
           .map(({ label, retiring }) => [label, !!retiring]);
       expect(publicRoutes()).toEqual([
-        ['backmesh-public-2', false],
-        ['backmesh-public-4', false],
+        ['backmesh-ubuntu-2404-public-2vcpu', false],
+        ['backmesh-ubuntu-2404-public-4vcpu', false],
       ]);
 
       // --no-public-repos retires them like any dropped class.
@@ -712,8 +712,8 @@ describe('upgrade', () => {
         planId: 'planId' in off ? off.planId : '',
       });
       expect(publicRoutes()).toEqual([
-        ['backmesh-public-2', true],
-        ['backmesh-public-4', true],
+        ['backmesh-ubuntu-2404-public-2vcpu', true],
+        ['backmesh-ubuntu-2404-public-4vcpu', true],
       ]);
     } finally {
       delete PUBLIC_REPOS.acme;
@@ -752,7 +752,7 @@ describe('upgrade', () => {
     const reordered = (
       JSON.parse(RUNNERS) as { label: string; vmTypes: string[] }[]
     ).map((c) =>
-      c.label === 'backmesh-4'
+      c.label === 'backmesh-ubuntu-2404-4vcpu'
         ? { ...c, vmTypes: [...c.vmTypes].reverse() }
         : c,
     );
@@ -1077,7 +1077,9 @@ describe('upgrade', () => {
       'Upgrade cancelled before anything changed.',
     );
     expect(
-      lines.some((l) => l.includes('backmesh-4 would start no runners')),
+      lines.some((l) =>
+        l.includes('backmesh-ubuntu-2404-4vcpu would start no runners'),
+      ),
     ).toBe(true);
     // Asked before the sign-in an install without a key needs.
     expect(lines.some((l) => l.includes('so upgrade asks for it now'))).toBe(

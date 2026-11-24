@@ -214,7 +214,7 @@ reruns and cancels included, stops once it's revoked.
 Each installation's runners join its own runner group, `backmesh-` and a short
 ID, which `backmesh status` names. The group doesn't allow public repositories
 unless the install has [`--public-repos`](/public-repos/), which keeps forks'
-pull requests on `backmesh-public-*` labels. backmesh adds no actor policy of
+pull requests on `backmesh-ubuntu-2404-public-*` labels. backmesh adds no actor policy of
 its own; GitHub's fork pull request settings decide whether a fork's workflow
 runs, and after whose approval.
 

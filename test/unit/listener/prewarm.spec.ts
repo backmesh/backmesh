@@ -20,8 +20,8 @@ import { message } from './fakes.js';
 // (`simulate.py`): T3 starts a slot at the trigger plus its
 // median offset minus the 71 s lead, and every slot ends 71 + 60 s after it
 // starts.
-const L = 'backmesh-4';
-const L8 = 'backmesh-8';
+const L = 'backmesh-ubuntu-2404-4vcpu';
+const L8 = 'backmesh-ubuntu-2404-8vcpu';
 const s = (seconds: number) => seconds * 1000;
 const REF = 'acme/app/.github/workflows/ci.yml@refs/heads/main';
 
@@ -145,7 +145,7 @@ describe('Planner', () => {
     // The trigger waits 31 s, so its children's offsets are normalized by
     // +40 s: a test queued at 31 + dur + 2 s learns 73 + dur. Durations
     // 100, 110, 120, 130 and 500 s give 173, 183, 193, 203 and 573 s, with
-    // 2, 2, 3, 1 and 2 tests; and `lint` on backmesh-8 queues with the
+    // 2, 2, 3, 1 and 2 tests; and `lint` on backmesh-ubuntu-2404-8vcpu queues with the
     // trigger.
     const runs = [100, 110, 120, 130, 500].map((dur, i) => [
       ...buildRun(0, [2, 2, 3, 1, 2][i]!, dur, 31),
@@ -329,7 +329,7 @@ describe('Planner', () => {
   it('spends no slot on the trigger, whichever label is heard of first', () => {
     for (const lintFirst of [false, true]) {
       const { planner } = make();
-      // build on backmesh-4 and lint on backmesh-8 queue together, then 2
+      // build on backmesh-ubuntu-2404-4vcpu and lint on backmesh-ubuntu-2404-8vcpu queue together, then 2
       // tests at 173 s: T3 from 5 runs.
       const run = (t0: number): Spec[] => [
         ...buildRun(t0, 2),
@@ -355,8 +355,8 @@ describe('Planner', () => {
 
   it("takes the trigger's label from most learned runs", () => {
     const { planner } = make();
-    // Four runs start with build on backmesh-4; the last skipped it and
-    // started with lint on backmesh-8. Tests at 173 s, lint at 0.
+    // Four runs start with build on backmesh-ubuntu-2404-4vcpu; the last skipped it and
+    // started with lint on backmesh-ubuntu-2404-8vcpu. Tests at 173 s, lint at 0.
     const full = (t0: number): Spec[] => [
       ...buildRun(t0, 2),
       { name: 'lint', label: L8, q: t0, start: t0 + 71, end: t0 + 90 },
@@ -396,7 +396,7 @@ describe('Planner', () => {
     planner.booted(L, null, s(5));
     expect(planner.boot(L)).toBe(s(40));
     expect(planner.boot(L8)).toBe(s(71));
-    // A start on backmesh-8, which speculation always serves: it takes the
+    // A start on backmesh-ubuntu-2404-8vcpu, which speculation always serves: it takes the
     // other labels' registration.
     planner.booted(L8, s(20), null);
     expect(planner.boot(L8)).toBe(s(25));
@@ -415,13 +415,13 @@ describe('Planner', () => {
 
   it('starts and ends T3 slots by the learned boots, so a runner idles at most 60 s', () => {
     const { planner } = make();
-    // backmesh-4 boots in 30 s, backmesh-8 in 90 s.
+    // backmesh-ubuntu-2404-4vcpu boots in 30 s, backmesh-ubuntu-2404-8vcpu in 90 s.
     for (let i = 0; i < 3; i++) {
       planner.booted(L, s(22), s(8));
       planner.booted(L8, s(82), s(8));
     }
-    // 5 runs: build waits 30 s and runs 100 s; test on backmesh-4 and e2e
-    // on backmesh-8 queue 2 s after it ends, at 132 s, which is 102 s
+    // 5 runs: build waits 30 s and runs 100 s; test on backmesh-ubuntu-2404-4vcpu and e2e
+    // on backmesh-ubuntu-2404-8vcpu queue 2 s after it ends, at 132 s, which is 102 s
     // after a trigger that waited none.
     const run = (t0: number): Spec[] => [
       ...buildRun(t0, 1, 100, 30),
@@ -1592,10 +1592,10 @@ describe('Planner.cue on a workflow mid-run', () => {
     readFileSync(new URL('./cue-first-wave.json', import.meta.url), 'utf8'),
   );
   const labels = [
-    'backmesh-4',
-    'backmesh-8',
-    'backmesh-kvm-4',
-    'backmesh-kvm-16',
+    'backmesh-ubuntu-2404-4vcpu',
+    'backmesh-ubuntu-2404-8vcpu',
+    'backmesh-ubuntu-2404-kvm-4vcpu',
+    'backmesh-ubuntu-2404-kvm-16vcpu',
   ];
   const planner = (runBranch?: PlannerDeps['runBranch']) => {
     const logs: Record<string, unknown>[] = [];
@@ -1627,7 +1627,7 @@ describe('Planner.cue on a workflow mid-run', () => {
   const style = (name = 'style') => [
     {
       name,
-      label: 'backmesh-4',
+      label: 'backmesh-ubuntu-2404-4vcpu',
       assignedMs: 0,
       ref: `.github/workflows/${name}.yml@refs/pull/2348/merge`,
     },
@@ -1734,7 +1734,7 @@ describe('Planner.cue on a workflow mid-run', () => {
         id,
         jobs: [0, 1, 2].map((i) => ({
           name: `it (${i})`,
-          labels: ['backmesh-4'],
+          labels: ['backmesh-ubuntu-2404-4vcpu'],
           conclusion: 'cancelled',
           queuedAt: queued + i,
           startedAt: null,
@@ -1777,7 +1777,7 @@ describe('Planner.cue on a workflow mid-run', () => {
       [4, 'dev'],
     ] as const) {
       p.observe(
-        'backmesh-8',
+        'backmesh-ubuntu-2404-8vcpu',
         message('JobAssigned', {
           workflowRunId: id,
           jobId: `${id}-0`,
@@ -1785,7 +1785,7 @@ describe('Planner.cue on a workflow mid-run', () => {
           jobWorkflowRef: `${ANY}/.github/workflows/ci.yml@refs/heads/${branch}`,
           eventName: 'push',
           scaleSetAssignTime: s(id),
-          requestLabels: ['backmesh-8'],
+          requestLabels: ['backmesh-ubuntu-2404-8vcpu'],
         }),
         s(id),
       );

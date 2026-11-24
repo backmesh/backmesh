@@ -5,7 +5,7 @@
 // the numbers are illustrative.
 export const status = `<span class="p">$ </span>backmesh status
 Runners: each job runs in its own VM
-  backmesh-aws-4: 6 assigned, 6 running
+  backmesh-aws-ubuntu-2404-4vcpu: 6 assigned, 6 running
 <span class="hi">    24 h: 42 jobs; queued to started
       p50 21 s, p95 1.6 min</span>
 Cost since 2026-11-01: $41.80`;

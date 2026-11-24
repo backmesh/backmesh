@@ -1,6 +1,6 @@
 # GPU T4 time to runner
 
-How long a `backmesh-gpu-t4` job waits for its spot T4 VM, cold: no cue, no
+How long a `backmesh-ubuntu-2404-gpu-t4` job waits for its spot T4 VM, cold: no cue, no
 runner idle on the label. It checks the v0.4.3 launch claim of 19 minutes
 (rc.1, [backmesh-dryrun/gpu-check run 44415113281](https://github.com/backmesh-dryrun/gpu-check/actions/runs/44415113281))
 cut to 5 (rc.2, [run 44420415510](https://github.com/backmesh-dryrun/gpu-check/actions/runs/44420415510))
@@ -14,6 +14,10 @@ a throwaway `gpu-t4-bench` branch of this repository, deleted after, as its
 so no VM from the last sample was left.
 
 ## Results
+
+Runs before backmesh v0.7.0 name the labels as they were then: `backmesh-4`
+is today's `backmesh-ubuntu-2404-4vcpu`, and `backmesh-gpu-t4` today's
+`backmesh-ubuntu-2404-gpu-t4`.
 
 Measured on 2026-11-21, 17:10 to 19:57 UTC, on backmesh's own CI installation
 (org `backmesh`, backmesh v0.5.1, anycloud 0.1.79, AWS runner regions

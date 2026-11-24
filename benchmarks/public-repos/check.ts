@@ -97,7 +97,7 @@ if (!forkPublic) {
 } else {
   const jobs = await jobsOf(forkPublic);
   // The most vCPUs the run's public jobs held at once, from their start and
-  // end times: `backmesh-public-<n>` holds n.
+  // end times: `backmesh-ubuntu-2404-public-<n>vcpu` holds n.
   const vcpus = (j: Job) =>
     Number(
       j.labels

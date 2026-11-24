@@ -92,7 +92,7 @@ const start = (bare: string) =>
     env: {
       ...process.env,
       TEST_ORG_REPO: 'backmesh-dryrun/e2e',
-      MATRIX: '{"include":[{"label":"backmesh-4"}]}',
+      MATRIX: '{"include":[{"label":"backmesh-ubuntu-2404-4vcpu"}]}',
       REF: 'a'.repeat(40),
       GIT_CONFIG_COUNT: '1',
       GIT_CONFIG_KEY_0: `url.${bare}.insteadOf`,

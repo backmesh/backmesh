@@ -24,8 +24,8 @@ narrows that risk but doesn't remove it. Read this page before you turn it on.
 - **The runner group allows public repositories.** A public repository's own
   runs, such as pushes and pull requests from its own branches, use every
   label, as a private repository's do.
-- **Pull requests from forks run only on `backmesh-public-2` and
-  `backmesh-public-4`.** These are spot VMs in the control plane's cloud, one
+- **Pull requests from forks run only on `backmesh-ubuntu-2404-public-2vcpu` and
+  `backmesh-ubuntu-2404-public-4vcpu`.** These are spot VMs in the control plane's cloud, one
   job per VM, deleted when the job ends, with no KVM. Together they hold at
   most 32 vCPUs across the org; more fork jobs wait at GitHub.
 - **A fork run that asks for another backmesh label is cancelled**, with a
@@ -44,7 +44,7 @@ repository was deleted.
 ## What it doesn't do
 
 - **On AWS and GCP, the public runners share your cloud network.**
-  `backmesh-public-*` VMs run in the same account or project as your other
+  `backmesh-ubuntu-2404-public-*` VMs run in the same account or project as your other
   runners: on AWS in the default VPC, in the shared `anycloud-vm` security
   group, and on GCP in the `default` network. A fork's job can reach your
   other instances there whose rules admit the network's range. On GCP that
@@ -71,7 +71,7 @@ repository was deleted.
   These run your default branch's workflow with its secrets and its
   `GITHUB_TOKEN`, on any label, with no vCPU cap or runtime limit, and GitHub's
   approval setting doesn't apply to them. Keep such jobs off backmesh labels,
-  put them on `backmesh-public-*`, or gate them with a job-level `if`, which
+  put them on `backmesh-ubuntu-2404-public-*`, or gate them with a job-level `if`, which
   GitHub checks before it assigns a runner. Never check out or run a fork's
   code in them; GitHub's
   [guidance](https://docs.github.com/en/actions/reference/security/secure-use)
@@ -100,17 +100,17 @@ repository was deleted.
 2. **Keep secrets out of fork-triggered workflows.** GitHub gives a fork's
    `pull_request` run no secrets and a read-only token; don't work around that
    with `pull_request_target`.
-3. **Send forks to `backmesh-public-*` in `runs-on`**, so their runs aren't
+3. **Send forks to `backmesh-ubuntu-2404-public-*` in `runs-on`**, so their runs aren't
    cancelled:
 
    ```yaml
    jobs:
      test:
-       runs-on: ${{ github.event.pull_request && github.event.pull_request.head.repo.full_name != github.repository && 'backmesh-public-4' || 'backmesh-4' }}
+       runs-on: ${{ github.event.pull_request && github.event.pull_request.head.repo.full_name != github.repository && 'backmesh-ubuntu-2404-public-4vcpu' || 'backmesh-ubuntu-2404-4vcpu' }}
    ```
 
    The `github.event.pull_request` check matters: on a push there is no pull
-   request, and the comparison alone would pick `backmesh-public-4`. It covers
+   request, and the comparison alone would pick `backmesh-ubuntu-2404-public-4vcpu`. It covers
    `pull_request_review` and `pull_request_review_comment` runs too, and a
    pull request whose fork was deleted.
 

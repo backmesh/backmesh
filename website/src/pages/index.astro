@@ -33,7 +33,7 @@ const description =
   'Free and open source (Apache-2.0). Self-hosted GitHub Actions runners on spot VMs in your AWS, GCP or Azure account: up to 2× faster, 5× cheaper builds than GitHub-hosted runners in our benchmarks. Your cloud bills you, so its credits apply.';
 const og = new URL('/brand/og.png', Astro.site).href;
 
-// Build benchmarks, 2026-11-18: medians of 5 rounds each, backmesh-4 against
+// Build benchmarks, 2026-11-18: medians of 5 rounds each, backmesh-ubuntu-2404-4vcpu against
 // GitHub's ubuntu-latest (/benchmarks/ has the method and the runs). Each
 // card's numbers link to its row there.
 const benchmarks = [
@@ -332,7 +332,7 @@ const jsonLd = {
       <section id="benchmarks" class="wrap section benchmarks">
         <h2>Builds against GitHub's ubuntu-latest.</h2>
         <p class="lead">
-          Median of 5 runs each, a <code>backmesh-4</code> spot VM on AWS
+          Median of 5 runs each, a <code>backmesh-ubuntu-2404-4vcpu</code> spot VM on AWS
           against GitHub-hosted <code>ubuntu-latest</code>.
         </p>
         <ul class="plans bench">
@@ -348,7 +348,7 @@ const jsonLd = {
                     </a>
                   </strong>
                   <span class="runner">
-                    on backmesh-4, plus <a href={row}>{wait} s</a> before the job
+                    on backmesh-ubuntu-2404-4vcpu, plus <a href={row}>{wait} s</a> before the job
                     starts, about <a href="/benchmarks/#method">17 s</a> when cued
                   </span>
                   <ul>
@@ -514,7 +514,7 @@ const jsonLd = {
             <p>
               Each label runs in one cloud. Out of spot capacity, the next VM
               type launches, never the next cloud. Use{' '}
-              <code>backmesh-od-*</code> (on-demand) for jobs that shouldn't be interrupted.
+              <code>backmesh-ubuntu-2404-od-*</code> (on-demand) for jobs that shouldn't be interrupted.
             </p>
             <p>
               CPU and KVM runners on AWS, GCP and Azure, and NVIDIA T4{' '}

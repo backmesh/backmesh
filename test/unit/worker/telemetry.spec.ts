@@ -40,7 +40,7 @@ const event = (org: number, job: number, startedAt = NOW) => ({
   region: 'us-east-2',
   vm_type: 'm7a.4xlarge',
   capacity: 'spot',
-  label: 'backmesh-4',
+  label: 'backmesh-ubuntu-2404-4vcpu',
   queued_ms: 2_100,
   boot_ms: 41_000,
   features: [],

@@ -17,7 +17,7 @@ describe('class rate', () => {
     [1, 'spot', { low: 0.09, high: 0.12 }],
     [2, 'on demand', { low: 0.17, high: 0.23 }],
   ] as const)(
-    "ranges target %i's backmesh-4 VM over its types on %s",
+    "ranges target %i's backmesh-ubuntu-2404-4vcpu VM over its types on %s",
     (i, kind, rate) => {
       const target = TARGETS[i];
       const details = CATALOG[target.cloud];
@@ -32,8 +32,8 @@ describe('class rate', () => {
   it('prices the default class and the GPU class per cloud, and says when a region is unpriced', () => {
     const { classes } = planClasses([TARGETS[0]], catalogs(), 'aws');
     expect(formatRate(classes, CATALOG.aws)).toEqual([
-      'aws us-east-2: no VM while idle; while its job runs, a backmesh-4 VM costs about $0.05–0.07 an hour on spot and $0.17–0.24 on demand, plus its disk, and the other sizes scale with their vCPUs',
-      'aws us-east-2: a backmesh-gpu-t4 VM (g4dn.xlarge, g4dn.2xlarge) costs about $0.27–0.37 an hour on spot and $0.53–0.75 on demand, plus its disk',
+      'aws us-east-2: no VM while idle; while its job runs, a backmesh-ubuntu-2404-4vcpu VM costs about $0.05–0.07 an hour on spot and $0.17–0.24 on demand, plus its disk, and the other sizes scale with their vCPUs',
+      'aws us-east-2: a backmesh-ubuntu-2404-gpu-t4 VM (g4dn.xlarge, g4dn.2xlarge) costs about $0.27–0.37 an hour on spot and $0.53–0.75 on demand, plus its disk',
     ]);
     const elsewhere = classes.map((c) => ({ ...c, regions: ['eu-west-1'] }));
     expect(formatRate(elsewhere, CATALOG.aws)[0]).toContain(

@@ -8,19 +8,19 @@ jobs:
     strategy:
       matrix:
         n: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    runs-on: backmesh-public-4
+    runs-on: backmesh-ubuntu-2404-public-4vcpu
     steps:
       - run: sleep 300
   # Cancelled at 60 minutes, with a heartbeat step's last line to time it.
   limit:
-    runs-on: backmesh-public-2
+    runs-on: backmesh-ubuntu-2404-public-2vcpu
     timeout-minutes: 120
     steps:
       - run: for i in $(seq 1 70); do echo "heartbeat $(date -u +%s)"; sleep 60; done
   # Reads the default branch's entry, which seed.yml saved, and gets no
   # write grant: its token file names no own prefix. Prints no token.
   cache:
-    runs-on: backmesh-public-2
+    runs-on: backmesh-ubuntu-2404-public-2vcpu
     steps:
       - uses: backmesh/cache@v1
         with:

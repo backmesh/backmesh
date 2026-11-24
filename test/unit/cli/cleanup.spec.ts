@@ -68,8 +68,8 @@ describe("uninstall's cleanup", () => {
     upstream.devicePending = 1;
     const { client, github, lines, org, calls } = setUp();
     // On-demand scale sets go too, on one cloud or several.
-    org.sets.set('backmesh-od-4', 3);
-    org.sets.set('backmesh-gcp-od-16', 4);
+    org.sets.set('backmesh-ubuntu-2404-od-4vcpu', 3);
+    org.sets.set('backmesh-gcp-ubuntu-2404-od-16vcpu', 4);
 
     const cleanup = await signInForCleanup('acme', undefined, client);
     const remaining = await removeFromGitHub(
@@ -138,7 +138,7 @@ describe("uninstall's cleanup", () => {
     // The other install's group, and a set in the shared group from
     // before per-install names, which a listener may still use.
     org.groups.set(7, 'backmesh-zz999-abcdef');
-    org.legacySets.set('backmesh-4', 9);
+    org.legacySets.set('backmesh-ubuntu-2404-4vcpu', 9);
     org.runners.set(104, 'bml8u5e-a4-aaaaaaaa');
 
     const cleanup = await signInForCleanup('acme', own.key, client);
@@ -153,7 +153,7 @@ describe("uninstall's cleanup", () => {
     ]);
     expect(remaining).toEqual([]);
     expect(org.sets.size).toBe(0);
-    expect([...org.legacySets]).toEqual([['backmesh-4', 9]]);
+    expect([...org.legacySets]).toEqual([['backmesh-ubuntu-2404-4vcpu', 9]]);
     // The other install's runners and group stay.
     expect([...org.runners.values()]).toEqual([
       'bm0a1b2-a4-k3j9x0qz',

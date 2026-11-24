@@ -9,14 +9,14 @@ import { clouds } from './clouds';
   <pre class="code"><code>strategy:
   matrix:
     cloud: [aws, gcp, azure]
-runs-on: <b>backmesh-${'{{'} matrix.cloud {'}}'}-4</b></code></pre>
+runs-on: <b>backmesh-${'{{'} matrix.cloud {'}}'}-ubuntu-2404-4vcpu</b></code></pre>
   <ul
-    aria-label="The matrix runs one job in each cloud's lane: backmesh-aws-4, backmesh-gcp-4 and backmesh-azure-4."
+    aria-label="The matrix runs one job in each cloud's lane: backmesh-aws-ubuntu-2404-4vcpu, backmesh-gcp-ubuntu-2404-4vcpu and backmesh-azure-ubuntu-2404-4vcpu."
   >
     {clouds.map((c) => (
       <li>
         <span class="mark" set:html={c.svg} aria-hidden="true" />
-        <code>backmesh-{c.key}-4</code>
+        <code>backmesh-{c.key}-ubuntu-2404-4vcpu</code>
         <span class="job"><i aria-hidden="true"></i>test · {c.key}</span>
       </li>
     ))}

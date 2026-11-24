@@ -77,8 +77,8 @@ on:
           GPU check
         required: true
         default: >-
-          backmesh-4=aws:us-east-2,us-east-1,us-west-2
-          backmesh-kvm-4=aws:us-east-2,us-east-1,us-west-2
+          backmesh-ubuntu-2404-4vcpu=aws:us-east-2,us-east-1,us-west-2
+          backmesh-ubuntu-2404-kvm-4vcpu=aws:us-east-2,us-east-1,us-west-2
 
 permissions: {}
 
@@ -242,15 +242,15 @@ jobs:
             placement: --runners azure
             # Both control-plane sizes are offered here in our subscription.
             control-plane-region: centralus
-            # Our Azure CI subscription has 3 spot vCPUs per region: back to backmesh-4 once its quota is raised.
-            label: backmesh-2
+            # Our Azure CI subscription has 3 spot vCPUs per region: back to 4 vCPUs once its quota is raised.
+            label: backmesh-ubuntu-2404-2vcpu
           - cloud: gcp
             placement: --runners gcp
             # anycloud finds a GCP cluster by name in the whole project (see
             # its guard), so the region is only where it and the runners go.
             control-plane-region: us-central1
             # The control plane's cloud's labels are plain.
-            label: backmesh-4
+            label: backmesh-ubuntu-2404-4vcpu
     runs-on: ubuntu-24.04
     # Holds the legs' secrets, and is the subject each cloud's OIDC trust
     # names (see the header).

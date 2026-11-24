@@ -73,6 +73,8 @@ export interface RunnerChanges {
   // Labels whose scale sets start or stop taking jobs.
   labelsAdded: string[];
   labelsRemoved: string[];
+  // Labels renamed: a class kept, its code the same, under a new label.
+  labelsRenamed: { from: string; to: string }[];
   // Labels kept whose VM types or regions change.
   labelsChanged: string[];
   // Per cloud kept, its runner regions added and removed.
@@ -101,11 +103,23 @@ export function runnerChanges(
   const [labelsWere, labelsNow] = [before, after].map((c) =>
     c.map((r) => r.label),
   ) as [string[], string[]];
+  const labelsRenamed = before.flatMap((r) => {
+    const next = after.find((c) => c.code === r.code);
+    return next && next.label !== r.label && !labelsNow.includes(r.label)
+      ? [{ from: r.label, to: next.label }]
+      : [];
+  });
+  const renamed = labelsRenamed.flatMap((r) => [r.from, r.to]);
   return {
     added: now.filter((c) => !was.includes(c)),
     removed: was.filter((c) => !now.includes(c)),
-    labelsAdded: labelsNow.filter((l) => !labelsWere.includes(l)),
-    labelsRemoved: labelsWere.filter((l) => !labelsNow.includes(l)),
+    labelsAdded: labelsNow.filter(
+      (l) => !labelsWere.includes(l) && !renamed.includes(l),
+    ),
+    labelsRemoved: labelsWere.filter(
+      (l) => !labelsNow.includes(l) && !renamed.includes(l),
+    ),
+    labelsRenamed,
     labelsChanged: after
       .filter((c) => {
         const was = before.find((r) => r.label === c.label);
@@ -139,6 +153,7 @@ export const changed = (c: RunnerChanges) =>
     c.removed.length ||
     c.labelsAdded.length ||
     c.labelsRemoved.length ||
+    c.labelsRenamed.length ||
     c.labelsChanged.length ||
     c.regions.length
   );
@@ -202,6 +217,11 @@ export function changeLines(
   }
   if (c.labelsAdded.length) {
     lines.push(`New labels: ${c.labelsAdded.join(', ')}.`);
+  }
+  if (c.labelsRenamed.length) {
+    lines.push(
+      `Renamed labels, old to new: ${c.labelsRenamed.map((r) => `${r.from} → ${r.to}`).join(', ')}. Change each workflow's runs-on to the new label: a job sent to an old label once its scale set is deleted never runs, and waits until GitHub cancels it after 24 hours.`,
+    );
   }
   if (c.labelsChanged.length) {
     lines.push(`New VM types or regions for: ${c.labelsChanged.join(', ')}.`);
@@ -436,8 +456,28 @@ export function routesJson(
   // the active ones, can't say a retiring one is gone.
   const ready = before.every((r) => r.retiring || live.has(r.label));
   const gone = (label: string) => ready && !live.has(label);
+  // A class kept under a new label, its code the same, renames its scale
+  // set until the listener lists the new name, so the old one doesn't
+  // retire: two routes can't share a code.
+  const renamed = classes.map((c) => {
+    const was = before.find((r) => r.code === c.code && !r.retiring);
+    const from =
+      was?.label !== c.label
+        ? was?.label
+        : !live.has(c.label) && was.renamedFrom;
+    return from ? { ...c, renamedFrom: from } : c;
+  });
+  const codes = new Set(classes.map((c) => c.code));
   const retiring = before
-    .filter((r) => !labels.has(r.label) && !(r.retiring && gone(r.label)))
-    .map(({ onDemand: _, ...route }) => ({ ...route, retiring: true }));
-  return JSON.stringify([...classes, ...retiring]);
+    .filter(
+      (r) =>
+        !labels.has(r.label) &&
+        !codes.has(r.code) &&
+        !(r.retiring && gone(r.label)),
+    )
+    .map(({ onDemand: _, renamedFrom: __, ...route }) => ({
+      ...route,
+      retiring: true,
+    }));
+  return JSON.stringify([...renamed, ...retiring]);
 }

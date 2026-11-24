@@ -39,17 +39,21 @@ const sessionBody = (token: string) => ({
 });
 
 const labels = [
-  { name: 'backmesh-4', type: 'System' },
+  { name: 'backmesh-ubuntu-2404-4vcpu', type: 'System' },
   { name: 'backmesh-noretry', type: 'System' },
 ];
 const scaleSet = {
   id: 7,
-  name: 'backmesh-4',
+  name: 'backmesh-ubuntu-2404-4vcpu',
   runnerGroupId: 3,
   RunnerSetting: { ephemeral: true, disableUpdate: true },
   statistics,
 };
-const parsedScaleSet = { id: 7, name: 'backmesh-4', runnerGroupId: 3 };
+const parsedScaleSet = {
+  id: 7,
+  name: 'backmesh-ubuntu-2404-4vcpu',
+  runnerGroupId: 3,
+};
 const listed = (...value: unknown[]) =>
   json(200, { count: value.length, value });
 
@@ -62,7 +66,7 @@ const job = {
   jobWorkflowRef: 'acme/web/.github/workflows/ci.yml@refs/heads/main',
   workflowRunId: 555,
   eventName: 'pull_request',
-  requestLabels: ['backmesh-4'],
+  requestLabels: ['backmesh-ubuntu-2404-4vcpu'],
   // The service's .NET timestamps: 7 fractional digits, and DateTime.MinValue
   // for "not yet"; finishTime is left out.
   queueTime: '2026-11-05T12:00:00.1234567Z',
@@ -134,7 +138,7 @@ const cases: Case[] = [
   {
     name: 'exchanges a registration token for the service URL and admin token',
     routes: { [`GET ${SCALE_SETS}`]: listed(scaleSet) },
-    run: (a) => a.getScaleSet(3, 'backmesh-4'),
+    run: (a) => a.getScaleSet(3, 'backmesh-ubuntu-2404-4vcpu'),
     result: parsedScaleSet,
     check: ({ calls: [registration, exchange, call] }) => {
       expect(registration?.headers.get('authorization')).toBe(
@@ -145,7 +149,9 @@ const cases: Case[] = [
         url: 'https://github.com/acme',
         runner_event: 'register',
       });
-      expect(call?.url.searchParams.get('name')).toBe('backmesh-4');
+      expect(call?.url.searchParams.get('name')).toBe(
+        'backmesh-ubuntu-2404-4vcpu',
+      );
       expect(call?.url.searchParams.get('api-version')).toBe('6.0-preview');
       expect(call?.headers.get('authorization')).toBe(
         `Bearer ${adminJwt(4_102_444_800)}`,
@@ -159,7 +165,7 @@ const cases: Case[] = [
     run: async (a, _, clock) => {
       for (const ms of [0, 500_000, 541_000]) {
         clock.now = new Date(ms);
-        await a.getScaleSet(3, 'backmesh-4');
+        await a.getScaleSet(3, 'backmesh-ubuntu-2404-4vcpu');
       }
     },
     check: ({ calls }) =>
@@ -174,7 +180,7 @@ const cases: Case[] = [
       ],
       [`GET ${SCALE_SETS}`]: listed(scaleSet),
     },
-    run: (a) => a.getScaleSet(3, 'backmesh-4'),
+    run: (a) => a.getScaleSet(3, 'backmesh-ubuntu-2404-4vcpu'),
     result: parsedScaleSet,
     check: ({ calls, waits }) => {
       expect(to(calls, '/runner-registration')).toHaveLength(2);
@@ -187,7 +193,7 @@ const cases: Case[] = [
     routes: {
       [`POST ${REGISTRATION}`]: json(401, { message: 'Bad credentials' }),
     },
-    run: (a) => a.getScaleSet(3, 'backmesh-4'),
+    run: (a) => a.getScaleSet(3, 'backmesh-ubuntu-2404-4vcpu'),
     error: { name: 'AbortError' },
     check: ({ waits }) => expect(waits).toEqual([]),
   },
@@ -197,11 +203,11 @@ const cases: Case[] = [
       [`GET ${SCALE_SETS}`]: listed(),
       [`POST ${SCALE_SETS}`]: json(200, scaleSet),
     },
-    run: (a) => a.ensureScaleSet('backmesh-4', 3),
+    run: (a) => a.ensureScaleSet('backmesh-ubuntu-2404-4vcpu', 3),
     result: parsedScaleSet,
     check: ({ calls }) =>
       expect(calls.at(-1)?.body).toEqual({
-        name: 'backmesh-4',
+        name: 'backmesh-ubuntu-2404-4vcpu',
         runnerGroupId: 3,
         labels,
         RunnerSetting: { ephemeral: true, disableUpdate: true },
@@ -210,7 +216,7 @@ const cases: Case[] = [
   {
     name: 'finds an existing scale set instead of creating one',
     routes: { [`GET ${SCALE_SETS}`]: listed(scaleSet) },
-    run: (a) => a.ensureScaleSet('backmesh-4', 3),
+    run: (a) => a.ensureScaleSet('backmesh-ubuntu-2404-4vcpu', 3),
     result: parsedScaleSet,
     check: ({ calls }) =>
       expect(
@@ -218,6 +224,36 @@ const cases: Case[] = [
           (c) => c.method === 'POST' && c.url.href.startsWith(SCALE_SETS),
         ),
       ).toBe(false),
+  },
+  {
+    name: 'renames the scale set of a renamed label instead of creating one',
+    routes: {
+      [`GET ${SCALE_SETS}`]: [
+        listed(),
+        listed({ ...scaleSet, name: 'backmesh-4' }),
+      ],
+      [`PATCH ${SCALE_SETS}/7`]: json(200, scaleSet),
+    },
+    run: (a) => a.ensureScaleSet('backmesh-ubuntu-2404-4vcpu', 3, 'backmesh-4'),
+    result: parsedScaleSet,
+    check: ({ calls }) => {
+      expect(calls.at(-2)?.url.searchParams.get('name')).toBe('backmesh-4');
+      expect(calls.at(-1)?.body).toEqual({
+        name: 'backmesh-ubuntu-2404-4vcpu',
+        runnerGroupId: 3,
+        labels,
+        RunnerSetting: { ephemeral: true, disableUpdate: true },
+      });
+    },
+  },
+  {
+    name: 'creates the scale set of a renamed label whose old one is gone',
+    routes: {
+      [`GET ${SCALE_SETS}`]: [listed(), listed()],
+      [`POST ${SCALE_SETS}`]: json(200, scaleSet),
+    },
+    run: (a) => a.ensureScaleSet('backmesh-ubuntu-2404-4vcpu', 3, 'backmesh-4'),
+    result: parsedScaleSet,
   },
   {
     name: 'treats a missing scale set as deleted',

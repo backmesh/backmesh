@@ -37,7 +37,7 @@ function fits(type: VmTypeDetails | undefined, vcpus: number): boolean {
 }
 
 /**
- * Whether `details` offers every type of every `backmesh-N` and KVM class.
+ * Whether `details` offers every type of every `backmesh-ubuntu-2404-Nvcpu` and KVM class.
  * The on-demand classes' own first types (GCP's c4d and c3d) needn't be
  * offered: their spot types follow them.
  */

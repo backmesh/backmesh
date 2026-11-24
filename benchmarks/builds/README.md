@@ -42,7 +42,7 @@ ours, on each label at once:
 
 ```sh
 GITHUB_TOKEN=$(gh auth token) TARGET_REPO=backmesh/benchmarks \
-LABELS='backmesh-4 ubuntu-latest backmesh-4/cache ubuntu-latest/cache' ROUNDS=5 \
+LABELS='backmesh-ubuntu-2404-4vcpu ubuntu-latest backmesh-ubuntu-2404-4vcpu/cache ubuntu-latest/cache' ROUNDS=5 \
 BACKMESH_VERSION=0.5.5 ANYCLOUD_VERSION=0.1.80 \
 INSTALLATION='backmesh org CI, AWS' node benchmarks/builds/run.ts
 node benchmarks/builds/report.ts
@@ -106,17 +106,21 @@ Python for python and Go for go, and npm's cache for typescript; uv's, Go's
 module and build caches, Cargo's and Docker's layers aren't kept.
 `ubuntu-latest` has no automatic cache, so its warm runs repeat its cold
 ones. In a public repository, as backmesh/benchmarks is, `ubuntu-latest` has
-4 vCPUs and is free; in a private one it has 2. `backmesh-<n>` has n vCPUs and 4 GiB
+4 vCPUs and is free; in a private one it has 2. `backmesh-ubuntu-2404-<n>vcpu` has n vCPUs and 4 GiB
 each, on AWS an `m8a` VM first (AMD EPYC 9R45), then `m8i`, `m7a`, `m7i` and
 `m6a`. Equal vCPUs aren't equal cores: an `m8a` or `m7a` vCPU is a whole core,
 while an `m8i` vCPU is one of a core's two hyperthreads. `ubuntu-latest`'s
 are hyperthreads on most of its CPUs (the EPYC 7763s and Xeons), but the Marks
-step doesn't record threads per core, so on those `backmesh-4` on `m8a` likely
+step doesn't record threads per core, so on those `backmesh-ubuntu-2404-4vcpu` on `m8a` likely
 has 4 cores where `ubuntu-latest` has 2. The
 Marks step prints each job's CPU model (`lscpu`), so a result shows which CPUs
 each label ran on.
 
 ## Results
+
+Runs before backmesh v0.7.0 name the labels as they were then: `backmesh-4`
+is today's `backmesh-ubuntu-2404-4vcpu`, and `backmesh-gpu-t4` today's
+`backmesh-ubuntu-2404-gpu-t4`.
 
 On v0.5.5 the warm runs restored almost nothing: 1 of the 50 warm jobs on
 `backmesh-4` and `backmesh-2` restored an automatic cache. The others waited

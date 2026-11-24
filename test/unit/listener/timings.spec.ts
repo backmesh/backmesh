@@ -27,7 +27,7 @@ const wire = {
   jobDisplayName: 'test (node 22)',
   workflowRunId: 987654321,
   eventName: 'pull_request',
-  requestLabels: ['backmesh-4'],
+  requestLabels: ['backmesh-ubuntu-2404-4vcpu'],
   queueTime: '2026-11-05T12:00:00.1234567Z',
   scaleSetAssignTime: '2026-11-05T12:00:01.1234567Z',
   runnerAssignTime: '2026-11-05T12:01:49.1234567Z',
@@ -62,7 +62,7 @@ const completed = (
 ): JobRow => ({
   kind: 'job completed',
   at,
-  ...gitHubJob('backmesh-4', message(fields)),
+  ...gitHubJob('backmesh-ubuntu-2404-4vcpu', message(fields)),
   result: fields.result ?? wire.result,
   runnerJob,
   start,
@@ -70,8 +70,8 @@ const completed = (
 
 describe('job rows', () => {
   it("keep ARC's labels, the scale set and GitHub's timestamps", () => {
-    expect(gitHubJob('backmesh-4', message())).toEqual({
-      label: 'backmesh-4',
+    expect(gitHubJob('backmesh-ubuntu-2404-4vcpu', message())).toEqual({
+      label: 'backmesh-ubuntu-2404-4vcpu',
       jobId: '8a7c3e52-1f0b-5d6e-9a41-2c7d8e9f0a1b',
       runId: 987654321,
       org: 'acme',
@@ -88,7 +88,7 @@ describe('job rows', () => {
     // A job canceled before a runner took it.
     expect(
       gitHubJob(
-        'backmesh-4',
+        'backmesh-ubuntu-2404-4vcpu',
         message({
           runnerAssignTime: '0001-01-01T00:00:00Z',
           runnerName: undefined,
@@ -178,7 +178,7 @@ describe('job rows', () => {
       at: clock.now,
       job: 'test',
       runner: 'bmabc12-a4-00000001',
-      label: 'backmesh-4',
+      label: 'backmesh-ubuntu-2404-4vcpu',
       spot: true,
       vm: 'aws m6a.xlarge us-east-2',
       repo: 'acme/web',
@@ -188,7 +188,7 @@ describe('job rows', () => {
     rows.add({
       kind: 'runner failed to start',
       at: clock.now - 2 * DAY_MS,
-      label: 'backmesh-4',
+      label: 'backmesh-ubuntu-2404-4vcpu',
       runner: 'bmabc12-a4-00000002',
       end: 'failed: retry attempts exhausted',
       refusals: [{ region: 'us-east-1', diagnosis: 'quota-exhausted-region' }],
@@ -197,12 +197,12 @@ describe('job rows', () => {
     expect(logged).toHaveLength(194);
     expect(logged[0]).toMatchObject({
       msg: 'job completed',
-      label: 'backmesh-4',
+      label: 'backmesh-ubuntu-2404-4vcpu',
       event: 'pull_request',
       runnerJob: { submittedAt: expect.any(Number) },
     });
     expect(logged.at(-1)).toMatchObject({ msg: 'runner failed to start' });
-    expect(rows.summary('backmesh-4', DAY_MS)).toEqual({
+    expect(rows.summary('backmesh-ubuntu-2404-4vcpu', DAY_MS)).toEqual({
       // Hours 168 to 192.
       jobs: 25,
       startMs: { p50: 181_000, p95: 192_000 },
@@ -234,7 +234,9 @@ describe('job rows', () => {
       },
     });
     // Hours 24 to 192: the rest fell out.
-    expect(rows.summary('backmesh-4', ROWS_KEPT_MS)).toMatchObject({
+    expect(
+      rows.summary('backmesh-ubuntu-2404-4vcpu', ROWS_KEPT_MS),
+    ).toMatchObject({
       jobs: 169,
       startMs: { p50: 109_000, p95: 185_000 },
       reclaims: 1,
@@ -249,7 +251,7 @@ describe('job rows', () => {
       },
       since: null,
     });
-    expect(rows.summary('backmesh-8', DAY_MS)).toMatchObject({
+    expect(rows.summary('backmesh-ubuntu-2404-8vcpu', DAY_MS)).toMatchObject({
       jobs: 0,
       startMs: null,
       dominant: null,
@@ -269,7 +271,7 @@ describe('job rows', () => {
     took('d', '2026-11-05T12:01:49.1234567Z', 'reactive');
     // A runner another listener process started counts only in the total.
     took('e', '2026-11-05T12:02:00.1234567Z', null);
-    expect(rows.summary('backmesh-4', DAY_MS)).toMatchObject({
+    expect(rows.summary('backmesh-ubuntu-2404-4vcpu', DAY_MS)).toMatchObject({
       jobs: 5,
       startedFor: {
         cue: { jobs: 2, startMs: { p50: 5_000, p95: 9_000 } },
@@ -288,7 +290,7 @@ describe('job rows', () => {
     rows.add(completed());
     rows.add(completed());
     expect(logged).toHaveLength(1);
-    expect(rows.summary('backmesh-4', DAY_MS).jobs).toBe(1);
+    expect(rows.summary('backmesh-ubuntu-2404-4vcpu', DAY_MS).jobs).toBe(1);
   });
 
   it('forget a completion once its row is 7 days old', () => {
@@ -306,7 +308,7 @@ describe('job rows', () => {
     rows.add(completed({}, null, clock.now));
     rows.add(completed({ jobId: 'job-2' }, null, clock.now));
     expect(logged).toHaveLength(3);
-    expect(rows.summary('backmesh-4', DAY_MS).jobs).toBe(2);
+    expect(rows.summary('backmesh-ubuntu-2404-4vcpu', DAY_MS).jobs).toBe(2);
   });
 
   it('say since when, after a restart or the row cap', () => {
@@ -315,17 +317,17 @@ describe('job rows', () => {
       () => undefined,
       () => clock.now,
     );
-    expect(rows.summary('backmesh-4', ROWS_KEPT_MS).since).toBe(
+    expect(rows.summary('backmesh-ubuntu-2404-4vcpu', ROWS_KEPT_MS).since).toBe(
       new Date(5 * DAY_MS).toISOString(),
     );
     clock.now += DAY_MS + 1;
-    expect(rows.summary('backmesh-4', DAY_MS).since).toBeNull();
+    expect(rows.summary('backmesh-ubuntu-2404-4vcpu', DAY_MS).since).toBeNull();
 
     for (let i = 0; i <= MAX_ROWS; i++) {
       clock.now += 1;
       rows.add(completed({ jobId: `job-${i}` }, null, clock.now));
     }
-    expect(rows.summary('backmesh-4', DAY_MS)).toMatchObject({
+    expect(rows.summary('backmesh-ubuntu-2404-4vcpu', DAY_MS)).toMatchObject({
       jobs: MAX_ROWS,
       since: new Date(6 * DAY_MS + 2).toISOString(),
     });

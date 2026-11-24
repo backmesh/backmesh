@@ -6,47 +6,48 @@ head:
     content: 'GitHub Actions runner sizes and runs-on labels | backmesh'
 ---
 
-A label reads left to right: `backmesh-`, then optional parts, then the
-number of vCPUs.
+A label reads left to right: `backmesh-`, an optional cloud, the OS, optional
+parts, then the number of vCPUs.
 
-| Part             | Means                                                           | Example          |
-| ---------------- | --------------------------------------------------------------- | ---------------- |
-| `gcp-`, `azure-` | That cloud. Without it, the control plane's cloud               | `backmesh-gcp-4` |
-| `od-`            | On-demand instead of spot, for jobs that mustn't be interrupted | `backmesh-od-4`  |
-| `kvm-`           | The VM has `/dev/kvm`                                           | `backmesh-kvm-4` |
-| the number       | vCPUs, with 4 GiB of memory each                                | `backmesh-8`     |
+| Part             | Means                                                           | Example                          |
+| ---------------- | --------------------------------------------------------------- | -------------------------------- |
+| `gcp-`, `azure-` | That cloud. Without it, the control plane's cloud               | `backmesh-gcp-ubuntu-2404-4vcpu` |
+| `ubuntu-2404`    | The job runs on Ubuntu 24.04, as GitHub's `ubuntu-24.04` does   | `backmesh-ubuntu-2404-4vcpu`     |
+| `kvm-`           | The VM has `/dev/kvm`                                           | `backmesh-ubuntu-2404-kvm-4vcpu` |
+| `od-`            | On-demand instead of spot, for jobs that mustn't be interrupted | `backmesh-ubuntu-2404-od-4vcpu`  |
+| `<n>vcpu`        | vCPUs, with 4 GiB of memory each                                | `backmesh-ubuntu-2404-8vcpu`     |
 
-The [GPU labels](#gpu), `backmesh-gpu-t4` and `backmesh-gpu-od-t4`, end in
+The [GPU labels](#gpu), `backmesh-ubuntu-2404-gpu-t4` and `backmesh-ubuntu-2404-gpu-od-t4`, end in
 their GPU instead of a number.
 
-So `backmesh-4` is a 4-vCPU, 16 GiB spot VM in the control plane's cloud, and
-`backmesh-azure-kvm-od-8` an 8-vCPU on-demand Azure VM with `/dev/kvm`.
+So `backmesh-ubuntu-2404-4vcpu` is a 4-vCPU, 16 GiB spot VM in the control plane's cloud, and
+`backmesh-azure-ubuntu-2404-kvm-od-8vcpu` an 8-vCPU on-demand Azure VM with `/dev/kvm`.
 
 Every cloud gets the same four sizes, at 4 GiB of memory per vCPU. Each job
 gets its own VM of its label's size, which is deleted when the job ends:
 
-| Label                  | vCPU | Memory |
-| ---------------------- | ---- | ------ |
-| `backmesh-2`           | 2    | 8 GiB  |
-| `backmesh-4` (default) | 4    | 16 GiB |
-| `backmesh-8`           | 8    | 32 GiB |
-| `backmesh-16`          | 16   | 64 GiB |
+| Label                                  | vCPU | Memory |
+| -------------------------------------- | ---- | ------ |
+| `backmesh-ubuntu-2404-2vcpu`           | 2    | 8 GiB  |
+| `backmesh-ubuntu-2404-4vcpu` (default) | 4    | 16 GiB |
+| `backmesh-ubuntu-2404-8vcpu`           | 8    | 32 GiB |
+| `backmesh-ubuntu-2404-16vcpu`          | 16   | 64 GiB |
 
 A job has its whole VM, less what the VM's own system and Docker use. Sizes
 aren't configurable.
 
 With [`--public-repos`](/public-repos/), the control plane's cloud also gets
-`backmesh-public-2` and `backmesh-public-4`: spot VMs, without KVM, and the
+`backmesh-ubuntu-2404-public-2vcpu` and `backmesh-ubuntu-2404-public-4vcpu`: spot VMs, without KVM, and the
 only labels pull requests from a public repository's forks may use.
 
 ## One cloud or several
 
-The control plane's cloud has the plain labels, `backmesh-2` to
-`backmesh-16`. Each other cloud's labels name it:
+The control plane's cloud has the plain labels, `backmesh-ubuntu-2404-2vcpu` to
+`backmesh-ubuntu-2404-16vcpu`. Each other cloud's labels name it:
 
 ```yaml
-runs-on: backmesh-4 # the control plane's cloud, say AWS
-runs-on: backmesh-gcp-4 # or backmesh-azure-4
+runs-on: backmesh-ubuntu-2404-4vcpu # the control plane's cloud, say AWS
+runs-on: backmesh-gcp-ubuntu-2404-4vcpu # or backmesh-azure-ubuntu-2404-4vcpu
 ```
 
 Adding or removing a cloud never renames a label. Each label runs in exactly
@@ -56,9 +57,9 @@ while a named one keeps its cloud.
 ## VM types
 
 Each job's VM is the first type in its label's list that has capacity. The types
-for `backmesh-4` are below; the other sizes use the same families at their size:
+for `backmesh-ubuntu-2404-4vcpu` are below; the other sizes use the same families at their size:
 
-| Cloud | Types for `backmesh-4`, in order                                     |
+| Cloud | Types for `backmesh-ubuntu-2404-4vcpu`, in order                     |
 | ----- | -------------------------------------------------------------------- |
 | AWS   | `m8a.xlarge`, `m8i.xlarge`, `m7a.xlarge`, `m7i.xlarge`, `m6a.xlarge` |
 | GCP   | `n2-standard-4`, `n2d-standard-4`                                    |
@@ -71,9 +72,9 @@ shows why runners are short. Each cloud's page lists every size's types:
 ## On demand
 
 Each size also has an on-demand label, with the same types on on-demand VMs:
-`backmesh-od-2` to `backmesh-od-16`, or `backmesh-gcp-od-4` and so on on
+`backmesh-ubuntu-2404-od-2vcpu` to `backmesh-ubuntu-2404-od-16vcpu`, or `backmesh-gcp-ubuntu-2404-od-4vcpu` and so on on
 another cloud. On GCP, on-demand labels from 4 vCPUs try AMD's `c4d` and `c3d`
-first, which built faster for less per job at 4 vCPUs, then the types above: `backmesh-od-4` tries
+first, which built faster for less per job at 4 vCPUs, then the types above: `backmesh-ubuntu-2404-od-4vcpu` tries
 `c4d-standard-4`, `c3d-standard-4`, `n2-standard-4` and `n2d-standard-4`. A
 `c4d` VM has 3.875 GiB a vCPU, so 15 GiB at 4 vCPUs, against GitHub's 4-core
 runner's 16 GiB ([GCP](/gcp/#vm-types)). On demand costs about 2 to 5 times spot, so use it for long jobs
@@ -85,47 +86,47 @@ runner takes a job, so a rerun can still land on spot. To rerun on demand every
 time, whatever the cause:
 
 ```yaml
-runs-on: ${{ github.run_attempt == 1 && 'backmesh-4' || 'backmesh-od-4' }}
+runs-on: ${{ github.run_attempt == 1 && 'backmesh-ubuntu-2404-4vcpu' || 'backmesh-ubuntu-2404-od-4vcpu' }}
 ```
 
 To keep backmesh from rerunning a job's run, add `backmesh-noretry` next to its
 size label. Always pair it with one: alone it matches every label.
 
 ```yaml
-runs-on: [backmesh-4, backmesh-noretry]
+runs-on: [backmesh-ubuntu-2404-4vcpu, backmesh-noretry]
 ```
 
 ## KVM
 
 Jobs that start microVMs, emulators or other virtual machines need `/dev/kvm`.
-Run them on `backmesh-kvm-2` to `backmesh-kvm-16`, the same sizes on spot VMs
+Run them on `backmesh-ubuntu-2404-kvm-2vcpu` to `backmesh-ubuntu-2404-kvm-16vcpu`, the same sizes on spot VMs
 with nested virtualization:
 
-| Cloud | Types for `backmesh-kvm-4`, in order  |
-| ----- | ------------------------------------- |
-| AWS   | `m8i.xlarge`, `m7i.xlarge`            |
-| GCP   | `n2-standard-4`                       |
-| Azure | `Standard_D4as_v5`, `Standard_D4s_v5` |
+| Cloud | Types for `backmesh-ubuntu-2404-kvm-4vcpu`, in order |
+| ----- | ---------------------------------------------------- |
+| AWS   | `m8i.xlarge`, `m7i.xlarge`                           |
+| GCP   | `n2-standard-4`                                      |
+| Azure | `Standard_D4as_v5`, `Standard_D4s_v5`                |
 
 Install keeps only the types a runner region offers with nested
 virtualization, and a KVM label's jobs run only in those regions; a cloud whose
 regions have none gets no KVM labels.
 
 ```yaml
-runs-on: backmesh-kvm-8
+runs-on: backmesh-ubuntu-2404-kvm-8vcpu
 ```
 
 Like the other labels, they have no VM while idle, retry on demand after a spot
-reclaim, and have on-demand twins, `backmesh-kvm-od-2` to `backmesh-kvm-od-16`.
-On another cloud than the control plane's they name it: `backmesh-azure-kvm-8`. They share their
+reclaim, and have on-demand twins, `backmesh-ubuntu-2404-kvm-od-2vcpu` to `backmesh-ubuntu-2404-kvm-od-16vcpu`.
+On another cloud than the control plane's they name it: `backmesh-azure-ubuntu-2404-kvm-8vcpu`. They share their
 cloud's spot and on-demand vCPU quotas with the other labels.
 
 ## GPU
 
-Jobs that need an NVIDIA GPU run on `backmesh-gpu-t4`, a spot VM with one
+Jobs that need an NVIDIA GPU run on `backmesh-ubuntu-2404-gpu-t4`, a spot VM with one
 Tesla T4 (16 GB of VRAM) and 4 vCPUs, the shape of GitHub's GPU runner. Its
-on-demand twin is `backmesh-gpu-od-t4`. On another cloud than the control
-plane's they name it: `backmesh-azure-gpu-t4`.
+on-demand twin is `backmesh-ubuntu-2404-gpu-od-t4`. On another cloud than the control
+plane's they name it: `backmesh-azure-ubuntu-2404-gpu-t4`.
 
 | Cloud | Type                               | vCPU | Memory     | Regions                                                                                                    |
 | ----- | ---------------------------------- | ---- | ---------- | ---------------------------------------------------------------------------------------------------------- |
@@ -140,8 +141,8 @@ T4 VM there.
 
 A GPU job starts slower than a CPU one: its VM boots NVIDIA's larger image,
 and pulling and starting the runner's image takes about 90 seconds more. When
-spot T4s are short, a `backmesh-gpu-t4` job waits for one: like every spot
-label, it never falls back on demand. `backmesh-gpu-od-t4` runs on demand
+spot T4s are short, a `backmesh-ubuntu-2404-gpu-t4` job waits for one: like every spot
+label, it never falls back on demand. `backmesh-ubuntu-2404-gpu-od-t4` runs on demand
 instead.
 
 The job sees the GPU as on GitHub's runner: `nvidia-smi` works in a step, and
@@ -152,14 +153,14 @@ job's `container:` and its service containers see the GPU only with
 `options: --gpus all`.
 
 ```yaml
-runs-on: backmesh-gpu-t4
+runs-on: backmesh-ubuntu-2404-gpu-t4
 steps:
   - run: nvidia-smi
   - run: docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
 ```
 
 ```yaml
-runs-on: backmesh-gpu-t4
+runs-on: backmesh-ubuntu-2404-gpu-t4
 container:
   image: nvidia/cuda:12.4.1-base-ubuntu22.04
   options: --gpus all
@@ -176,7 +177,7 @@ prices.
 
 ## Large Node.js tools
 
-Workflows that run large Node.js tools on `backmesh-4`, such as ESLint over a big
+Workflows that run large Node.js tools on `backmesh-ubuntu-2404-4vcpu`, such as ESLint over a big
 repository, set a larger heap:
 
 ```yaml

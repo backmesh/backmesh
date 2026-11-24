@@ -36,8 +36,8 @@ const BRANCHES = ['main', 'dev', 'feature'] as const;
 // Two push keys (workflow files), each with its own label, so a cue's
 // slot and a take are unambiguous.
 const KEYS = [
-  { file: 'ci.yml', label: 'backmesh-4' },
-  { file: 'deploy.yml', label: 'backmesh-8' },
+  { file: 'ci.yml', label: 'backmesh-ubuntu-2404-4vcpu' },
+  { file: 'deploy.yml', label: 'backmesh-ubuntu-2404-8vcpu' },
 ] as const;
 const refFor = (file: string, branch: string) =>
   `${REPO}/.github/workflows/${file}@refs/heads/${branch}`;
@@ -105,8 +105,8 @@ function setup(runBranch?: PlannerDeps['runBranch']) {
 // candidate, which every later random 'cue' step on their branch must
 // then keep untouched, exercising invariant 3's other two reasons without
 // needing to synthesize them mid-stream.
-const GUARD_KEY = { file: 'flaky.yml', label: 'backmesh-4' };
-const REVIEW_KEY = { file: 'review.yml', label: 'backmesh-16' };
+const GUARD_KEY = { file: 'flaky.yml', label: 'backmesh-ubuntu-2404-4vcpu' };
+const REVIEW_KEY = { file: 'review.yml', label: 'backmesh-ubuntu-2404-16vcpu' };
 const GUARD_KEY_NAME = `${REPO}/.github/workflows/${GUARD_KEY.file} push`;
 const REVIEW_KEY_NAME = `${REPO}/.github/workflows/${REVIEW_KEY.file} pull_request`;
 
@@ -610,7 +610,7 @@ describe('Planner cue guard invariants (property test)', () => {
   // this one hasn't), '?' starts them only once this key has, 'n' starts
   // neither — same invariants apply throughout.
   it('holds for a pull_request key across pr = y, n and ?', async () => {
-    const key = { file: 'review.yml', label: 'backmesh-16' };
+    const key = { file: 'review.yml', label: 'backmesh-ubuntu-2404-16vcpu' };
     const prRef = (pull: number) =>
       `${REPO}/.github/workflows/${key.file}@refs/pull/${pull}/merge`;
     const { planner, now, advance, nextRunId } = setup(async (_o, _r, runId) =>
@@ -662,7 +662,7 @@ describe('Planner cue guard invariants (property test)', () => {
   // this one) must leave that slot alone — not drop and score it as if
   // '?' were as definite as 'n'.
   it("leaves an earlier definite cue's pull_request slot alone through an uncertain re-cue", async () => {
-    const key = { file: 'review.yml', label: 'backmesh-16' };
+    const key = { file: 'review.yml', label: 'backmesh-ubuntu-2404-16vcpu' };
     const keyName = `${REPO}/.github/workflows/${key.file} pull_request`;
     const { planner, now, advance, nextRunId } = setup(async () => 'feature');
     const learnId = nextRunId();
@@ -810,9 +810,13 @@ describe('Planner cue guard invariants (property test)', () => {
         jobDisplayName: 'build',
         jobWorkflowRef: `${REPO}/.github/workflows/evict-${i}.yml@refs/heads/main`,
         queueTime: now(),
-        requestLabels: ['backmesh-4'],
+        requestLabels: ['backmesh-ubuntu-2404-4vcpu'],
       };
-      planner.observe('backmesh-4', message('JobAvailable', fields), now());
+      planner.observe(
+        'backmesh-ubuntu-2404-4vcpu',
+        message('JobAvailable', fields),
+        now(),
+      );
       advance(1000);
     }
     const after = planner.debugSlots();

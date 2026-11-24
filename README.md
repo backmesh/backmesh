@@ -4,7 +4,7 @@ Self-hosted GitHub Actions runners in your own AWS, GCP or Azure account. Each
 job runs on its own spot VM, which is deleted when the job ends.
 
 - **Up to 2× faster, 5× cheaper builds.** In our
-  [build benchmarks](https://backmesh.com/benchmarks/), a `backmesh-4` spot VM ran Docker,
+  [build benchmarks](https://backmesh.com/benchmarks/), a `backmesh-ubuntu-2404-4vcpu` spot VM ran Docker,
   Rust and TypeScript builds 1.4 to 2.1× faster than GitHub's `ubuntu-latest`,
   at 2.8 to 5.5× less per build. Your cloud bills you, so your cloud credits
   apply.
@@ -51,7 +51,7 @@ Then use a label in a workflow:
 ```yaml
 jobs:
   test:
-    runs-on: backmesh-4
+    runs-on: backmesh-ubuntu-2404-4vcpu
     steps:
       - uses: actions/checkout@v5
       - run: make test

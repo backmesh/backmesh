@@ -5,7 +5,7 @@
 // results/<date>-<backmesh version>.json after each round.
 //
 //   GITHUB_TOKEN=… TARGET_REPO=backmesh/benchmarks \
-//   LABELS='backmesh-4 ubuntu-latest' ROUNDS=5 \
+//   LABELS='backmesh-ubuntu-2404-4vcpu ubuntu-latest' ROUNDS=5 \
 //   BACKMESH_VERSION=0.5.5 ANYCLOUD_VERSION=0.1.80 \
 //   INSTALLATION='backmesh org CI, AWS' node benchmarks/builds/run.ts
 import { execFile } from 'node:child_process';

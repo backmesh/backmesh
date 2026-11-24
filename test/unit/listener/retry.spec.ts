@@ -10,7 +10,7 @@ const MIN = 60_000;
 const RUN = { owner: 'acme', repo: 'app', runId: 7 };
 const SPOT: Route = {
   ...ROUTE,
-  onDemand: { label: 'backmesh-od-4' },
+  onDemand: { label: 'backmesh-ubuntu-2404-od-4vcpu' },
 };
 const reclaim = (runner: string, job = 'test'): Reclaim => ({
   job,
@@ -33,7 +33,7 @@ function fakeRuns() {
       name: 'test',
       conclusion: 'failure',
       runnerName: 'r1',
-      labels: ['backmesh-4'],
+      labels: ['backmesh-ubuntu-2404-4vcpu'],
     },
     { name: 'lint', conclusion: 'success', runnerName: 'r2', labels: [] },
   ];
@@ -107,7 +107,7 @@ describe('Retrier', () => {
         name: 'test',
         conclusion: 'failure',
         runnerName: 'r1',
-        labels: ['backmesh-4', 'backmesh-noretry'],
+        labels: ['backmesh-ubuntu-2404-4vcpu', 'backmesh-noretry'],
       },
     ]);
     expect(await opted.retrier.decide(RUN, [reclaim('r1')])).toBe('noretry');
@@ -323,7 +323,7 @@ describe('Retrier', () => {
     );
     expect(row).toMatchObject({
       kind: 'retry started',
-      label: 'backmesh-4',
+      label: 'backmesh-ubuntu-2404-4vcpu',
       onDemand: true,
     });
     expect(env.retrier.onDemand(SPOT, 0)).toBe(false);
@@ -367,7 +367,7 @@ describe('Retrier', () => {
 describe('Scaler with the retry', () => {
   const OD: Route = {
     ...ROUTE,
-    label: 'backmesh-od-4',
+    label: 'backmesh-ubuntu-2404-od-4vcpu',
     code: 'b4',
     spot: false,
   };
@@ -441,7 +441,7 @@ describe('Scaler with the retry', () => {
       expect.objectContaining({
         title: 'Spot reclaim',
         summary: expect.stringMatching(
-          /reruns its failed jobs .* use `backmesh-od-4`\.$/,
+          /reruns its failed jobs .* use `backmesh-ubuntu-2404-od-4vcpu`\.$/,
         ),
       }),
     ]);
@@ -581,7 +581,7 @@ describe('Scaler with the retry', () => {
     const spot = setup([SPOT, OD], async () => 'unavailable');
     await failJob(spot, spot.sets[0]!, 'reclaimed');
     expect(spot.notes[0]!.note.summary).toMatch(
-      / To start on an on-demand runner instead, use `backmesh-od-4`\.$/,
+      / To start on an on-demand runner instead, use `backmesh-ubuntu-2404-od-4vcpu`\.$/,
     );
   });
 });

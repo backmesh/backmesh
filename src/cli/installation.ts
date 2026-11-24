@@ -7,7 +7,12 @@ import { z } from 'zod';
 
 import type { AnycloudApi } from '../anycloud/client.js';
 import { ANYCLOUD_VERSION } from '../anycloud/contract.generated.js';
-import { CLOUDS, PUBLIC_VCPUS, type Cloud } from '../runners/classes.js';
+import {
+  CLOUDS,
+  PUBLIC_VCPUS,
+  publicLabel,
+  type Cloud,
+} from '../runners/classes.js';
 import { listListenerVms, type ListenerVm } from './listener-vm.js';
 
 // The hosted API's URL is `https://<cluster-id>.anycloud.sh`
@@ -158,7 +163,7 @@ export function publicReposWarning(
   fix: string,
 ) {
   const n = names.length;
-  return `${org}: ${n}${more ? '+' : ''} public repositor${n === 1 && !more ? 'y' : 'ies'} (such as ${names[0]}) can't use these runners, and their jobs wait at GitHub. \`${fix}\` adds ${PUBLIC_VCPUS.map((v) => `backmesh-public-${v}`).join(' and ')} for them to use.`;
+  return `${org}: ${n}${more ? '+' : ''} public repositor${n === 1 && !more ? 'y' : 'ies'} (such as ${names[0]}) can't use these runners, and their jobs wait at GitHub. \`${fix}\` adds ${PUBLIC_VCPUS.map(publicLabel).join(' and ')} for them to use.`;
 }
 
 // GitHub's primary rate limit empties `x-ratelimit-remaining`; a secondary

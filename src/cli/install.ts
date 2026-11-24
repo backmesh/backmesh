@@ -42,6 +42,7 @@ import {
   planClasses,
   PUBLIC_VCPU_CAP,
   PUBLIC_VCPUS,
+  publicLabel,
   where,
   type Cloud,
   type CloudTarget,
@@ -140,7 +141,7 @@ export async function classesOf(
   regionsOf: RegionsOf,
   // The control plane's cloud, whose labels are plain.
   home: Cloud | undefined,
-  // `--public-repos`: `backmesh-public-<n>` too.
+  // `--public-repos`: `backmesh-ubuntu-2404-public-<n>vcpu` too.
   publicRepos = false,
 ) {
   const catalog = new Map<Cloud, Map<string, VmTypeDetails[]>>();
@@ -248,18 +249,18 @@ export interface InstallOptions {
   // listener is created.
   cacheCapGb?: number;
   // `--public-repos` or `--no-public-repos`: public repositories may use the
-  // runners, their fork pull requests only `backmesh-public-<n>`. Without
+  // runners, their fork pull requests only `backmesh-ubuntu-2404-public-<n>vcpu`. Without
   // either, a re-run keeps the listener's.
   publicRepos?: boolean;
 }
 
 // What `--public-repos` opens, and what it needs.
-export const PUBLIC_REPOS_LINE = `Public repositories: the org's public repositories may use the runners. Their forks' pull requests run only on ${PUBLIC_VCPUS.map((n) => `backmesh-public-${n}`).join(' and ')}, with ${PUBLIC_VCPU_CAP} vCPUs at once; a fork run that asks for another label is cancelled. Set GitHub's "Require approval for all external contributors" for the org, and keep nothing else in the runners' cloud network: a job can reach the network's other instances.`;
+export const PUBLIC_REPOS_LINE = `Public repositories: the org's public repositories may use the runners. Their forks' pull requests run only on ${PUBLIC_VCPUS.map(publicLabel).join(' and ')}, with ${PUBLIC_VCPU_CAP} vCPUs at once; a fork run that asks for another label is cancelled. Set GitHub's "Require approval for all external contributors" for the org, and keep nothing else in the runners' cloud network: a job can reach the network's other instances.`;
 
 /**
  * The labels a workflow's `runs-on` takes, exactly as the listener's scale
  * sets name them: the control plane's cloud's carry no cloud, so on an
- * Azure control plane it's `backmesh-gpu-t4`, and `backmesh-azure-gpu-t4`
+ * Azure control plane it's `backmesh-ubuntu-2404-gpu-t4`, and `backmesh-azure-ubuntu-2404-gpu-t4`
  * waits at GitHub for a runner that never comes.
  */
 export const labelsLine = (
@@ -1210,7 +1211,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   // The public labels are the control plane's cloud's.
   if (publicRepos && !classPlan.classes.some((c) => c.public)) {
     problems.push(
-      `--public-repos needs runners on the control plane's cloud, ${placement.controlPlane.cloud}: backmesh-public-2 and -4 run there.`,
+      `--public-repos needs runners on the control plane's cloud, ${placement.controlPlane.cloud}: backmesh-ubuntu-2404-public-2vcpu and backmesh-ubuntu-2404-public-4vcpu run there.`,
     );
   }
   const quotas = [];

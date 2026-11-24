@@ -28,7 +28,7 @@ describe('quota check', () => {
     expect(check.problem).toBeUndefined();
     expect(check.increase).toContain('L-34B43A08) in us-east-2');
     expect(formatQuota(check, true)).toBe(
-      '100 spot vCPUs (25 backmesh-4 jobs at once)',
+      '100 spot vCPUs (25 backmesh-ubuntu-2404-4vcpu jobs at once)',
     );
   });
 
@@ -36,11 +36,14 @@ describe('quota check', () => {
     [{ spot: 3 }, /allows 3 spot vCPUs, under one 4-vCPU VM/],
     [{}, /azure reported no lowPriorityCores limit in westus2/],
     [{ spot: NaN }, /no lowPriorityCores limit/],
-  ])('refuses a quota under one backmesh-4 VM or unread', (limits, problem) => {
-    expect(
-      quotaCheck('azure', ['westus2'], one('westus2', limits), true).problem,
-    ).toMatch(problem);
-  });
+  ])(
+    'refuses a quota under one backmesh-ubuntu-2404-4vcpu VM or unread',
+    (limits, problem) => {
+      expect(
+        quotaCheck('azure', ['westus2'], one('westus2', limits), true).problem,
+      ).toMatch(problem);
+    },
+  );
 
   it('reads the on-demand quota for the on-demand classes', () => {
     expect(
@@ -84,18 +87,18 @@ describe('quota check', () => {
     expect(check).toMatchObject({ vcpus: 96, unread: ['us-east-1'] });
     expect(check.increase).toContain('in us-east-2, us-west-2, us-east-1');
     expect(formatQuota(check, true)).toBe(
-      '96 spot vCPUs (24 backmesh-4 jobs at once, unread in us-east-1)',
+      '96 spot vCPUs (24 backmesh-ubuntu-2404-4vcpu jobs at once, unread in us-east-1)',
     );
   });
 
   it("counts the jobs each region's limit fits, not the summed vCPUs'", () => {
     // A sponsorship subscription's 3 spot vCPUs per region fit no
-    // backmesh-4 VM anywhere, though they sum past one.
+    // backmesh-ubuntu-2404-4vcpu VM anywhere, though they sum past one.
     const regions = ['eastus', 'eastus2', 'westus2', 'centralus'];
     const limits = new Map(regions.map((r) => [r, { spot: 3 }]));
     const check = quotaCheck('azure', regions, limits, true);
     expect(formatQuota(check, true)).toBe(
-      '12 spot vCPUs (0 backmesh-4 jobs at once)',
+      '12 spot vCPUs (0 backmesh-ubuntu-2404-4vcpu jobs at once)',
     );
     expect(
       formatQuota(
@@ -110,14 +113,19 @@ describe('quota check', () => {
         ),
         true,
       ),
-    ).toBe('12 spot vCPUs (2 backmesh-4 jobs at once)');
+    ).toBe('12 spot vCPUs (2 backmesh-ubuntu-2404-4vcpu jobs at once)');
   });
 });
 
 describe('GPU quota', () => {
   const GPU = [
-    { label: 'backmesh-gpu-t4', vcpus: 4, spot: true, gpu: 'T4' },
-    { label: 'backmesh-gpu-od-t4', vcpus: 4, spot: false, gpu: 'T4' },
+    { label: 'backmesh-ubuntu-2404-gpu-t4', vcpus: 4, spot: true, gpu: 'T4' },
+    {
+      label: 'backmesh-ubuntu-2404-gpu-od-t4',
+      vcpus: 4,
+      spot: false,
+      gpu: 'T4',
+    },
   ];
 
   it("counts a GPU runner against its family's quota, and Azure's spot ones against low-priority vCPUs", () => {
@@ -141,7 +149,7 @@ describe('GPU quota', () => {
       regions: ['us-east-1', 'us-east-2'],
     }));
     expect(startsNoRunners('aws', limits, classes)).toEqual([
-      "backmesh-gpu-t4 would start no runners: every runner region's GPU spot quota is under one 4-vCPU runner (us-east-1 0 vCPU, us-east-2 0 vCPU); raise L-3819A6DF in us-east-1 or us-east-2 to use it.",
+      "backmesh-ubuntu-2404-gpu-t4 would start no runners: every runner region's GPU spot quota is under one 4-vCPU runner (us-east-1 0 vCPU, us-east-2 0 vCPU); raise L-3819A6DF in us-east-1 or us-east-2 to use it.",
     ]);
     expect(skippedRegions('aws', limits, classes)).toEqual([
       'us-east-1: GPU spot quota 0 vCPU, skipped; raise L-3819A6DF to use it',
@@ -157,9 +165,11 @@ describe('GPU quota', () => {
         ]),
         classes.slice(0, 1),
       ),
-    ).toBe('GPU quota: 14 spot vCPUs (2 backmesh-gpu-t4 jobs at once)');
+    ).toBe(
+      'GPU quota: 14 spot vCPUs (2 backmesh-ubuntu-2404-gpu-t4 jobs at once)',
+    );
     expect(formatGpuQuota('aws', limits, classes)).toBe(
-      'GPU quota: 0 spot vCPUs (0 backmesh-gpu-t4 jobs at once), 8 on-demand vCPUs (2 backmesh-gpu-od-t4 jobs at once); raise EC2 "All G and VT Spot Instance Requests" (L-3819A6DF) in us-east-1, us-east-2 to run backmesh-gpu-t4',
+      'GPU quota: 0 spot vCPUs (0 backmesh-ubuntu-2404-gpu-t4 jobs at once), 8 on-demand vCPUs (2 backmesh-ubuntu-2404-gpu-od-t4 jobs at once); raise EC2 "All G and VT Spot Instance Requests" (L-3819A6DF) in us-east-1, us-east-2 to run backmesh-ubuntu-2404-gpu-t4',
     );
   });
 
@@ -172,15 +182,17 @@ describe('GPU quota', () => {
       );
     expect(azure({ spot: 100, onDemand: 100, gpuOnDemand: 0 })).toEqual([
       expect.stringMatching(
-        /^backmesh-gpu-od-t4 would start no runners: .*GPU on-demand quota .*raise "Standard NCASv3_T4 Family vCPUs" in eastus/,
+        /^backmesh-ubuntu-2404-gpu-od-t4 would start no runners: .*GPU on-demand quota .*raise "Standard NCASv3_T4 Family vCPUs" in eastus/,
       ),
     ]);
     expect(azure({ spot: 100, onDemand: 2, gpuOnDemand: 8 })).toEqual([
-      expect.stringMatching(/^backmesh-gpu-od-t4 .*"Total Regional vCPUs"/),
+      expect.stringMatching(
+        /^backmesh-ubuntu-2404-gpu-od-t4 .*"Total Regional vCPUs"/,
+      ),
     ]);
     expect(azure({ spot: 2, onDemand: 100, gpuOnDemand: 8 })).toEqual([
       expect.stringMatching(
-        /^backmesh-gpu-t4 .*"Total Regional Low-priority vCPUs"/,
+        /^backmesh-ubuntu-2404-gpu-t4 .*"Total Regional Low-priority vCPUs"/,
       ),
     ]);
     // Another cloud than the control plane's names it in its labels.
@@ -195,7 +207,7 @@ describe('GPU quota', () => {
         })),
       ),
     ).toBe(
-      'GPU quota: on-demand vCPUs unread, and its spot VMs count against the spot vCPUs above; raise "Standard NCASv3_T4 Family vCPUs" in eastus to run backmesh-azure-gpu-od-t4',
+      'GPU quota: on-demand vCPUs unread, and its spot VMs count against the spot vCPUs above; raise "Standard NCASv3_T4 Family vCPUs" in eastus to run backmesh-azure-ubuntu-2404-gpu-od-t4',
     );
   });
 

@@ -47,7 +47,7 @@ beforeEach(async () => {
         conclusion: null,
         status: 'queued',
         runner_name: null,
-        labels: ['backmesh-kvm-4'],
+        labels: ['backmesh-ubuntu-2404-kvm-4vcpu'],
         started_at: null,
       },
     ],
@@ -99,7 +99,7 @@ describe('POST /v1/cancel', () => {
         conclusion: null,
         status: 'in_progress',
         runner_name: OURS,
-        labels: ['backmesh-public-4'],
+        labels: ['backmesh-ubuntu-2404-public-4vcpu'],
         started_at: ago(57),
       },
     ];
@@ -118,9 +118,13 @@ describe('POST /v1/cancel', () => {
   });
 
   it("counts only cancels made, not refusals, toward the hour's 20", async () => {
-    upstream.runs.get('acme/app/42')!.jobs[0]!.labels = ['backmesh-public-4'];
+    upstream.runs.get('acme/app/42')!.jobs[0]!.labels = [
+      'backmesh-ubuntu-2404-public-4vcpu',
+    ];
     for (let i = 0; i < 25; i++) expect((await cancel()).status).toBe(403);
-    upstream.runs.get('acme/app/42')!.jobs[0]!.labels = ['backmesh-kvm-4'];
+    upstream.runs.get('acme/app/42')!.jobs[0]!.labels = [
+      'backmesh-ubuntu-2404-kvm-4vcpu',
+    ];
 
     expect((await cancel()).status).toBe(200);
   });
@@ -132,7 +136,7 @@ describe('POST /v1/cancel', () => {
         conclusion: null,
         status: 'in_progress',
         runner_name: OURS,
-        labels: ['backmesh-public-4'],
+        labels: ['backmesh-ubuntu-2404-public-4vcpu'],
         started_at: ago(59),
       },
     ];

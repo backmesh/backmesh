@@ -9,7 +9,7 @@ export const GITHUB_4_CORE_PER_MIN = 0.012;
 
 /** The catalog's spot prices on 2026-11-13 (refreshed with the
  * 2026-11-13 VM type reorder), the lowest zone in each region, for
- * `backmesh-4`'s VM types (src/runners/classes.ts, same figures). Each job gets
+ * `backmesh-ubuntu-2404-4vcpu`'s VM types (src/runners/classes.ts, same figures). Each job gets
  * its own 4-vCPU, 16 GiB VM, which bills from its boot until the job ends.
  * Disks are left out: each runner's 100 GB gp3 disk, at 4,000 IOPS and
  * 500 MiB/s (src/listener/runner-jobs.ts), adds about $0.038 an hour on AWS,
@@ -22,7 +22,7 @@ export const GITHUB_4_CORE_PER_MIN = 0.012;
  * it (src/cli/install.ts MANAGEMENT_MONTHLY_USD and src/cli/listener-vm.ts
  * LISTENER_VM_MONTHLY_USD). */
 export const CATALOG_DATE = '2026-11-13';
-/** AWS's `backmesh-4` spot prices by VM family, $/hour, as above; `m8a`'s
+/** AWS's `backmesh-ubuntu-2404-4vcpu` spot prices by VM family, $/hour, as above; `m8a`'s
  * from the catalog on 2026-11-23. */
 export const AWS_SPOT_XLARGE: Record<string, number> = {
   m8a: 0.065,
@@ -31,7 +31,7 @@ export const AWS_SPOT_XLARGE: Record<string, number> = {
   m7i: 0.0497,
   m6a: 0.0547,
 };
-/** AWS's `backmesh-od-4` on-demand prices by VM family, $/hour, us-east-2's
+/** AWS's `backmesh-ubuntu-2404-od-4vcpu` on-demand prices by VM family, $/hour, us-east-2's
  * from the catalog, as docs/aws.md lists them. */
 export const AWS_ON_DEMAND_XLARGE: Record<string, number> = {
   m8a: 0.2434,

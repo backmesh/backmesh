@@ -6,7 +6,7 @@
 // tested: it only wires subprocess calls; stop-member.ts and gh-workflows.ts
 // carry the logic that is.
 //
-//   LABEL=backmesh-4 ORG=backmesh node test/e2e/run-stop-member.ts
+//   LABEL=backmesh-ubuntu-2404-4vcpu ORG=backmesh node test/e2e/run-stop-member.ts
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';

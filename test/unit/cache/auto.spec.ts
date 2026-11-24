@@ -46,7 +46,7 @@ jobs:
     steps:
       - run: true
   test:
-    runs-on: backmesh-4
+    runs-on: backmesh-ubuntu-2404-4vcpu
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
@@ -809,7 +809,7 @@ describe('the saver', () => {
   it('saves only the record for a job that opts out, or whose workflow it cannot read, and its next run says why', async () => {
     for (const workflow of [
       WORKFLOW.replace(
-        '    runs-on: backmesh-4',
+        '    runs-on: backmesh-ubuntu-2404-4vcpu',
         '    env:\n      BACKMESH_AUTO_CACHE: "false"',
       ),
       'name: not this job\n',

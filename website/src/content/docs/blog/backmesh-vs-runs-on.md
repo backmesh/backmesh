@@ -78,8 +78,8 @@ listener VM (t3.large and t3.small on AWS) in your account. The listener long-po
 GitHub for queued jobs, so nothing needs an inbound port or a webhook. For
 each job, backmesh starts a VM in the cheapest region with capacity and
 deletes it when the job ends. Labels pick one of four fixed
-[sizes](/labels/) and a cloud, for example `runs-on: backmesh-4` or
-`backmesh-gcp-4`.
+[sizes](/labels/) and a cloud, for example `runs-on: backmesh-ubuntu-2404-4vcpu` or
+`backmesh-gcp-ubuntu-2404-4vcpu`.
 
 **RunsOn.** A CloudFormation stack sets up networking, a cache bucket and a
 control plane on ECS Fargate. GitHub posts each queued job's webhook to an API

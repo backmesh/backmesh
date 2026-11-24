@@ -17,7 +17,7 @@ import type { Planner } from '../../../src/listener/prewarm.js';
 const TWO: Route = { ...ROUTE, regions: ['us-east-2', 'us-west-2'] };
 const OD: Route = {
   ...ROUTE,
-  label: 'backmesh-od-4',
+  label: 'backmesh-ubuntu-2404-od-4vcpu',
   code: 'b4',
   spot: false,
 };
@@ -60,7 +60,7 @@ async function slowRunners(
 
 const KVM: Route = {
   ...ROUTE,
-  label: 'backmesh-kvm-4',
+  label: 'backmesh-ubuntu-2404-kvm-4vcpu',
   code: 'k4',
   kvm: true,
   regions: ['us-west-2'],
@@ -449,7 +449,7 @@ describe('quota cap', () => {
       'us-east-2': { spot: 8 },
       'us-west-2': { spot: 400 },
     });
-    // backmesh-4 only in us-east-2; a KVM class in us-west-2 has room.
+    // backmesh-ubuntu-2404-4vcpu only in us-east-2; a KVM class in us-west-2 has room.
     const env = withQuotas([ROUTE, KVM], q);
     env.sets[0]!.statistics = assigned(1);
     env.sets[1]!.statistics = assigned(0);
@@ -498,7 +498,7 @@ describe('quota cap', () => {
     });
     const GPU: Route = {
       ...ROUTE,
-      label: 'backmesh-gpu-t4',
+      label: 'backmesh-ubuntu-2404-gpu-t4',
       code: 'd4',
       vmTypes: ['g4dn.xlarge'],
       gpu: 'T4',
@@ -508,7 +508,7 @@ describe('quota cap', () => {
     env.sets[0]!.statistics = assigned(3);
     env.sets[1]!.statistics = assigned(3);
     await env.scaler.reconcile();
-    // 8 GPU spot vCPUs: two T4 runners, while backmesh-4 takes its three.
+    // 8 GPU spot vCPUs: two T4 runners, while backmesh-ubuntu-2404-4vcpu takes its three.
     const codes = env.anycloud.submitted.map((s) => s.id.slice(8, 10));
     expect(codes.filter((c) => c === 'a4')).toHaveLength(3);
     expect(codes.filter((c) => c === 'd4')).toHaveLength(2);
@@ -529,7 +529,12 @@ describe('quota cap', () => {
   it("gives the quota to real jobs before any set's speculative runners", async () => {
     const { q } = quotas({ 'us-east-2': { spot: 12 } });
     q.limit('aws', 'bm-aws', ['us-east-2'], 'spot', 0);
-    const B: Route = { ...ROUTE, label: 'backmesh-8', code: 'a8', vcpus: 8 };
+    const B: Route = {
+      ...ROUTE,
+      label: 'backmesh-ubuntu-2404-8vcpu',
+      code: 'a8',
+      vcpus: 8,
+    };
     let wanted = 0;
     const planner = {
       observe: () => undefined,
@@ -543,7 +548,7 @@ describe('quota cap', () => {
     env.sets[1]!.statistics = assigned(0);
     await env.scaler.reconcile();
     await flush();
-    // backmesh-4 wants 2 speculative runners, backmesh-8 has a real job:
+    // backmesh-ubuntu-2404-4vcpu wants 2 speculative runners, backmesh-ubuntu-2404-8vcpu has a real job:
     // 8 of the 12 vCPUs go to it first, then one speculative runner.
     wanted = 2;
     env.sets[1]!.statistics = assigned(1);
@@ -556,7 +561,7 @@ describe('quota cap', () => {
     const { q } = quotas({ 'us-east-2': { spot: 4 } });
     const GCP: Route = {
       ...ROUTE,
-      label: 'backmesh-gcp-4',
+      label: 'backmesh-gcp-ubuntu-2404-4vcpu',
       code: 'g4',
       cloud: 'gcp',
       credentials: 'bm-gcp',

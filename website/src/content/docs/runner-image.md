@@ -87,7 +87,7 @@ The job's steps then run inside that image, on the job's own VM:
 ```yaml
 jobs:
   build:
-    runs-on: backmesh-4
+    runs-on: backmesh-ubuntu-2404-4vcpu
     container: mcr.microsoft.com/dotnet/sdk:9.0
 ```
 
