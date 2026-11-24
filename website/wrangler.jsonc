@@ -10,6 +10,9 @@
     "not_found_handling": "404-page",
     "run_worker_first": true,
   },
+  "analytics_engine_datasets": [
+    { "binding": "GO_CLICKS", "dataset": "go_clicks" },
+  ],
   "routes": [
     { "pattern": "backmesh.com", "custom_domain": true },
     { "pattern": "www.backmesh.com", "custom_domain": true },

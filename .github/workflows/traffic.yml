@@ -1,0 +1,64 @@
+name: Traffic
+
+# Daily: snapshots backmesh's, cache's and benchmarks' stargazers and GitHub
+# traffic, and the clicks on backmesh.com's /go/ links, to the traffic branch
+# (scripts/traffic.sh), as GitHub keeps traffic for 14 days only. From the
+# publish environment: TRAFFIC_TOKEN, a fine-grained token of the backmesh
+# org with Administration read on those three repositories, which the
+# traffic API needs; and CLOUDFLARE_API_TOKEN, with Account Analytics read
+# for the clicks. Without either, it keeps what it can.
+on:
+  schedule:
+    - cron: '41 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: traffic
+
+jobs:
+  snapshot:
+    # GitHub-hosted, so a day's snapshot doesn't depend on backmesh's own
+    # installation being up.
+    runs-on: ubuntu-24.04
+    environment: publish
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check out the traffic branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git
+          if git ls-remote --exit-code origin refs/heads/traffic >/dev/null; then
+            git clone -q --branch traffic --single-branch "https://github.com/$GITHUB_REPOSITORY.git" data
+          else
+            git init -q -b traffic data
+          fi
+
+      - name: Snapshot
+        working-directory: data
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRAFFIC_TOKEN: ${{ secrets.TRAFFIC_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: ../scripts/traffic.sh backmesh/backmesh backmesh/cache backmesh/benchmarks
+
+      - name: Push
+        working-directory: data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add -A
+          if git diff --cached --quiet; then echo 'Nothing changed.'; exit 0; fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -q -m "Traffic $(date -u +%F)"
+          git push -q "https://github.com/$GITHUB_REPOSITORY.git" HEAD:refs/heads/traffic

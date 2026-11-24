@@ -1,8 +1,10 @@
 // Serves the static site. It runs before the assets, so it can send
 // www.backmesh.com to the apex, /pricing to the landing page's pricing,
-// serve install.sh as text so a browser shows it, and retire the old site's
-// other paths.
+// serve install.sh as text so a browser shows it, retire the old site's
+// other paths, and send each channel's link, such as /go/hn, to the
+// repository, counting it in the GO_CLICKS dataset (wrangler.jsonc).
 const RETIRED = /^\/(docs|blog|app|firebase-jwt|supabase-jwt)(\/|$)/;
+const GO = /^\/go\/([a-z0-9-]{1,32})\/?$/;
 
 export default {
   async fetch(request, env) {
@@ -18,6 +20,11 @@ export default {
     }
     if (/^\/pricing(\/|$)/.test(url.pathname)) {
       return Response.redirect(new URL('/#pricing', url).href, 301);
+    }
+    const channel = url.pathname.match(GO)?.[1];
+    if (channel) {
+      env.GO_CLICKS.writeDataPoint({ blobs: [channel], indexes: [channel] });
+      return Response.redirect('https://github.com/backmesh/backmesh', 302);
     }
     if (RETIRED.test(url.pathname)) {
       return Response.redirect(new URL('/', url).href, 301);
