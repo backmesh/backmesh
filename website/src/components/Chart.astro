@@ -1,7 +1,8 @@
 ---
 // A horizontal bar chart on one shared axis: each row a label, a bar of
 // segments and its value at the bar's end; a hairline grid under the ticks.
-// A row's `head` starts a group of rows, such as a pair to compare.
+// A row's `head` starts a group of rows, such as a pair to compare; a row's
+// `track` draws another figure, such as GitHub's, as a pale bar behind it.
 // The markup is complete; with motion allowed, the bars grow in once, the
 // first time the chart scrolls into view.
 import { clouds } from './clouds';
@@ -9,14 +10,18 @@ import { clouds } from './clouds';
 export type Segment = {
   from: number;
   to: number;
-  kind: 'ink' | 'solid' | 'range' | 'fixed';
+  kind: 'ink' | 'solid' | 'range' | 'fixed' | 'track';
 };
 export type Row = {
   name: string;
   /** A cloud's key in clouds.ts, for its mark. */
   cloud?: string;
   sub?: string;
+  /** A ratio under the name, such as how much faster the row is. */
+  ratio?: string;
   value: string;
+  /** The figure compared against, from 0 behind the segments. */
+  track?: { to: number; value: string };
   segments: Segment[];
   note?: string;
   /** A group's name and its note, such as a ratio, above its first row. */
@@ -29,10 +34,13 @@ interface Props {
   ticks: { at: number; label: string; narrow?: boolean }[];
   rows: Row[];
   legend?: { kind: Segment['kind']; label: string }[];
+  /** A colour key above the rows. */
+  legendAbove?: { kind: Segment['kind']; label: string }[];
   note?: string;
   compact?: boolean;
 }
-const { title, label, max, ticks, rows, legend, note, compact } = Astro.props;
+const { title, label, max, ticks, rows, legend, legendAbove, note, compact } =
+  Astro.props;
 const pct = (v: number) => `${((v / max) * 100).toFixed(3)}%`;
 const mark = (key?: string) => clouds.find((c) => c.key === key)?.svg;
 const grouped = rows.some((r) => r.head);
@@ -40,6 +48,18 @@ const grouped = rows.some((r) => r.head);
 
 <figure class:list={['chart', { compact }]} aria-label={label}>
   {title && <p class="title">{title}</p>}
+  {
+    legendAbove && (
+      <ul class="legend above">
+        {legendAbove.map((l) => (
+          <li>
+            <i class={l.kind} />
+            {l.label}
+          </li>
+        ))}
+      </ul>
+    )
+  }
   <div class="rows">
     <div class="grid" aria-hidden="true">
       {ticks.map((t) => <i style={`left:${pct(t.at)}`} />)}
@@ -64,20 +84,38 @@ const grouped = rows.some((r) => r.head);
                 <span>
                   {row.name}
                   {row.sub && <small>{row.sub}</small>}
+                  {row.ratio && <small class="ratio">{row.ratio}</small>}
                 </span>
-                <span class="value-inline">{row.value}</span>
+                <span class="value-inline">
+                  {row.value}
+                  {row.track && <small> vs {row.track.value}</small>}
+                </span>
               </div>
               <div class="plot">
                 <div class="bar" aria-hidden="true">
+                  {row.track && (
+                    <i
+                      class="track"
+                      style={`left:0;width:${pct(row.track.to)};--delay:${r * 90}ms`}
+                    />
+                  )}
                   {row.segments.map((s, i) => (
                     <i
                       class={s.kind}
-                      style={`left:${pct(s.from)};width:${pct(s.to - s.from)};--delay:${r * 90 + i * 140}ms`}
+                      style={`left:${pct(s.from)};width:${pct(s.to - s.from)};--delay:${r * 90 + (i + (row.track ? 1 : 0)) * 140}ms`}
                     />
                   ))}
                   <span class="value" style={`left:${pct(end)}`}>
                     {row.value}
                   </span>
+                  {row.track && (
+                    <span
+                      class="value track-value"
+                      style={`left:${pct(row.track.to)}`}
+                    >
+                      {row.track.value}
+                    </span>
+                  )}
                 </div>
                 {row.note && (
                   <p class="note">
@@ -222,6 +260,11 @@ const grouped = rows.some((r) => r.head);
     font-weight: 400;
     font-size: 14px;
   }
+  .name .ratio {
+    margin-top: 2px;
+    font: 400 14px var(--bm-mono);
+    color: var(--bm-accent);
+  }
   .mark {
     display: flex;
     flex: none;
@@ -269,6 +312,9 @@ const grouped = rows.some((r) => r.head);
   .range {
     background: color-mix(in srgb, var(--bm-accent) 34%, var(--bm-bg));
   }
+  .track {
+    background: var(--bm-track);
+  }
   .fixed {
     background: repeating-linear-gradient(
       135deg,
@@ -287,6 +333,14 @@ const grouped = rows.some((r) => r.head);
   .ink-row .value,
   .ink-row .value-inline {
     color: var(--bm-ink);
+  }
+  .track-value,
+  .value-inline small {
+    color: var(--bm-soft);
+  }
+  .value-inline small {
+    display: inline;
+    font-size: inherit;
   }
   .note {
     margin: 8px 0 0;
@@ -347,7 +401,13 @@ const grouped = rows.some((r) => r.head);
     width: 28px;
     height: 12px;
   }
-  .legend i.solid {
+  .legend.above {
+    margin: 0 0 18px calc(var(--label) + var(--gap));
+  }
+  .legend.above i {
+    width: 12px;
+  }
+  .legend:not(.above) i.solid {
     background: linear-gradient(
       90deg,
       var(--bm-accent) 0 55%,

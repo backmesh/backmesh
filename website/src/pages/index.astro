@@ -51,24 +51,18 @@ const title =
   'backmesh: Free, open-source GitHub Actions runners in your AWS, GCP or Azure';
 const description = `Free and open source (Apache-2.0). Self-hosted GitHub Actions runners on spot VMs in your AWS, GCP or Azure account: ${bench.headline.toLowerCase()} than GitHub-hosted runners in our benchmarks. Your cloud bills you, so its credits apply.`;
 const og = new URL('/brand/og.png', Astro.site).href;
-// The builds on the speed chart, each backmesh 4 vCPU against GitHub-hosted on a
-// shared axis in steps of 20 s; /benchmarks/ has every build.
+// The builds on the speed chart, each backmesh 4 vCPU inside GitHub-hosted's
+// track on a shared axis in steps of 20 s; /benchmarks/ has every build.
 const speed = bench.rows.filter((b) =>
   ['docker', 'go', 'typescript'].includes(b.id),
 );
-const speedRows: Row[] = speed.flatMap((b): Row[] => [
-  {
-    name: 'backmesh 4 vCPU',
-    value: seconds(b.spot.secs),
-    segments: [{ from: 0, to: b.spot.secs, kind: 'solid' }],
-    head: { name: b.workload, note: `${times(b.spot.faster)} faster` },
-  },
-  {
-    name: 'GitHub-hosted',
-    value: seconds(b.github.secs),
-    segments: [{ from: 0, to: b.github.secs, kind: 'ink' }],
-  },
-]);
+const speedRows: Row[] = speed.map((b) => ({
+  name: b.workload,
+  ratio: `${times(b.spot.faster)} faster`,
+  value: seconds(b.spot.secs),
+  segments: [{ from: 0, to: b.spot.secs, kind: 'solid' }],
+  track: { to: b.github.secs, value: seconds(b.github.secs) },
+}));
 const speedMax =
   Math.ceil(Math.max(...speed.map((b) => b.github.secs)) / 20) * 20;
 const speedTicks = Array.from({ length: speedMax / 20 + 1 }, (_, i) => ({
@@ -77,29 +71,20 @@ const speedTicks = Array.from({ length: speedMax / 20 + 1 }, (_, i) => ({
   narrow: i % 2 === 1 && i * 20 < speedMax,
 }));
 
-// GPU list prices, not a benchmark (cost.ts): GitHub's T4 against
-// backmesh's spot and on-demand T4, an hour.
+// GPU list prices, not a benchmark (cost.ts): backmesh's spot and on-demand
+// T4 inside GitHub's T4 track, an hour.
 const price = (v: number) => `$${v.toFixed(2)}`;
 const cheaper = (v: number) => `${Math.round(GPU.github / v)}× cheaper`;
 const gpuRows: Row[] = [
-  {
-    name: 'GitHub-hosted T4',
-    value: price(GPU.github),
-    segments: [{ from: 0, to: GPU.github, kind: 'ink' }],
-  },
-  ...[
-    { sub: 'Spot', v: GPU.spot },
-    { sub: 'On demand', v: GPU.onDemand },
-  ].map(
-    ({ sub, v }): Row => ({
-      name: 'backmesh T4',
-      sub,
-      value: price(v),
-      segments: [{ from: 0, to: v, kind: 'solid' }],
-      note: cheaper(v),
-    }),
-  ),
-];
+  { name: 'Spot', v: GPU.spot },
+  { name: 'On demand', v: GPU.onDemand },
+].map(({ name, v }) => ({
+  name,
+  ratio: cheaper(v),
+  value: price(v),
+  segments: [{ from: 0, to: v, kind: 'solid' }],
+  track: { to: GPU.github, value: price(GPU.github) },
+}));
 const money = (v: number) => `$${Math.round(v).toLocaleString('en-US')}`;
 const range = (lo: number, hi: number) => `${money(lo)}–${money(hi)}`;
 const minutes = MINUTES.toLocaleString('en-US');
@@ -360,6 +345,10 @@ const jsonLd = {
           max={speedMax}
           ticks={speedTicks}
           rows={speedRows}
+          legendAbove={[
+            { kind: 'solid', label: 'backmesh 4 vCPU' },
+            { kind: 'track', label: 'GitHub-hosted' },
+          ]}
         />
         <p class="method"><a href="/benchmarks/">How we measured →</a></p>
       </section>
@@ -370,7 +359,7 @@ const jsonLd = {
           List prices on 2026-11-18, not a benchmark.
         </p>
         <Chart
-          label={`T4 GPU runners' list price an hour: ${gpuRows.map((r) => `${r.name}${r.sub ? ` ${r.sub.toLowerCase()}` : ''} ${r.value}${r.note ? `, ${r.note}` : ''}`).join('; ')}.`}
+          label={`T4 GPU runners' list price an hour: GitHub-hosted ${price(GPU.github)}; ${gpuRows.map((r) => `backmesh ${r.name.toLowerCase()} ${r.value}, ${r.ratio}`).join('; ')}.`}
           max={GPU.github}
           ticks={[
             { at: 0, label: '$0' },
@@ -379,6 +368,10 @@ const jsonLd = {
             { at: GPU.github, label: price(GPU.github) },
           ]}
           rows={gpuRows}
+          legendAbove={[
+            { kind: 'solid', label: 'backmesh T4' },
+            { kind: 'track', label: 'GitHub-hosted T4' },
+          ]}
         />
         <p class="caption">AWS and Azure. Spot jobs can wait for capacity.</p>
         <p class="method"><a href="/labels/#gpu">GPU labels →</a></p>

@@ -12,6 +12,7 @@
   --bm-accent-hover: #0a5283;
   --bm-accent-soft: #b9d4e8;
   --bm-navy: #0b3557;
+  --bm-track: #c9d3de;
   --bm-on-accent: #ffffff;
   --bm-band: #15171a;
   --bm-band-ink: #f1f3f5;
@@ -33,6 +34,7 @@
   --bm-accent-hover: #a6d7f8;
   --bm-accent-soft: #2a4a63;
   --bm-navy: #3a6f9e;
+  --bm-track: #2b3a48;
   --bm-on-accent: #0e1114;
   --bm-band: #1a2129;
   color-scheme: dark;
@@ -50,6 +52,7 @@
     --bm-accent-hover: #a6d7f8;
     --bm-accent-soft: #2a4a63;
     --bm-navy: #3a6f9e;
+    --bm-track: #2b3a48;
     --bm-on-accent: #0e1114;
     --bm-band: #1a2129;
     color-scheme: dark;
