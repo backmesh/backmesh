@@ -1,0 +1,18 @@
+# Corrections to the first-use index (Dockerfile): `<package> <instead>`.
+# The commands Ubuntu's metadata gives <package> install <instead>, or with
+# `-` they don't install from it, so the next package with the command, if
+# any, provides it.
+# A wrapper without the client.
+postgresql-client-common postgresql-client
+# The `dotnet` host without an SDK.
+dotnet-host-10.0 dotnet-sdk-10.0
+# OpenStack's `swift`, not Swift.
+python3-swiftclient -
+# Stubs that install a snap, which can't run in the runner's container.
+chromium-browser -
+chromium-chromedriver -
+firefox -
+thunderbird -
+lxd-installer -
+# Bazel 4.2.3, which ignores .bazelversion.
+bazel-bootstrap -

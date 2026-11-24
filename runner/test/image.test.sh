@@ -2,7 +2,7 @@
 # The built image's first-use install, for real: a step run as the runner runs
 # one, `bash --noprofile --norc -e -o pipefail <file>`, installs hello from
 # Ubuntu's archive and runs it, and leaves a typo alone; the cloud CLIs install
-# on first use from node. Then the image's gaps
+# on first use from node; the index's corrections hold. Then the image's gaps
 # against GitHub's (runner/parity/gaps.sh).
 # Run: runner/test/image.test.sh <image>
 set -Eeuo pipefail
@@ -56,5 +56,21 @@ docker run --rm --entrypoint bash "$image" -c '
   [[ $(sudo -n sh -c "command -v apt-get") == /usr/local/bin/apt-get ]]
   [[ $(ls /etc/apt/sources.list.d) == ubuntu.sources ]]
   echo "environment and apt: passed"' || fail "the image's environment or apt sources"
+
+# The first-use index's corrections (first-use-packages.txt): psql installs
+# the client and runs; OpenStack's swift, Ubuntu's snap stubs and Bazel 4.2.3
+# aren't indexed, so they fail as a typo does; dotnet installs an SDK.
+# shellcheck disable=SC2016 # in the image
+docker run --rm -i --entrypoint sh "$image" \
+  -c 'cat >/tmp/step.sh && exec bash --noprofile --norc -e -o pipefail /tmp/step.sh' <<'EOF' || fail "the first-use index's corrections"
+psql --version
+if swift --version; then echo "swift ran"; exit 1; elif (($? != 127)); then echo "swift: not 127"; exit 1; fi
+index() { awk -v c="$1" '$1 == c { print $2 }' /usr/share/backmesh/commands; }
+[[ $(index dotnet) == dotnet-sdk-* ]] || { echo "dotnet: $(index dotnet)"; exit 1; }
+for c in swift chromium-browser chromedriver firefox thunderbird lxc lxd bazel; do
+  [[ -z $(index "$c") ]] || { echo "$c: $(index "$c")"; exit 1; }
+done
+echo 'first-use index: passed'
+EOF
 
 "$here/../parity/gaps.sh" "$image"

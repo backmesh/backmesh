@@ -62,9 +62,10 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # The lock's packages; the ones backmesh needs, listed even where the lock has
 # them, or adds (gettext-base for envsubst; git-lfs, which git runs without
 # bash, so it can't install on first use); and the first-use index: every
-# command in the archive's command metadata with its package, main's first.
-# apt fetches the metadata, so it's checked against the archive's signature.
-COPY parity/toolset.lock /tmp/toolset.lock
+# command in the archive's command metadata with its package, main's first,
+# after first-use-packages.txt's corrections. apt fetches the metadata, so
+# it's checked against the archive's signature.
+COPY parity/toolset.lock first-use-packages.txt /tmp/
 RUN echo 'Acquire::IndexTargets::deb::CNF { MetaKey "$(COMPONENT)/cnf/Commands-$(NATIVE_ARCHITECTURE)"; ShortDescription "Commands-$(NATIVE_ARCHITECTURE)"; Description "$(RELEASE)/$(COMPONENT) $(NATIVE_ARCHITECTURE) c-n-f Metadata"; flatMetaKeyFormat "cnf/Commands-$(NATIVE_ARCHITECTURE)"; flatDescription "$(RELEASE) c-n-f Metadata"; };' \
         >/etc/apt/apt.conf.d/50backmesh-commands \
     && apt-get update \
@@ -91,15 +92,17 @@ RUN echo 'Acquire::IndexTargets::deb::CNF { MetaKey "$(COMPONENT)/cnf/Commands-$
         for list in /var/lib/apt/lists/*_"$component"_cnf_Commands-amd64*; do \
           /usr/lib/apt/apt-helper cat-file "$list"; \
         done; \
-      done | awk '$1 == "name:" { pkg = $2 } $1 == "commands:" { n = split($2, c, ","); for (i = 1; i <= n; i++) if (!seen[c[i]]++) print c[i], pkg }' \
-        >/usr/share/backmesh/commands \
+      done | awk 'FNR == NR { if (NF && !/^#/) to[$1] = $2; next } \
+          $1 == "name:" { pkg = ($2 in to) ? to[$2] : $2 } \
+          $1 == "commands:" && pkg != "-" { n = split($2, c, ","); for (i = 1; i <= n; i++) if (!seen[c[i]]++) print c[i], pkg }' \
+          /tmp/first-use-packages.txt - >/usr/share/backmesh/commands \
     && [[ $(wc -l </usr/share/backmesh/commands) -gt 10000 ]] \
     && useradd --create-home --uid 1001 --shell /bin/bash runner \
     && echo 'runner ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/runner \
     && chmod 0440 /etc/sudoers.d/runner \
     && install -d -o runner -g runner /opt/actions-runner-dist \
         /opt/pipx /opt/pipx_bin /opt/corepack \
-    && rm -rf /etc/apt/apt.conf.d/50backmesh-commands /var/lib/apt/lists/* /tmp/toolset.lock
+    && rm -rf /etc/apt/apt.conf.d/50backmesh-commands /var/lib/apt/lists/* /tmp/toolset.lock /tmp/first-use-packages.txt
 
 # Node and npm with corepack's yarn and pnpm. npm's global directories are the
 # runner user's, so `npm install --global` needs no sudo, as on GitHub's image.
