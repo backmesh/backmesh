@@ -235,20 +235,21 @@ describe('runListener', () => {
     ]);
   });
 
-  it("renames a renamed label's scale set, and says so when GitHub kept the old name", async () => {
+  it("passes a renamed label's old one to ensureScaleSet", async () => {
     const renamed = { ...ROUTE, renamedFrom: 'backmesh-4' };
     const { scaler } = setup([renamed]);
-    const logs: unknown[] = [];
+    const shutdown = new AbortController();
     const asked: unknown[] = [];
     await runListener(
       {
         actions: {
           ensureScaleSet: async (name, runnerGroupId, renamedFrom) => {
             asked.push([name, runnerGroupId, renamedFrom]);
-            return { id: 7, name: 'backmesh-4', runnerGroupId };
+            return { id: 7, name, runnerGroupId };
           },
           createSession: async () => {
-            throw new Error('no session for a scale set not renamed');
+            shutdown.abort();
+            throw new Error('shut down');
           },
           deleteSession: async () => {},
           getMessage: async () => undefined,
@@ -261,19 +262,11 @@ describe('runListener', () => {
         scaler,
         routes: [renamed],
         owner: 'pod',
-        log: (line) => void logs.push(line),
+        log: () => {},
       },
-      new AbortController().signal,
+      shutdown.signal,
     );
     expect(asked).toEqual([['backmesh-ubuntu-2404-4vcpu', 3, 'backmesh-4']]);
-    expect(logs).toEqual([
-      {
-        msg: 'scale set rename not applied',
-        label: 'backmesh-ubuntu-2404-4vcpu',
-        renamedFrom: 'backmesh-4',
-        name: 'backmesh-4',
-      },
-    ]);
   });
 
   it('reconciles again at once after a tick that submitted its limit', async () => {

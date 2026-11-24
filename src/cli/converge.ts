@@ -436,7 +436,7 @@ export function routesJson(
   // the active ones, can't say a retiring one is gone.
   const ready = before.every((r) => r.retiring || live.has(r.label));
   const gone = (label: string) => ready && !live.has(label);
-  // A class kept under a new label, its code the same, renames its scale
+  // A class kept under a new label, its code the same, replaces its scale
   // set until the listener lists the new name, so the old one doesn't
   // retire: two routes can't share a code.
   const renamed = classes.map((c) => {

@@ -137,17 +137,8 @@ async function addScaleSets(
               groupId,
               route.renamedFrom,
             );
-        if (scaleSet?.name !== route.label) {
-          log(
-            route.retiring
-              ? { msg: 'retired scale set gone', label: route.label }
-              : {
-                  msg: 'scale set rename not applied',
-                  label: route.label,
-                  renamedFrom: route.renamedFrom,
-                  name: scaleSet?.name,
-                },
-          );
+        if (!scaleSet) {
+          log({ msg: 'retired scale set gone', label: route.label });
           continue;
         }
         log({

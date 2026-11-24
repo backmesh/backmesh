@@ -50,6 +50,7 @@ export const scaleSetSchema = z.object({
   id: z.number().int(),
   name: z.string(),
   runnerGroupId: z.number().int(),
+  labels: z.array(z.object({ name: z.string() })).nullish(),
 });
 export type ScaleSet = z.infer<typeof scaleSetSchema>;
 

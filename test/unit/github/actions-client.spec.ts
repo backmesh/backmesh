@@ -46,6 +46,7 @@ const scaleSet = {
   id: 7,
   name: 'backmesh-ubuntu-2404-4vcpu',
   runnerGroupId: 3,
+  labels,
   RunnerSetting: { ephemeral: true, disableUpdate: true },
   statistics,
 };
@@ -53,6 +54,7 @@ const parsedScaleSet = {
   id: 7,
   name: 'backmesh-ubuntu-2404-4vcpu',
   runnerGroupId: 3,
+  labels: labels.map(({ name }) => ({ name })),
 };
 const listed = (...value: unknown[]) =>
   json(200, { count: value.length, value });
@@ -226,18 +228,20 @@ const cases: Case[] = [
       ).toBe(false),
   },
   {
-    name: 'renames the scale set of a renamed label instead of creating one',
+    name: 'replaces the scale set of a renamed label: a PATCH keeps its old labels',
     routes: {
       [`GET ${SCALE_SETS}`]: [
         listed(),
         listed({ ...scaleSet, name: 'backmesh-4' }),
       ],
-      [`PATCH ${SCALE_SETS}/7`]: json(200, scaleSet),
+      [`DELETE ${SCALE_SETS}/7`]: empty(204),
+      [`POST ${SCALE_SETS}`]: json(200, scaleSet),
     },
     run: (a) => a.ensureScaleSet('backmesh-ubuntu-2404-4vcpu', 3, 'backmesh-4'),
     result: parsedScaleSet,
     check: ({ calls }) => {
-      expect(calls.at(-2)?.url.searchParams.get('name')).toBe('backmesh-4');
+      expect(calls.at(-3)?.url.searchParams.get('name')).toBe('backmesh-4');
+      expect(calls.at(-2)?.method).toBe('DELETE');
       expect(calls.at(-1)?.body).toEqual({
         name: 'backmesh-ubuntu-2404-4vcpu',
         runnerGroupId: 3,
@@ -245,6 +249,21 @@ const cases: Case[] = [
         RunnerSetting: { ephemeral: true, disableUpdate: true },
       });
     },
+  },
+  {
+    name: 'replaces a scale set renamed in place, which kept its old labels',
+    routes: {
+      [`GET ${SCALE_SETS}`]: listed({
+        ...scaleSet,
+        labels: [{ name: 'backmesh-4', type: 'System' }],
+      }),
+      [`DELETE ${SCALE_SETS}/7`]: empty(204),
+      [`POST ${SCALE_SETS}`]: json(200, scaleSet),
+    },
+    run: (a) => a.ensureScaleSet('backmesh-ubuntu-2404-4vcpu', 3),
+    result: parsedScaleSet,
+    check: ({ calls }) =>
+      expect(calls.slice(-2).map((c) => c.method)).toEqual(['DELETE', 'POST']),
   },
   {
     name: 'creates the scale set of a renamed label whose old one is gone',

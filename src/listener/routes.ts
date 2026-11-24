@@ -27,8 +27,8 @@ const RunnerClasses = z.array(
     // is deleted once GitHub counts no job assigned to it, since GitHub accepts
     // deleting a busy scale set and fails its job minutes later.
     retiring: z.boolean().optional(),
-    // The class's label before an upgrade renamed it: the listener renames
-    // that scale set rather than make another (`ensureScaleSet`).
+    // The class's label before an upgrade renamed it: the listener replaces
+    // that scale set with one under the new label (`ensureScaleSet`).
     renamedFrom: z.string().optional(),
     public: z.boolean().optional(),
     gpu: z.literal(GPU.model).optional(),
