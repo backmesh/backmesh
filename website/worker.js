@@ -2,9 +2,29 @@
 // www.backmesh.com to the apex, /pricing to the landing page's pricing,
 // serve install.sh as text so a browser shows it, retire the old site's
 // other paths, and send each channel's link, such as /go/hn, to the
-// repository, counting it in the GO_CLICKS dataset (wrangler.jsonc).
+// repository, counting it in the GO_CLICKS dataset (wrangler.jsonc). Only the
+// channels below count, so junk links can't inflate the figures or reach the
+// public traffic branch; any other /go/ path is the site's 404.
 const RETIRED = /^\/(docs|blog|app|firebase-jwt|supabase-jwt)(\/|$)/;
-const GO = /^\/go\/([a-z0-9-]{1,32})\/?$/;
+const GO = /^\/go\/([^/]+)\/?$/;
+const CHANNELS = new Set([
+  'hn',
+  'bookface',
+  'x',
+  'linkedin',
+  'reddit-devops',
+  'reddit-aws',
+  'reddit-googlecloud',
+  'reddit-azure',
+  'reddit-cicd',
+  'reddit-github',
+  'reddit-selfhosted',
+  'reddit-sideproject',
+  'newsletter-console',
+  'newsletter-devopsweekly',
+  'newsletter-devopsish',
+  'deep-dive',
+]);
 
 export default {
   async fetch(request, env) {
@@ -22,7 +42,7 @@ export default {
       return Response.redirect(new URL('/#pricing', url).href, 301);
     }
     const channel = url.pathname.match(GO)?.[1];
-    if (channel) {
+    if (CHANNELS.has(channel)) {
       env.GO_CLICKS.writeDataPoint({ blobs: [channel], indexes: [channel] });
       return Response.redirect('https://github.com/backmesh/backmesh', 302);
     }

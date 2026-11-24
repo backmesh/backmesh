@@ -1,12 +1,13 @@
 name: Traffic
 
-# Daily: snapshots backmesh's, cache's and benchmarks' stargazers and GitHub
+# Daily: snapshots backmesh's, cache's and benchmarks' star counts and GitHub
 # traffic, and the clicks on backmesh.com's /go/ links, to the traffic branch
-# (scripts/traffic.sh), as GitHub keeps traffic for 14 days only. From the
-# publish environment: TRAFFIC_TOKEN, a fine-grained token of the backmesh
-# org with Administration read on those three repositories, which the
-# traffic API needs; and CLOUDFLARE_API_TOKEN, with Account Analytics read
-# for the clicks. Without either, it keeps what it can.
+# (scripts/traffic.sh), as GitHub keeps traffic for 14 days only. Counts only:
+# nothing about who starred or visited. From the publish environment:
+# TRAFFIC_TOKEN, a fine-grained token of the backmesh org with Administration
+# read on those three repositories, which the traffic API needs; and
+# CLOUDFLARE_ANALYTICS_TOKEN, with Account Analytics read only, for the
+# clicks. Without either, it keeps what it can.
 on:
   schedule:
     - cron: '41 5 * * *'
@@ -48,7 +49,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TRAFFIC_TOKEN: ${{ secrets.TRAFFIC_TOKEN }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.CLOUDFLARE_ANALYTICS_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         run: ../scripts/traffic.sh backmesh/backmesh backmesh/cache backmesh/benchmarks
 

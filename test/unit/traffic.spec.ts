@@ -51,6 +51,7 @@ const json = (dir: string, file: string) =>
   JSON.parse(readFileSync(join(dir, file), 'utf8'));
 
 const stars = [
+  { user: { login: 'c' }, starred_at: '2026-11-24T18:00:00Z' },
   { user: { login: 'b' }, starred_at: '2026-11-24T10:00:00Z' },
   { user: { login: 'a' }, starred_at: '2026-11-20T10:00:00Z' },
 ];
@@ -69,7 +70,7 @@ describe('scripts/traffic.sh', () => {
     const dir = mkdtempSync(join(tmpdir(), 'traffic-'));
     const env = {
       TRAFFIC_TOKEN: 't',
-      CLOUDFLARE_API_TOKEN: 'c',
+      CLOUDFLARE_ANALYTICS_TOKEN: 'c',
       CLOUDFLARE_ACCOUNT_ID: 'a',
     };
     const day1 = { timestamp: '2026-11-10T00:00:00Z', count: 1, uniques: 1 };
@@ -93,10 +94,13 @@ describe('scripts/traffic.sh', () => {
         ],
       },
     );
-    expect(json(dir, 'backmesh/stargazers.json')).toEqual([
-      { login: 'a', starred_at: '2026-11-20T10:00:00Z' },
-      { login: 'b', starred_at: '2026-11-24T10:00:00Z' },
+    expect(json(dir, 'backmesh/stars.json')).toEqual([
+      { day: '2026-11-20', added: 1, total: 1 },
+      { day: '2026-11-24', added: 2, total: 3 },
     ]);
+    expect(
+      spawnSync('grep', ['-rlE', '"(a|b|c)"|login', dir]).stdout.toString(),
+    ).toBe('');
     expect(json(dir, 'backmesh/views.json')).toEqual([
       day1,
       { timestamp: '2026-11-24T00:00:00Z', count: 5, uniques: 4 },
@@ -110,15 +114,15 @@ describe('scripts/traffic.sh', () => {
     ]);
   });
 
-  it('keeps the stargazers alone without tokens, and warns when Cloudflare fails', () => {
+  it('keeps the stars alone without tokens, and warns when Cloudflare fails', () => {
     const dir = mkdtempSync(join(tmpdir(), 'traffic-'));
     expect(run(dir, {}, traffic([]))).toContain('No TRAFFIC_TOKEN');
-    expect(existsSync(join(dir, 'backmesh/stargazers.json'))).toBe(true);
+    expect(existsSync(join(dir, 'backmesh/stars.json'))).toBe(true);
     expect(existsSync(join(dir, 'backmesh/views.json'))).toBe(false);
     expect(
       run(
         dir,
-        { CLOUDFLARE_API_TOKEN: 'c', CLOUDFLARE_ACCOUNT_ID: 'a' },
+        { CLOUDFLARE_ANALYTICS_TOKEN: 'c', CLOUDFLARE_ACCOUNT_ID: 'a' },
         traffic([]),
       ),
     ).toContain("::warning::Couldn't read the /go/ link clicks");

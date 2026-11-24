@@ -32,7 +32,7 @@ describe("the site's channel links", () => {
     },
   );
 
-  it.each(['/go/', '/go/HN', '/go/hn/x', `/go/${'a'.repeat(33)}`])(
+  it.each(['/go/', '/go/HN', '/go/hn/x', '/go/lobsters', '/go/hn-'])(
     'serves %s from the assets, uncounted',
     async (path) => {
       const { env, response } = get(path);
