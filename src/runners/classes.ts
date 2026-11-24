@@ -8,6 +8,9 @@ export type Cloud = (typeof CLOUDS)[number];
 /** The classes' vCPUs, at 4 GiB each; `backmesh-4` is the default. */
 export const CLASS_VCPUS = [2, 4, 8, 16] as const;
 export const GIB_PER_VCPU = 4;
+// GCP's c4d has 3.875 GiB a vCPU, rounded down: 15 GiB at 4 vCPUs. Only
+// it may have less than 4 GiB a vCPU, so another such type still fails.
+const C4D_GIB_PER_VCPU = 3.875;
 
 const AWS_SIZE: Record<number, string> = {
   2: 'large',
@@ -24,16 +27,30 @@ const AWS_SIZE: Record<number, string> = {
  * capacity (owner, 2026-11-13; anycloud `experiments/runner-start/README.md`
  * on `experiment/runner-start`): AWS drops `m6i` (the highest spot price and
  * 9 of 13 spot refusals) and leads with `m8i` (not `m8a`, which us-east-2
- * refused 22 of 24 spot requests); GCP keeps `n2` ahead of `n2d` without
+ * refused 22 of 24 spot requests); GCP spot keeps `n2` ahead of `n2d` without
  * `c4d`'s extra Hyperdisk cost; Azure's `ads` family, whose local resource
  * disk anycloud already redirects the image stores onto
  * (`moveImageStoresToResourceDisk`), goes first: 21.5 s faster to start than
  * `as_v5` with no anycloud change (the OS disk stays Premium_LRS either way;
  * an actual ephemeral OS disk would save about 6 s more but isn't built).
+ * GCP's on-demand classes try AMD's `c4d` (Zen 5) and `c3d` (Zen 4) first:
+ * at 4 vCPUs on demand, anycloud#38 measured 0.50 and 0.71 of `n2`'s build
+ * time and 0.78 and 0.76 of its cost per Job, `c4d`'s Hyperdisk Balanced
+ * boot disk included. `backmesh-od-2` keeps `n2` and `n2d`: `c3d` has no
+ * 2-vCPU size, and `c4d`'s wasn't measured. A region without either falls
+ * back to `n2` and `n2d`; spot stays as it is until its own measurements
+ * land.
  */
-export const VM_TYPES: Record<Cloud, (vcpus: number) => string[]> = {
+export const VM_TYPES: Record<
+  Cloud,
+  (vcpus: number, spot: boolean) => string[]
+> = {
   aws: (n) => ['m8i', 'm7a', 'm7i', 'm6a'].map((f) => `${f}.${AWS_SIZE[n]}`),
-  gcp: (n) => [`n2-standard-${n}`, `n2d-standard-${n}`],
+  gcp: (n, spot) => [
+    ...(spot || n < 4 ? [] : [`c4d-standard-${n}`, `c3d-standard-${n}`]),
+    `n2-standard-${n}`,
+    `n2d-standard-${n}`,
+  ],
   azure: (n) => [
     `Standard_D${n}ads_v5`,
     `Standard_D${n}as_v5`,
@@ -186,9 +203,14 @@ function shapeProblem(
   const type = findVmType(details, vmType);
   if (!type) return;
   const memory = vcpus * GIB_PER_VCPU;
+  const gib = type.memoryGiB ?? 0;
+  const least = vmType.startsWith('c4d-')
+    ? Math.floor(vcpus * C4D_GIB_PER_VCPU)
+    : memory;
   const fits =
     type.vCPUs === vcpus &&
-    type.memoryGiB === memory &&
+    gib <= memory &&
+    gib >= least &&
     !type.accelerators?.length;
   return fits
     ? undefined
@@ -247,7 +269,8 @@ export function planClasses(
     // A KVM class tries the same types as the general one, in the same
     // order, filtered to the ones a runner region's catalog reports nested
     // virtualization for: GCP's `n2d` doesn't nest, and `n2` does
-    // (anycloud's `src/shared/catalog/nested-virtualization.ts`). AWS's
+    // (anycloud's `src/shared/catalog/nested-virtualization.ts`), nor do
+    // `c4d` and `c3d`. AWS's
     // `m7a` and `m6a` don't nest, so KVM classes get only `m8i` then `m7i`;
     // Azure's `ads_v5` doesn't nest either, so KVM classes keep `as_v5`
     // then `s_v5`. There's no separate list to keep in step with
@@ -259,15 +282,17 @@ export function planClasses(
     ) =>
       fits(details, vmType, n) &&
       findVmType(details, vmType)?.capabilities?.nestedVirtualization === true;
-    const kvmTypes = (vcpus: number) =>
-      VM_TYPES[target.cloud](vcpus).filter((vmType) =>
+    const kvmTypes = (vcpus: number, spot: boolean) =>
+      VM_TYPES[target.cloud](vcpus, spot).filter((vmType) =>
         byRegion.some(([, details]) => nests(details, vmType, vcpus)),
       );
     const classes = [false, true].flatMap((kvm) =>
       [true, false].flatMap((spot) =>
         CLASS_VCPUS.flatMap((vcpus): RunnerClass[] => {
           const ok = kvm ? nests : fits;
-          const vmTypes = kvm ? kvmTypes(vcpus) : VM_TYPES[target.cloud](vcpus);
+          const vmTypes = kvm
+            ? kvmTypes(vcpus, spot)
+            : VM_TYPES[target.cloud](vcpus, spot);
           const regions = byRegion.flatMap(([region, details]) =>
             vmTypes.some((vmType) => ok(details, vmType, vcpus))
               ? [region]
@@ -298,9 +323,10 @@ export function planClasses(
       ),
     );
     const names = byRegion.map(([region]) => region);
+    // The on-demand types end with the spot ones (`VM_TYPES`).
     plan.problems.push(
       ...CLASS_VCPUS.flatMap((vcpus) =>
-        VM_TYPES[target.cloud](vcpus).flatMap((vmType) => {
+        VM_TYPES[target.cloud](vcpus, false).flatMap((vmType) => {
           const offered = byRegion.find(([, d]) => findVmType(d, vmType));
           return offered
             ? (shapeProblem(offered[1], vmType, vcpus) ?? [])
@@ -309,7 +335,9 @@ export function planClasses(
       ),
       ...byRegion.flatMap(([region, details]) =>
         CLASS_VCPUS.some((vcpus) =>
-          VM_TYPES[target.cloud](vcpus).some((t) => fits(details, t, vcpus)),
+          VM_TYPES[target.cloud](vcpus, false).some((t) =>
+            fits(details, t, vcpus),
+          ),
         )
           ? []
           : [`${target.cloud} ${region} offers none of the runners' VM types`],
