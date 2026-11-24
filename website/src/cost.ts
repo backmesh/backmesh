@@ -31,6 +31,15 @@ export const AWS_SPOT_XLARGE: Record<string, number> = {
   m7i: 0.0497,
   m6a: 0.0547,
 };
+/** AWS's `backmesh-od-4` on-demand prices by VM family, $/hour, us-east-2's
+ * from the catalog, as docs/aws.md lists them. */
+export const AWS_ON_DEMAND_XLARGE: Record<string, number> = {
+  m8a: 0.2434,
+  m8i: 0.2117,
+  m7a: 0.2318,
+  m7i: 0.2016,
+  m6a: 0.1728,
+};
 const clouds = [
   {
     cloud: 'AWS',

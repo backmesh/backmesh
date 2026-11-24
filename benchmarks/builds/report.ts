@@ -11,11 +11,13 @@ import { format } from 'prettier';
 
 import {
   AWS_DISK_PER_HOUR,
+  AWS_ON_DEMAND_XLARGE,
   AWS_SPOT_XLARGE,
   GITHUB_4_CORE_PER_MIN,
 } from '../../website/src/cost.ts';
 import {
   figures,
+  mannWhitney,
   median,
   SEGMENTS,
   type Job,
@@ -65,13 +67,23 @@ const med = (
 
 // Each label's speed against ubuntu-latest's, and a build's cost. A backmesh
 // job costs its VM's spot price (cost.ts's `backmesh-4` price for the VM's
-// family, times its vCPUs over 4) from the kernel's start to the job's end,
+// family, times its vCPUs over 4; its on-demand price on a `-od-` label) from
+// the kernel's start to the job's end,
 // with its disk, each for at least a minute as AWS bills them; ubuntu-latest's,
 // what a private repository pays for GitHub's 4-vCPU runner: its per-minute
 // price, each job rounded up to a whole minute.
 // A `<label>/cache` arm (bench-cache.yml) compares with ubuntu-latest's.
 const BASE = 'ubuntu-latest';
 const baseOf = (l: string) => (l.endsWith('/cache') ? `${BASE}/cache` : BASE);
+// An experiment without its own ubuntu-latest compares with the one in the
+// release file it ran alongside: the same date and backmesh version.
+const withBase = (r: Results): Results => {
+  const base = all.find((a) => a.date === r.date && a.backmesh === r.backmesh)
+    ?.labels[BASE];
+  return r.labels[BASE] || !base
+    ? r
+    : { ...r, labels: { ...r.labels, [BASE]: base } };
+};
 function cost(label: string, job: Job) {
   const end = Date.parse(job.completedAt!);
   if (label.startsWith(BASE))
@@ -79,15 +91,20 @@ function cost(label: string, job: Job) {
       Math.ceil((end - Date.parse(job.startedAt)) / 60_000) *
       GITHUB_4_CORE_PER_MIN
     );
-  const price = AWS_SPOT_XLARGE[job.vm?.split('.')[0] ?? ''];
+  const prices = label.includes('-od-')
+    ? AWS_ON_DEMAND_XLARGE
+    : AWS_SPOT_XLARGE;
+  const price = prices[job.vm?.split('.')[0] ?? ''];
   const booted = job.marks.vm_booted;
   if (!price || !job.nproc || !booted) return undefined;
   const hours = Math.max(60_000, end - booted / 1000) / 3_600_000;
   return ((price * job.nproc) / 4 + AWS_DISK_PER_HOUR) * hours;
 }
 const usd = (v: number | null) => (v === null ? 'n/a' : `$${v.toFixed(4)}`);
-const times = (v: number | null, base: number | null) =>
-  v && base ? `${s(v)}, ${(base / v).toFixed(1)}×` : s(v);
+const times = (v: number | null, base: number | null, p?: number) =>
+  v && base
+    ? `${s(v)}, ${(base / v).toFixed(1)}×${p === undefined ? '' : ` (p ${p < 0.001 ? '<0.001' : p.toFixed(3)})`}`
+    : s(v);
 
 // One results file's tables, VMs, cache hits and runs.
 function report(r: Results) {
@@ -133,11 +150,18 @@ function report(r: Results) {
                 .filter((v) => v !== undefined),
             );
           return labels.map((l) => {
-            const pair = (arm: 'cold' | 'warm', k: 'build' | 'total') =>
-              times(
-                med(jobs(r, l, arm, b), (f) => f[k]),
-                med(jobs(r, baseOf(l), arm, b), (f) => f[k]),
+            const pair = (arm: 'cold' | 'warm', k: 'build' | 'total') => {
+              const [v, base] = [l, baseOf(l)].map((x) =>
+                jobs(r, x, arm, b).map((j) => j.f![k]),
+              ) as [number[], number[]];
+              return times(
+                median(v),
+                median(base),
+                l === baseOf(l) || !v.length || !base.length
+                  ? undefined
+                  : mannWhitney(v, base),
               );
+            };
             const c = costs(l);
             const base = costs(baseOf(l));
             return row([
@@ -243,10 +267,10 @@ ${
   costTable &&
   `**Speed and cost a build.** Each label's medians, and their speed against
 ${BASE}'s (its time over the label's), a \`/cache\` arm's against
-\`${BASE}/cache\`'s. A backmesh job's cost is its VM's spot
-price from the kernel's start to the job's end, at
-[\`cost.ts\`](../../website/src/cost.ts)'s \`backmesh-4\` price for the VM's
-family times its vCPUs over 4, plus its disk's $${AWS_DISK_PER_HOUR} an hour,
+\`${BASE}/cache\`'s, with a two-sided Mann-Whitney p. A backmesh job's cost is
+its VM's spot price (on-demand on a \`-od-\` label) from the kernel's start to
+the job's end, at [\`cost.ts\`](../../website/src/cost.ts)'s \`backmesh-4\`
+price for the VM's family times its vCPUs over 4, plus its disk's $${AWS_DISK_PER_HOUR} an hour,
 for at least a minute, as AWS bills both. ${BASE}'s is what GitHub charges for
 its 4-vCPU runner, $${GITHUB_4_CORE_PER_MIN} a minute, each job rounded up to
 a whole minute: a private repository pays it for a 4-core larger runner, while
@@ -309,7 +333,7 @@ ${experiments
   .map(
     ({ name, r }) => `### Experiment: \`experiments/${name}.json\`
 
-${report(r)}
+${r.labels[BASE] ? '' : `Its \`${BASE}\` is the release file's, run alongside it.\n\n`}${report(withBase(r))}
 
 `,
   )
