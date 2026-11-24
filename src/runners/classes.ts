@@ -44,8 +44,13 @@ const AWS_SIZE: Record<number, string> = {
  * time and 0.78 and 0.76 of its cost per Job, `c4d`'s Hyperdisk Balanced
  * boot disk included. `backmesh-ubuntu-2404-od-2vcpu` keeps `n2` and `n2d`: `c3d` has no
  * 2-vCPU size, and `c4d`'s wasn't measured. A region without either falls
- * back to `n2` and `n2d`; spot stays as it is until its own measurements
- * land.
+ * back to `n2` and `n2d`.
+ * GCP's spot classes try `c4d` first too, with a cheaper Hyperdisk
+ * (`GCP_SPOT_RUNNER_DISK_IOPS`, `runner-jobs.ts`; owner, 2026-11-24): spot
+ * `c4d-standard-4` launched 13 of 13 times in us-east4 with none preempted
+ * (anycloud#38), and at 3,000 IOPS and 750 MiB/s a Job costs about 1.05 of
+ * `n2`'s spot cost for about 0.6 of its VM time (anycloud#43). `c3d` has no
+ * spot measurements, so spot leaves it out.
  */
 export const VM_TYPES: Record<
   Cloud,
@@ -54,7 +59,11 @@ export const VM_TYPES: Record<
   aws: (n) =>
     ['m8a', 'm8i', 'm7a', 'm7i', 'm6a'].map((f) => `${f}.${AWS_SIZE[n]}`),
   gcp: (n, spot) => [
-    ...(spot || n < 4 ? [] : [`c4d-standard-${n}`, `c3d-standard-${n}`]),
+    ...(n < 4
+      ? []
+      : spot
+        ? [`c4d-standard-${n}`]
+        : [`c4d-standard-${n}`, `c3d-standard-${n}`]),
     `n2-standard-${n}`,
     `n2d-standard-${n}`,
   ],

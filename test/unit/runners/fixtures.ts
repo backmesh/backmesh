@@ -105,7 +105,7 @@ export const CATALOG = {
       [0.1165, 0.1942],
       true,
     ),
-    // The on-demand classes' first: c3d has no 2-vCPU size.
+    // c4d leads spot and on demand, c3d on demand only; c3d has no 2-vCPU size.
     ...family(
       (n) => `c4d-standard-${n}`,
       'us-central1-a',

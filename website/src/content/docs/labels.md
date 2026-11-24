@@ -64,7 +64,7 @@ for `backmesh-ubuntu-2404-4vcpu` are below; the other sizes use the same familie
 | Cloud | Types for `backmesh-ubuntu-2404-4vcpu`, in order                     |
 | ----- | -------------------------------------------------------------------- |
 | AWS   | `m8a.xlarge`, `m8i.xlarge`, `m7a.xlarge`, `m7i.xlarge`, `m6a.xlarge` |
-| GCP   | `n2-standard-4`, `n2d-standard-4`                                    |
+| GCP   | `c4d-standard-4`, `n2-standard-4`, `n2d-standard-4`                  |
 | Azure | `Standard_D4ads_v5`, `Standard_D4as_v5`, `Standard_D4s_v5`           |
 
 When no type has capacity, jobs wait at GitHub and [`backmesh status`](/status/)

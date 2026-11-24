@@ -26,8 +26,7 @@ export const RUNNER_DISK_GB = 100;
 // about $0.009 per 10-minute job (owner, 2026-11-13). AWS gp3 bills IOPS and
 // MiB/s separately, so both need to drop for the full saving: throughput
 // alone, still at 8,000 IOPS, saves only about half. Disk size stays the
-// tier's, and GCP and Azure have no gp3 equivalent to tune (anycloud's
-// `assertGp3Performance` refuses the fields off AWS).
+// tier's; Azure has no equivalent to tune.
 export const AWS_RUNNER_DISK_IOPS = 4_000;
 export const AWS_RUNNER_DISK_THROUGHPUT_MIBPS = 500;
 
@@ -39,6 +38,17 @@ export const AWS_RUNNER_DISK_THROUGHPUT_MIBPS = 500;
 // job 23 s sooner on pd-ssd than on pd-standard, for about $0.02 more a VM
 // hour (owner, 2026-11-23).
 export const GCP_RUNNER_DISK_TIER = 'high';
+
+// A spot `c4d` runner's Hyperdisk Balanced has 3,000 IOPS and 750 MiB/s, not
+// the tier's 8,000 and 1,000: anycloud#43's A/B (c4d-standard-4, us-east4,
+// n=12) measured VM time 1.02 (p=0.51), toolchain pulls 1.04 and `docker
+// build` 1.03 of the tier's, for $0.044 an hour instead of $0.092, bringing a
+// spot `c4d` Job to about 1.05 of `n2`'s cost. The owner took the slowdown
+// for spot only (2026-11-24); on-demand runners keep the tier. anycloud
+// (0.1.84) applies them only to a Hyperdisk type, so `n2` and `n2d` keep the
+// tier's pd-ssd.
+export const GCP_SPOT_RUNNER_DISK_IOPS = 3_000;
+export const GCP_SPOT_RUNNER_DISK_THROUGHPUT_MIBPS = 750;
 
 export interface RunnerJob {
   id: string;
@@ -340,6 +350,14 @@ export function anycloudRunnerJobs(
             diskThroughputMibps: AWS_RUNNER_DISK_THROUGHPUT_MIBPS,
           }),
           ...(cloud === 'gcp' && { diskTier: GCP_RUNNER_DISK_TIER }),
+          // Only a class with `c4d` asks: anycloud refuses a Job none of
+          // whose types takes Hyperdisk.
+          ...(cloud === 'gcp' &&
+            spot &&
+            vmTypes.some((t) => t.startsWith('c4d-')) && {
+              diskIops: GCP_SPOT_RUNNER_DISK_IOPS,
+              diskThroughputMibps: GCP_SPOT_RUNNER_DISK_THROUGHPUT_MIBPS,
+            }),
         },
         workloadType: 'job',
         maxRetries: 0,

@@ -29,6 +29,11 @@ floor. backmesh's core features are free; your clouds bill you for the VMs.
 | Azure | `westus2`     | `Standard_D4ads_v5` 0.0381, `Standard_D4as_v5` 0.0318, `Standard_D4s_v5` 0.0355                                   |
 | GCP   | `us-central1` | `n2-standard-4` 0.1165, `n2d-standard-4` 0.0899                                                                   |
 
+GCP's `backmesh-4` tries `c4d-standard-4` first (from v0.6.2), which isn't
+priced here: in `us-east4` a spot job on it cost about 1.05 times one on `n2`,
+for about 0.6 of its VM time
+([anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)).
+
 - **The always-on VMs:** the control plane's VM and one listener VM for each
   org, with their disks and public addresses. For one org that's about $86 a
   month on AWS ($69 + $17), $111 on Azure ($79 + $32) and $74 on GCP ($59 +
@@ -69,10 +74,12 @@ shows the same figures.
   $0.027 for IOPS and throughput above gp3's baseline
   ([EBS pricing](https://aws.amazon.com/ebs/pricing/)). On GCP it's pd-ssd,
   $0.17 a GB-month in `us-central1`, about $0.023 an hour
-  ([disk pricing](https://cloud.google.com/compute/disks-image-pricing)). An
-  on-demand job on `c4d` has Hyperdisk Balanced instead, with 8,000 IOPS and
+  ([disk pricing](https://cloud.google.com/compute/disks-image-pricing)). A
+  job on `c4d` has Hyperdisk Balanced instead: on demand with 8,000 IOPS and
   1,000 MB/s provisioned, about $0.092 an hour
-  ([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38)).
+  ([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38)), and on
+  spot with 3,000 and 750, about $0.044
+  ([anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)).
 - **Runners started ahead** of predicted or cued jobs that no job takes. Each
   bills for its boot and a short idle time.
 - **Buckets.** The checkpoint bucket and the [cache](/cache/) buckets bill for
