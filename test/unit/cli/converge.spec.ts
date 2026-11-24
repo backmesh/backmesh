@@ -69,7 +69,7 @@ describe('converge', () => {
     });
     expect(changeLines('acme', changes, both)).toEqual([
       expect.stringMatching(
-        /^Renamed labels, old to new: backmesh-2 → backmesh-ubuntu-2404-2vcpu, .*\. Change each workflow's runs-on to the new label: a job sent to an old label once its scale set is deleted never runs, and waits until GitHub cancels it after 24 hours\.$/,
+        /^Renamed labels, old to new: backmesh-2 → backmesh-ubuntu-2404-2vcpu, .*\. Change each workflow's runs-on to the new label: a job sent to an old label once the listener restarts never runs, and waits until GitHub cancels it after 24 hours\.$/,
       ),
     ]);
     // Each class renames its old scale set, and none retires: two routes

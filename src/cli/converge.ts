@@ -220,7 +220,7 @@ export function changeLines(
   }
   if (c.labelsRenamed.length) {
     lines.push(
-      `Renamed labels, old to new: ${c.labelsRenamed.map((r) => `${r.from} → ${r.to}`).join(', ')}. Change each workflow's runs-on to the new label: a job sent to an old label once its scale set is deleted never runs, and waits until GitHub cancels it after 24 hours.`,
+      `Renamed labels, old to new: ${c.labelsRenamed.map((r) => `${r.from} → ${r.to}`).join(', ')}. Change each workflow's runs-on to the new label: a job sent to an old label once the listener restarts never runs, and waits until GitHub cancels it after 24 hours.`,
     );
   }
   if (c.labelsChanged.length) {
