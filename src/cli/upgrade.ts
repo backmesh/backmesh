@@ -52,6 +52,7 @@ import {
   createListenerVm,
   LISTENER_VM_TYPES,
   listenerVmId,
+  loggedScaleSetIds,
   startListener,
 } from './listener-vm.js';
 import type { Cloud, CloudTarget } from '../runners/classes.js';
@@ -355,7 +356,9 @@ async function upgradeOnce(
       );
     }
     const home = homeOf(routes);
-    read.push({ listener, running, org, targets, home });
+    // For the scale sets a class replaces (`routesJson`).
+    const ids = await loggedScaleSetIds(exec, listener.vm.id);
+    read.push({ listener, running, org, targets, home, ids });
     for (const target of all) {
       if (!connections.has(target.credentials)) {
         connections.set(target.credentials, target);
@@ -442,7 +445,7 @@ async function upgradeOnce(
       ...entry,
       classes: plan.classes,
       changes: runnerChanges(before, plan.classes),
-      runners: routesJson(plan.classes, before, live),
+      runners: routesJson(plan.classes, before, live, entry.ids),
     });
   }
   const upgradePlan: UpgradePlan = {
@@ -547,7 +550,15 @@ async function upgradeOnce(
   // key. Without a key to save, the new listener wouldn't start, so
   // upgrade gets every org's first, before any listener changes.
   const orgs = [];
-  for (const { listener, running, org, targets, classes, changes } of planned) {
+  for (const {
+    listener,
+    running,
+    org,
+    targets,
+    classes,
+    changes,
+    ids,
+  } of planned) {
     let installKey = running.installKey;
     if (!installKey) {
       print(
@@ -589,6 +600,7 @@ async function upgradeOnce(
       targets,
       classes,
       changes,
+      ids,
     });
   }
   // One roll per org, one at a time. A new install key needs the roll
@@ -603,6 +615,7 @@ async function upgradeOnce(
     targets,
     classes,
     changes,
+    ids,
   } of orgs) {
     const { name } = listener;
     const tag = installTag(clusterIdOf(url), orgId);
@@ -622,6 +635,7 @@ async function upgradeOnce(
       finalClasses,
       running.runners ? parseRoutes(running.runners) : [],
       new Set(running.status.scaleSets.map((set) => set.label)),
+      ids,
     );
     // The listener mints for every route region, so their cache buckets
     // come first; already created or

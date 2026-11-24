@@ -46,7 +46,6 @@ const scaleSet = {
   id: 7,
   name: 'backmesh-ubuntu-2404-4vcpu',
   runnerGroupId: 3,
-  labels,
   RunnerSetting: { ephemeral: true, disableUpdate: true },
   statistics,
 };
@@ -54,7 +53,6 @@ const parsedScaleSet = {
   id: 7,
   name: 'backmesh-ubuntu-2404-4vcpu',
   runnerGroupId: 3,
-  labels: labels.map(({ name }) => ({ name })),
 };
 const listed = (...value: unknown[]) =>
   json(200, { count: value.length, value });
@@ -228,51 +226,79 @@ const cases: Case[] = [
       ).toBe(false),
   },
   {
-    name: 'replaces the scale set of a renamed label: a PATCH keeps its old labels',
+    name: "replaces an old label's scale set by its ID, logging why",
     routes: {
-      [`GET ${SCALE_SETS}`]: [
-        listed(),
-        listed({ ...scaleSet, name: 'backmesh-4' }),
-      ],
+      [`GET ${SCALE_SETS}`]: listed(),
       [`DELETE ${SCALE_SETS}/7`]: empty(204),
-      [`POST ${SCALE_SETS}`]: json(200, scaleSet),
+      [`POST ${SCALE_SETS}`]: json(200, { ...scaleSet, id: 8 }),
     },
-    run: (a) => a.ensureScaleSet('backmesh-ubuntu-2404-4vcpu', 3, 'backmesh-4'),
-    result: parsedScaleSet,
-    check: ({ calls }) => {
-      expect(calls.at(-3)?.url.searchParams.get('name')).toBe('backmesh-4');
-      expect(calls.at(-2)?.method).toBe('DELETE');
+    run: (a) => a.ensureScaleSet('backmesh-ubuntu-2404-4vcpu', 3, 7),
+    result: { ...parsedScaleSet, id: 8 },
+    check: ({ calls, logs }) => {
+      expect(calls.slice(-2).map((c) => c.method)).toEqual(['DELETE', 'POST']);
       expect(calls.at(-1)?.body).toEqual({
         name: 'backmesh-ubuntu-2404-4vcpu',
         runnerGroupId: 3,
         labels,
         RunnerSetting: { ephemeral: true, disableUpdate: true },
       });
+      expect(logs).toEqual([
+        {
+          msg: 'replacing scale set',
+          name: 'backmesh-ubuntu-2404-4vcpu',
+          scaleSetId: 7,
+          reason: 'old label',
+        },
+      ]);
     },
   },
   {
-    name: 'replaces a scale set renamed in place, which kept its old labels',
+    name: 'replaces a scale set renamed in place, which kept its old label',
     routes: {
-      [`GET ${SCALE_SETS}`]: listed({
-        ...scaleSet,
-        labels: [{ name: 'backmesh-4', type: 'System' }],
-      }),
+      [`GET ${SCALE_SETS}`]: listed(scaleSet),
       [`DELETE ${SCALE_SETS}/7`]: empty(204),
-      [`POST ${SCALE_SETS}`]: json(200, scaleSet),
+      [`POST ${SCALE_SETS}`]: json(200, { ...scaleSet, id: 8 }),
     },
-    run: (a) => a.ensureScaleSet('backmesh-ubuntu-2404-4vcpu', 3),
-    result: parsedScaleSet,
-    check: ({ calls }) =>
-      expect(calls.slice(-2).map((c) => c.method)).toEqual(['DELETE', 'POST']),
+    run: (a) => a.ensureScaleSet('backmesh-ubuntu-2404-4vcpu', 3, 7),
+    result: { ...parsedScaleSet, id: 8 },
+    check: ({ calls, logs }) => {
+      expect(calls.slice(-2).map((c) => c.method)).toEqual(['DELETE', 'POST']);
+      expect(logs[0]).toMatchObject({ reason: 'renamed in place' });
+    },
   },
   {
-    name: 'creates the scale set of a renamed label whose old one is gone',
-    routes: {
-      [`GET ${SCALE_SETS}`]: [listed(), listed()],
-      [`POST ${SCALE_SETS}`]: json(200, scaleSet),
+    name: 'keeps a scale set already made again, as after a restart',
+    routes: { [`GET ${SCALE_SETS}`]: listed({ ...scaleSet, id: 8 }) },
+    run: (a) => a.ensureScaleSet('backmesh-ubuntu-2404-4vcpu', 3, 7),
+    result: { ...parsedScaleSet, id: 8 },
+    check: ({ calls, logs }) => {
+      expect(
+        calls.some(
+          (c) => c.method !== 'GET' && c.url.href.startsWith(SCALE_SETS),
+        ),
+      ).toBe(false);
+      expect(logs).toEqual([]);
     },
-    run: (a) => a.ensureScaleSet('backmesh-ubuntu-2404-4vcpu', 3, 'backmesh-4'),
-    result: parsedScaleSet,
+  },
+  {
+    name: 'creates the scale set after a delete whose create failed',
+    routes: {
+      [`GET ${SCALE_SETS}`]: listed(),
+      [`DELETE ${SCALE_SETS}/7`]: json(404, { typeName: 'NotFound' }),
+      [`POST ${SCALE_SETS}`]: json(200, { ...scaleSet, id: 8 }),
+    },
+    run: (a) => a.ensureScaleSet('backmesh-ubuntu-2404-4vcpu', 3, 7),
+    result: { ...parsedScaleSet, id: 8 },
+  },
+  {
+    name: 'fails when the create after a delete is refused',
+    routes: {
+      [`GET ${SCALE_SETS}`]: listed(),
+      [`DELETE ${SCALE_SETS}/7`]: empty(204),
+      [`POST ${SCALE_SETS}`]: json(400, { message: 'refused' }),
+    },
+    run: (a) => a.ensureScaleSet('backmesh-ubuntu-2404-4vcpu', 3, 7),
+    error: { status: 400 },
   },
   {
     name: 'treats a missing scale set as deleted',

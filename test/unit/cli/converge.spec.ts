@@ -49,33 +49,48 @@ describe('converge', () => {
     ]);
   });
 
-  it('renames the scale set of a label renamed under the same class code', () => {
+  it('replaces the scale set of a label renamed under the same class code, by its logged ID', () => {
     // As v0.6.1 named them.
     const old = running.map((r) => ({
       ...r,
       label: r.label.replace('ubuntu-2404-', '').replace('vcpu', ''),
     }));
-    // Each class renames its old scale set, and none retires: two routes
+    // Each class replaces its old scale set, and none retires: two routes
     // can't share a code.
     const live = new Set(old.map((r) => r.label));
-    const written = parseRoutes(routesJson(both, old, live));
+    const ids = new Map(old.map((r, i) => [r.label, i + 1]));
+    const written = parseRoutes(routesJson(both, old, live, ids));
     expect(written.filter((r) => r.retiring)).toEqual([]);
-    expect(
-      written.find((r) => r.label === 'backmesh-ubuntu-2404-4vcpu')
-        ?.renamedFrom,
-    ).toBe('backmesh-4');
-    // A rerun before the listener has renamed them keeps the old names, and
-    // drops them once it lists the new ones.
-    const again = parseRoutes(routesJson(both, written, live));
-    expect(again.map((r) => r.renamedFrom)).toEqual(
-      written.map((r) => r.renamedFrom),
+    const four = (routes: Route[]) =>
+      routes.find((r) => r.label === 'backmesh-ubuntu-2404-4vcpu')
+        ?.replaceScaleSetId;
+    expect(four(written)).toBe(ids.get('backmesh-4'));
+    expect(() => routesJson(both, old, live)).toThrow(
+      "The listener's log doesn't name backmesh-",
+    );
+    // A rerun before the listener has replaced them keeps the IDs, and
+    // drops them once it logs new ones under the new labels.
+    expect(four(parseRoutes(routesJson(both, written, live, ids)))).toBe(
+      ids.get('backmesh-4'),
     );
     const renamed = new Set(both.map((c) => c.label));
+    const made = new Map(both.map((c, i) => [c.label, 100 + i]));
     expect(
-      parseRoutes(routesJson(both, written, renamed)).some(
-        (r) => r.renamedFrom,
+      parseRoutes(routesJson(both, written, renamed, made)).some(
+        (r) => r.replaceScaleSetId,
       ),
     ).toBe(false);
+  });
+
+  it('replaces a scale set v0.7.0 renamed in place', () => {
+    const v070 = running.map((r) => ({ ...r, renamedFrom: 'old' }));
+    const live = new Set(both.map((c) => c.label));
+    const ids = new Map(both.map((c, i) => [c.label, i + 1]));
+    const written = parseRoutes(routesJson(both, v070, live, ids));
+    expect(written.map((r) => r.replaceScaleSetId)).toEqual(
+      written.map((r) => ids.get(r.label)),
+    );
+    expect(written.some((r) => r.renamedFrom)).toBe(false);
   });
 
   it("doesn't flag a label changed when a release only reorders its VM types", () => {

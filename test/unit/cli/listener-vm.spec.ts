@@ -13,6 +13,7 @@ import {
   listListenerVms,
   rollCommand,
   startCommand,
+  loggedScaleSetIds,
 } from '../../../src/cli/listener-vm.js';
 import { fakeApi, fakeBinary } from './fakes.js';
 import { fakeExec, listenerVm } from './fakes.js';
@@ -361,6 +362,39 @@ describe('the VM commands', () => {
       ),
     ).rejects.toThrow(
       "acme's listener start on bml-l8u5e-abc123 failed: Error: manifest unknown.",
+    );
+  });
+});
+
+describe('loggedScaleSetIds', () => {
+  it("reads each scale set's newest ID from the listener's log", async () => {
+    const line = (name: string, scaleSetId: number) =>
+      JSON.stringify({ time: 't', msg: 'scale set ready', scaleSetId, name });
+    const { exec, calls } = fakeExec(() =>
+      [
+        line('backmesh-4', 2),
+        'not json',
+        line('backmesh-4', 9),
+        line('backmesh-2', 1),
+      ].join('\n'),
+    );
+    expect(await loggedScaleSetIds(exec, 'bml-x')).toEqual(
+      new Map([
+        ['backmesh-4', 9],
+        ['backmesh-2', 1],
+      ]),
+    );
+    expect(calls[0]?.[1]).toMatch(/^docker logs backmesh-listener /);
+  });
+
+  it("fails when the log can't be read", async () => {
+    const { exec } = fakeExec(() => ({
+      code: 1,
+      stdout: '',
+      stderr: 'Error: No such container\n',
+    }));
+    await expect(loggedScaleSetIds(exec, 'bml-x')).rejects.toThrow(
+      'No such container',
     );
   });
 });

@@ -235,16 +235,16 @@ describe('runListener', () => {
     ]);
   });
 
-  it("passes a renamed label's old one to ensureScaleSet", async () => {
-    const renamed = { ...ROUTE, renamedFrom: 'backmesh-4' };
+  it('passes the scale set a class replaces to ensureScaleSet', async () => {
+    const renamed = { ...ROUTE, replaceScaleSetId: 2 };
     const { scaler } = setup([renamed]);
     const shutdown = new AbortController();
     const asked: unknown[] = [];
     await runListener(
       {
         actions: {
-          ensureScaleSet: async (name, runnerGroupId, renamedFrom) => {
-            asked.push([name, runnerGroupId, renamedFrom]);
+          ensureScaleSet: async (name, runnerGroupId, replaceId) => {
+            asked.push([name, runnerGroupId, replaceId]);
             return { id: 7, name, runnerGroupId };
           },
           createSession: async () => {
@@ -266,7 +266,7 @@ describe('runListener', () => {
       },
       shutdown.signal,
     );
-    expect(asked).toEqual([['backmesh-ubuntu-2404-4vcpu', 3, 'backmesh-4']]);
+    expect(asked).toEqual([['backmesh-ubuntu-2404-4vcpu', 3, 2]]);
   });
 
   it('reconciles again at once after a tick that submitted its limit', async () => {

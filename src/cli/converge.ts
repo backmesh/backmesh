@@ -424,28 +424,43 @@ export const homeOf = (routes: readonly Route[]) =>
 /**
  * The listener's classes as the plan writes them: the new ones, then each
  * one it drops, retiring (`routes.ts`), until the listener has deleted its
- * scale set: `live` is the labels its status still lists.
+ * scale set: `live` is the labels its status still lists, and `ids` their
+ * scale sets' IDs, from its log (`loggedScaleSetIds`).
  */
 export function routesJson(
   classes: readonly RunnerClass[],
   before: readonly Route[],
   live: ReadonlySet<string>,
+  ids: ReadonlyMap<string, number> = new Map(),
 ): string {
   const labels = new Set(classes.map((c) => c.label));
   // A listener still setting its scale sets up, which lists only some of
   // the active ones, can't say a retiring one is gone.
   const ready = before.every((r) => r.retiring || live.has(r.label));
   const gone = (label: string) => ready && !live.has(label);
-  // A class kept under a new label, its code the same, replaces its scale
-  // set until the listener lists the new name, so the old one doesn't
-  // retire: two routes can't share a code.
+  // A class whose scale set keeps an old label has it replaced, by ID, so
+  // the old one doesn't retire (two routes can't share a code): one under
+  // a label this upgrade renames, or one v0.7.0's upgrade renamed in place
+  // (`renamedFrom`), until the listener logs another ID under the label.
   const renamed = classes.map((c) => {
     const was = before.find((r) => r.code === c.code && !r.retiring);
-    const from =
+    const old =
       was?.label !== c.label
-        ? was?.label
-        : !live.has(c.label) && was.renamedFrom;
-    return from ? { ...c, renamedFrom: from } : c;
+        ? was && live.has(was.label) && was.label
+        : was.renamedFrom && c.label;
+    const logged = ids.get(c.label);
+    const kept =
+      was?.label === c.label &&
+      (logged ?? was.replaceScaleSetId) === was.replaceScaleSetId
+        ? was.replaceScaleSetId
+        : undefined;
+    const id = old ? ids.get(old) : kept;
+    if (old && !id) {
+      throw new Error(
+        `The listener's log doesn't name ${old}'s scale set, which ${c.label} replaces. The listener logs it at each start: restart its container on its VM, then run upgrade again.`,
+      );
+    }
+    return id ? { ...c, replaceScaleSetId: id } : c;
   });
   const codes = new Set(classes.map((c) => c.code));
   const retiring = before
@@ -457,9 +472,11 @@ export function routesJson(
         !codes.has(r.code) &&
         !(r.retiring && gone(r.label)),
     )
-    .map(({ onDemand: _, renamedFrom: __, ...route }) => ({
-      ...route,
-      retiring: true,
-    }));
+    .map(
+      ({ onDemand: _, renamedFrom: __, replaceScaleSetId: ___, ...route }) => ({
+        ...route,
+        retiring: true,
+      }),
+    );
   return JSON.stringify([...renamed, ...retiring]);
 }

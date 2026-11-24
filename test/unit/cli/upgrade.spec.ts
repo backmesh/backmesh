@@ -279,7 +279,7 @@ function setUp({
     roll?: (values: Record<string, string>) => boolean;
   } = {};
   // `anycloud exec`'s route, as each listener answers it; recorded in
-  // `calls` as `status <id>`, `roll <id>` or `start <id>`.
+  // `calls` as `status <id>`, `roll <id>`, `start <id>` or `logs <id>`.
   const { exec } = fakeExec((id, command) => {
     const refused = refusal();
     if (refused) return new Error('Client/API version mismatch.');
@@ -292,6 +292,10 @@ function setUp({
         return { code: 1, stdout: '', stderr: 'Error: rollout failed\n' };
       target.env = values;
       target.up = !target.stuck;
+      return '';
+    }
+    if (command.startsWith('docker logs')) {
+      calls.push(`logs ${id}`);
       return '';
     }
     if (command.startsWith('set -e')) {
