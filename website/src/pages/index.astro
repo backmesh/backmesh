@@ -30,6 +30,23 @@ import {
   per1000,
 } from '../cost';
 
+// The repo's stars, read at build time; shown from 100 up, and left out when
+// GitHub doesn't answer within 5 s.
+const stars: number | undefined = await fetch(
+  'https://api.github.com/repos/backmesh/backmesh',
+  { signal: AbortSignal.timeout(5000) },
+)
+  .then((r) => (r.ok ? r.json() : undefined))
+  .then((r) => r?.stargazers_count)
+  .catch(() => undefined);
+const starCount =
+  stars !== undefined && stars >= 100
+    ? new Intl.NumberFormat('en', {
+        notation: 'compact',
+        maximumFractionDigits: 1,
+      }).format(stars)
+    : undefined;
+
 const title =
   'backmesh: Free, open-source GitHub Actions runners in your AWS, GCP or Azure';
 const description = `Free and open source (Apache-2.0). Self-hosted GitHub Actions runners on spot VMs in your AWS, GCP or Azure account: ${bench.headline.toLowerCase()} than GitHub-hosted runners in our benchmarks. Your cloud bills you, so its credits apply.`;
@@ -275,15 +292,16 @@ const jsonLd = {
         <a
           id="github"
           href="https://github.com/backmesh/backmesh"
-          aria-label="backmesh on GitHub"
-          title="GitHub"
+          aria-label={`Star backmesh on GitHub${starCount ? `, ${starCount} stars` : ''}`}
         >
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
             <path
               fill="currentColor"
               d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"
             ></path>
           </svg>
+          <span>Star</span>
+          {starCount && <span class="count">{starCount}</span>}
         </a>
         <a
           id="discord"
@@ -711,6 +729,7 @@ const jsonLd = {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 12px;
     height: 88px;
   }
   .logo {
@@ -732,7 +751,6 @@ const jsonLd = {
   nav a[href='/install/'] {
     color: var(--bm-accent);
   }
-  #github,
   #discord,
   #theme {
     display: grid;
@@ -747,13 +765,29 @@ const jsonLd = {
     color: var(--bm-body);
     cursor: pointer;
   }
+  #github {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 34px;
+    margin-left: -6px;
+    padding: 0 12px;
+    border: 1px solid var(--bm-hair);
+    border-radius: 17px;
+    color: var(--bm-body);
+  }
+  #github .count {
+    padding-left: 8px;
+    border-left: 1px solid var(--bm-hair);
+    color: var(--bm-soft);
+  }
   #github:hover,
   #discord:hover,
   #theme:hover {
     border-color: var(--bm-line);
     color: var(--bm-ink);
   }
-  @media (max-width: 600px) {
+  @media (max-width: 640px) {
     .nav {
       height: 68px;
     }
@@ -761,26 +795,34 @@ const jsonLd = {
       height: 22px;
     }
     nav {
-      gap: 12px;
+      gap: 8px;
       font-size: 13px;
     }
+    /* "Star" doesn't fit beside the links on a phone: the mark alone. */
     nav a[href='#faq'],
+    #github span {
+      display: none;
+    }
+    #github,
+    #discord,
+    #theme {
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      margin-left: 0;
+      padding: 0;
+    }
+  }
+  @media (max-width: 374px) {
     #github {
       display: none;
     }
-    #discord,
-    #theme {
-      width: 30px;
-      height: 30px;
-      margin-left: 0;
-    }
   }
-  @media (max-width: 360px) {
+  @media (max-width: 419px) {
     .logo img {
       height: 19px;
     }
     nav {
-      gap: 10px;
       font-size: 12px;
     }
   }
