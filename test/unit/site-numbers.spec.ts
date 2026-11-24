@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { format } from 'prettier';
 import { describe, expect, it } from 'vitest';
 
 import { byName } from '../../benchmarks/builds/results.ts';
@@ -27,16 +28,18 @@ const results = (path: string) =>
 // The site reads the newest results at build time (website/src/bench.ts);
 // these check what it can't: the README, and figures written by hand.
 describe('published benchmark figures', () => {
-  it("README's headline is the newest results file's", () => {
-    expect(read('README.md').match(README_BENCH)?.[1]).toBe(
-      readme(
-        published(
-          ...newest(
-            results('benchmarks/builds/results'),
-            results('benchmarks/builds/results/experiments'),
-          ),
-        ),
+  it("README's headline and table are the newest results file's", async () => {
+    const text = read('README.md');
+    const p = published(
+      ...newest(
+        results('benchmarks/builds/results'),
+        results('benchmarks/builds/results/experiments'),
       ),
+    );
+    expect(text).toBe(
+      await format(text.replace(README_BENCH, readme(p)), {
+        filepath: join(root, 'README.md'),
+      }),
     );
   });
 

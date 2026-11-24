@@ -20,7 +20,7 @@ import CueLanes from '../components/CueLanes.astro';
 import HeroDiagram from '../components/HeroDiagram.astro';
 import TrustStrip from '../components/TrustStrip.astro';
 import { bench } from '../bench';
-import { seconds, times } from '../benchmarks';
+import { FEATURED, seconds, times } from '../benchmarks';
 import {
   CATALOG_DATE,
   GITHUB_4_CORE_PER_MIN,
@@ -53,9 +53,7 @@ const description = `Free and open source (Apache-2.0). Self-hosted GitHub Actio
 const og = new URL('/brand/og.png', Astro.site).href;
 // The builds on the speed chart, each backmesh 4 vCPU inside GitHub-hosted's
 // track on a shared axis in steps of 20 s; /benchmarks/ has every build.
-const speed = bench.rows.filter((b) =>
-  ['docker', 'go', 'typescript'].includes(b.id),
-);
+const speed = bench.rows.filter((b) => FEATURED.includes(b.id));
 const speedRows: Row[] = speed.map((b) => ({
   name: b.workload,
   ratio: `${times(b.spot.faster)} faster`,

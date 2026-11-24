@@ -157,8 +157,8 @@ const round = (v: number) => {
   return Math.floor(v / unit) * unit;
 };
 
-// The headline's conditions, a short line under it on the landing page, in
-// the README and /llms.txt; `link` makes the benchmarks page's link. The
+// The headline's conditions, a short line under it on the landing page, and in
+// /llms.txt; `link` makes the benchmarks page's link. The
 // wait is rounded to 10 s.
 export const brief = (
   p: Published,
@@ -180,11 +180,28 @@ export const conditions = (p: Published, code = (c: string) => `\`${c}\``) => [
       ]),
 ];
 
-// The repository README's headline, which report.ts writes between README.md's
-// bench markers.
-export const README_BENCH = /<!-- bench:start -->(.*?)<!-- bench:end -->/s;
-export const readme = (p: Published) =>
-  `**${p.headline}**, in our build benchmarks on ${p.date}, backmesh ${p.version}. ${brief(p)}`;
+// The builds the landing page and the README compare; /benchmarks/ and
+// benchmarks/builds/README.md have every build.
+export const FEATURED = ['docker', 'go', 'typescript'];
+
+// The repository README's table of the featured builds on spot, which
+// report.ts writes over README.md's bench markers.
+export const README_BENCH = /<!-- bench:start -->.*?<!-- bench:end -->/s;
+export const readme = (p: Published) => `<!-- bench:start -->
+
+| Build | GitHub-hosted \`${GITHUB}\`, 4 vCPUs | backmesh, 4 vCPUs | backmesh vs GitHub |
+| --- | --- | --- | --- |
+${p.rows
+  .filter((b) => FEATURED.includes(b.id))
+  .map(
+    (b) =>
+      `| ${b.workload} | ${seconds(b.github.secs)}, ${dollars(b.github.cost)} | ${seconds(b.spot.secs)}, ${dollars(b.spot.cost)} | ${speed(b.spot.faster)}, ${times(b.spot.cheaper)} cheaper |`,
+  )
+  .join('\n')}
+
+Medians of ${p.rounds} runs, 4 vCPUs each. [How we measured →](https://backmesh.com/benchmarks/)
+
+<!-- bench:end -->`;
 
 // A cued job's median queued to first real step, in the cue benchmark's
 // 2026-11-23 run against GitHub-hosted (benchmarks/cue/README.md).
