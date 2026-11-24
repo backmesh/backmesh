@@ -14,15 +14,15 @@ Google bills you for it.
 
 A job's VM is the first type in its [label's](/labels/) list that has capacity:
 
-| Label         | vCPU | Memory | Types, in order                     |
-| ------------- | ---- | ------ | ----------------------------------- |
-| `backmesh-2`  | 2    | 8 GiB  | `n2-standard-2`, `n2d-standard-2`   |
-| `backmesh-4`  | 4    | 16 GiB | `n2-standard-4`, `n2d-standard-4`   |
-| `backmesh-8`  | 8    | 32 GiB | `n2-standard-8`, `n2d-standard-8`   |
-| `backmesh-16` | 16   | 64 GiB | `n2-standard-16`, `n2d-standard-16` |
+| Label         | vCPU | Memory       | Types, in order                                        |
+| ------------- | ---- | ------------ | ------------------------------------------------------ |
+| `backmesh-2`  | 2    | 8 GiB        | `n2-standard-2`, `n2d-standard-2`                      |
+| `backmesh-4`  | 4    | 15 or 16 GiB | `c4d-standard-4`, `n2-standard-4`, `n2d-standard-4`    |
+| `backmesh-8`  | 8    | 31 or 32 GiB | `c4d-standard-8`, `n2-standard-8`, `n2d-standard-8`    |
+| `backmesh-16` | 16   | 62 or 64 GiB | `c4d-standard-16`, `n2-standard-16`, `n2d-standard-16` |
 
 [On-demand labels](/labels/#on-demand) from 4 vCPUs try AMD's `c4d` (Zen 5)
-and `c3d` (Zen 4) first, then the same types; `backmesh-od-2` keeps `n2` and
+and `c3d` (Zen 4) first, then `n2` and `n2d`; `backmesh-od-2` keeps `n2` and
 `n2d`:
 
 | Label            | vCPU | Memory       | Types, in order                                                           |
@@ -37,8 +37,17 @@ it, for 0.78 and 0.76 of its cost per job, disk included
 ([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38)); at 16
 vCPUs, a few runs gave 0.52 and 0.75 of its time, and 8 vCPUs wasn't
 measured. `us-south1` offers neither, and `us-west2` and `us-west3` no
-`c3d`, so jobs there start on the next type in the list. Spot labels stay on
-`n2` and `n2d` for now.
+`c3d`, so jobs there start on the next type in the list.
+
+Spot labels from 4 vCPUs try `c4d` first too, with a cheaper disk than on
+demand's: Hyperdisk Balanced at 3,000 IOPS and 750 MiB/s, not 8,000 and
+1,000. Spot `c4d-standard-4` launched 13 times of 13 in `us-east4` with none
+reclaimed ([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38)).
+With that disk, a job's VM time was 1.02 of on-demand's disk's, its image
+pulls 1.04 and its `docker build` 1.03
+([anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)), so a spot
+job on `c4d` costs about 1.05 of one on `n2` for about 0.6 of its VM time.
+`c3d` isn't in the spot lists, as its spot capacity wasn't measured.
 
 The [KVM labels](/labels/#kvm) use `n2` only, since `n2d`, `c4d` and `c3d`
 don't support nested virtualization. GCP has no [GPU labels](/labels/#gpu) yet: anycloud
@@ -77,11 +86,13 @@ delete in the console.
 Install can't read GCP's quotas, so it names the ones to raise instead. The one
 that bites first is `CPUS_ALL_REGIONS`, 32 vCPUs by default across all regions:
 8 `backmesh-4` jobs at once. Raise it before big bursts. Each runner region
-also has `N2D_CPUS` and `N2_CPUS`, and `PREEMPTIBLE_CPUS` for spot or `CPUS`,
-`C4D_CPUS` and `C3D_CPUS` for on demand. Each on-demand `c4d` runner's disk
-also counts 100 GB, 8,000 IOPS and 1,000 MB/s against the region's
+also has `N2D_CPUS`, `N2_CPUS` and `C4D_CPUS`, and `PREEMPTIBLE_CPUS` for spot
+or `CPUS` and `C3D_CPUS` for on demand. Each `c4d` runner's disk also counts
+100 GB against the region's
 [Hyperdisk Balanced quotas](https://cloud.google.com/compute/docs/disks/hyperdisks)
-for capacity, IOPS and throughput, which install doesn't name. Runners past a quota wait, and [`backmesh status`](/status/) warns
+for capacity, and its IOPS and throughput (8,000 and 1,000 MB/s on demand,
+3,000 and 750 on spot) against those for IOPS and throughput, which install
+doesn't name. Runners past a quota wait, and [`backmesh status`](/status/) warns
 when they do, as in this example with illustrative numbers:
 
 ```text
@@ -103,8 +114,10 @@ These are catalog prices in `us-central1`, spot in the lowest zone, for a
 
 Other sizes scale with their vCPUs. Each job also pays for its VM's boot and its
 100 GB disk: pd-ssd, about $0.023 an hour, or on `c4d`, which can't take
-pd-ssd, Hyperdisk Balanced with 8,000 IOPS and 1,000 MB/s provisioned, about
-$0.092 an hour. The control plane and one org's listener VM cost about $74 a
+pd-ssd, Hyperdisk Balanced: on demand with 8,000 IOPS and 1,000 MB/s
+provisioned, about $0.092 an hour, and on spot with 3,000 and 750, about
+$0.044. In `us-east4`, where `c4d` spot was measured, it cost $0.0967 an hour
+([anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)). The control plane and one org's listener VM cost about $74 a
 month. At those prices, 150,000 minutes a month of `backmesh-4` jobs cost at
 least $299–$365 with one org's always-on VMs, before disks, boots and runners started ahead of jobs; see [the
 costs](/#cost). Spot prices change by the hour.
