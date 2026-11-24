@@ -111,8 +111,8 @@ each, on AWS an `m8a` VM first (AMD EPYC 9R45), then `m8i`, `m7a`, `m7i` and
 `m6a`. Equal vCPUs aren't equal cores: an `m8a` or `m7a` vCPU is a whole core,
 while an `m8i` vCPU is one of a core's two hyperthreads. `ubuntu-latest`'s
 are hyperthreads on most of its CPUs (the EPYC 7763s and Xeons), but the Marks
-step doesn't record threads per core, so on those `backmesh-4` on `m8a` has 4
-cores where `ubuntu-latest` has 2. The
+step doesn't record threads per core, so on those `backmesh-4` on `m8a` likely
+has 4 cores where `ubuntu-latest` has 2. The
 Marks step prints each job's CPU model (`lscpu`), so a result shows which CPUs
 each label ran on.
 
@@ -293,7 +293,8 @@ from bench.yml at cc41c8c. Medians, in seconds.
 
 **Speed and cost a build.** Each label's medians, and their speed against
 ubuntu-latest's (its time over the label's), a `/cache` arm's against
-`ubuntu-latest/cache`'s, with a two-sided Mann-Whitney p. A backmesh job's cost is
+`ubuntu-latest/cache`'s, with a two-sided Mann-Whitney p
+(the normal approximation, which at 5 jobs a side can understate the exact p). A backmesh job's cost is
 its VM's spot price (on-demand on a `-od-` label) from the kernel's start to
 the job's end, at [`cost.ts`](../../website/src/cost.ts)'s `backmesh-4`
 price for the VM's family times its vCPUs over 4, plus its disk's $0.0384 an hour,
@@ -357,7 +358,8 @@ from bench.yml at ac5e478. Medians, in seconds.
 
 **Speed and cost a build.** Each label's medians, and their speed against
 ubuntu-latest's (its time over the label's), a `/cache` arm's against
-`ubuntu-latest/cache`'s, with a two-sided Mann-Whitney p. A backmesh job's cost is
+`ubuntu-latest/cache`'s, with a two-sided Mann-Whitney p
+(the normal approximation, which at 5 jobs a side can understate the exact p). A backmesh job's cost is
 its VM's spot price (on-demand on a `-od-` label) from the kernel's start to
 the job's end, at [`cost.ts`](../../website/src/cost.ts)'s `backmesh-4`
 price for the VM's family times its vCPUs over 4, plus its disk's $0.0384 an hour,
@@ -453,7 +455,8 @@ from bench.yml at 4d847e7. Medians, in seconds.
 
 **Speed and cost a build.** Each label's medians, and their speed against
 ubuntu-latest's (its time over the label's), a `/cache` arm's against
-`ubuntu-latest/cache`'s, with a two-sided Mann-Whitney p. A backmesh job's cost is
+`ubuntu-latest/cache`'s, with a two-sided Mann-Whitney p
+(the normal approximation, which at 5 jobs a side can understate the exact p). A backmesh job's cost is
 its VM's spot price (on-demand on a `-od-` label) from the kernel's start to
 the job's end, at [`cost.ts`](../../website/src/cost.ts)'s `backmesh-4`
 price for the VM's family times its vCPUs over 4, plus its disk's $0.0384 an hour,
@@ -519,7 +522,8 @@ from bench.yml at cc41c8c. Medians, in seconds.
 
 **Speed and cost a build.** Each label's medians, and their speed against
 ubuntu-latest's (its time over the label's), a `/cache` arm's against
-`ubuntu-latest/cache`'s, with a two-sided Mann-Whitney p. A backmesh job's cost is
+`ubuntu-latest/cache`'s, with a two-sided Mann-Whitney p
+(the normal approximation, which at 5 jobs a side can understate the exact p). A backmesh job's cost is
 its VM's spot price (on-demand on a `-od-` label) from the kernel's start to
 the job's end, at [`cost.ts`](../../website/src/cost.ts)'s `backmesh-4`
 price for the VM's family times its vCPUs over 4, plus its disk's $0.0384 an hour,
