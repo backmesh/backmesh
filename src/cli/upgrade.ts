@@ -200,9 +200,9 @@ export interface UpgradeOptions {
   publicRepos?: boolean;
 }
 
-// The oldest anycloud a move starts from: backmesh v0.5.7's. The pinned
-// release's own previous (ANYCLOUD_PREVIOUS_VERSION) is 0.1.81, which no
-// backmesh release pinned, and `api upgrade` skips releases.
+// The oldest anycloud a move starts from: backmesh v0.5.7's, so a v0.5.7
+// install still upgrades in one hop (`api upgrade` skips releases). The
+// pinned release's own previous (ANYCLOUD_PREVIOUS_VERSION) is v0.6.0's.
 export const OLDEST = '0.1.80';
 
 // From a move past the API's window until each org's listener rolls, the
