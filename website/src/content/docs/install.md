@@ -67,7 +67,7 @@ Install then:
 
 1. **Checks and plans.** It prints a fix for each missing sign-in,
    project or subscription (`--verbose` adds the CLI's error), then each cloud's
-   regions, `backmesh-4` spot and on-demand prices, the [quotas](#quotas) read
+   regions, `backmesh-ubuntu-2404-4vcpu` spot and on-demand prices, the [quotas](#quotas) read
    through your cloud CLI, and the control plane's monthly cost, and asks once.
 2. **Prints a code.** The org owner opens `https://github.com/login/device` on
    any device and enters the code; one that expires is replaced by a new one,
@@ -79,16 +79,16 @@ Install then:
    creates the control plane and, in the plan's account, a role that trusts only
    it. You own both; no cloud keys are stored.
 4. **Starts backmesh,** prints this installation's labels and the largest
-   one up to `backmesh-4` that your quotas start a runner for, and runs
+   one up to `backmesh-ubuntu-2404-4vcpu` that your quotas start a runner for, and runs
    [`backmesh status`](/status/).
 
 ```text
-Labels for runs-on: backmesh-2, backmesh-4, backmesh-8, backmesh-16, backmesh-od-2, ..., backmesh-gpu-od-t4 (aws's carry no "aws-": it runs the control plane).
-Done. Use `runs-on: backmesh-4` (a 4-vCPU spot VM) in a workflow; other sizes: https://backmesh.com/labels/
+Labels for runs-on: backmesh-ubuntu-2404-2vcpu, backmesh-ubuntu-2404-4vcpu, backmesh-ubuntu-2404-8vcpu, backmesh-ubuntu-2404-16vcpu, backmesh-ubuntu-2404-od-2vcpu, ..., backmesh-ubuntu-2404-gpu-od-t4 (aws's carry no "aws-": it runs the control plane).
+Done. Use `runs-on: backmesh-ubuntu-2404-4vcpu` (a 4-vCPU spot VM) in a workflow; other sizes: https://backmesh.com/labels/
 ```
 
 The plan prints the same `Labels for runs-on:` line. Use those labels exactly:
-one that isn't there, such as `backmesh-azure-gpu-t4` on an Azure control
+one that isn't there, such as `backmesh-azure-ubuntu-2404-gpu-t4` on an Azure control
 plane, waits at GitHub for a runner that never comes.
 
 To change an installation's runners,
@@ -106,7 +106,7 @@ Same owner only; orgs share the 500-runner cap. [More](/faq/#installing).
 
 The control plane lives in one cloud and region. Runners, one VM per job that is
 deleted when it ends, can be in other clouds; the control plane's cloud gets plain [labels](/labels/) like
-`backmesh-4`, others named ones like `backmesh-gcp-4`.
+`backmesh-ubuntu-2404-4vcpu`, others named ones like `backmesh-gcp-ubuntu-2404-4vcpu`.
 
 | You pass                       | backmesh uses                                                                                                                                             |
 | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -153,13 +153,13 @@ capacity or quota; labels stay the same.
 ## Quotas
 
 Each region's spot and on-demand vCPU quotas cap how many jobs run at once; jobs
-past them wait. Install prints them as how many `backmesh-4` jobs fit at once,
+past them wait. Install prints them as how many `backmesh-ubuntu-2404-4vcpu` jobs fit at once,
 each region counted on its own. It stops before anything is billed when the
-regions' quotas together are under one `backmesh-4` VM; otherwise each label
+regions' quotas together are under one `backmesh-ubuntu-2404-4vcpu` VM; otherwise each label
 whose VM no region's quota fits gets a line that it `would start no runners`,
 naming the quota to raise. On Azure, the plan also
 checks the always-on VMs' family quotas, such as "Standard DSv5 Family vCPUs". GCP's default `CPUS_ALL_REGIONS` is 32
-vCPUs, 8 `backmesh-4` jobs, so raise it before big bursts.
+vCPUs, 8 `backmesh-ubuntu-2404-4vcpu` jobs, so raise it before big bursts.
 [More](/faq/#installing).
 
 ## Cache size
@@ -179,7 +179,7 @@ Set `runs-on` to a [label](/labels/):
 ```yaml
 jobs:
   test:
-    runs-on: backmesh-4
+    runs-on: backmesh-ubuntu-2404-4vcpu
     steps:
       - uses: actions/checkout@v5
       - run: make test

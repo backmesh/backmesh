@@ -28,7 +28,7 @@ describe('workflowRuns', () => {
             name: 'test (18)',
             conclusion: 'failure',
             runner_name: 'bmabc12-a4-00000001',
-            labels: ['backmesh-4', 'backmesh-noretry'],
+            labels: ['backmesh-ubuntu-2404-4vcpu', 'backmesh-noretry'],
           },
         ],
       }),
@@ -46,7 +46,7 @@ describe('workflowRuns', () => {
         name: 'test (18)',
         conclusion: 'failure',
         runnerName: 'bmabc12-a4-00000001',
-        labels: ['backmesh-4', 'backmesh-noretry'],
+        labels: ['backmesh-ubuntu-2404-4vcpu', 'backmesh-noretry'],
       },
     ]);
     // Reads only: the rerun is the Worker's (`/v1/rerun`).
@@ -61,7 +61,7 @@ describe('recentRuns', () => {
       total_count: 3,
       jobs: jobs.map((i) => ({
         name: `test (${i})`,
-        labels: ['backmesh-4'],
+        labels: ['backmesh-ubuntu-2404-4vcpu'],
         conclusion: i === 2 ? null : 'success',
         created_at: '2026-11-07T10:00:00Z',
         started_at: i === 2 ? null : '2026-11-07T10:01:00Z',
@@ -118,7 +118,7 @@ describe('recentRuns', () => {
         branch: 'main',
         jobs: [0, 1, 2].map((i) => ({
           name: `test (${i})`,
-          labels: ['backmesh-4'],
+          labels: ['backmesh-ubuntu-2404-4vcpu'],
           conclusion: i === 2 ? null : 'success',
           queuedAt: Date.parse('2026-11-07T10:00:00Z'),
           startedAt: i === 2 ? null : Date.parse('2026-11-07T10:01:00Z'),
@@ -161,7 +161,8 @@ describe('recentRuns, asked whether a workflow uses the labels', () => {
       ref,
       20,
       () => true,
-      (jobs) => jobs.some((job) => job.labels.includes('backmesh-4')),
+      (jobs) =>
+        jobs.some((job) => job.labels.includes('backmesh-ubuntu-2404-4vcpu')),
     );
     expect(runs).toEqual([]);
     expect(calls).toHaveLength(2);

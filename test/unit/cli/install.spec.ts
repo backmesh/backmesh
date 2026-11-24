@@ -558,17 +558,17 @@ describe('install', () => {
     expect(result).toMatchObject({
       apiUrl: HOSTED,
       labels: expect.arrayContaining([
-        'backmesh-4',
-        'backmesh-od-4',
-        'backmesh-kvm-4',
-        'backmesh-kvm-od-4',
+        'backmesh-ubuntu-2404-4vcpu',
+        'backmesh-ubuntu-2404-od-4vcpu',
+        'backmesh-ubuntu-2404-kvm-4vcpu',
+        'backmesh-ubuntu-2404-kvm-od-4vcpu',
       ]),
     });
     // The only monthly cost is the control plane's; runner VMs bill per use.
     expect(lines).toEqual(
       expect.arrayContaining([
-        'aws us-east-2: no VM while idle; while its job runs, a backmesh-4 VM costs about $0.05–0.07 an hour on spot and $0.17–0.24 on demand, plus its disk, and the other sizes scale with their vCPUs',
-        'aws us-east-2 quota: 640 spot vCPUs (160 backmesh-4 jobs at once), 128 on-demand vCPUs (32 backmesh-4 jobs at once)',
+        'aws us-east-2: no VM while idle; while its job runs, a backmesh-ubuntu-2404-4vcpu VM costs about $0.05–0.07 an hour on spot and $0.17–0.24 on demand, plus its disk, and the other sizes scale with their vCPUs',
+        'aws us-east-2 quota: 640 spot vCPUs (160 backmesh-ubuntu-2404-4vcpu jobs at once), 128 on-demand vCPUs (32 backmesh-ubuntu-2404-4vcpu jobs at once)',
         "Always on: the control plane's VM (t3.large) on aws us-east-2, about $69 a month with its disk and address.",
         "Always on: acme's listener VM (t3.small) on aws us-east-2, about $17 a month with its disk and address.",
       ]),
@@ -585,8 +585,8 @@ describe('install', () => {
       'Lowered vol-api from 8000 IOPS and 125 MiB/s to 3000 IOPS and 125 MiB/s.',
     );
     expect(lines.slice(-2)).toEqual([
-      'Labels for runs-on: backmesh-2, backmesh-4, backmesh-8, backmesh-16, backmesh-od-2, backmesh-od-4, backmesh-od-8, backmesh-od-16, backmesh-kvm-2, backmesh-kvm-4, backmesh-kvm-8, backmesh-kvm-16, backmesh-kvm-od-2, backmesh-kvm-od-4, backmesh-kvm-od-8, backmesh-kvm-od-16, backmesh-gpu-t4, backmesh-gpu-od-t4 (aws\'s carry no "aws-": it runs the control plane).',
-      'Done. Use `runs-on: backmesh-4` (a 4-vCPU spot VM) in a workflow; other sizes: https://backmesh.com/labels/',
+      'Labels for runs-on: backmesh-ubuntu-2404-2vcpu, backmesh-ubuntu-2404-4vcpu, backmesh-ubuntu-2404-8vcpu, backmesh-ubuntu-2404-16vcpu, backmesh-ubuntu-2404-od-2vcpu, backmesh-ubuntu-2404-od-4vcpu, backmesh-ubuntu-2404-od-8vcpu, backmesh-ubuntu-2404-od-16vcpu, backmesh-ubuntu-2404-kvm-2vcpu, backmesh-ubuntu-2404-kvm-4vcpu, backmesh-ubuntu-2404-kvm-8vcpu, backmesh-ubuntu-2404-kvm-16vcpu, backmesh-ubuntu-2404-kvm-od-2vcpu, backmesh-ubuntu-2404-kvm-od-4vcpu, backmesh-ubuntu-2404-kvm-od-8vcpu, backmesh-ubuntu-2404-kvm-od-16vcpu, backmesh-ubuntu-2404-gpu-t4, backmesh-ubuntu-2404-gpu-od-t4 (aws\'s carry no "aws-": it runs the control plane).',
+      'Done. Use `runs-on: backmesh-ubuntu-2404-4vcpu` (a 4-vCPU spot VM) in a workflow; other sizes: https://backmesh.com/labels/',
     ]);
     expect(lines).toContain(
       'Connecting aws with a role connection in account 123456789012, through your aws CLI.',
@@ -851,8 +851,10 @@ describe('install', () => {
       JSON.parse(secret.split(' ')[2]!).values.BACKMESH_RUNNERS,
     );
     expect(routes).toHaveLength(18);
-    expect(routes.find((r) => r.label === 'backmesh-kvm-od-4')).toEqual({
-      label: 'backmesh-kvm-od-4',
+    expect(
+      routes.find((r) => r.label === 'backmesh-ubuntu-2404-kvm-od-4vcpu'),
+    ).toEqual({
+      label: 'backmesh-ubuntu-2404-kvm-od-4vcpu',
       code: 'l4',
       cloud: 'aws',
       region: 'us-east-2',
@@ -865,7 +867,7 @@ describe('install', () => {
     });
   });
 
-  it("refuses a region's quota under one backmesh-4 VM, before anything is billed", async () => {
+  it("refuses a region's quota under one backmesh-ubuntu-2404-4vcpu VM, before anything is billed", async () => {
     const { deps, calls } = setUp({
       env: OVERRIDE,
       quota: { 'L-34B43A08': '2.0', 'L-1216C47A': '128.0' },
@@ -908,7 +910,7 @@ describe('install', () => {
       'Install cancelled before anything billed was created. Raise the quotas named above, then run install again.',
     );
     expect(lines).toContain(
-      "backmesh-8 would start no runners: every runner region's spot quota is under one 8-vCPU runner (us-east-2 6 vCPU); raise L-34B43A08 in us-east-2 to use it.",
+      "backmesh-ubuntu-2404-8vcpu would start no runners: every runner region's spot quota is under one 8-vCPU runner (us-east-2 6 vCPU); raise L-34B43A08 in us-east-2 to use it.",
     );
     expect(confirm).toHaveBeenCalledWith(
       '4 labels would start no runners until a quota is raised. Install anyway?',
@@ -1336,11 +1338,11 @@ describe('install', () => {
 
   it("rolls a re-run that only reorders a label's VM types, with no consent asked", async () => {
     // Simulates an org installed before the VM type reorder: its
-    // backmesh-kvm-4 listed m7i before m8i.
+    // backmesh-ubuntu-2404-kvm-4vcpu listed m7i before m8i.
     const before = (
       JSON.parse(RUNNERS) as { label: string; vmTypes: string[] }[]
     ).map((c) =>
-      c.label === 'backmesh-kvm-4'
+      c.label === 'backmesh-ubuntu-2404-kvm-4vcpu'
         ? { ...c, vmTypes: [...c.vmTypes].reverse() }
         : c,
     );
@@ -1393,10 +1395,10 @@ describe('install', () => {
       JSON.parse(secret.split(' ')[2]!).values.BACKMESH_RUNNERS,
     ) as { label: string; vmTypes: string[] }[];
     // The Secret gets this release's order, even though nothing needed consent.
-    expect(runners.find((r) => r.label === 'backmesh-kvm-4')?.vmTypes).toEqual([
-      'm8i.xlarge',
-      'm7i.xlarge',
-    ]);
+    expect(
+      runners.find((r) => r.label === 'backmesh-ubuntu-2404-kvm-4vcpu')
+        ?.vmTypes,
+    ).toEqual(['m8i.xlarge', 'm7i.xlarge']);
   });
 
   it('changes the cache cap on a re-run: in the plan and its ID, then the Secret and a roll', async () => {
@@ -1472,14 +1474,14 @@ describe('install', () => {
     await install({ ...options, publicRepos: true }, on.deps);
     expect(on.lines).toContain(PUBLIC_REPOS_LINE);
     expect(on.lines).toContain(
-      'New labels: backmesh-public-2, backmesh-public-4.',
+      'New labels: backmesh-ubuntu-2404-public-2vcpu, backmesh-ubuntu-2404-public-4vcpu.',
     );
     const routes = runnersOf(on.requests);
     expect(
       routes.filter((r) => r.public).map(({ label, code }) => [label, code]),
     ).toEqual([
-      ['backmesh-public-2', 'c2'],
-      ['backmesh-public-4', 'c4'],
+      ['backmesh-ubuntu-2404-public-2vcpu', 'c2'],
+      ['backmesh-ubuntu-2404-public-4vcpu', 'c4'],
     ]);
 
     // A re-run without the flag keeps them, and changes nothing.
@@ -1502,15 +1504,15 @@ describe('install', () => {
     }
     expect(off.lines).not.toContain(PUBLIC_REPOS_LINE);
     expect(off.lines).toContain(
-      "acme: 2 public repositories (such as acme/site) can't use these runners, and their jobs wait at GitHub. `backmesh install --org acme --public-repos` adds backmesh-public-2 and backmesh-public-4 for them to use.",
+      "acme: 2 public repositories (such as acme/site) can't use these runners, and their jobs wait at GitHub. `backmesh install --org acme --public-repos` adds backmesh-ubuntu-2404-public-2vcpu and backmesh-ubuntu-2404-public-4vcpu for them to use.",
     );
     expect(
       runnersOf(off.requests)
         .filter((r) => r.public)
         .map(({ label, retiring }) => [label, retiring]),
     ).toEqual([
-      ['backmesh-public-2', true],
-      ['backmesh-public-4', true],
+      ['backmesh-ubuntu-2404-public-2vcpu', true],
+      ['backmesh-ubuntu-2404-public-4vcpu', true],
     ]);
   });
 
@@ -1534,13 +1536,13 @@ describe('install', () => {
         removed: [],
         labelsRemoved: [],
         labelsChanged: [],
-        labelsAdded: expect.arrayContaining(['backmesh-gcp-4']),
+        labelsAdded: expect.arrayContaining(['backmesh-gcp-ubuntu-2404-4vcpu']),
       },
     });
     expect(lines).toContain("acme's runners add gcp us-east4.");
     expect(lines).toEqual(
       expect.arrayContaining([
-        expect.stringMatching(/^New labels: backmesh-gcp-2, /),
+        expect.stringMatching(/^New labels: backmesh-gcp-ubuntu-2404-2vcpu, /),
       ]),
     );
 
@@ -1559,7 +1561,10 @@ describe('install', () => {
     const labels = parseRoutes(values.BACKMESH_RUNNERS!).map((r) => r.label);
     // The home cloud's labels stay plain.
     expect(labels).toEqual(
-      expect.arrayContaining(['backmesh-4', 'backmesh-gcp-4']),
+      expect.arrayContaining([
+        'backmesh-ubuntu-2404-4vcpu',
+        'backmesh-gcp-ubuntu-2404-4vcpu',
+      ]),
     );
     expect(calls).toContain(`roll ${VM}`);
     expect(calls.some((c) => c.startsWith('vm '))).toBe(false);
@@ -1607,7 +1612,9 @@ describe('install', () => {
         }
       ).values.BACKMESH_RUNNERS,
     ).map((r) => r.label);
-    expect(labels).toEqual(expect.arrayContaining(['backmesh-gcp-4']));
+    expect(labels).toEqual(
+      expect.arrayContaining(['backmesh-gcp-ubuntu-2404-4vcpu']),
+    );
   });
 
   it("connects a reused control plane's cloud while it has no listener yet", async () => {
@@ -1740,7 +1747,7 @@ describe('install', () => {
       { ...options, plan: true },
       deps,
     )) as InstallPlan;
-    expect(plan.changes?.labelsChanged).toEqual(['backmesh-2']);
+    expect(plan.changes?.labelsChanged).toEqual(['backmesh-ubuntu-2404-2vcpu']);
     await install(options, deps);
     expect(calls.some((c) => c.startsWith('roll '))).toBe(true);
   });
@@ -2134,7 +2141,9 @@ describe('install', () => {
         },
         sameOwner: null,
       });
-      expect(plan.classes.map((c) => c.label)).toContain('backmesh-4');
+      expect(plan.classes.map((c) => c.label)).toContain(
+        'backmesh-ubuntu-2404-4vcpu',
+      );
       expect(lines).toEqual(
         expect.arrayContaining([
           ...plan.rates,
@@ -2429,12 +2438,12 @@ describe('install', () => {
           .split(' ')[2]!,
       ).values.BACKMESH_RUNNERS,
     );
-    expect(routes.find((r) => r.label === 'backmesh-4')?.regions).toEqual([
-      'us-east1',
-    ]);
-    expect(routes.find((r) => r.label === 'backmesh-aws-4')?.regions).toEqual([
-      'us-east-1',
-    ]);
+    expect(
+      routes.find((r) => r.label === 'backmesh-ubuntu-2404-4vcpu')?.regions,
+    ).toEqual(['us-east1']);
+    expect(
+      routes.find((r) => r.label === 'backmesh-aws-ubuntu-2404-4vcpu')?.regions,
+    ).toEqual(['us-east-1']);
     expect(lines.filter((l) => l.endsWith(']'))).toEqual([
       'Control plane cloud (aws, gcp, azure)? [aws]',
       'Control plane region on gcp? [us-east4]',
@@ -2512,7 +2521,9 @@ describe('install', () => {
       JSON.parse(secret.split(' ')[2]!).values.BACKMESH_RUNNERS,
     );
     expect(routes.every((r) => r.cloud === 'gcp')).toBe(true);
-    expect(routes.map((r) => r.label)).toContain('backmesh-gcp-4');
+    expect(routes.map((r) => r.label)).toContain(
+      'backmesh-gcp-ubuntu-2404-4vcpu',
+    );
   });
 
   it("says when this control plane can't take a region list yet", async () => {
@@ -2587,10 +2598,12 @@ describe('install', () => {
           expect.stringMatching(
             /^aws us-east-2, us-east-1 and us-west-2: .* about \$/,
           ),
-          'aws us-east-2, us-east-1 and us-west-2 quota: 2112 spot vCPUs (528 backmesh-4 jobs at once), 480 on-demand vCPUs (120 backmesh-4 jobs at once)',
+          'aws us-east-2, us-east-1 and us-west-2 quota: 2112 spot vCPUs (528 backmesh-ubuntu-2404-4vcpu jobs at once), 480 on-demand vCPUs (120 backmesh-ubuntu-2404-4vcpu jobs at once)',
         ]),
       );
-      const four = routesOf(requests).find((r) => r.label === 'backmesh-4')!;
+      const four = routesOf(requests).find(
+        (r) => r.label === 'backmesh-ubuntu-2404-4vcpu',
+      )!;
       expect(four).toMatchObject({
         region: 'us-east-2',
         regions: ['us-east-2', 'us-east-1', 'us-west-2'],
@@ -2600,7 +2613,9 @@ describe('install', () => {
     it('keeps the single anchor region while this control plane takes no list', async () => {
       const { deps, requests } = setUp({ env: OVERRIDE, quota: {} }, binary);
       await install(options, deps);
-      const four = routesOf(requests).find((r) => r.label === 'backmesh-4')!;
+      const four = routesOf(requests).find(
+        (r) => r.label === 'backmesh-ubuntu-2404-4vcpu',
+      )!;
       expect(four.regions).toEqual(['us-east-2']);
     });
 
@@ -3137,17 +3152,19 @@ describe("install's always-on VM sizes on Azure", () => {
     const { run } = await planned(eastus, deps);
     const labels = lines.filter((l) => l.startsWith('Labels for runs-on: '));
     expect(labels[0]).toMatch(
-      /^Labels for runs-on: backmesh-2, backmesh-4, .*backmesh-gpu-t4, backmesh-gpu-od-t4 \(azure's carry no "azure-": it runs the control plane\)\.$/,
+      /^Labels for runs-on: backmesh-ubuntu-2404-2vcpu, backmesh-ubuntu-2404-4vcpu, .*backmesh-ubuntu-2404-gpu-t4, backmesh-ubuntu-2404-gpu-od-t4 \(azure's carry no "azure-": it runs the control plane\)\.$/,
     );
     expect(labels[0]).not.toContain('backmesh-azure-');
     expect(lines).toContainEqual(
-      expect.stringMatching(/ spot vCPUs \(0 backmesh-4 jobs at once/),
+      expect.stringMatching(
+        / spot vCPUs \(0 backmesh-ubuntu-2404-4vcpu jobs at once/,
+      ),
     );
     lines.length = 0;
     await run();
     expect(lines.slice(-2)).toEqual([
       labels[0],
-      'Done. Use `runs-on: backmesh-2` (a 2-vCPU spot VM) in a workflow; other sizes: https://backmesh.com/labels/',
+      'Done. Use `runs-on: backmesh-ubuntu-2404-2vcpu` (a 2-vCPU spot VM) in a workflow; other sizes: https://backmesh.com/labels/',
     ]);
     const none = azure({}, { families: spot(1), features });
     await (await planned(eastus, none.deps)).run();
@@ -3452,26 +3469,31 @@ describe("a control plane named backmesh that this machine doesn't use", () => {
     );
     expect(
       await refused(
-        { ...options, controlPlaneId: 'backmesh-2' },
+        { ...options, controlPlaneId: 'backmesh-ubuntu-2404-2vcpu' },
         {
           stacks: [stack(ID)],
         },
       ),
     ).toBe(
-      `--control-plane-id backmesh-2: this AWS account's us-east-2 has ${ID} named backmesh, not that one.`,
+      `--control-plane-id backmesh-ubuntu-2404-2vcpu: this AWS account's us-east-2 has ${ID} named backmesh, not that one.`,
     );
     expect(
-      await refused({ ...options, controlPlaneId: 'backmesh-2' }, {}),
+      await refused(
+        { ...options, controlPlaneId: 'backmesh-ubuntu-2404-2vcpu' },
+        {},
+      ),
     ).toBe(
-      "--control-plane-id backmesh-2: this AWS account's us-east-2 has no control plane named backmesh, not that one.",
+      "--control-plane-id backmesh-ubuntu-2404-2vcpu: this AWS account's us-east-2 has no control plane named backmesh, not that one.",
     );
   });
 
   it("stops on two named backmesh, or a cloud CLI that can't list them, on AWS and GCP too", async () => {
     expect(
-      await refused(options, { stacks: [stack(ID), stack('backmesh-2')] }),
+      await refused(options, {
+        stacks: [stack(ID), stack('backmesh-ubuntu-2404-2vcpu')],
+      }),
     ).toBe(
-      `This AWS account's us-east-2 has 2 control planes named backmesh: ${ID} in us-east-2, backmesh-2 in us-east-2. install can't tell which to resume: delete the ones you don't use, then run install again.`,
+      `This AWS account's us-east-2 has 2 control planes named backmesh: ${ID} in us-east-2, backmesh-ubuntu-2404-2vcpu in us-east-2. install can't tell which to resume: delete the ones you don't use, then run install again.`,
     );
     const gcp = { ...options, controlPlane: 'gcp:us-east4' };
     const binary = { 'vm-types gcp us-east4': JSON.stringify(CATALOG.gcp) };
@@ -3479,7 +3501,7 @@ describe("a control plane named backmesh that this machine doesn't use", () => {
       await refused(
         gcp,
         {
-          serviceAccounts: [ID, 'backmesh-2'].map((id) => ({
+          serviceAccounts: [ID, 'backmesh-ubuntu-2404-2vcpu'].map((id) => ({
             description: `anycloud_cluster=${id} anycloud_cluster_name=backmesh`,
           })),
         },

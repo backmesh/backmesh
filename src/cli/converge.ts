@@ -436,8 +436,30 @@ export function routesJson(
   // the active ones, can't say a retiring one is gone.
   const ready = before.every((r) => r.retiring || live.has(r.label));
   const gone = (label: string) => ready && !live.has(label);
+  // A class kept under a new label, its code the same, renames its scale
+  // set until the listener lists the new name, so the old one doesn't
+  // retire: two routes can't share a code.
+  const renamed = classes.map((c) => {
+    const was = before.find((r) => r.code === c.code && !r.retiring);
+    const from =
+      was?.label !== c.label
+        ? was?.label
+        : !live.has(c.label) && was.renamedFrom;
+    return from ? { ...c, renamedFrom: from } : c;
+  });
+  const codes = new Set(classes.map((c) => c.code));
   const retiring = before
-    .filter((r) => !labels.has(r.label) && !(r.retiring && gone(r.label)))
-    .map(({ onDemand: _, ...route }) => ({ ...route, retiring: true }));
-  return JSON.stringify([...classes, ...retiring]);
+    .filter(
+      (r) =>
+        !labels.has(r.label) &&
+        // A retiring route sharing a class's code under another label is
+        // dropped, not kept: the class renames its scale set instead.
+        !codes.has(r.code) &&
+        !(r.retiring && gone(r.label)),
+    )
+    .map(({ onDemand: _, renamedFrom: __, ...route }) => ({
+      ...route,
+      retiring: true,
+    }));
+  return JSON.stringify([...renamed, ...retiring]);
 }

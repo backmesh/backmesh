@@ -14,18 +14,18 @@ for it.
 
 A job's VM is the first type in its [label's](/labels/) list that has capacity:
 
-| Label         | vCPU | Memory | Types, in order                                               |
-| ------------- | ---- | ------ | ------------------------------------------------------------- |
-| `backmesh-2`  | 2    | 8 GiB  | `Standard_D2ads_v5`, `Standard_D2as_v5`, `Standard_D2s_v5`    |
-| `backmesh-4`  | 4    | 16 GiB | `Standard_D4ads_v5`, `Standard_D4as_v5`, `Standard_D4s_v5`    |
-| `backmesh-8`  | 8    | 32 GiB | `Standard_D8ads_v5`, `Standard_D8as_v5`, `Standard_D8s_v5`    |
-| `backmesh-16` | 16   | 64 GiB | `Standard_D16ads_v5`, `Standard_D16as_v5`, `Standard_D16s_v5` |
+| Label                         | vCPU | Memory | Types, in order                                               |
+| ----------------------------- | ---- | ------ | ------------------------------------------------------------- |
+| `backmesh-ubuntu-2404-2vcpu`  | 2    | 8 GiB  | `Standard_D2ads_v5`, `Standard_D2as_v5`, `Standard_D2s_v5`    |
+| `backmesh-ubuntu-2404-4vcpu`  | 4    | 16 GiB | `Standard_D4ads_v5`, `Standard_D4as_v5`, `Standard_D4s_v5`    |
+| `backmesh-ubuntu-2404-8vcpu`  | 8    | 32 GiB | `Standard_D8ads_v5`, `Standard_D8as_v5`, `Standard_D8s_v5`    |
+| `backmesh-ubuntu-2404-16vcpu` | 16   | 64 GiB | `Standard_D16ads_v5`, `Standard_D16as_v5`, `Standard_D16s_v5` |
 
 The [KVM labels](/labels/#kvm) use `as_v5` and `s_v5` only, since `ads_v5`
 doesn't nest. When Azure is the control plane's cloud, its labels are plain,
-as above, and its [GPU labels](/labels/#gpu) are `backmesh-gpu-t4`, on spot,
-and `backmesh-gpu-od-t4`, on demand; otherwise they name it, such as
-`backmesh-azure-4`. Install prints the labels it made.
+as above, and its [GPU labels](/labels/#gpu) are `backmesh-ubuntu-2404-gpu-t4`, on spot,
+and `backmesh-ubuntu-2404-gpu-od-t4`, on demand; otherwise they name it, such as
+`backmesh-azure-ubuntu-2404-4vcpu`. Install prints the labels it made.
 
 ## Regions
 
@@ -91,13 +91,13 @@ delete in the console.
 
 Spot labels count against each region's "Total Regional Low-priority vCPUs"
 quota, and on-demand labels against "Total Regional vCPUs". Install reads both
-through `az vm list-usage` and prints them as how many `backmesh-4` jobs fit at
+through `az vm list-usage` and prints them as how many `backmesh-ubuntu-2404-4vcpu` jobs fit at
 once, counting each region on its own: 3 spot vCPUs in every region run no
-`backmesh-4` job, only `backmesh-2`. A region whose quota can't fit one VM of a
+`backmesh-ubuntu-2404-4vcpu` job, only `backmesh-ubuntu-2404-2vcpu`. A region whose quota can't fit one VM of a
 label gets none of that label's runners until you raise it; install and
 [`backmesh status`](/status/) name the quota. The spot GPU label,
-`backmesh-gpu-t4`, counts against the spot vCPUs with the others; the
-on-demand one, `backmesh-gpu-od-t4`, also counts against "Standard NCASv3_T4
+`backmesh-ubuntu-2404-gpu-t4`, counts against the spot vCPUs with the others; the
+on-demand one, `backmesh-ubuntu-2404-gpu-od-t4`, also counts against "Standard NCASv3_T4
 Family vCPUs", 0 on most new subscriptions; request at least 4 under
 [Quotas](https://portal.azure.com/#view/Microsoft_Azure_Capacity/QuotaMenuBlade/~/myQuotas)
 in the portal. The always-on VMs count against their size's family quota too,
@@ -109,7 +109,7 @@ sign-in, and takes a VM's next size when its family has no room. [More](/faq/#in
 ## Cost
 
 These are catalog prices in `westus2`, spot in the lowest zone, for a
-`backmesh-4` VM while its job runs:
+`backmesh-ubuntu-2404-4vcpu` VM while its job runs:
 
 | Type                | Spot $/h | On demand $/h |
 | ------------------- | -------- | ------------- |
@@ -126,7 +126,7 @@ at their first sizes. Another size costs, in `westus2` on 2026-11-21: $72 for
 $63 for `Standard_B2s_v2`, $65 for `Standard_D2as_v5` and $72 for
 `Standard_D2s_v5` or `Standard_D2s_v4`. The plan prints the sizes and prices
 it picks.
-At those prices, 150,000 minutes a month of `backmesh-4` jobs cost at least
+At those prices, 150,000 minutes a month of `backmesh-ubuntu-2404-4vcpu` jobs cost at least
 $191–$206 with one org's always-on VMs, before disks, boots and runners started ahead of
 jobs; see [the
 costs](/#cost). Spot prices change by the hour.

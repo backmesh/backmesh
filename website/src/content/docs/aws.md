@@ -14,20 +14,20 @@ it.
 
 A job's VM is the first type in its [label's](/labels/) list that has capacity:
 
-| Label         | vCPU | Memory | Types, in order                                                           |
-| ------------- | ---- | ------ | ------------------------------------------------------------------------- |
-| `backmesh-2`  | 2    | 8 GiB  | `m8a.large`, `m8i.large`, `m7a.large`, `m7i.large`, `m6a.large`           |
-| `backmesh-4`  | 4    | 16 GiB | `m8a.xlarge`, `m8i.xlarge`, `m7a.xlarge`, `m7i.xlarge`, `m6a.xlarge`      |
-| `backmesh-8`  | 8    | 32 GiB | `m8a.2xlarge`, `m8i.2xlarge`, `m7a.2xlarge`, `m7i.2xlarge`, `m6a.2xlarge` |
-| `backmesh-16` | 16   | 64 GiB | `m8a.4xlarge`, `m8i.4xlarge`, `m7a.4xlarge`, `m7i.4xlarge`, `m6a.4xlarge` |
+| Label                         | vCPU | Memory | Types, in order                                                           |
+| ----------------------------- | ---- | ------ | ------------------------------------------------------------------------- |
+| `backmesh-ubuntu-2404-2vcpu`  | 2    | 8 GiB  | `m8a.large`, `m8i.large`, `m7a.large`, `m7i.large`, `m6a.large`           |
+| `backmesh-ubuntu-2404-4vcpu`  | 4    | 16 GiB | `m8a.xlarge`, `m8i.xlarge`, `m7a.xlarge`, `m7i.xlarge`, `m6a.xlarge`      |
+| `backmesh-ubuntu-2404-8vcpu`  | 8    | 32 GiB | `m8a.2xlarge`, `m8i.2xlarge`, `m7a.2xlarge`, `m7i.2xlarge`, `m6a.2xlarge` |
+| `backmesh-ubuntu-2404-16vcpu` | 16   | 64 GiB | `m8a.4xlarge`, `m8i.4xlarge`, `m7a.4xlarge`, `m7i.4xlarge`, `m6a.4xlarge` |
 
-The on-demand labels, such as `backmesh-od-4`, use the same types. `m8a` goes
+The on-demand labels, such as `backmesh-ubuntu-2404-od-4vcpu`, use the same types. `m8a` goes
 first because it ran backmesh's builds in 0.64–0.88 times `m8i`'s time,
 typically about 1.3 times as fast. When a zone has no spot `m8a`, the job moves
 on to the next zone or type within seconds. The [KVM labels](/labels/#kvm) use `m8i`, then `m7i` (`m8a`, `m7a` and
 `m6a` don't nest). The [GPU labels](/labels/#gpu) use `g4dn.xlarge` (one T4, 4 vCPUs and
 16 GiB), then `g4dn.2xlarge` (the same T4, 8 vCPUs and 32 GiB). When AWS is the control plane's cloud, its labels are plain, as above;
-otherwise they name it, such as `backmesh-aws-4`.
+otherwise they name it, such as `backmesh-aws-ubuntu-2404-4vcpu`.
 
 ## Regions
 
@@ -60,8 +60,8 @@ Spot labels count against EC2's "All Standard (A, C, D, H, I, M, R, T, Z) Spot
 Instance Requests" quota (`L-34B43A08`), and on-demand labels against "Running
 On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances" (`L-1216C47A`), in
 vCPUs per region. Install reads both through `aws service-quotas` and prints
-them as how many `backmesh-4` jobs fit at once. A region whose quota is at AWS's
-default 5 vCPUs gets no `backmesh-8` or `backmesh-16` runners until you raise
+them as how many `backmesh-ubuntu-2404-4vcpu` jobs fit at once. A region whose quota is at AWS's
+default 5 vCPUs gets no `backmesh-ubuntu-2404-8vcpu` or `backmesh-ubuntu-2404-16vcpu` runners until you raise
 it; install and [`backmesh status`](/status/) name the quota. The GPU labels
 count against "All G and VT Spot Instance Requests" (`L-3819A6DF`) and
 "Running On-Demand G and VT instances" (`L-DB2E81BA`) instead, 0 on most new
@@ -72,7 +72,7 @@ accounts: request at least 4 vCPUs per region in the
 ## Cost
 
 These are catalog prices in `us-east-2`, spot in the lowest zone, for a
-`backmesh-4` VM while its job runs:
+`backmesh-ubuntu-2404-4vcpu` VM while its job runs:
 
 | Type         | Spot $/h | On demand $/h |
 | ------------ | -------- | ------------- |
@@ -84,14 +84,14 @@ These are catalog prices in `us-east-2`, spot in the lowest zone, for a
 
 `m8a`'s prices are from the catalog on 2026-11-23, when `m8i.xlarge`'s spot
 price was 0.0649. On spot, `m8a.xlarge` then cost about the same an hour as
-`m8i.xlarge`, so a `backmesh-4` job that finishes sooner costs less;
+`m8i.xlarge`, so a `backmesh-ubuntu-2404-4vcpu` job that finishes sooner costs less;
 `m8a.4xlarge` cost about 27 % more than `m8i.4xlarge`, about even a job. On
 demand `m8a` costs 15 % more an hour than `m8i`, so a job costs about 9 % less at
-`backmesh-od-4` and about the same at `backmesh-od-16`.
+`backmesh-ubuntu-2404-od-4vcpu` and about the same at `backmesh-ubuntu-2404-od-16vcpu`.
 
 Other sizes scale with their vCPUs. Each job also pays for its VM's boot and its
 100 GB gp3 disk at 4,000 IOPS and 500 MiB/s, about $0.038 an hour. The
 control plane and one org's listener VM cost about $86 a month. At
-those prices, 150,000 minutes a month of `backmesh-4` jobs cost at least
+those prices, 150,000 minutes a month of `backmesh-ubuntu-2404-4vcpu` jobs cost at least
 $210–$261 with one org's always-on VMs, before disks, boots and runners started ahead
 of jobs; see [the costs](/#cost). Spot prices change by the hour.

@@ -6,7 +6,7 @@ on:
 permissions: {}
 jobs:
   seed:
-    runs-on: backmesh-public-2
+    runs-on: backmesh-ubuntu-2404-public-2vcpu
     steps:
       - run: mkdir -p seed && echo main > seed/value
       - uses: backmesh/cache@v1

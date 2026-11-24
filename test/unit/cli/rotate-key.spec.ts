@@ -29,7 +29,7 @@ const IMAGE = `ghcr.io/backmesh/backmesh-listener@sha256:${'b'.repeat(64)}`;
 const RUNNER_IMAGE = `ghcr.io/backmesh/backmesh-runner@sha256:${'a'.repeat(64)}`;
 const RUNNERS = JSON.stringify([
   {
-    label: 'backmesh-4',
+    label: 'backmesh-ubuntu-2404-4vcpu',
     cloud: 'aws',
     vmTypes: ['m7g.xlarge'],
     regions: ['us-east-2'],

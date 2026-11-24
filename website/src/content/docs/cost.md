@@ -17,13 +17,13 @@ floor. backmesh's core features are free; your clouds bill you for the VMs.
   before included minutes
   ([docs.github.com](https://docs.github.com/en/billing/reference/actions-runner-pricing),
   read 2026-11-05).
-- **backmesh:** each job runs on its own 4-vCPU, 16 GiB `backmesh-4` VM, which
+- **backmesh:** each job runs on its own 4-vCPU, 16 GiB `backmesh-ubuntu-2404-4vcpu` VM, which
   bills from its boot until the job ends. The prices are spot prices in the
   lowest zone of one region per cloud, from the catalog on 2026-11-13
   (refreshed with the 2026-11-13 VM type reorder; `m8a` from the catalog on
   2026-11-23):
 
-| Cloud | Region        | `backmesh-4` types and spot $/h                                                                                   |
+| Cloud | Region        | `backmesh-ubuntu-2404-4vcpu` types and spot $/h                                                                   |
 | ----- | ------------- | ----------------------------------------------------------------------------------------------------------------- |
 | AWS   | `us-east-2`   | `m8a.xlarge` 0.065 (2026-11-23), `m8i.xlarge` 0.0583, `m7a.xlarge` 0.07, `m7i.xlarge` 0.0497, `m6a.xlarge` 0.0547 |
 | Azure | `westus2`     | `Standard_D4ads_v5` 0.0381, `Standard_D4as_v5` 0.0318, `Standard_D4s_v5` 0.0355                                   |
@@ -108,10 +108,10 @@ pulls the runner's image after it, about 90 seconds more.
 
 1. Count your jobs' minutes a month at each size.
 2. Run `backmesh install --org <org> --plan`, with `--runners <cloud>` for each
-   cloud to compare. It prints each of those clouds' `backmesh-4` spot and
+   cloud to compare. It prints each of those clouds' `backmesh-ubuntu-2404-4vcpu` spot and
    on-demand prices and the always-on VMs' monthly cost, without changing
    anything. Other sizes scale with their vCPUs:
-   `backmesh-8` costs about twice `backmesh-4`.
+   `backmesh-ubuntu-2404-8vcpu` costs about twice `backmesh-ubuntu-2404-4vcpu`.
 3. Multiply each size's minutes by its price ÷ 60, add the always-on VMs once
    (each org's listener VM once per org), and add a boot per job if you run
    many short jobs.

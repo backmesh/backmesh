@@ -4,7 +4,7 @@
 // reads each push's job times from the row the target's report.mjs
 // writes. Run by cue-benchmark.yml:
 //
-//   TARGET_REPO=<owner>/<repo> LABEL=backmesh-16 ROUNDS=5 WIDTH=8 \
+//   TARGET_REPO=<owner>/<repo> LABEL=backmesh-ubuntu-2404-16vcpu ROUNDS=5 WIDTH=8 \
 //   LEAD_S=75 BACKMESH_CLI=dist/cli/index.js BACKMESH_CUE_TOKEN=… \
 //   GIT_SSH_COMMAND='ssh -i <deploy key>' OUTPUT_DIR=… node benchmarks/cue/run.ts
 import { execFile } from 'node:child_process';

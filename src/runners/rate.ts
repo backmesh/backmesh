@@ -52,7 +52,7 @@ export function formatRate(
     classes.find((c) => c.gpu && c.spot === s),
   );
   return [
-    `${where(cloud, regions)}: no VM while idle; while its job runs, a ${spot?.label ?? 'backmesh-4'} VM costs about ${range(spot ? classRate(spot, details) : null)} an hour on spot and ${range(onDemand ? classRate(onDemand, details) : null)} on demand, plus its disk, and the other sizes scale with their vCPUs`,
+    `${where(cloud, regions)}: no VM while idle; while its job runs, a ${spot?.label ?? 'backmesh-ubuntu-2404-4vcpu'} VM costs about ${range(spot ? classRate(spot, details) : null)} an hour on spot and ${range(onDemand ? classRate(onDemand, details) : null)} on demand, plus its disk, and the other sizes scale with their vCPUs`,
     ...(gpuSpot && gpuOnDemand
       ? [
           `${where(cloud, gpuSpot.regions)}: a ${gpuSpot.label} VM (${gpuSpot.vmTypes.join(', ')}) costs about ${range(classRate(gpuSpot, details))} an hour on spot and ${range(classRate(gpuOnDemand, details))} on demand, plus its disk`,

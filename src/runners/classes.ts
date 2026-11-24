@@ -5,7 +5,7 @@ import { findVmType, type VmTypeDetails } from './anycloud.js';
 export const CLOUDS = ['aws', 'gcp', 'azure'] as const;
 export type Cloud = (typeof CLOUDS)[number];
 
-/** The classes' vCPUs, at 4 GiB each; `backmesh-4` is the default. */
+/** The classes' vCPUs, at 4 GiB each; `backmesh-ubuntu-2404-4vcpu` is the default. */
 export const CLASS_VCPUS = [2, 4, 8, 16] as const;
 export const GIB_PER_VCPU = 4;
 // GCP's c4d has 3.875 GiB a vCPU, rounded down: 15 GiB at 4 vCPUs. Only
@@ -42,7 +42,7 @@ const AWS_SIZE: Record<number, string> = {
  * GCP's on-demand classes try AMD's `c4d` (Zen 5) and `c3d` (Zen 4) first:
  * at 4 vCPUs on demand, anycloud#38 measured 0.50 and 0.71 of `n2`'s build
  * time and 0.78 and 0.76 of its cost per Job, `c4d`'s Hyperdisk Balanced
- * boot disk included. `backmesh-od-2` keeps `n2` and `n2d`: `c3d` has no
+ * boot disk included. `backmesh-ubuntu-2404-od-2vcpu` keeps `n2` and `n2d`: `c3d` has no
  * 2-vCPU size, and `c4d`'s wasn't measured. A region without either falls
  * back to `n2` and `n2d`; spot stays as it is until its own measurements
  * land.
@@ -109,7 +109,7 @@ export const GPU_TYPES: Record<Cloud, string[]> = {
  */
 export const GPU = { model: 'T4', vcpus: 4 } as const;
 
-/** `backmesh-public-<n>`'s sizes: the home cloud's spot, no KVM. */
+/** `backmesh-ubuntu-2404-public-<n>vcpu`'s sizes: the home cloud's spot, no KVM. */
 export const PUBLIC_VCPUS = [2, 4] as const;
 /** The vCPUs they may hold at once. */
 export const PUBLIC_VCPU_CAP = 32;
@@ -163,19 +163,26 @@ export interface RunnerClass extends CloudTarget {
   /** Where its VM Jobs may launch: the regions offering one of its types. */
   regions: string[];
   /**
-   * `backmesh-public-<n>`: the only labels a public repository's fork pull
+   * `backmesh-ubuntu-2404-public-<n>vcpu`: the only labels a public repository's fork pull
    * request may use.
    */
   public?: boolean;
-  /** `backmesh-gpu-t4`: its VMs' one GPU, passed into the job. */
+  /** `backmesh-ubuntu-2404-gpu-t4`: its VMs' one GPU, passed into the job. */
   gpu?: typeof GPU.model;
 }
 
 /**
- * On-demand classes are `backmesh-od-<n>`, KVM ones `backmesh-kvm-<n>`.
+ * The OS every label names: the runner image's (`runner/Dockerfile`), the
+ * same on every cloud and class (owner, 2026-11-24).
+ */
+const OS = 'ubuntu-2404';
+
+/**
+ * A class's label: `backmesh-ubuntu-2404-4vcpu`, on demand
+ * `backmesh-ubuntu-2404-od-4vcpu`, KVM `backmesh-ubuntu-2404-kvm-4vcpu`.
  * The home cloud, the control plane's, has the plain labels; another cloud's
- * name it (`prefixed`), so adding or removing a cloud renames no label
- * (owner, 2026-11-08).
+ * name it (`prefixed`, `backmesh-aws-ubuntu-2404-4vcpu`), so adding or
+ * removing a cloud renames no label (owner, 2026-11-08).
  */
 export const classLabel = (
   cloud: Cloud,
@@ -184,11 +191,15 @@ export const classLabel = (
   kvm: boolean,
   vcpus: number,
 ) =>
-  `backmesh-${prefixed ? `${cloud}-` : ''}${kvm ? 'kvm-' : ''}${onDemand ? 'od-' : ''}${vcpus}`;
+  `backmesh-${prefixed ? `${cloud}-` : ''}${OS}-${kvm ? 'kvm-' : ''}${onDemand ? 'od-' : ''}${vcpus}vcpu`;
 
-/** A GPU class's label, such as `backmesh-gpu-od-t4` or `backmesh-azure-gpu-t4`. */
+/** A GPU class's label, such as `backmesh-ubuntu-2404-gpu-od-t4` or `backmesh-azure-ubuntu-2404-gpu-t4`. */
 export const gpuLabel = (cloud: Cloud, prefixed: boolean, onDemand: boolean) =>
-  `backmesh-${prefixed ? `${cloud}-` : ''}gpu-${onDemand ? 'od-' : ''}${GPU.model.toLowerCase()}`;
+  `backmesh-${prefixed ? `${cloud}-` : ''}${OS}-gpu-${onDemand ? 'od-' : ''}${GPU.model.toLowerCase()}`;
+
+/** A public class's label, such as `backmesh-ubuntu-2404-public-4vcpu`. */
+export const publicLabel = (vcpus: number) =>
+  `backmesh-${OS}-public-${vcpus}vcpu`;
 
 /** Where a spot class's reclaims count for the breaker, such as "aws spot". */
 export const spotCapacity = ({
@@ -262,7 +273,7 @@ export function planClasses(
   // The control plane's cloud, whose labels are plain; others name theirs.
   // None when no runners are on it.
   home: Cloud | undefined,
-  // `install --public-repos`: the home cloud's `backmesh-public-<n>` too.
+  // `install --public-repos`: the home cloud's `backmesh-ubuntu-2404-public-<n>vcpu` too.
   publicRepos = false,
 ): ClassPlan {
   const plan: ClassPlan = { classes: [], problems: [], noKvm: [], noGpu: [] };
@@ -393,7 +404,7 @@ export function planClasses(
             ? [
                 {
                   ...c,
-                  label: `backmesh-public-${c.vcpus}`,
+                  label: publicLabel(c.vcpus),
                   code: `${CLOUD_CODE[target.cloud][4]}${c.vcpus.toString(36)}`,
                   public: true,
                 },

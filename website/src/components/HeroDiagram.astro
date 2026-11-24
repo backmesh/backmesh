@@ -34,8 +34,9 @@ const queue = queueAt(G.REST);
 >
   <title id="flow-title">One changed runs-on line, three clouds</title>
   <desc id="flow-desc">
-    Change runs-on: ubuntu-latest to runs-on: backmesh-4, and GitHub Actions
-    jobs each run on their own spot VM in AWS, Google Cloud or Azure.
+    Change runs-on: ubuntu-latest to runs-on: backmesh-ubuntu-2404-4vcpu, and
+    GitHub Actions jobs each run on their own spot VM in AWS, Google Cloud or
+    Azure.
   </desc>
   <text class="lbl" x="0" y={G.QY - 22}>GitHub Actions</text>
   <path class="rail" d={`M0 ${G.QY} H ${G.DROP}`}></path>
@@ -46,7 +47,7 @@ const queue = queueAt(G.REST);
     <tspan class="sign">-</tspan> runs-on: ubuntu-latest
   </text>
   <text class="cmd" x={G.DROP - 188} y={G.BOX_Y + 51}>
-    <tspan class="sign add">+</tspan> runs-on: backmesh-4 <tspan class="note"># 4 vCPU spot VM</tspan>
+    <tspan class="sign add">+</tspan> runs-on: backmesh-ubuntu-2404-4vcpu
   </text>
   {panels.map((p) => <path class="thread" d={branch(p.x + G.PW / 2)} />)}
   {
@@ -211,9 +212,6 @@ const queue = queueAt(G.REST);
   }
   .sign.add {
     fill: var(--bm-accent);
-  }
-  .note {
-    fill: var(--bm-soft);
   }
   .p {
     fill: var(--bm-accent);

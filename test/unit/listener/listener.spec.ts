@@ -104,19 +104,23 @@ describe('runListener', () => {
       {
         msg: 'scale set ready',
         scaleSetId: 9,
-        name: 'backmesh-4',
+        name: 'backmesh-ubuntu-2404-4vcpu',
         runnerGroupId: 3,
       },
-      { msg: 'session opened', label: 'backmesh-4', scaleSetId: 9 },
+      {
+        msg: 'session opened',
+        label: 'backmesh-ubuntu-2404-4vcpu',
+        scaleSetId: 9,
+      },
     ]);
     // The message's runners don't wait for its ack.
     expect(calls).toEqual([
       'reconcile',
       'poll after 0',
       'acquire 10,11',
-      'gate backmesh-4 job-0',
-      'gate backmesh-4 job-1',
-      'gate backmesh-4 job-2',
+      'gate backmesh-ubuntu-2404-4vcpu job-0',
+      'gate backmesh-ubuntu-2404-4vcpu job-1',
+      'gate backmesh-ubuntu-2404-4vcpu job-2',
       'reconcile',
       'ack 1',
       'poll after 1',
@@ -192,7 +196,7 @@ describe('runListener', () => {
     ]);
     expect(logs).toContainEqual({
       msg: 'scale set retired',
-      label: 'backmesh-4',
+      label: 'backmesh-ubuntu-2404-4vcpu',
       scaleSetId: 9,
     });
     expect(scaler.status().scaleSets).toEqual([]);
@@ -227,7 +231,48 @@ describe('runListener', () => {
       new AbortController().signal,
     );
     expect(logs).toEqual([
-      { msg: 'retired scale set gone', label: 'backmesh-4' },
+      { msg: 'retired scale set gone', label: 'backmesh-ubuntu-2404-4vcpu' },
+    ]);
+  });
+
+  it("renames a renamed label's scale set, and says so when GitHub kept the old name", async () => {
+    const renamed = { ...ROUTE, renamedFrom: 'backmesh-4' };
+    const { scaler } = setup([renamed]);
+    const logs: unknown[] = [];
+    const asked: unknown[] = [];
+    await runListener(
+      {
+        actions: {
+          ensureScaleSet: async (name, runnerGroupId, renamedFrom) => {
+            asked.push([name, runnerGroupId, renamedFrom]);
+            return { id: 7, name: 'backmesh-4', runnerGroupId };
+          },
+          createSession: async () => {
+            throw new Error('no session for a scale set not renamed');
+          },
+          deleteSession: async () => {},
+          getMessage: async () => undefined,
+          acquireJobs: async () => [],
+          deleteMessage: async () => {},
+          getScaleSet: async () => undefined,
+          deleteScaleSet: async () => {},
+        },
+        runnerGroup: async () => 3,
+        scaler,
+        routes: [renamed],
+        owner: 'pod',
+        log: (line) => void logs.push(line),
+      },
+      new AbortController().signal,
+    );
+    expect(asked).toEqual([['backmesh-ubuntu-2404-4vcpu', 3, 'backmesh-4']]);
+    expect(logs).toEqual([
+      {
+        msg: 'scale set rename not applied',
+        label: 'backmesh-ubuntu-2404-4vcpu',
+        renamedFrom: 'backmesh-4',
+        name: 'backmesh-4',
+      },
     ]);
   });
 

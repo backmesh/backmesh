@@ -34,8 +34,8 @@ Linux x86-64 jobs can use the runners, in private repositories unless you
 turn on [public repositories](/public-repos/).
 
 **Which clouds does backmesh run on?** AWS, Google Cloud (GCP) and Azure. One installation can use
-several, and each [label](/labels/) runs in exactly one cloud: `backmesh-4` in
-the control plane's, `backmesh-gcp-4` in GCP.
+several, and each [label](/labels/) runs in exactly one cloud: `backmesh-ubuntu-2404-4vcpu` in
+the control plane's, `backmesh-gcp-ubuntu-2404-4vcpu` in GCP.
 
 ## Will it work?
 
@@ -47,11 +47,11 @@ runners. Jobs that need `/dev/kvm` use the
 **How do backmesh's GPU runners compare with GitHub's?** Same shape: one Tesla
 T4 and 4 vCPUs, with 16 GiB of memory on AWS to GitHub's 28 GB. At list prices
 (arithmetic, not measured; read 2026-11-18), GitHub's Linux GPU runner costs
-$0.052 a minute. `backmesh-gpu-t4` costs about $0.0046 a minute on AWS spot
-and $0.0029 on Azure spot, and `backmesh-gpu-od-t4` $0.0088 on demand: 6 to 18
+$0.052 a minute. `backmesh-ubuntu-2404-gpu-t4` costs about $0.0046 a minute on AWS spot
+and $0.0029 on Azure spot, and `backmesh-ubuntu-2404-gpu-od-t4` $0.0088 on demand: 6 to 18
 times less, before disks and boots. See [Cost](/cost/#gpu).
 
-**Can public repositories use backmesh?** Yes, with `--public-repos` on install or upgrade. Pull requests from forks then run only on `backmesh-public-2` and `-4`, and read the cache without saving to it. Their VMs share your runners' cloud network, so GitHub's "Require approval for all external contributors" setting is required. See [Public repositories](/public-repos/).
+**Can public repositories use backmesh?** Yes, with `--public-repos` on install or upgrade. Pull requests from forks then run only on `backmesh-ubuntu-2404-public-2vcpu` and `-4`, and read the cache without saving to it. Their VMs share your runners' cloud network, so GitHub's "Require approval for all external contributors" setting is required. See [Public repositories](/public-repos/).
 
 **Will my `ubuntu-latest` jobs work on backmesh?** Most do with only a new `runs-on`. The
 image is Ubuntu 24.04, has no systemd or swap, and lacks some of GitHub's
@@ -115,7 +115,7 @@ region's quotas, install says why, shows them as unread, and goes on. It can't
 read GCP's quotas, so it names the ones to raise. Runners past a quota wait,
 sometimes for many minutes, until earlier VMs end, and `backmesh status` shows
 that wait. A region whose quota can't fit one VM of a label, such as an AWS
-region at its default 5 vCPUs for `backmesh-8`, stays in the install but gets
+region at its default 5 vCPUs for `backmesh-ubuntu-2404-8vcpu`, stays in the install but gets
 none of that label's runners. Install's plan names it and the quota to raise,
 and so does `backmesh status`. Once you raise the quota, the region is used
 within about 10 minutes, with nothing to reinstall.

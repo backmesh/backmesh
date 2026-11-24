@@ -103,19 +103,19 @@ forever. Ask before changing workflows others use.
 ```yaml
 jobs:
   test:
-    runs-on: backmesh-4
+    runs-on: backmesh-ubuntu-2404-4vcpu
 ```
 
-- Sizes: `backmesh-2`, `backmesh-4` (the default), `backmesh-8` and
-  `backmesh-16`, at 4 GiB of memory per vCPU.
+- Sizes: `backmesh-ubuntu-2404-2vcpu`, `backmesh-ubuntu-2404-4vcpu` (the default), `backmesh-ubuntu-2404-8vcpu` and
+  `backmesh-ubuntu-2404-16vcpu`, at 4 GiB of memory per vCPU.
 - The control plane's cloud has the plain labels; others name their cloud,
-  such as `backmesh-gcp-4`. On an Azure control plane, Azure's GPU label is
-  `backmesh-gpu-t4`, not `backmesh-azure-gpu-t4`.
-- Spot is the default. On-demand labels, such as `backmesh-od-4`, cost about 2
+  such as `backmesh-gcp-ubuntu-2404-4vcpu`. On an Azure control plane, Azure's GPU label is
+  `backmesh-ubuntu-2404-gpu-t4`, not `backmesh-azure-ubuntu-2404-gpu-t4`.
+- Spot is the default. On-demand labels, such as `backmesh-ubuntu-2404-od-4vcpu`, cost about 2
   to 5 times spot. When spot reclaims were a run's only failures, backmesh
   reruns its failed jobs on demand, at most twice; add `backmesh-noretry` to
   `runs-on` to turn that off.
-- `backmesh-kvm-4` and the like give a job `/dev/kvm`.
+- `backmesh-ubuntu-2404-kvm-4vcpu` and the like give a job `/dev/kvm`.
 
 Full list: https://backmesh.com/labels/.
 

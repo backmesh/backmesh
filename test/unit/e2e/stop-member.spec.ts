@@ -81,7 +81,7 @@ describe('runStopMember', () => {
         failed('2026-11-10T12:00:05Z'),
       ],
     });
-    const result = await runStopMember(deps, 'backmesh-4');
+    const result = await runStopMember(deps, 'backmesh-ubuntu-2404-4vcpu');
     expect(result).toEqual({
       runnerId: 'bmabcde-01-abcdefgh',
       terminatedAt: '2026-11-10T12:00:00Z',
@@ -105,7 +105,7 @@ describe('runStopMember', () => {
         return '2026-11-10T12:00:00Z';
       },
     });
-    await runStopMember(deps, 'backmesh-4');
+    await runStopMember(deps, 'backmesh-ubuntu-2404-4vcpu');
     // Run 42775988257: GitHub reports `runner_name: ""` before a runner
     // registers, not null; terminating that empty id dispatched
     // ci-install.yml's stop-runner with a blank runner, which it refused.
@@ -126,7 +126,7 @@ describe('runStopMember', () => {
         return '2026-11-10T12:00:00Z';
       },
     });
-    await runStopMember(deps, 'backmesh-4');
+    await runStopMember(deps, 'backmesh-ubuntu-2404-4vcpu');
     expect(terminated).toBe('bmabcde-01-abcdefgh');
   });
 
@@ -141,9 +141,9 @@ describe('runStopMember', () => {
         },
       ],
     });
-    await expect(runStopMember(deps, 'backmesh-4')).rejects.toThrow(
-      'ended (cancelled) before it ever had a runner',
-    );
+    await expect(
+      runStopMember(deps, 'backmesh-ubuntu-2404-4vcpu'),
+    ).rejects.toThrow('ended (cancelled) before it ever had a runner');
   });
 
   it("throws when GitHub doesn't mark the job failed", async () => {
@@ -158,9 +158,9 @@ describe('runStopMember', () => {
         },
       ],
     });
-    await expect(runStopMember(deps, 'backmesh-4')).rejects.toThrow(
-      'ended cancelled, not failure',
-    );
+    await expect(
+      runStopMember(deps, 'backmesh-ubuntu-2404-4vcpu'),
+    ).rejects.toThrow('ended cancelled, not failure');
   });
 
   it('throws when the job takes more than 15 s to fail', async () => {
@@ -170,9 +170,9 @@ describe('runStopMember', () => {
         failed('2026-11-10T12:00:16Z'),
       ],
     });
-    await expect(runStopMember(deps, 'backmesh-4')).rejects.toThrow(
-      'not within 15 s',
-    );
+    await expect(
+      runStopMember(deps, 'backmesh-ubuntu-2404-4vcpu'),
+    ).rejects.toThrow('not within 15 s');
   });
 
   it('throws on a negative delta (a clock or ordering problem)', async () => {
@@ -182,9 +182,9 @@ describe('runStopMember', () => {
         failed('2026-11-10T11:59:59Z'),
       ],
     });
-    await expect(runStopMember(deps, 'backmesh-4')).rejects.toThrow(
-      'not within 15 s',
-    );
+    await expect(
+      runStopMember(deps, 'backmesh-ubuntu-2404-4vcpu'),
+    ).rejects.toThrow('not within 15 s');
   });
 
   it('calls diagnoseRunner exactly once, already retried by the deps', async () => {
@@ -199,7 +199,7 @@ describe('runStopMember', () => {
         return { cleanedAt: '2026-11-10T12:01:00Z', cleanupError: null };
       },
     });
-    const result = await runStopMember(deps, 'backmesh-4');
+    const result = await runStopMember(deps, 'backmesh-ubuntu-2404-4vcpu');
     expect(diagnoseCalls).toBe(1);
     expect(result.runnerId).toBe('bmabcde-01-abcdefgh');
   });
@@ -212,9 +212,9 @@ describe('runStopMember', () => {
       ],
       diagnoses: [{ cleanedAt: null, cleanupError: null }],
     });
-    await expect(runStopMember(deps, 'backmesh-4')).rejects.toThrow(
-      "wasn't cleaned up",
-    );
+    await expect(
+      runStopMember(deps, 'backmesh-ubuntu-2404-4vcpu'),
+    ).rejects.toThrow("wasn't cleaned up");
   });
 
   it('throws when the runner Job cleans up with an error', async () => {
@@ -230,9 +230,9 @@ describe('runStopMember', () => {
         },
       ],
     });
-    await expect(runStopMember(deps, 'backmesh-4')).rejects.toThrow(
-      'cleaned up with an error: some cleanup error',
-    );
+    await expect(
+      runStopMember(deps, 'backmesh-ubuntu-2404-4vcpu'),
+    ).rejects.toThrow('cleaned up with an error: some cleanup error');
   });
 
   it("cancels the lost-runner-check run if it's still live when something else throws", async () => {
@@ -247,9 +247,9 @@ describe('runStopMember', () => {
       },
       cancelled,
     });
-    await expect(runStopMember(deps, 'backmesh-4')).rejects.toThrow(
-      'ci-install.yml already has a run in flight',
-    );
+    await expect(
+      runStopMember(deps, 'backmesh-ubuntu-2404-4vcpu'),
+    ).rejects.toThrow('ci-install.yml already has a run in flight');
     expect(cancelled).toEqual([4242]);
   });
 
@@ -263,9 +263,9 @@ describe('runStopMember', () => {
       ],
       cancelled,
     });
-    await expect(runStopMember(deps, 'backmesh-4')).rejects.toThrow(
-      'not within 15 s',
-    );
+    await expect(
+      runStopMember(deps, 'backmesh-ubuntu-2404-4vcpu'),
+    ).rejects.toThrow('not within 15 s');
     // Cancelling an already-completed run is just a no-op error on GitHub's
     // side, swallowed like any other cancelRun failure; the point is this
     // never skips calling it.
@@ -281,9 +281,9 @@ describe('runStopMember', () => {
       },
       cancelled,
     });
-    await expect(runStopMember(deps, 'backmesh-4')).rejects.toThrow(
-      'transient GitHub API error',
-    );
+    await expect(
+      runStopMember(deps, 'backmesh-ubuntu-2404-4vcpu'),
+    ).rejects.toThrow('transient GitHub API error');
     expect(cancelled).toEqual([4242]);
   });
 
@@ -297,8 +297,8 @@ describe('runStopMember', () => {
         throw new Error('cancel also failed');
       },
     });
-    await expect(runStopMember(deps, 'backmesh-4')).rejects.toThrow(
-      'the original failure',
-    );
+    await expect(
+      runStopMember(deps, 'backmesh-ubuntu-2404-4vcpu'),
+    ).rejects.toThrow('the original failure');
   });
 });

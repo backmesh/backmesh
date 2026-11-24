@@ -66,7 +66,7 @@ const med = (
 ) => median(fs.map((j) => pick(j.f!)).filter((v) => v !== undefined));
 
 // Each label's speed against ubuntu-latest's, and a build's cost. A backmesh
-// job costs its VM's spot price (cost.ts's `backmesh-4` price for the VM's
+// job costs its VM's spot price (cost.ts's `backmesh-ubuntu-2404-4vcpu` price for the VM's
 // family, times its vCPUs over 4; its on-demand price on a `-od-` label) from
 // the kernel's start to the job's end,
 // with its disk, each for at least a minute as AWS bills them; ubuntu-latest's,
@@ -270,7 +270,7 @@ ${BASE}'s (its time over the label's), a \`/cache\` arm's against
 \`${BASE}/cache\`'s, with a two-sided Mann-Whitney p
 (the normal approximation, which at 5 jobs a side can understate the exact p). A backmesh job's cost is
 its VM's spot price (on-demand on a \`-od-\` label) from the kernel's start to
-the job's end, at [\`cost.ts\`](../../website/src/cost.ts)'s \`backmesh-4\`
+the job's end, at [\`cost.ts\`](../../website/src/cost.ts)'s \`backmesh-ubuntu-2404-4vcpu\`
 price for the VM's family times its vCPUs over 4, plus its disk's $${AWS_DISK_PER_HOUR} an hour,
 for at least a minute, as AWS bills both. ${BASE}'s is what GitHub charges for
 its 4-vCPU runner, $${GITHUB_4_CORE_PER_MIN} a minute, each job rounded up to

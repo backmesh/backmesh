@@ -21,7 +21,7 @@ describe('routes', () => {
     const routes = parseRoutes(json);
     expect(routes).toHaveLength(18);
     expect(routes[1]).toEqual({
-      label: 'backmesh-4',
+      label: 'backmesh-ubuntu-2404-4vcpu',
       code: 'a4',
       cloud: 'aws',
       region: 'us-east-2',
@@ -37,7 +37,7 @@ describe('routes', () => {
         'm6a.xlarge',
       ],
       regions: ['us-east-2'],
-      onDemand: { label: 'backmesh-od-4' },
+      onDemand: { label: 'backmesh-ubuntu-2404-od-4vcpu' },
     });
   });
 
@@ -59,13 +59,17 @@ describe('routes', () => {
     expect(
       fours.map(({ label, code, onDemand }) => [label, code, onDemand?.label]),
     ).toEqual([
-      ['backmesh-4', 'a4', 'backmesh-od-4'],
-      ['backmesh-od-4', 'b4', undefined],
-      ['backmesh-kvm-4', 'k4', 'backmesh-kvm-od-4'],
-      ['backmesh-kvm-od-4', 'l4', undefined],
-      // A GPU label's twin is the GPU one, not backmesh-od-4.
-      ['backmesh-gpu-t4', 'd4', 'backmesh-gpu-od-t4'],
-      ['backmesh-gpu-od-t4', 'e4', undefined],
+      ['backmesh-ubuntu-2404-4vcpu', 'a4', 'backmesh-ubuntu-2404-od-4vcpu'],
+      ['backmesh-ubuntu-2404-od-4vcpu', 'b4', undefined],
+      [
+        'backmesh-ubuntu-2404-kvm-4vcpu',
+        'k4',
+        'backmesh-ubuntu-2404-kvm-od-4vcpu',
+      ],
+      ['backmesh-ubuntu-2404-kvm-od-4vcpu', 'l4', undefined],
+      // A GPU label's twin is the GPU one, not backmesh-ubuntu-2404-od-4vcpu.
+      ['backmesh-ubuntu-2404-gpu-t4', 'd4', 'backmesh-ubuntu-2404-gpu-od-t4'],
+      ['backmesh-ubuntu-2404-gpu-od-t4', 'e4', undefined],
     ]);
     // A spot class whose on-demand twin is gone keeps no on-demand label.
     const spotOnly = JSON.stringify(classes.filter((c) => c.spot));
@@ -80,7 +84,7 @@ describe('routes', () => {
       true,
     );
     const route = parseRoutes(JSON.stringify(withPublic)).find(
-      (r) => r.label === 'backmesh-public-4',
+      (r) => r.label === 'backmesh-ubuntu-2404-public-4vcpu',
     );
     expect(route).toMatchObject({ code: 'c4', public: true, spot: true });
     expect(route?.onDemand).toBeUndefined();

@@ -8,7 +8,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        label: [backmesh-kvm-4, backmesh-gcp-2, backmesh-azure-2]
+        label:
+          [
+            backmesh-ubuntu-2404-kvm-4vcpu,
+            backmesh-gcp-ubuntu-2404-2vcpu,
+            backmesh-azure-ubuntu-2404-2vcpu,
+          ]
     runs-on: ${{ matrix.label }}
     steps:
       - run: echo "ran on ${{ matrix.label }}"

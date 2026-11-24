@@ -12,10 +12,15 @@ import {
 import type { Route } from '../../../src/listener/routes.js';
 import { message, ROUTE } from './fakes.js';
 
-const KVM: Route = { ...ROUTE, label: 'backmesh-kvm-4', code: 'k4', kvm: true };
+const KVM: Route = {
+  ...ROUTE,
+  label: 'backmesh-ubuntu-2404-kvm-4vcpu',
+  code: 'k4',
+  kvm: true,
+};
 const PUBLIC: Route = {
   ...ROUTE,
-  label: 'backmesh-public-4',
+  label: 'backmesh-ubuntu-2404-public-4vcpu',
   code: 'c4',
   public: true,
 };
@@ -141,7 +146,7 @@ describe('Gate', () => {
         name: 'fork run 7',
         title: 'Fork run cancelled',
         summary:
-          '`test` asked for `backmesh-kvm-4`. In this public repository, pull requests from forks run only on `backmesh-public-4`, so backmesh cancelled the run. Use one of them, or a GitHub-hosted runner.',
+          '`test` asked for `backmesh-ubuntu-2404-kvm-4vcpu`. In this public repository, pull requests from forks run only on `backmesh-ubuntu-2404-public-4vcpu`, so backmesh cancelled the run. Use one of them, or a GitHub-hosted runner.',
       },
     ]);
     expect(gate.holds(pr('JobAssigned'))).toBe(true);
@@ -217,7 +222,7 @@ describe('Gate', () => {
       7: [
         {
           name: 'build',
-          labels: ['backmesh-kvm-4'],
+          labels: ['backmesh-ubuntu-2404-kvm-4vcpu'],
           runnerName: 'bmabc12-k4-00000001',
           startedAt: 0,
           done: false,
@@ -227,7 +232,7 @@ describe('Gate', () => {
       8: [
         {
           name: 'lint',
-          labels: ['backmesh-public-4'],
+          labels: ['backmesh-ubuntu-2404-public-4vcpu'],
           runnerName: 'bmabc12-c4-00000002',
           startedAt: 0,
           done: false,
@@ -254,7 +259,9 @@ describe('Gate', () => {
     expect(calls).toEqual(['jobs 7', 'cancel 7', 'jobs 8']);
     expect(terminated).toEqual(['bmabc12-k4-00000001']);
     expect(notes.map((n) => n.summary)).toEqual([
-      expect.stringContaining('`build` asked for `backmesh-kvm-4`'),
+      expect.stringContaining(
+        '`build` asked for `backmesh-ubuntu-2404-kvm-4vcpu`',
+      ),
     ]);
     clock.now = SWEEP_MS - 1;
     await gate.tick();
@@ -275,9 +282,9 @@ describe('Gate', () => {
     gate.observe(KVM, pr('JobAssigned', { workflowRunId: 8 }));
     await settle();
     expect(replayed).toEqual([
-      'backmesh-kvm-4 JobAssigned job-1',
-      'backmesh-kvm-4 JobAssigned job-2',
-      'backmesh-kvm-4 JobCompleted job-2',
+      'backmesh-ubuntu-2404-kvm-4vcpu JobAssigned job-1',
+      'backmesh-ubuntu-2404-kvm-4vcpu JobAssigned job-2',
+      'backmesh-ubuntu-2404-kvm-4vcpu JobCompleted job-2',
     ]);
     // Classified trusted, its later messages go to the planner directly.
     expect(gate.holds(pr('JobStarted'))).toBe(false);
@@ -396,7 +403,7 @@ describe('Gate', () => {
         return [
           {
             name: 'build',
-            labels: ['backmesh-kvm-4'],
+            labels: ['backmesh-ubuntu-2404-kvm-4vcpu'],
             runnerName: null,
             startedAt: null,
             done: false,
@@ -539,7 +546,7 @@ describe('Gate', () => {
         name: 'runtime limit in run 7',
         title: 'Runtime limit',
         summary:
-          '`test` ran on `backmesh-public-4` for 60 minutes, the limit for pull requests from forks, so backmesh cancelled the run.',
+          '`test` ran on `backmesh-ubuntu-2404-public-4vcpu` for 60 minutes, the limit for pull requests from forks, so backmesh cancelled the run.',
       });
       clock.now = LIMIT_MS + 5 * 60_000;
       await gate.tick();
@@ -575,7 +582,7 @@ describe('Gate', () => {
         jobs: async () => [
           {
             name: 'sleep',
-            labels: ['backmesh-public-4'],
+            labels: ['backmesh-ubuntu-2404-public-4vcpu'],
             runnerName: 'bmabc12-c4-00000007',
             startedAt: -30 * 60_000,
             done: false,
@@ -600,7 +607,7 @@ describe('Gate', () => {
         jobs: async () => [
           {
             name: 'sleep',
-            labels: ['backmesh-public-4'],
+            labels: ['backmesh-ubuntu-2404-public-4vcpu'],
             runnerName: 'bmabc12-c4-00000007',
             startedAt: -30 * 60_000,
             done: false,

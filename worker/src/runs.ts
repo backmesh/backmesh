@@ -390,9 +390,7 @@ export const cancel = (
         reason === 'label'
           ? live.some((job) =>
               (job.labels ?? []).some(
-                (l) =>
-                  l.startsWith('backmesh-') &&
-                  !l.startsWith('backmesh-public-'),
+                (l) => l.startsWith('backmesh-') && !l.includes('-public-'),
               ),
             )
           : live.some(

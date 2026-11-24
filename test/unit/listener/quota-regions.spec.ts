@@ -14,7 +14,7 @@ import { assigned, ROUTE, setup } from './fakes.js';
 // demand (spike 42582624801): one 8-vCPU runner can't fit.
 const EIGHT: Route = {
   ...ROUTE,
-  label: 'backmesh-8',
+  label: 'backmesh-ubuntu-2404-8vcpu',
   code: 'a8',
   vcpus: 8,
   regions: ['us-east-2', 'us-west-1'],
@@ -97,10 +97,13 @@ describe('regions skipped for quota', () => {
   });
 
   it('starts nothing for a spot label with every spot region skipped or avoided, never on demand (owner, 2026-11-09)', async () => {
-    const SPOT8: Route = { ...EIGHT, onDemand: { label: 'backmesh-od-8' } };
+    const SPOT8: Route = {
+      ...EIGHT,
+      onDemand: { label: 'backmesh-ubuntu-2404-od-8vcpu' },
+    };
     const OD8: Route = {
       ...EIGHT,
-      label: 'backmesh-od-8',
+      label: 'backmesh-ubuntu-2404-od-8vcpu',
       code: 'b8',
       spot: false,
     };
@@ -180,10 +183,13 @@ describe('regions skipped for quota', () => {
   });
 
   it("keeps a spot label's on-demand runners starting in the on-demand window when every on-demand region is avoided", async () => {
-    const SPOT8: Route = { ...EIGHT, onDemand: { label: 'backmesh-od-8' } };
+    const SPOT8: Route = {
+      ...EIGHT,
+      onDemand: { label: 'backmesh-ubuntu-2404-od-8vcpu' },
+    };
     const OD8: Route = {
       ...EIGHT,
-      label: 'backmesh-od-8',
+      label: 'backmesh-ubuntu-2404-od-8vcpu',
       code: 'b8',
       spot: false,
     };
@@ -228,10 +234,13 @@ describe('regions skipped for quota', () => {
   });
 
   it('stays on spot in the on-demand window when no region fits on demand', async () => {
-    const SPOT8: Route = { ...EIGHT, onDemand: { label: 'backmesh-od-8' } };
+    const SPOT8: Route = {
+      ...EIGHT,
+      onDemand: { label: 'backmesh-ubuntu-2404-od-8vcpu' },
+    };
     const OD8: Route = {
       ...EIGHT,
-      label: 'backmesh-od-8',
+      label: 'backmesh-ubuntu-2404-od-8vcpu',
       code: 'b8',
       spot: false,
     };
@@ -277,11 +286,11 @@ describe('regions skipped for quota', () => {
     const SPOT1: Route = {
       ...EIGHT,
       regions: ['us-east-2'],
-      onDemand: { label: 'backmesh-od-8' },
+      onDemand: { label: 'backmesh-ubuntu-2404-od-8vcpu' },
     };
     const OD1: Route = {
       ...SPOT1,
-      label: 'backmesh-od-8',
+      label: 'backmesh-ubuntu-2404-od-8vcpu',
       code: 'b8',
       spot: false,
     };
@@ -317,10 +326,13 @@ describe('regions skipped for quota', () => {
   });
 
   it("records the kind it mints with, not a replacement's", async () => {
-    const SPOT8: Route = { ...EIGHT, onDemand: { label: 'backmesh-od-8' } };
+    const SPOT8: Route = {
+      ...EIGHT,
+      onDemand: { label: 'backmesh-ubuntu-2404-od-8vcpu' },
+    };
     const OD8: Route = {
       ...EIGHT,
-      label: 'backmesh-od-8',
+      label: 'backmesh-ubuntu-2404-od-8vcpu',
       code: 'b8',
       spot: false,
     };
@@ -362,7 +374,7 @@ describe('regions skipped for quota', () => {
   it('gives the on-demand code for an on-demand route, and never skips GCP', async () => {
     const OD: Route = {
       ...EIGHT,
-      label: 'backmesh-od-8',
+      label: 'backmesh-ubuntu-2404-od-8vcpu',
       code: 'b8',
       spot: false,
     };
@@ -379,7 +391,7 @@ describe('regions skipped for quota', () => {
 
     const GCP: Route = {
       ...EIGHT,
-      label: 'backmesh-gcp-8',
+      label: 'backmesh-gcp-ubuntu-2404-8vcpu',
       code: 'g8',
       cloud: 'gcp',
       regions: ['us-central1', 'us-east4'],
@@ -405,7 +417,7 @@ describe('regions skipped for quota', () => {
 describe("install's plan", () => {
   const classes = [2, 4, 8, 16].flatMap((vcpus) =>
     [true, false].map((spot) => ({
-      label: `backmesh-${spot ? '' : 'od-'}${vcpus}`,
+      label: `backmesh-ubuntu-2404-${spot ? '' : 'od-'}${vcpus}vcpu`,
       vcpus,
       spot,
       regions: ['us-east-2', 'us-west-1'],
@@ -418,7 +430,7 @@ describe("install's plan", () => {
       ['us-west-1', { spot: 5, onDemand: 1 }],
     ]);
     expect(skippedRegions('aws', limits, classes)).toEqual([
-      'us-west-1: spot quota 5 vCPU, skipped for backmesh-8, backmesh-16; raise L-34B43A08 to use it',
+      'us-west-1: spot quota 5 vCPU, skipped for backmesh-ubuntu-2404-8vcpu, backmesh-ubuntu-2404-16vcpu; raise L-34B43A08 to use it',
       'us-west-1: on-demand quota 1 vCPU, skipped; raise L-1216C47A to use it',
     ]);
     expect(
@@ -428,7 +440,7 @@ describe("install's plan", () => {
         classes.map((c) => ({ ...c, regions: ['westus2'] })),
       ),
     ).toEqual([
-      'westus2: spot quota 3 vCPU, skipped for backmesh-4, backmesh-8, backmesh-16; raise "Total Regional Low-priority vCPUs" to use it',
+      'westus2: spot quota 3 vCPU, skipped for backmesh-ubuntu-2404-4vcpu, backmesh-ubuntu-2404-8vcpu, backmesh-ubuntu-2404-16vcpu; raise "Total Regional Low-priority vCPUs" to use it',
     ]);
     expect(skippedRegions('gcp', limits, classes)).toEqual([]);
   });

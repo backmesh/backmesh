@@ -53,9 +53,9 @@ written after each round.
 
 The label is shared with real CI: a cue's runner may take a real job, and a
 benchmark job may take a runner started for a real one. The default,
-`backmesh-16`, is a label no other workflow in anycloud or backmesh uses, so
+`backmesh-ubuntu-2404-16vcpu`, is a label no other workflow in anycloud or backmesh uses, so
 the figures aren't skewed by real jobs taking the cue's runners (our CI uses
-`backmesh-4` and `backmesh-2` heavily). Give `label` a different value, keep
+`backmesh-ubuntu-2404-4vcpu` and `backmesh-ubuntu-2404-2vcpu` heavily). Give `label` a different value, keep
 it one nothing else uses. The listener's planner keeps a label's
 workflow history until it restarts, so after a dispatch on another label, a
 cue also starts a runner on the earlier label, which idles; the cued
@@ -65,7 +65,7 @@ cue also starts a runner on the earlier label, which idles; the cued
 
 Dispatch **Cue benchmark** with `target`, `rounds` (cued, uncued and hosted pushes
 each, default 5), `lead` (default 75 s), `width` (default 8 jobs a push) and
-`label` (default `backmesh-16`). It
+`label` (default `backmesh-ubuntu-2404-16vcpu`). It
 takes about 12 minutes a round: a cued push at its default 75 s lead and one
 not, each about a minute plus a 200 s gap after, then a hosted push of about
 a minute. It needs, in the `e2e` environment:
@@ -83,6 +83,10 @@ and a cued round's runners idle at most 180 s before its push; the driver's
 hosted runner is billed per minute.
 
 ## Results
+
+Runs before backmesh v0.7.0 name the labels as they were then: `backmesh-4`
+is today's `backmesh-ubuntu-2404-4vcpu`, and `backmesh-gpu-t4` today's
+`backmesh-ubuntu-2404-gpu-t4`.
 
 ### 2026-11-23, backmesh 0.5.7, against GitHub-hosted
 

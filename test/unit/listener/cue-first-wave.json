@@ -3,319 +3,319 @@
   "jobs": [
     {
       "name": "docs",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 0,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "credentials-onboarding-e2e (aws)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 0,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "cloud-sad-tests (gcp-sad)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 0,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "e2e-noprovision / gcp-invalid / vitest",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 0,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "local-smolvm / job-resubmitted-vitest",
-      "label": "backmesh-kvm-4",
+      "label": "backmesh-ubuntu-2404-kvm-4vcpu",
       "assignedMs": 72,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "e2e-pool-scaling-local",
-      "label": "backmesh-8",
+      "label": "backmesh-ubuntu-2404-8vcpu",
       "assignedMs": 124,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "e2e-cluster-local",
-      "label": "backmesh-8",
+      "label": "backmesh-ubuntu-2404-8vcpu",
       "assignedMs": 124,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "cloud-sad-tests (pool-job-storage-gcp)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "e2e-noprovision / azure-invalid / vitest",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (runner-rclone-sync)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (ssh-starvation)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (installed-wizard)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "cloud-sad-tests (pool-job-storage-aws)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (fail-assert)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "vitest-e2e / long-history-responsiveness",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "vitest-e2e / hosted-api-access-policy",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (install-script)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "credentials-onboarding-e2e (gcp)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (ssh-interrupt)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (image-manifest)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (api-image)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (slack-handoff)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "vitest-e2e / cli-piped-output",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (kubernetes-host-step)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "vitest-e2e / billing-settlement",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "vitest-e2e / cli-exit",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "cloud-sad-tests (quota)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "cloud-sad-tests (lambda-sad)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (ssh-interrupt-container)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (credentials-terminal)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (credential-lifecycle)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "cloud-sad-tests (pool-job-storage-azure)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "cloud-sad-tests (azure-sad)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "cloud-sad-tests (aws-sad)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "credentials-onboarding-e2e (azure)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "vitest-e2e / secret-crud-privacy",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "vitest-e2e / image-preflight-invalid",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (cli-interactive)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (api-startup)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (api-http-reconciliation)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (binary)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (ghcr-private-auth)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 521,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "cloud-sad-tests (quota-e2e)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 522,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "integration-tests-common (ssh-keepalive)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 522,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "cloud-sad-tests (aws-multivpc)",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 522,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "e2e-noprovision / aws-invalid / vitest",
-      "label": "backmesh-4",
+      "label": "backmesh-ubuntu-2404-4vcpu",
       "assignedMs": 522,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "local-smolvm / vm-host-loss-vitest",
-      "label": "backmesh-kvm-4",
+      "label": "backmesh-ubuntu-2404-kvm-4vcpu",
       "assignedMs": 658,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "local-smolvm / runtime",
-      "label": "backmesh-kvm-4",
+      "label": "backmesh-ubuntu-2404-kvm-4vcpu",
       "assignedMs": 658,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "local-smolvm / job-held-vitest",
-      "label": "backmesh-kvm-4",
+      "label": "backmesh-ubuntu-2404-kvm-4vcpu",
       "assignedMs": 658,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "local-smolvm / serve-vitest",
-      "label": "backmesh-kvm-4",
+      "label": "backmesh-ubuntu-2404-kvm-4vcpu",
       "assignedMs": 658,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "local-smolvm / vm-vitest",
-      "label": "backmesh-kvm-4",
+      "label": "backmesh-ubuntu-2404-kvm-4vcpu",
       "assignedMs": 658,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "local-smolvm / job-completed-vitest",
-      "label": "backmesh-kvm-4",
+      "label": "backmesh-ubuntu-2404-kvm-4vcpu",
       "assignedMs": 658,
       "ref": ".github/workflows/integration.yml@refs/pull/2348/merge"
     },
     {
       "name": "local-smolvm / nuke / nuke",
-      "label": "backmesh-kvm-16",
+      "label": "backmesh-ubuntu-2404-kvm-16vcpu",
       "assignedMs": 742,
       "ref": ".github/workflows/nuke.yml@refs/pull/2348/merge"
     }

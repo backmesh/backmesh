@@ -423,8 +423,8 @@ export function fakeOrg({ stickyRunner = false } = {}) {
   const API = 'https://api.github.com/orgs/acme/actions';
   const SCALE_SETS = `${SERVICE}/_apis/runtime/runnerscalesets`;
   const sets = new Map([
-    ['backmesh-4', 1],
-    ['backmesh-aws-8', 2],
+    ['backmesh-ubuntu-2404-4vcpu', 1],
+    ['backmesh-aws-ubuntu-2404-8vcpu', 2],
   ]);
   const runners = new Map([
     [100, 'bm0a1b2-a4-k3j9x0qz'],

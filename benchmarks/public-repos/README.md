@@ -19,7 +19,7 @@ not an E2E member.
 4. Confirm each repo being turned on has no job that outsiders can trigger
    (`issues`, `issue_comment`, `discussion`, `fork`, `watch`,
    `pull_request_target`, or a `workflow_run` after a fork's run) on a backmesh
-   label other than `backmesh-public-*`.
+   label other than `backmesh-ubuntu-2404-public-*`.
 
 ## Cases
 
@@ -29,12 +29,12 @@ not an E2E member.
 2. **Same repo.** Open a pull request from a branch of the repo itself, with
    the same change.
 3. **Idle runner.** Repeat case 1 once while a planner runner is idle on
-   `backmesh-kvm-4`: `backmesh cue` a push to `main` in a private repo that
+   `backmesh-ubuntu-2404-kvm-4vcpu`: `backmesh cue` a push to `main` in a private repo that
    uses it, then open the fork's PR within the cue's lead.
 4. **Restart.** While case 1's `limit` job is about 30 minutes in, roll the
    listener (`backmesh upgrade`, or scale its Deployment to 0 for a minute and
    back).
-5. **Listener down.** With a planner runner idle on `backmesh-kvm-4` (as in
+5. **Listener down.** With a planner runner idle on `backmesh-ubuntu-2404-kvm-4vcpu` (as in
    case 3), scale the listener's Deployment to 0, open a third fork pull
    request, approve it, wait until its job starts on the idle runner, then
    scale the listener back to 1.

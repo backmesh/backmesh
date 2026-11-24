@@ -304,7 +304,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
     )
     .option(
       '--public-repos',
-      "let the org's public repositories use the runners; their forks' pull requests run only on backmesh-public-2 and -4. See https://backmesh.com/public-repos/",
+      "let the org's public repositories use the runners; their forks' pull requests run only on backmesh-ubuntu-2404-public-2vcpu and backmesh-ubuntu-2404-public-4vcpu. See https://backmesh.com/public-repos/",
     )
     .option(
       '--no-public-repos',
@@ -492,9 +492,12 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
     .option('--yes', 'apply the plan --plan-id names without asking')
     .option(
       '--public-repos',
-      "add backmesh-public-2 and -4, as install's --public-repos does; without it or --no-public-repos, each org keeps what it has",
+      "add backmesh-ubuntu-2404-public-2vcpu and backmesh-ubuntu-2404-public-4vcpu, as install's --public-repos does; without it or --no-public-repos, each org keeps what it has",
     )
-    .option('--no-public-repos', 'remove backmesh-public-2 and -4')
+    .option(
+      '--no-public-repos',
+      'remove backmesh-ubuntu-2404-public-2vcpu and backmesh-ubuntu-2404-public-4vcpu',
+    )
     .action(
       async (opts: {
         runners: string[];

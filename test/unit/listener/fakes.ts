@@ -14,7 +14,7 @@ import { Scaler, type ScalerDeps } from '../../../src/listener/scaler.js';
 
 export const INSTALL = 'abc12';
 export const ROUTE: Route = {
-  label: 'backmesh-4',
+  label: 'backmesh-ubuntu-2404-4vcpu',
   code: 'a4',
   cloud: 'aws',
   region: 'us-east-2',

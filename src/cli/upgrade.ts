@@ -196,7 +196,7 @@ export interface UpgradeOptions {
   planId?: string;
   yes?: boolean;
   // `--public-repos` or `--no-public-repos`, as install's: adds or drops
-  // `backmesh-public-<n>`. Without it, each org keeps what it has.
+  // `backmesh-ubuntu-2404-public-<n>vcpu`. Without it, each org keeps what it has.
   publicRepos?: boolean;
 }
 
@@ -408,7 +408,7 @@ async function upgradeOnce(
     // The public labels are the control plane's cloud's, as install's.
     if (isPublic && !plan.classes.some((c) => c.public)) {
       plan.problems.push(
-        "--public-repos needs runners on the control plane's cloud: backmesh-public-2 and -4 run there.",
+        "--public-repos needs runners on the control plane's cloud: backmesh-ubuntu-2404-public-2vcpu and backmesh-ubuntu-2404-public-4vcpu run there.",
       );
     }
     if (plan.problems.length) {

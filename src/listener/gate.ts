@@ -1,6 +1,6 @@
 // The public-repository gate:
 // a fork's pull request in a public repository is untrusted, and runs only on
-// `backmesh-public-<n>`. GitHub assigns a job before the listener hears of
+// `backmesh-ubuntu-2404-public-<n>vcpu`. GitHub assigns a job before the listener hears of
 // it, so the gate can't hold one back: it leaves untrusted and unclassified
 // jobs out of their set's desired count, force-cancels an untrusted run
 // through the Worker's /v1/cancel (the listener's token reads Actions only,
@@ -437,7 +437,7 @@ export class Gate {
                 key: keyOf(state.run),
                 job: job.name,
                 label:
-                  job.labels.find((l) => l.startsWith('backmesh-public-')) ??
+                  job.labels.find((l) => this.deps.publicLabels.includes(l)) ??
                   '',
                 at: startedAt,
               });

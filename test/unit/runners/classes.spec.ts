@@ -35,18 +35,44 @@ describe('runner classes', () => {
     expect(noKvm).toEqual([]);
     expect(noGpu).toEqual([]);
     expect(classes.map((c) => `${c.label} ${c.code}`)).toEqual([
-      ...['backmesh-2 a2', 'backmesh-4 a4', 'backmesh-8 a8', 'backmesh-16 ag'],
-      ...['backmesh-od-2 b2', 'backmesh-od-4 b4'],
-      ...['backmesh-od-8 b8', 'backmesh-od-16 bg'],
-      ...['backmesh-kvm-2 k2', 'backmesh-kvm-4 k4'],
-      ...['backmesh-kvm-8 k8', 'backmesh-kvm-16 kg'],
-      ...['backmesh-kvm-od-2 l2', 'backmesh-kvm-od-4 l4'],
-      ...['backmesh-kvm-od-8 l8', 'backmesh-kvm-od-16 lg'],
-      ...['backmesh-gpu-t4 d4', 'backmesh-gpu-od-t4 e4'],
+      ...[
+        'backmesh-ubuntu-2404-2vcpu a2',
+        'backmesh-ubuntu-2404-4vcpu a4',
+        'backmesh-ubuntu-2404-8vcpu a8',
+        'backmesh-ubuntu-2404-16vcpu ag',
+      ],
+      ...[
+        'backmesh-ubuntu-2404-od-2vcpu b2',
+        'backmesh-ubuntu-2404-od-4vcpu b4',
+      ],
+      ...[
+        'backmesh-ubuntu-2404-od-8vcpu b8',
+        'backmesh-ubuntu-2404-od-16vcpu bg',
+      ],
+      ...[
+        'backmesh-ubuntu-2404-kvm-2vcpu k2',
+        'backmesh-ubuntu-2404-kvm-4vcpu k4',
+      ],
+      ...[
+        'backmesh-ubuntu-2404-kvm-8vcpu k8',
+        'backmesh-ubuntu-2404-kvm-16vcpu kg',
+      ],
+      ...[
+        'backmesh-ubuntu-2404-kvm-od-2vcpu l2',
+        'backmesh-ubuntu-2404-kvm-od-4vcpu l4',
+      ],
+      ...[
+        'backmesh-ubuntu-2404-kvm-od-8vcpu l8',
+        'backmesh-ubuntu-2404-kvm-od-16vcpu lg',
+      ],
+      ...[
+        'backmesh-ubuntu-2404-gpu-t4 d4',
+        'backmesh-ubuntu-2404-gpu-od-t4 e4',
+      ],
     ]);
     expect(classes[1]).toEqual({
       ...AWS,
-      label: 'backmesh-4',
+      label: 'backmesh-ubuntu-2404-4vcpu',
       code: 'a4',
       vcpus: 4,
       spot: true,
@@ -62,10 +88,12 @@ describe('runner classes', () => {
       regions: ['us-east-2'],
     });
     // On demand tries the same types.
-    expect(classes.find((c) => c.label === 'backmesh-od-4')?.vmTypes).toEqual(
-      classes[1]!.vmTypes,
-    );
-    expect(classes.find((c) => c.label === 'backmesh-kvm-od-16')).toEqual(
+    expect(
+      classes.find((c) => c.label === 'backmesh-ubuntu-2404-od-4vcpu')?.vmTypes,
+    ).toEqual(classes[1]!.vmTypes);
+    expect(
+      classes.find((c) => c.label === 'backmesh-ubuntu-2404-kvm-od-16vcpu'),
+    ).toEqual(
       expect.objectContaining({
         spot: false,
         kvm: true,
@@ -79,9 +107,9 @@ describe('runner classes', () => {
     const labels = classes.map((c) => c.label);
     expect(labels).toEqual(
       expect.arrayContaining([
-        'backmesh-4',
-        'backmesh-od-4',
-        'backmesh-azure-kvm-od-4',
+        'backmesh-ubuntu-2404-4vcpu',
+        'backmesh-ubuntu-2404-od-4vcpu',
+        'backmesh-azure-ubuntu-2404-kvm-od-4vcpu',
       ]),
     );
     expect(labels.some((l) => l.startsWith('backmesh-aws-'))).toBe(false);
@@ -90,12 +118,12 @@ describe('runner classes', () => {
       (c) => c.label,
     );
     expect(labels).toEqual(expect.arrayContaining(alone));
-    expect(classes.find((c) => c.label === 'backmesh-azure-2')?.code).toBe(
-      'z2',
-    );
+    expect(
+      classes.find((c) => c.label === 'backmesh-azure-ubuntu-2404-2vcpu')?.code,
+    ).toBe('z2');
   });
 
-  it("adds the home cloud's backmesh-public-2 and -4 with --public-repos, spot and without KVM", () => {
+  it("adds the home cloud's backmesh-ubuntu-2404-public-2vcpu and -4 with --public-repos, spot and without KVM", () => {
     const { classes } = planClasses([AWS, GCP], catalog, 'aws', true);
     const shown = classes
       .filter((c) => c.public)
@@ -109,7 +137,7 @@ describe('runner classes', () => {
       }));
     expect(shown).toEqual([
       {
-        label: 'backmesh-public-2',
+        label: 'backmesh-ubuntu-2404-public-2vcpu',
         code: 'c2',
         cloud: 'aws',
         spot: true,
@@ -117,7 +145,7 @@ describe('runner classes', () => {
         vcpus: 2,
       },
       {
-        label: 'backmesh-public-4',
+        label: 'backmesh-ubuntu-2404-public-4vcpu',
         code: 'c4',
         cloud: 'aws',
         spot: true,
@@ -147,7 +175,9 @@ describe('runner classes', () => {
     const { classes, noKvm } = planClasses([GCP], catalog, 'gcp');
     expect(noKvm).toEqual([]);
     expect(classes[0]?.vmTypes).toEqual(['n2-standard-2', 'n2d-standard-2']);
-    expect(classes.find((c) => c.label === 'backmesh-kvm-4')).toEqual(
+    expect(
+      classes.find((c) => c.label === 'backmesh-ubuntu-2404-kvm-4vcpu'),
+    ).toEqual(
       expect.objectContaining({ code: 'm4', vmTypes: ['n2-standard-4'] }),
     );
   });
@@ -159,35 +189,49 @@ describe('runner classes', () => {
     const types = (label: string) =>
       classes.find((c) => c.label === label)?.vmTypes;
     // c4d-standard-2 wasn't measured, and c3d has no 2-vCPU size.
-    expect(types('backmesh-od-2')).toEqual(['n2-standard-2', 'n2d-standard-2']);
-    expect(types('backmesh-od-16')).toEqual([
+    expect(types('backmesh-ubuntu-2404-od-2vcpu')).toEqual([
+      'n2-standard-2',
+      'n2d-standard-2',
+    ]);
+    expect(types('backmesh-ubuntu-2404-od-16vcpu')).toEqual([
       'c4d-standard-16',
       'c3d-standard-16',
       'n2-standard-16',
       'n2d-standard-16',
     ]);
-    expect(types('backmesh-4')).toEqual(['n2-standard-4', 'n2d-standard-4']);
-    expect(types('backmesh-public-4')).toEqual([
+    expect(types('backmesh-ubuntu-2404-4vcpu')).toEqual([
+      'n2-standard-4',
+      'n2d-standard-4',
+    ]);
+    expect(types('backmesh-ubuntu-2404-public-4vcpu')).toEqual([
       'n2-standard-4',
       'n2d-standard-4',
     ]);
     // Neither nests.
-    expect(types('backmesh-kvm-od-4')).toEqual(['n2-standard-4']);
+    expect(types('backmesh-ubuntu-2404-kvm-od-4vcpu')).toEqual([
+      'n2-standard-4',
+    ]);
     // AWS's and Azure's on-demand classes keep their spot types.
     const aws = planClasses([AWS], catalog, 'aws').classes;
-    expect(aws.find((c) => c.label === 'backmesh-od-4')?.vmTypes).toEqual(
-      aws.find((c) => c.label === 'backmesh-4')?.vmTypes,
+    expect(
+      aws.find((c) => c.label === 'backmesh-ubuntu-2404-od-4vcpu')?.vmTypes,
+    ).toEqual(
+      aws.find((c) => c.label === 'backmesh-ubuntu-2404-4vcpu')?.vmTypes,
     );
   });
 
-  it("gives Azure's backmesh-4 all three families, but its KVM twin only as_v5 and s_v5, since ads_v5 doesn't nest", () => {
+  it("gives Azure's backmesh-ubuntu-2404-4vcpu all three families, but its KVM twin only as_v5 and s_v5, since ads_v5 doesn't nest", () => {
     const { classes } = planClasses([AZURE], catalog, 'azure');
-    expect(classes.find((c) => c.label === 'backmesh-4')).toEqual(
+    expect(
+      classes.find((c) => c.label === 'backmesh-ubuntu-2404-4vcpu'),
+    ).toEqual(
       expect.objectContaining({
         vmTypes: ['Standard_D4ads_v5', 'Standard_D4as_v5', 'Standard_D4s_v5'],
       }),
     );
-    expect(classes.find((c) => c.label === 'backmesh-kvm-4')).toEqual(
+    expect(
+      classes.find((c) => c.label === 'backmesh-ubuntu-2404-kvm-4vcpu'),
+    ).toEqual(
       expect.objectContaining({
         vmTypes: ['Standard_D4as_v5', 'Standard_D4s_v5'],
       }),
@@ -227,7 +271,10 @@ describe('runner classes', () => {
       'aws',
     );
     expect(problems).toEqual([]);
-    for (const label of ['backmesh-4', 'backmesh-od-4']) {
+    for (const label of [
+      'backmesh-ubuntu-2404-4vcpu',
+      'backmesh-ubuntu-2404-od-4vcpu',
+    ]) {
       expect(classes.find((c) => c.label === label)?.regions).toEqual([
         'us-east-2',
         'us-west-2',
@@ -292,10 +339,11 @@ describe('runner classes', () => {
       'aws',
     );
     expect(problems).toEqual([]);
-    const four = classes.find((c) => c.label === 'backmesh-4')!;
+    const four = classes.find((c) => c.label === 'backmesh-ubuntu-2404-4vcpu')!;
     expect(four.regions).toEqual(['us-east-2', 'us-west-2', 'us-east-1']);
     expect(
-      classes.find((c) => c.label === 'backmesh-kvm-od-4')?.regions,
+      classes.find((c) => c.label === 'backmesh-ubuntu-2404-kvm-od-4vcpu')
+        ?.regions,
     ).toEqual(['us-east-2']);
   });
 
@@ -305,7 +353,7 @@ describe('runner classes', () => {
     expect(gpu).toEqual([
       {
         ...AWS,
-        label: 'backmesh-gpu-t4',
+        label: 'backmesh-ubuntu-2404-gpu-t4',
         code: 'd4',
         vcpus: 4,
         spot: true,
@@ -316,15 +364,18 @@ describe('runner classes', () => {
         regions: ['us-east-2'],
         gpu: 'T4',
       },
-      expect.objectContaining({ label: 'backmesh-gpu-od-t4', code: 'e4' }),
       expect.objectContaining({
-        label: 'backmesh-azure-gpu-t4',
+        label: 'backmesh-ubuntu-2404-gpu-od-t4',
+        code: 'e4',
+      }),
+      expect.objectContaining({
+        label: 'backmesh-azure-ubuntu-2404-gpu-t4',
         code: 't4',
         cloud: 'azure',
         vmTypes: ['Standard_NC4as_T4_v3'],
       }),
       expect.objectContaining({
-        label: 'backmesh-azure-gpu-od-t4',
+        label: 'backmesh-azure-ubuntu-2404-gpu-od-t4',
         code: 'u4',
       }),
     ]);
@@ -358,9 +409,9 @@ describe('runner classes', () => {
       new Map([['azure', regions]]),
       'azure',
     );
-    expect(classes.find((c) => c.label === 'backmesh-gpu-t4')?.regions).toEqual(
-      ['westus2', 'eastus'],
-    );
+    expect(
+      classes.find((c) => c.label === 'backmesh-ubuntu-2404-gpu-t4')?.regions,
+    ).toEqual(['westus2', 'eastus']);
     const twoGpus = catalogs({
       azure: CATALOG.azure.map((t) =>
         t === t4 ? { ...t, accelerators: [{ name: 'T4', count: 2 }] } : t,

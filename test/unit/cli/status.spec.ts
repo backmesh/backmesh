@@ -62,7 +62,7 @@ const LISTENER = {
     cap: 500,
     scaleSets: [
       {
-        label: 'backmesh-4',
+        label: 'backmesh-ubuntu-2404-4vcpu',
         statistics: {
           totalAvailableJobs: 0,
           totalAcquiredJobs: 0,
@@ -221,7 +221,7 @@ describe('status', () => {
           org: 'acme',
           listener: {
             runners: [
-              'aws us-east-2, 18 labels; quota: 640 spot vCPUs (160 backmesh-4 jobs at once), 128 on-demand vCPUs (32 backmesh-4 jobs at once); GPU quota: 0 spot vCPUs (0 backmesh-gpu-t4 jobs at once), 8 on-demand vCPUs (2 backmesh-gpu-od-t4 jobs at once); raise EC2 "All G and VT Spot Instance Requests" (L-3819A6DF) in us-east-2 to run backmesh-gpu-t4',
+              'aws us-east-2, 18 labels; quota: 640 spot vCPUs (160 backmesh-ubuntu-2404-4vcpu jobs at once), 128 on-demand vCPUs (32 backmesh-ubuntu-2404-4vcpu jobs at once); GPU quota: 0 spot vCPUs (0 backmesh-ubuntu-2404-gpu-t4 jobs at once), 8 on-demand vCPUs (2 backmesh-ubuntu-2404-gpu-od-t4 jobs at once); raise EC2 "All G and VT Spot Instance Requests" (L-3819A6DF) in us-east-2 to run backmesh-ubuntu-2404-gpu-t4',
             ],
           },
           vm: 'bml-l8u5e-acme00',
@@ -249,7 +249,7 @@ describe('status', () => {
 
     const text = formatStatus(report);
     expect(text).toContain(
-      'backmesh-4: 5 assigned, 2 running; runners 2 queued, 0 starting, 1 running',
+      'backmesh-ubuntu-2404-4vcpu: 5 assigned, 2 running; runners 2 queued, 0 starting, 1 running',
     );
     expect(text).toContain(
       [
@@ -386,7 +386,7 @@ describe('status', () => {
     );
     expect(text).toContain(`Runner image: ${RUNNER_IMAGE}`);
     expect(text).toContain(
-      'Runner VMs: aws us-east-2, 18 labels; quota: 640 spot vCPUs (160 backmesh-4 jobs at once), 128 on-demand vCPUs (32 backmesh-4 jobs at once); GPU quota: 0 spot vCPUs (0 backmesh-gpu-t4 jobs at once), 8 on-demand vCPUs (2 backmesh-gpu-od-t4 jobs at once); raise EC2 "All G and VT Spot Instance Requests" (L-3819A6DF) in us-east-2 to run backmesh-gpu-t4',
+      'Runner VMs: aws us-east-2, 18 labels; quota: 640 spot vCPUs (160 backmesh-ubuntu-2404-4vcpu jobs at once), 128 on-demand vCPUs (32 backmesh-ubuntu-2404-4vcpu jobs at once); GPU quota: 0 spot vCPUs (0 backmesh-ubuntu-2404-gpu-t4 jobs at once), 8 on-demand vCPUs (2 backmesh-ubuntu-2404-gpu-od-t4 jobs at once); raise EC2 "All G and VT Spot Instance Requests" (L-3819A6DF) in us-east-2 to run backmesh-ubuntu-2404-gpu-t4',
     );
     expect(text).toContain('No warnings.');
     expect(text).not.toContain('\n\n\n');
@@ -482,7 +482,7 @@ describe('status', () => {
     PUBLIC_REPOS.acme = ['acme/site', 'acme/docs', 'acme/old-archived'];
     try {
       expect((await setUp().read()).warnings).toEqual([
-        "acme: 2 public repositories (such as acme/site) can't use these runners, and their jobs wait at GitHub. `backmesh upgrade --public-repos` adds backmesh-public-2 and backmesh-public-4 for them to use.",
+        "acme: 2 public repositories (such as acme/site) can't use these runners, and their jobs wait at GitHub. `backmesh upgrade --public-repos` adds backmesh-ubuntu-2404-public-2vcpu and backmesh-ubuntu-2404-public-4vcpu for them to use.",
       ]);
       const withPublic = JSON.stringify(
         planClasses(
@@ -632,7 +632,7 @@ describe('status', () => {
       }),
     }).read();
     expect(report.warnings).toEqual([
-      "acme: backmesh-4 starts no runners: every runner region's spot quota is under one 4-vCPU runner (us-west-1 3 vCPU). Its jobs wait at GitHub until L-34B43A08 is raised; nothing to reinstall.",
+      "acme: backmesh-ubuntu-2404-4vcpu starts no runners: every runner region's spot quota is under one 4-vCPU runner (us-west-1 3 vCPU). Its jobs wait at GitHub until L-34B43A08 is raised; nothing to reinstall.",
     ]);
     expect(formatStatus(report)).toContain(
       '    us-west-1: spot quota 3 vCPU, under one 4-vCPU runner, skipped; raise L-34B43A08 to use it',
@@ -664,7 +664,7 @@ describe('status', () => {
       }),
     }).read();
     expect(report.warnings).toEqual([
-      'acme: backmesh-4 starts no runners until 14:30Z: runners in us-east-2 missed the 3-minute start deadline, and its other regions are skipped for quota. Its jobs wait at GitHub meanwhile.',
+      'acme: backmesh-ubuntu-2404-4vcpu starts no runners until 14:30Z: runners in us-east-2 missed the 3-minute start deadline, and its other regions are skipped for quota. Its jobs wait at GitHub meanwhile.',
     ]);
   });
 

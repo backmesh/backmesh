@@ -22,7 +22,7 @@ const isCloud = (value: string): value is Cloud =>
 
 /**
  * Parses whitespace-separated `label=cloud:region[,region…]` entries, such as
- * `backmesh-4=aws:us-east-2,us-east-1,us-west-2 backmesh-kvm-4=aws:us-east-2`.
+ * `backmesh-ubuntu-2404-4vcpu=aws:us-east-2,us-east-1,us-west-2 backmesh-ubuntu-2404-kvm-4vcpu=aws:us-east-2`.
  */
 export function parseLabels(spec: string): LabelSpec[] {
   const entries = spec.trim().split(/\s+/).filter(Boolean);

@@ -172,7 +172,7 @@ function setUp({
           cap: 500,
           scaleSets: [
             {
-              label: 'backmesh-4',
+              label: 'backmesh-ubuntu-2404-4vcpu',
               queued: 0,
               starting: 0,
               running: 1,

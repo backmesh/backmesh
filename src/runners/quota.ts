@@ -80,7 +80,7 @@ export const KIND_NAME: Record<QuotaKind, string> = {
   gpuOnDemand: 'GPU on-demand',
 };
 
-/** The default class's vCPUs: a quota under it runs no `backmesh-4` job. */
+/** The default class's vCPUs: a quota under it runs no `backmesh-ubuntu-2404-4vcpu` job. */
 const DEFAULT_VCPUS = 4;
 
 /**
@@ -172,7 +172,7 @@ export const usageNamed = (usage: readonly Usage[], name: string) =>
 export interface QuotaCheck {
   /** The vCPU limit, summed over the regions read; undefined on GCP. */
   vcpus?: number;
-  /** The `backmesh-4` VMs each region's limit fits, summed. */
+  /** The `backmesh-ubuntu-2404-4vcpu` VMs each region's limit fits, summed. */
   jobs?: number;
   /** The quota to raise. */
   increase: string;
@@ -210,7 +210,7 @@ const limitOf = (
  * A runner region whose quota of some kind can't fit one VM of some of the
  * cloud's classes: the listener skips it for those, keeping it in the list,
  * until a read shows the quota raised. For install's plan, such as
- * "us-west-1: spot quota 5 vCPU, skipped for backmesh-8, backmesh-16; raise
+ * "us-west-1: spot quota 5 vCPU, skipped for backmesh-ubuntu-2404-8vcpu, backmesh-ubuntu-2404-16vcpu; raise
  * L-34B43A08 to use it". GCP's quotas aren't read, so it's never skipped.
  */
 export function skippedRegions(
@@ -288,7 +288,7 @@ const fits = (limits: readonly number[], vcpus: number) =>
 /**
  * Runners past the quota wait in anycloud's launch retries, so the quotas of
  * the runners' regions, summed, cap how many jobs run at once; under one
- * `backmesh-4` VM it's a problem.
+ * `backmesh-ubuntu-2404-4vcpu` VM it's a problem.
  */
 export function quotaCheck(
   cloud: Cloud,
@@ -421,19 +421,19 @@ export async function readQuotas(
   return new Map(regions.map((region, i) => [region, limits[i]!]));
 }
 
-/** The line install prints per quota, such as "64 spot vCPUs (16 backmesh-4 jobs at once)". */
+/** The line install prints per quota, such as "64 spot vCPUs (16 backmesh-ubuntu-2404-4vcpu jobs at once)". */
 export function formatQuota(check: QuotaCheck, spot: boolean): string {
   const kind = spot ? 'spot' : 'on-demand';
   const unread = check.unread ? `, unread in ${check.unread.join(', ')}` : '';
   return check.vcpus === undefined
     ? `${kind} vCPUs unread (raise ${check.increase} for more jobs at once)`
-    : `${check.vcpus} ${kind} vCPUs (${check.jobs} backmesh-4 jobs at once${unread})`;
+    : `${check.vcpus} ${kind} vCPUs (${check.jobs} backmesh-ubuntu-2404-4vcpu jobs at once${unread})`;
 }
 
 /**
  * The GPU labels' quota line for install's plan and `backmesh status`, such as
- * "GPU quota: 0 spot vCPUs, 8 on-demand vCPUs (2 backmesh-gpu-od-t4 jobs at
- * once); raise ... to run backmesh-gpu-t4", over each label's own regions. A
+ * "GPU quota: 0 spot vCPUs, 8 on-demand vCPUs (2 backmesh-ubuntu-2404-gpu-od-t4 jobs at
+ * once); raise ... to run backmesh-ubuntu-2404-gpu-t4", over each label's own regions. A
  * new account usually has none (AWS's G and VT and Azure's NCASv3_T4 default
  * to 0), so it's shown, never refused: the GPU labels' jobs wait at GitHub
  * until it's raised.
