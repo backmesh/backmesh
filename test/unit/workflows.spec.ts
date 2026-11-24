@@ -20,7 +20,7 @@ import { RUNNER_REGIONS } from '../../src/runners/regions.js';
 // secret, take an environment or get a token that writes. ci.yml dogfoods the
 // public labels for forks; every other workflow sends them to GitHub's runners.
 // Its workflow files are its own, so this is defense in depth: the guard is the
-// listener, which cancels a fork's run on any label but backmesh-public-*.
+// listener, which cancels a fork's run on any label but backmesh-ubuntu-2404-public-*.
 const DIR = '.github/workflows';
 const TRIGGERS = [
   'push',
@@ -197,13 +197,13 @@ describe('the workflows', () => {
     ['a fork', FORK],
     ['a deleted fork', GONE],
   ])(
-    "run %s's pull request on backmesh-public-4 in ci.yml and GitHub's runners elsewhere",
+    "run %s's pull request on backmesh-ubuntu-2404-public-4vcpu in ci.yml and GitHub's runners elsewhere",
     (_, context) => {
       const jobs = onPullRequest.flatMap((f) => started(f, context));
       expect(jobs.some(({ job }) => job.startsWith('ci.yml '))).toBe(true);
       for (const { job, runsOn } of jobs) {
         if (job.startsWith('ci.yml '))
-          expect(runsOn, job).toBe('backmesh-public-4');
+          expect(runsOn, job).toBe('backmesh-ubuntu-2404-public-4vcpu');
         else expect(runsOn, job).toMatch(/^ubuntu-/);
       }
     },
@@ -232,7 +232,8 @@ describe('the workflows', () => {
   it('keep a same-repository pull request on backmesh', () => {
     const jobs = onPullRequest.flatMap((f) => started(f, SAME_REPO));
     expect(jobs.length).toBeGreaterThan(0);
-    for (const { job, runsOn } of jobs) expect(runsOn, job).toBe('backmesh-4');
+    for (const { job, runsOn } of jobs)
+      expect(runsOn, job).toBe('backmesh-ubuntu-2404-4vcpu');
   });
 });
 

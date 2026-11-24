@@ -30,7 +30,7 @@ on:
         description: >-
           the backmesh label the target's job runs on; must be one no other
           workflow in anycloud or backmesh uses, or its jobs skew the figures
-        default: backmesh-16
+        default: backmesh-ubuntu-2404-16vcpu
 
 permissions: {}
 

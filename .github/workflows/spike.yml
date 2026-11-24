@@ -34,7 +34,7 @@ concurrency:
 jobs:
   experiment:
     # Each backmesh job has its own VM, so a token-holding job may run there.
-    runs-on: ${{ vars.BACKMESH_RUNS_ON || 'backmesh-4' }}
+    runs-on: ${{ vars.BACKMESH_RUNS_ON || 'backmesh-ubuntu-2404-4vcpu' }}
     environment: publish
     timeout-minutes: 60
     steps:

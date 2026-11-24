@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   bump:
-    runs-on: ${{ vars.BACKMESH_RUNS_ON || 'backmesh-4' }}
+    runs-on: ${{ vars.BACKMESH_RUNS_ON || 'backmesh-ubuntu-2404-4vcpu' }}
     permissions:
       contents: write
       pull-requests: write
