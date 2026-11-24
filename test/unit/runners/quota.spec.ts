@@ -56,7 +56,7 @@ describe('quota check', () => {
     });
     expect(
       quotaCheck('gcp', ['us-central1'], new Map(), false).increase,
-    ).toMatch(/"CPUS", "N2D_CPUS"/);
+    ).toMatch(/"CPUS", "C4D_CPUS", "C3D_CPUS", "N2D_CPUS" and "N2_CPUS"/);
   });
 
   it('names the quotas to raise on GCP, whose quotas are not read', () => {

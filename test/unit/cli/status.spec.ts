@@ -339,7 +339,7 @@ describe('status', () => {
       [
         'gcp',
         'quota-exhausted-region',
-        'CPUS, N2D_CPUS and N2_CPUS in us-east4',
+        'CPUS, C4D_CPUS, C3D_CPUS, N2D_CPUS and N2_CPUS in us-east4',
       ],
       ['aws', 'quota-exhausted-region', 'L-1216C47A in us-east4'],
       ['aws', spot, 'L-34B43A08 in us-east4'],

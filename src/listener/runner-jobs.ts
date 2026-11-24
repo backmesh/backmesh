@@ -31,7 +31,8 @@ export const RUNNER_DISK_GB = 100;
 export const AWS_RUNNER_DISK_IOPS = 4_000;
 export const AWS_RUNNER_DISK_THROUGHPUT_MIBPS = 500;
 
-// GCP's runner disk is pd-ssd: anycloud's `high` tier on `n2` and `n2d`
+// GCP's runner disk is pd-ssd: anycloud's `high` tier on `n2`, `n2d` and
+// `c3d`, and Hyperdisk Balanced at 8,000 IOPS and 1,000 MB/s on `c4d`
 // (`bootDiskFor`, `src/api/services/gateways/gcp.ts`), its default too, named
 // here so a change to that default doesn't move runners off it. anycloud's
 // image-delivery spike (anycloud#29, n2-standard-4, 100 GB, n=10) started a

@@ -65,7 +65,10 @@ shows the same figures.
   $0.027 for IOPS and throughput above gp3's baseline
   ([EBS pricing](https://aws.amazon.com/ebs/pricing/)). On GCP it's pd-ssd,
   $0.17 a GB-month in `us-central1`, about $0.023 an hour
-  ([disk pricing](https://cloud.google.com/compute/disks-image-pricing)).
+  ([disk pricing](https://cloud.google.com/compute/disks-image-pricing)). An
+  on-demand job on `c4d` has Hyperdisk Balanced instead, with 8,000 IOPS and
+  1,000 MB/s provisioned, about $0.092 an hour
+  ([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38)).
 - **Runners started ahead** of predicted or cued jobs that no job takes. Each
   bills for its boot and a short idle time.
 - **Buckets.** The checkpoint bucket and the [cache](/cache/) buckets bill for

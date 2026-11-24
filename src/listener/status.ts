@@ -280,7 +280,7 @@ function quotaWarning(
     cloud === 'gcp'
       ? first === 'quota-exhausted-account'
         ? 'CPUS_ALL_REGIONS above its default 32'
-        : `CPUS, N2D_CPUS and N2_CPUS in ${regions}`
+        : `CPUS, C4D_CPUS, C3D_CPUS, N2D_CPUS and N2_CPUS in ${regions}`
       : cloud === 'azure' && !spot
         ? `the VM family's vCPU quota in ${regions}`
         : `${quotaCode(cloud, quotaKinds(cloud, spot, gpu)[0]!)} in ${regions}`;

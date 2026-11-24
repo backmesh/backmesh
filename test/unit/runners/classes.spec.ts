@@ -142,6 +142,37 @@ describe('runner classes', () => {
     );
   });
 
+  it("tries c4d, then c3d, before n2 and n2d on GCP's on-demand classes only", () => {
+    const { classes, problems } = planClasses([GCP], catalog, 'gcp', true);
+    // c4d's 3.875 GiB a vCPU passes for 4 GiB.
+    expect(problems).toEqual([]);
+    const types = (label: string) =>
+      classes.find((c) => c.label === label)?.vmTypes;
+    expect(types('backmesh-od-2')).toEqual([
+      'c4d-standard-2',
+      'n2-standard-2',
+      'n2d-standard-2',
+    ]);
+    expect(types('backmesh-od-16')).toEqual([
+      'c4d-standard-16',
+      'c3d-standard-16',
+      'n2-standard-16',
+      'n2d-standard-16',
+    ]);
+    expect(types('backmesh-4')).toEqual(['n2-standard-4', 'n2d-standard-4']);
+    expect(types('backmesh-public-4')).toEqual([
+      'n2-standard-4',
+      'n2d-standard-4',
+    ]);
+    // Neither nests.
+    expect(types('backmesh-kvm-od-4')).toEqual(['n2-standard-4']);
+    // AWS's and Azure's on-demand classes keep their spot types.
+    const aws = planClasses([AWS], catalog, 'aws').classes;
+    expect(aws.find((c) => c.label === 'backmesh-od-4')?.vmTypes).toEqual(
+      aws.find((c) => c.label === 'backmesh-4')?.vmTypes,
+    );
+  });
+
   it("gives Azure's backmesh-4 all three families, but its KVM twin only as_v5 and s_v5, since ads_v5 doesn't nest", () => {
     const { classes } = planClasses([AZURE], catalog, 'azure');
     expect(classes.find((c) => c.label === 'backmesh-4')).toEqual(
@@ -184,6 +215,14 @@ describe('runner classes', () => {
     expect(planClasses([AWS], odd, 'aws').problems).toEqual([
       "m7a.large isn't offered in aws us-east-2",
       'm6a.xlarge is 4 vCPU / 8 GiB, not a 4 vCPU / 16 GiB CPU type',
+    ]);
+    const small = catalogs({
+      gcp: CATALOG.gcp.map((type) =>
+        type.vmType === 'c4d-standard-4' ? { ...type, memoryGiB: 14 } : type,
+      ),
+    });
+    expect(planClasses([GCP], small, 'gcp').problems).toEqual([
+      'c4d-standard-4 is 4 vCPU / 14 GiB, not a 4 vCPU / 16 GiB CPU type',
     ]);
   });
 

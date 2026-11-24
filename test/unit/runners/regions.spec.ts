@@ -36,10 +36,14 @@ function fits(type: VmTypeDetails | undefined, vcpus: number): boolean {
   );
 }
 
-/** Whether `details` offers every type of every `backmesh-N` and KVM class. */
+/**
+ * Whether `details` offers every type of every `backmesh-N` and KVM class.
+ * The on-demand classes' own first types (GCP's c4d and c3d) needn't be
+ * offered: their spot types follow them.
+ */
 function qualifies(cloud: Cloud, details: readonly VmTypeDetails[]): boolean {
   return CLASS_VCPUS.every((vcpus) => {
-    const general = VM_TYPES[cloud](vcpus).every((t) =>
+    const general = VM_TYPES[cloud](vcpus, true).every((t) =>
       fits(findVmType(details, t), vcpus),
     );
     const kvm = KVM_TYPES[cloud](vcpus).every((t) => {
@@ -109,6 +113,14 @@ const GCP_FULL = CLASS_VCPUS.flatMap((vcpus) => [
   gcpType('n2', true, vcpus),
   gcpType('n2d', false, vcpus),
 ]);
+// The on-demand classes' first types: c4d at 3.875 GiB a vCPU, and c3d,
+// which has no 2-vCPU size.
+const C4D = CLASS_VCPUS.map((vcpus) => ({
+  ...gcpType('c4d', false, vcpus),
+  memoryGiB: Math.floor(vcpus * 3.875),
+}));
+const C3D = [4, 8, 16].map((vcpus) => gcpType('c3d', false, vcpus));
+const GCP_NEWEST = [...GCP_FULL, ...C4D, ...C3D];
 
 const PINNED: Record<Cloud, Record<string, VmTypeDetails[]>> = {
   aws: {
@@ -119,15 +131,17 @@ const PINNED: Record<Cloud, Record<string, VmTypeDetails[]>> = {
     'us-west-1': AWS_NO_M7A,
   },
   gcp: {
-    'us-east4': GCP_FULL,
-    'us-central1': GCP_FULL,
-    'us-east1': GCP_FULL,
-    'us-east5': GCP_FULL,
+    'us-east4': GCP_NEWEST,
+    'us-central1': GCP_NEWEST,
+    'us-east1': GCP_NEWEST,
+    'us-east5': GCP_NEWEST,
+    // No c4d or c3d.
     'us-south1': GCP_FULL,
-    'us-west1': GCP_FULL,
-    'us-west2': GCP_FULL,
-    'us-west3': GCP_FULL,
-    'us-west4': GCP_FULL,
+    'us-west1': GCP_NEWEST,
+    // No c3d.
+    'us-west2': [...GCP_FULL, ...C4D],
+    'us-west3': [...GCP_FULL, ...C4D],
+    'us-west4': GCP_NEWEST,
     // Excluded: almost no general-purpose types.
     'us-central2': [],
   },
@@ -164,6 +178,21 @@ describe('runner regions', () => {
   it('excludes us-central2 for GCP specifically because it offers nothing', () => {
     expect(qualifies('gcp', PINNED.gcp['us-central2']!)).toBe(false);
     expect(RUNNER_REGIONS.gcp).not.toContain('us-central2');
+  });
+
+  it("ends each on-demand class's types with its spot types, so a region without GCP's c4d or c3d falls back to n2 and n2d", () => {
+    for (const cloud of ['aws', 'gcp', 'azure'] as const) {
+      for (const vcpus of CLASS_VCPUS) {
+        const spot = VM_TYPES[cloud](vcpus, true);
+        expect(VM_TYPES[cloud](vcpus, false).slice(-spot.length)).toEqual(spot);
+      }
+    }
+    // The anchor offers each on-demand type.
+    for (const vcpus of CLASS_VCPUS) {
+      for (const t of VM_TYPES.gcp(vcpus, false)) {
+        expect(findVmType(PINNED.gcp['us-east4']!, t)).toBeDefined();
+      }
+    }
   });
 
   it('lists every pinned US Azure region, which all qualify', () => {
