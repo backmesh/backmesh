@@ -7,6 +7,8 @@ GitHub Actions runners on spot VMs in your own AWS, GCP or Azure account.
 [![CI](https://github.com/backmesh/backmesh/actions/workflows/ci.yml/badge.svg)](https://github.com/backmesh/backmesh/actions/workflows/ci.yml)
 [![Discord](https://img.shields.io/badge/Discord-chat-5865F2?logo=discord&logoColor=white)](https://discord.backmesh.com)
 
+![backmesh launch video](https://backmesh.com/launch.gif)
+
 <!-- bench:start -->
 
 | Build        | GitHub-hosted `ubuntu-latest`, 4 vCPUs | backmesh, 4 vCPUs | backmesh vs GitHub         |
