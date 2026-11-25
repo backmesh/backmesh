@@ -247,6 +247,33 @@ describe('boot deadline', () => {
     expect(env.anycloud.submitted).toHaveLength(3);
   });
 
+  it("falls a preferred route's spot runner refused everywhere back on demand in its preferred region first", async () => {
+    const env = await slowRunners(
+      [
+        { ...SPOT, regions: ['us-west-2', 'us-east-2'], preferred: true },
+        { ...OD, regions: ['us-west-2', 'us-east-2'], preferred: true },
+      ],
+      1,
+      BOOT_DEADLINE_MS,
+      ['us-west-2'],
+    );
+    expect(env.anycloud.submitted[0]!.regions).toEqual(['us-west-2']);
+    await env.scaler.reconcile();
+    const spot = env.anycloud.submitted.at(-1)!;
+    expect(spot).toMatchObject({ spot: true, regions: ['us-east-2'] });
+    env.anycloud.setState(spot.id, 'retrying', { spot: true });
+    const timeline = (await env.anycloud.jobs.timeline(spot.id))!;
+    timeline.runningAt = null;
+    timeline.refusals = [refused('us-east-2')];
+    timeline.backedOff = ['us-east-2'];
+    env.clock.now += BOOT_DEADLINE_MS;
+    await env.scaler.reconcile();
+    expect(env.anycloud.submitted.at(-1)).toMatchObject({
+      spot: false,
+      regions: ['us-west-2'],
+    });
+  });
+
   it("waits for anycloud to try every type and zone, and never falls back a runner that wasn't refused", async () => {
     const unrefused = await slowRunners([SPOT, OD], 1, BOOT_DEADLINE_MS);
     await unrefused.scaler.reconcile();
@@ -637,6 +664,27 @@ describe('quota cap', () => {
     }
     await env.scaler.reconcile();
     expect(env.anycloud.submitted).toHaveLength(5);
+  });
+
+  it("starts a preferred route's runners in its other regions once its preferred region's quota is full, with no cap shown", async () => {
+    const { q } = quotas({
+      'us-west-2': { spot: 8, onDemand: 64 },
+      'us-east-2': { spot: 400, onDemand: 64 },
+    });
+    const env = withQuotas(
+      [{ ...TWO, regions: ['us-west-2', 'us-east-2'], preferred: true }],
+      q,
+    );
+    await flush();
+    env.sets[0]!.statistics = assigned(4);
+    await env.scaler.reconcile();
+    expect(env.anycloud.submitted.map((s) => s.regions)).toEqual([
+      ['us-west-2'],
+      ['us-west-2'],
+      ['us-east-2'],
+      ['us-east-2'],
+    ]);
+    expect(env.scaler.status().scaleSets[0]!.quota).toBeUndefined();
   });
 
   it("counts only the route's own regions, and every listener's runners of the cloud", async () => {

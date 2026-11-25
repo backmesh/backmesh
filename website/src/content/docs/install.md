@@ -165,11 +165,14 @@ backmesh install --org acme --control-plane gcp:europe-west4 --runner-geo eu
 ```
 
 `--runner-region <cloud>:<region>`, once per cloud, starts that cloud's jobs
-in one of the geo's regions first, so they keep finding their cache there; the
-geo's other regions take a job only when the cloud refuses it there for
-capacity or quota, and after 3 such refusals in 15 minutes for the next 30.
-Without it, each job tries the cheapest region. A region outside the geo is
-refused with the geo's list, and the plan shows the order.
+in one of the geo's regions first, so they keep finding their cache there.
+The geo's other regions take a job only when that region can't: its vCPU
+quota is full, or the cloud refuses the job's spot VM there, and after 3 such
+refusals in 15 minutes for the next 30. A spot job that the other regions
+refuse too falls [back on demand](/labels/#on-demand-fallback) in the
+preferred region first. Without it, each job tries the cheapest region. A
+region outside the geo is refused with the geo's list, and the plan shows
+the order.
 
 ```sh
 backmesh install --org acme --runner-geo eu --runner-region gcp:europe-west1

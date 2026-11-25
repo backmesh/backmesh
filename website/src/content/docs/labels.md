@@ -108,7 +108,9 @@ VM of the same types, in any runner region. After 3 such refusals in a region
 within 15 minutes, the region is [avoided](/status/) for spot for 30 minutes,
 and while every spot region of the label is avoided, its jobs' runners start on
 demand at once; after the 30 minutes they start on spot again. Runners started
-ahead of predicted or cued jobs don't fall back: they wait for spot. A job that fell back bills at the on-demand rate,
+ahead of predicted or cued jobs don't fall back: they wait for spot. With a
+[`--runner-region`](/install/#regions), the order is spot in that region,
+then spot in the geo's others, then on demand in that region first. A job that fell back bills at the on-demand rate,
 about 1.7 to 5.4 times spot ([Cost](/cost/#whats-left-out)). The listener logs
 each with `"fallback": true` on its `job completed` line, and
 [`backmesh status`](/status/) counts a label's jobs that fell back today. Public

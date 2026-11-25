@@ -454,7 +454,7 @@ export class Scaler {
     const extras: {
       set: ScaleSet;
       spot: boolean;
-      regions: string[];
+      take: (record: boolean) => string[] | undefined;
       fallback: boolean;
       extra: number;
     }[] = [];
@@ -491,7 +491,10 @@ export class Scaler {
         Math.min(desired - have, tick, short + Math.max(0, spareTick)),
         now,
       );
-      const { spot, regions, fallback } = this.placement(set, onDemand, now);
+      const placed = this.placement(set, onDemand, now);
+      const { spot, fallback } = placed;
+      const take = (record: boolean) =>
+        takeFirst(quota, set, spot, record, placed.regions);
       const needed = Math.min(
         allowed,
         short,
@@ -500,17 +503,17 @@ export class Scaler {
           : Infinity,
       );
       let count = 0;
-      for (; count < needed && quota.take(set, spot, true, regions); count++) {
+      for (let regions; count < needed && (regions = take(true)); count++) {
         mints.push({ set, spot, regions, start: 'reactive', fallback });
       }
       if (set.route.public) publicLeft -= count * set.route.vcpus;
       room -= count;
       tick -= count;
       if (count === needed && allowed > needed && !set.route.public) {
-        extras.push({ set, spot, regions, fallback, extra: allowed - needed });
+        extras.push({ set, spot, take, fallback, extra: allowed - needed });
       }
     }
-    for (const { set, spot, regions, fallback, extra } of extras) {
+    for (const { set, spot, take, fallback, extra } of extras) {
       // Only real jobs fall back on demand: a speculative runner would idle
       // at the on-demand rate.
       if (fallback) continue;
@@ -526,7 +529,7 @@ export class Scaler {
       let cues =
         (this.deps.planner?.speculative(set.route.label, now, true) ?? 0) -
         idle;
-      for (; count < most && quota.take(set, spot, false, regions); count++) {
+      for (let regions; count < most && (regions = take(false)); count++) {
         const start = cues-- > 0 ? 'cue' : 'predicted';
         mints.push({ set, spot, regions, start, fallback });
       }
@@ -1244,9 +1247,21 @@ export class Scaler {
     if (fallsBack && !backedOff.length) return undefined;
     let to: string;
     let name: string;
-    const onDemand = fallsBack ? this.fits(set, false, now) : [];
+    // On demand, a preferred route's first region goes first.
+    const fitsOnDemand = fallsBack ? this.fits(set, false, now) : [];
+    let onDemand: string[] = [];
+    if (fitsOnDemand.length) {
+      const took = takeFirst(
+        quota,
+        set,
+        false,
+        true,
+        preferring(route, fitsOnDemand),
+      );
+      if (!took) return undefined;
+      onDemand = took;
+    }
     if (onDemand.length) {
-      if (!quota.take(set, false, true, onDemand)) return undefined;
       to = onDemand.join(', ');
       // A predicted or cued runner's replacement keeps its start kind.
       const start = this.startedFor.get(job.id) ?? 'reactive';
@@ -1433,15 +1448,10 @@ export class Scaler {
   // `od-*` label or in the on-demand window; then the regions that fit
   // that kind's quota, less those the failover avoids. Records the regions
   // skipped for `status`; none left means none of its runners can start.
-  // A route with a preferred region (`--runner-region`) starts its runners
-  // there alone while it's open; a runner the cloud refuses there fails
-  // over to the rest (`replace`), and the failover's avoidance opens them
-  // all.
+  // `regions` are the choices in order (`preferring`).
   private placement(set: ScaleSet, onDemand: boolean, now: number) {
     const { route } = set;
-    const [first] = route.regions;
-    const pin = (regions: string[]) =>
-      route.preferred && regions.includes(first!) ? [first!] : regions;
+    const pin = (regions: string[]) => preferring(route, regions);
     const usable = (spot: boolean) => {
       const { fit, skipped } = this.fitting(set, spot, now);
       return {
@@ -1572,6 +1582,32 @@ const HAS_VM = new Set([
 ]);
 // Timeline reads for late Jobs per reconcile, cached a minute each: a
 // burst's late Jobs are read over a few cycles, not all in one.
+/**
+ * A route's regions as choices in order: a preferred route's first region
+ * (`--runner-region`) alone while it's among them, then the others, which
+ * take a runner its quota can't fit; any other route's all at once, where
+ * anycloud picks the cheapest. A runner the cloud refuses in the first
+ * fails over to the others (`replace`), and avoiding it opens them all.
+ */
+function preferring(route: Route, regions: string[]): string[][] {
+  const [first] = route.regions;
+  return route.preferred && regions.length > 1 && regions.includes(first!)
+    ? [[first!], regions.filter((r) => r !== first)]
+    : [regions];
+}
+
+/** The first of `choices` whose quota fits a runner; only the last records a cap. */
+const takeFirst = (
+  quota: ReturnType<Scaler['quotaLeft']>,
+  set: ScaleSet,
+  spot: boolean,
+  record: boolean,
+  choices: readonly string[][],
+) =>
+  choices.find((regions, i) =>
+    quota.take(set, spot, record && i === choices.length - 1, regions),
+  );
+
 const READS_PER_TICK = 20;
 // Replacements per reconcile, each a few calls in turn, so a burst's don't
 // hold up the cycle's scale-downs.
