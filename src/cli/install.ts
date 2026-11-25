@@ -152,6 +152,8 @@ export async function classesOf(
   publicRepos = false,
   // `--runner-region`: each cloud's region first, its classes `preferred`.
   preferred: Preferred = {},
+  // `takesArm`: the arm64 classes too.
+  arm = true,
 ) {
   const catalog = new Map<Cloud, Map<string, VmTypeDetails[]>>();
   // Each cloud's first region, which prices its rate line: the preferred
@@ -178,7 +180,7 @@ export async function classesOf(
     catalog.set(cloud, new Map(entries));
     if (ordered[0]) anchors.set(cloud, ordered[0]);
   }
-  const plan = planClasses(targets, catalog, home, publicRepos);
+  const plan = planClasses(targets, catalog, home, publicRepos, arm);
   const classes = plan.classes.map((c) =>
     preferred[c.cloud] === c.regions[0]
       ? { ...c, preferred: true as const }
@@ -227,6 +229,10 @@ export const planRegions =
     );
     return [target.region];
   };
+
+/** Whether `version` boots arm64 types on anycloud's arm64 image. */
+export const takesArm = (version: string, features?: FeatureTable) =>
+  !missingFeatures(version, ['arm64'], features).length;
 
 /** Whether `version`'s VM Jobs take a region list. */
 export const takesRegions = (version: string, features?: FeatureTable) =>
@@ -1364,6 +1370,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     placement.controlPlane.cloud,
     publicRepos,
     preferred,
+    takesArm(ANYCLOUD_VERSION, deps.features),
   );
   const regionsOf = (cloud: Cloud) => [
     ...(classPlan.catalog.get(cloud)?.keys() ?? []),

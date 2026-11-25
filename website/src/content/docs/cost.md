@@ -139,9 +139,14 @@ arithmetic, not measured.
   ([docs.github.com](https://docs.github.com/en/actions/reference/runners/github-hosted-runners),
   read 2026-11-24). It's free in a public repository.
 - **backmesh:** the catalog's prices on 2026-11-24 in AWS's `us-east-2`, and
-  on 2026-11-25 in GCP's `us-central1`, spot in the lowest zone. GCP's catalog
-  doesn't price `c4a` yet, so only its `t2a` is here. Azure has no arm64
-  labels.
+  on 2026-11-25 in GCP's `us-central1`, spot in the lowest zone. Azure has no
+  arm64 labels.
+- **GCP's `c4a` disk:** `c4a` takes no pd-ssd, so its runner's 100 GB disk is
+  Hyperdisk Balanced
+  ([anycloud#50](https://github.com/anycloud-sh/anycloud/pull/50)), which
+  bills its provisioned IOPS and throughput too: at an on-demand `c4d` job's
+  8,000 IOPS and 1,000 MB/s, about $0.092 an hour, or $0.0015 a minute, to
+  `t2a`'s pd-ssd at about $0.0004.
 
 | Label                                | Type             | Spot $/h | On-demand $/h | Spot per minute | On demand per minute |
 | ------------------------------------ | ---------------- | -------- | ------------- | --------------- | -------------------- |
@@ -149,7 +154,9 @@ arithmetic, not measured.
 | `backmesh-ubuntu-2404-arm-2vcpu`     | `m7g.large`      | 0.0495   | 0.0816        | $0.0008         | $0.0014              |
 | `backmesh-ubuntu-2404-arm-4vcpu`     | `m8g.xlarge`     | 0.0534   | 0.1795        | $0.0009         | $0.0030              |
 | `backmesh-ubuntu-2404-arm-4vcpu`     | `m7g.xlarge`     | 0.0608   | 0.1632        | $0.0010         | $0.0027              |
+| `backmesh-gcp-ubuntu-2404-arm-2vcpu` | `c4a-standard-2` | 0.0536   | 0.0898        | $0.0009         | $0.0015              |
 | `backmesh-gcp-ubuntu-2404-arm-2vcpu` | `t2a-standard-2` | 0.0414   | 0.077         | $0.0007         | $0.0013              |
+| `backmesh-gcp-ubuntu-2404-arm-4vcpu` | `c4a-standard-4` | 0.1071   | 0.1796        | $0.0018         | $0.0030              |
 | `backmesh-gcp-ubuntu-2404-arm-4vcpu` | `t2a-standard-4` | 0.0828   | 0.154         | $0.0014         | $0.0026              |
 
 10,000 minutes a month of 2-vCPU arm64 jobs cost $50 on GitHub (10,000 ×

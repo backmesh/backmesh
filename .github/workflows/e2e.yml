@@ -81,6 +81,7 @@ on:
           backmesh-ubuntu-2404-4vcpu=aws:us-east-2,us-east-1,us-west-2
           backmesh-ubuntu-2404-kvm-4vcpu=aws:us-east-2,us-east-1,us-west-2
           backmesh-ubuntu-2404-arm-4vcpu=aws:us-east-2,us-east-1,us-west-2
+          backmesh-gcp-ubuntu-2404-arm-4vcpu=gcp:us-east4,us-central1,us-east1,us-east5,us-south1,us-west1,us-west2,us-west3,us-west4
 
 permissions: {}
 

@@ -595,21 +595,6 @@ describe('runner classes', () => {
         false,
         ['r8g.xlarge', 'r7g.xlarge'],
       ],
-      // The fixture's GCP catalog has t2a but no c4a yet, as anycloud's
-      // published one: the general classes launch on t2a, and there's no
-      // c4a-highmem for a high-memory one.
-      [
-        'backmesh-ubuntu-2404-arm-4vcpu',
-        'q4',
-        true,
-        ['c4a-standard-4', 't2a-standard-4'],
-      ],
-      [
-        'backmesh-ubuntu-2404-arm-od-4vcpu',
-        'r4',
-        false,
-        ['c4a-standard-4', 't2a-standard-4'],
-      ],
     ]);
     expect(arm[1]).toEqual({
       ...AWS,
@@ -626,8 +611,15 @@ describe('runner classes', () => {
       highmem: true,
       arm: true,
     });
-    // anycloud boots the arm64 image on AWS and GCP only.
-    expect(noArm).toEqual([AZURE]);
+    // anycloud boots the arm64 image on AWS and GCP only, and the
+    // fixture's GCP catalog has t2a but no c4a, as one from before the
+    // catalog's arch column: t2a would boot the amd64 image, so GCP gets
+    // none (c4a's below).
+    expect(noArm).toEqual([AZURE, GCP]);
+    // An anycloud without arm64 boots gets no arm64 class, and no line.
+    const older = planClasses([AWS, GCP], catalog, 'gcp', false, false);
+    expect(older.classes.some((c) => c.arm)).toBe(false);
+    expect(older.noArm).toEqual([]);
     // Every code is unique, and another listener's arm64 runner holds its
     // cloud's quota at its size.
     const codes = classes.map((c) => c.code);

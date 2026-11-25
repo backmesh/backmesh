@@ -182,7 +182,11 @@ export const PUBLIC_VCPUS = [2, 4] as const;
 /** The vCPUs they may hold at once. */
 export const PUBLIC_VCPU_CAP = 32;
 
-/** The cloud, spot-ness and vCPUs a runner class's code names. */
+/**
+ * The cloud, spot-ness and vCPUs a runner class's code names. It doesn't
+ * say whether a class is arm64: quota counts an arm64 runner's vCPUs as a
+ * CPU runner's, which AWS's general vCPU quotas also cover (`ARM_TYPES`).
+ */
 export function codeClass(
   code: string,
 ): { cloud: Cloud; spot: boolean; vcpus: number; gpu: boolean } | undefined {
@@ -390,6 +394,9 @@ export function planClasses(
   home: Cloud | undefined,
   // `install --public-repos`: the home cloud's `backmesh-ubuntu-2404-public-<n>vcpu` too.
   publicRepos = false,
+  // Whether the pinned anycloud boots arm64 types on its arm64 image
+  // (`takesArm`): without it, no arm64 class.
+  arm = true,
 ): ClassPlan {
   const plan: ClassPlan = {
     classes: [],
@@ -563,9 +570,17 @@ export function planClasses(
     // other classes', their types aren't in every runner region (GCP's
     // `t2a` is in few, and `c4a` not in all), so a class launches only
     // where one is, and a cloud without any gets no arm64 labels and
-    // blocks nothing, as GPU's.
+    // blocks nothing, as GPU's. GCP's need a catalog that lists `c4a`:
+    // it came in the same publish as the catalog's arch column, which
+    // anycloud boots the arm64 image by, so an older one would boot `t2a`
+    // on the amd64 image.
     const letters = CLOUD_CODE[target.cloud];
-    const arm = [false, true].flatMap((himem) =>
+    const archKnown =
+      target.cloud !== 'gcp' ||
+      byRegion.some(([, details]) =>
+        details.some((d) => d.vmType.toLowerCase().startsWith('c4a-')),
+      );
+    const armClasses = [false, true].flatMap((himem) =>
       [true, false].flatMap((spot) =>
         CLASS_VCPUS.flatMap((vcpus): RunnerClass[] => {
           const letter = letters[spot ? 7 : 8];
@@ -576,7 +591,7 @@ export function planClasses(
           const regions = byRegion.flatMap(([region, details]) =>
             vmTypes.some((t) => fits(details, t, vcpus, gib)) ? [region] : [],
           );
-          if (!letter || !regions.length) return [];
+          if (!arm || !archKnown || !letter || !regions.length) return [];
           return [
             {
               ...target,
@@ -600,8 +615,8 @@ export function planClasses(
         }),
       ),
     );
-    if (!arm.length) plan.noArm.push(target);
-    plan.classes.push(...classes, ...gpu, ...highmem, ...arm);
+    if (arm && !armClasses.length) plan.noArm.push(target);
+    plan.classes.push(...classes, ...gpu, ...highmem, ...armClasses);
     if (publicRepos && target.cloud === home) {
       plan.classes.push(
         ...classes.flatMap((c) =>

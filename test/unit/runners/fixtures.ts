@@ -134,8 +134,8 @@ export const CATALOG = {
       false,
       HIGHMEM,
     ),
-    // arm64: Ampere's t2a, the catalog's of 2026-11-25. Its catalog has no
-    // c4a yet (anycloud#50 adds it when its catalog is next fetched).
+    // arm64: Ampere's t2a, with no c4a, as a catalog from before its arch
+    // column (`planClasses`).
     ...family(
       (n) => `t2a-standard-${n}`,
       'us-central1-a',
