@@ -588,7 +588,7 @@ describe('install', () => {
       'Lowered vol-api from 8000 IOPS and 125 MiB/s to 3000 IOPS and 125 MiB/s.',
     );
     expect(lines.slice(-2)).toEqual([
-      'Labels for runs-on: backmesh-ubuntu-2404-2vcpu, backmesh-ubuntu-2404-4vcpu, backmesh-ubuntu-2404-8vcpu, backmesh-ubuntu-2404-16vcpu, backmesh-ubuntu-2404-od-2vcpu, backmesh-ubuntu-2404-od-4vcpu, backmesh-ubuntu-2404-od-8vcpu, backmesh-ubuntu-2404-od-16vcpu, backmesh-ubuntu-2404-kvm-2vcpu, backmesh-ubuntu-2404-kvm-4vcpu, backmesh-ubuntu-2404-kvm-8vcpu, backmesh-ubuntu-2404-kvm-16vcpu, backmesh-ubuntu-2404-kvm-od-2vcpu, backmesh-ubuntu-2404-kvm-od-4vcpu, backmesh-ubuntu-2404-kvm-od-8vcpu, backmesh-ubuntu-2404-kvm-od-16vcpu, backmesh-ubuntu-2404-gpu-t4, backmesh-ubuntu-2404-gpu-od-t4, backmesh-ubuntu-2404-highmem-2vcpu, backmesh-ubuntu-2404-highmem-4vcpu, backmesh-ubuntu-2404-highmem-8vcpu, backmesh-ubuntu-2404-highmem-16vcpu, backmesh-ubuntu-2404-highmem-od-2vcpu, backmesh-ubuntu-2404-highmem-od-4vcpu, backmesh-ubuntu-2404-highmem-od-8vcpu, backmesh-ubuntu-2404-highmem-od-16vcpu (aws\'s carry no "aws-": it runs the control plane).',
+      'Labels for runs-on: backmesh-ubuntu-2404-2vcpu, backmesh-ubuntu-2404-4vcpu, backmesh-ubuntu-2404-8vcpu, backmesh-ubuntu-2404-16vcpu, backmesh-ubuntu-2404-od-2vcpu, backmesh-ubuntu-2404-od-4vcpu, backmesh-ubuntu-2404-od-8vcpu, backmesh-ubuntu-2404-od-16vcpu, backmesh-ubuntu-2404-kvm-2vcpu, backmesh-ubuntu-2404-kvm-4vcpu, backmesh-ubuntu-2404-kvm-8vcpu, backmesh-ubuntu-2404-kvm-16vcpu, backmesh-ubuntu-2404-kvm-od-2vcpu, backmesh-ubuntu-2404-kvm-od-4vcpu, backmesh-ubuntu-2404-kvm-od-8vcpu, backmesh-ubuntu-2404-kvm-od-16vcpu, backmesh-ubuntu-2404-gpu-t4, backmesh-ubuntu-2404-gpu-od-t4, backmesh-ubuntu-2404-highmem-2vcpu, backmesh-ubuntu-2404-highmem-4vcpu, backmesh-ubuntu-2404-highmem-8vcpu, backmesh-ubuntu-2404-highmem-16vcpu, backmesh-ubuntu-2404-highmem-od-2vcpu, backmesh-ubuntu-2404-highmem-od-4vcpu, backmesh-ubuntu-2404-highmem-od-8vcpu, backmesh-ubuntu-2404-highmem-od-16vcpu, backmesh-ubuntu-2404-arm-2vcpu, backmesh-ubuntu-2404-arm-4vcpu, backmesh-ubuntu-2404-arm-8vcpu, backmesh-ubuntu-2404-arm-16vcpu, backmesh-ubuntu-2404-arm-od-2vcpu, backmesh-ubuntu-2404-arm-od-4vcpu, backmesh-ubuntu-2404-arm-od-8vcpu, backmesh-ubuntu-2404-arm-od-16vcpu, backmesh-ubuntu-2404-arm-highmem-2vcpu, backmesh-ubuntu-2404-arm-highmem-4vcpu, backmesh-ubuntu-2404-arm-highmem-8vcpu, backmesh-ubuntu-2404-arm-highmem-16vcpu, backmesh-ubuntu-2404-arm-highmem-od-2vcpu, backmesh-ubuntu-2404-arm-highmem-od-4vcpu, backmesh-ubuntu-2404-arm-highmem-od-8vcpu, backmesh-ubuntu-2404-arm-highmem-od-16vcpu (aws\'s carry no "aws-": it runs the control plane).',
       'Done. Use `runs-on: backmesh-ubuntu-2404-4vcpu` (a 4-vCPU spot VM) in a workflow; other sizes: https://backmesh.com/labels/',
     ]);
     expect(lines).toContain(
@@ -853,7 +853,7 @@ describe('install', () => {
     const routes = parseRoutes(
       JSON.parse(secret.split(' ')[2]!).values.BACKMESH_RUNNERS,
     );
-    expect(routes).toHaveLength(26);
+    expect(routes).toHaveLength(42);
     expect(
       routes.find((r) => r.label === 'backmesh-ubuntu-2404-kvm-od-4vcpu'),
     ).toEqual({
@@ -917,7 +917,7 @@ describe('install', () => {
       "backmesh-ubuntu-2404-8vcpu would start no runners: every runner region's spot quota is under one 8-vCPU runner (us-east-2 6 vCPU); raise L-34B43A08 in us-east-2 to use it.",
     );
     expect(confirm).toHaveBeenCalledWith(
-      '6 labels would start no runners until a quota is raised. Install anyway?',
+      '10 labels would start no runners until a quota is raised. Install anyway?',
     );
     expect(calls.some((c) => c.startsWith('api create'))).toBe(false);
   });
@@ -3656,8 +3656,13 @@ describe("install's arm64 line", () => {
     expect(noArmLine({ ...target, cloud: 'aws' }, ['us-east-2'])).toBe(
       'aws us-east-2 offers no m8g or m7g, so aws gets no arm64 labels.',
     );
-    expect(noArmLine({ ...target, cloud: 'gcp' }, ['us-central1'])).toBe(
-      'gcp gets no arm64 labels: backmesh runs arm64 on AWS Graviton only so far.',
+    expect(
+      noArmLine({ ...target, cloud: 'gcp' }, ['us-east4', 'us-east1']),
+    ).toBe(
+      'gcp us-east4 and us-east1 offer no c4a or t2a, so gcp gets no arm64 labels.',
+    );
+    expect(noArmLine({ ...target, cloud: 'azure' }, ['eastus'])).toBe(
+      'azure gets no arm64 labels: anycloud boots its arm64 image on AWS and GCP only.',
     );
   });
 });

@@ -138,15 +138,19 @@ arithmetic, not measured.
   $0.005 a minute
   ([docs.github.com](https://docs.github.com/en/actions/reference/runners/github-hosted-runners),
   read 2026-11-24). It's free in a public repository.
-- **backmesh:** the catalog's prices on 2026-11-24 in `us-east-2`, spot in the
-  lowest zone. Only AWS has arm64 labels.
+- **backmesh:** the catalog's prices on 2026-11-24 in AWS's `us-east-2`, and
+  on 2026-11-25 in GCP's `us-central1`, spot in the lowest zone. GCP's catalog
+  doesn't price `c4a` yet, so only its `t2a` is here. Azure has no arm64
+  labels.
 
-| Label                            | Type         | Spot $/h | On-demand $/h | Spot per minute | On demand per minute |
-| -------------------------------- | ------------ | -------- | ------------- | --------------- | -------------------- |
-| `backmesh-ubuntu-2404-arm-2vcpu` | `m8g.large`  | 0.0424   | 0.0898        | $0.0007         | $0.0015              |
-| `backmesh-ubuntu-2404-arm-2vcpu` | `m7g.large`  | 0.0495   | 0.0816        | $0.0008         | $0.0014              |
-| `backmesh-ubuntu-2404-arm-4vcpu` | `m8g.xlarge` | 0.0534   | 0.1795        | $0.0009         | $0.0030              |
-| `backmesh-ubuntu-2404-arm-4vcpu` | `m7g.xlarge` | 0.0608   | 0.1632        | $0.0010         | $0.0027              |
+| Label                                | Type             | Spot $/h | On-demand $/h | Spot per minute | On demand per minute |
+| ------------------------------------ | ---------------- | -------- | ------------- | --------------- | -------------------- |
+| `backmesh-ubuntu-2404-arm-2vcpu`     | `m8g.large`      | 0.0424   | 0.0898        | $0.0007         | $0.0015              |
+| `backmesh-ubuntu-2404-arm-2vcpu`     | `m7g.large`      | 0.0495   | 0.0816        | $0.0008         | $0.0014              |
+| `backmesh-ubuntu-2404-arm-4vcpu`     | `m8g.xlarge`     | 0.0534   | 0.1795        | $0.0009         | $0.0030              |
+| `backmesh-ubuntu-2404-arm-4vcpu`     | `m7g.xlarge`     | 0.0608   | 0.1632        | $0.0010         | $0.0027              |
+| `backmesh-gcp-ubuntu-2404-arm-2vcpu` | `t2a-standard-2` | 0.0414   | 0.077         | $0.0007         | $0.0013              |
+| `backmesh-gcp-ubuntu-2404-arm-4vcpu` | `t2a-standard-4` | 0.0828   | 0.154         | $0.0014         | $0.0026              |
 
 10,000 minutes a month of 2-vCPU arm64 jobs cost $50 on GitHub (10,000 ×
 $0.005), and on backmesh about $7 on `m8g.large` spot (10,000 × $0.0424 ÷ 60)

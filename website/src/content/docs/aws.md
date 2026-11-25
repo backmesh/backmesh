@@ -29,7 +29,8 @@ on to the next zone or type within seconds. The [KVM labels](/labels/#kvm) use `
 16 GiB), then `g4dn.2xlarge` (the same T4, 8 vCPUs and 32 GiB). The
 [arm64 labels](/labels/#arm64), `backmesh-ubuntu-2404-arm-2vcpu` to `backmesh-ubuntu-2404-arm-16vcpu` and their
 on-demand twins, use Graviton's `m8g`, then `m7g`, at the same sizes:
-`m8g.xlarge` and `m7g.xlarge` for `backmesh-ubuntu-2404-arm-4vcpu`. When AWS is the control plane's cloud, its labels are plain, as above;
+`m8g.xlarge` and `m7g.xlarge` for `backmesh-ubuntu-2404-arm-4vcpu`; the arm64 high-memory
+ones, `backmesh-ubuntu-2404-arm-highmem-<n>vcpu`, use `r8g`, then `r7g`. When AWS is the control plane's cloud, its labels are plain, as above;
 otherwise they name it, such as `backmesh-aws-ubuntu-2404-4vcpu`.
 
 The [high-memory labels](/labels/#high-memory) use the same sizes with 8 GiB a
