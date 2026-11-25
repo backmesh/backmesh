@@ -29,10 +29,11 @@ describe('class rate', () => {
     },
   );
 
-  it('prices the default class and the GPU class per cloud, and says when a region is unpriced', () => {
+  it('prices the default class, the largest high-memory class and the GPU class per cloud, and says when a region is unpriced', () => {
     const { classes } = planClasses([TARGETS[0]], catalogs(), 'aws');
     expect(formatRate(classes, CATALOG.aws)).toEqual([
       'aws us-east-2: no VM while idle; while its job runs, a backmesh-ubuntu-2404-4vcpu VM costs about $0.05–0.07 an hour on spot and $0.17–0.24 on demand, plus its disk, and the other sizes scale with their vCPUs',
+      'aws us-east-2: a backmesh-ubuntu-2404-highmem-16vcpu VM (128 GiB: r8a.4xlarge, r8i.4xlarge, r7a.4xlarge, r7i.4xlarge, r6a.4xlarge) costs about $0.31–0.46 an hour on spot and $0.91–1.28 on demand, plus its disk, and the smaller ones scale with their vCPUs',
       'aws us-east-2: a backmesh-ubuntu-2404-gpu-t4 VM (g4dn.xlarge, g4dn.2xlarge) costs about $0.27–0.37 an hour on spot and $0.53–0.75 on demand, plus its disk',
     ]);
     const elsewhere = classes.map((c) => ({ ...c, regions: ['eu-west-1'] }));

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  highmemFamilyLine,
   formatGpuQuota,
   formatQuota,
   quotaCheck,
@@ -222,6 +223,29 @@ describe('GPU quota', () => {
       gpuSpot: undefined,
       gpuOnDemand: 64,
     });
+  });
+});
+
+describe('high-memory family quota', () => {
+  it("warns of Azure's E-series family quota for its on-demand high-memory labels only", () => {
+    const classes = [
+      {
+        label: 'backmesh-azure-ubuntu-2404-highmem-8vcpu',
+        spot: true,
+        highmem: true as const,
+      },
+      {
+        label: 'backmesh-azure-ubuntu-2404-highmem-od-8vcpu',
+        spot: false,
+        highmem: true as const,
+      },
+      { label: 'backmesh-azure-ubuntu-2404-od-8vcpu', spot: false },
+    ];
+    expect(highmemFamilyLine('azure', classes)).toEqual([
+      'azure\'s on-demand high-memory runners (backmesh-azure-ubuntu-2404-highmem-od-8vcpu) also need their E-series family\'s vCPU quota in a region, not only its regional vCPUs: raise one of "Standard EADSv5 Family vCPUs", "Standard EASv5 Family vCPUs", "Standard ESv5 Family vCPUs" to the vCPUs they should run at once.',
+    ]);
+    expect(highmemFamilyLine('aws', classes)).toEqual([]);
+    expect(highmemFamilyLine('azure', classes.slice(2))).toEqual([]);
   });
 });
 

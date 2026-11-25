@@ -108,15 +108,16 @@ The control plane lives in one cloud and region. Runners, one VM per job that is
 deleted when it ends, can be in other clouds; the control plane's cloud gets plain [labels](/labels/) like
 `backmesh-ubuntu-2404-4vcpu`, others named ones like `backmesh-gcp-ubuntu-2404-4vcpu`.
 
-| You pass                       | backmesh uses                                                                                                                                             |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Nothing                        | The control plane on the cloud whose CLI is signed in, in its US East region (AWS `us-east-1`, GCP `us-east4`, Azure `eastus`), and runners on that cloud |
-| `--control-plane gcp:us-east1` | The control plane there, and runners on GCP                                                                                                               |
-| `--runners azure`              | Runners on Azure too                                                                                                                                      |
+| You pass                       | backmesh uses                                                                                                                                                         |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nothing                        | The control plane on the cloud whose CLI is signed in, in its US East region (AWS `us-east-1`, GCP `us-east4`, Azure `eastus`), and runners on that cloud             |
+| `--control-plane gcp:us-east1` | The control plane there, and runners on GCP                                                                                                                           |
+| `--runners azure`              | Runners on Azure too                                                                                                                                                  |
+| `--runner-geo eu`              | Runners in the EU's [regions](#regions), and without `--control-plane`, the control plane near Amsterdam (AWS `eu-central-1`, GCP `europe-west4`, Azure `westeurope`) |
 
 `--control-plane` still takes `<cloud>:<region>`. `--runners` takes a cloud
-only — `--runners aws:us-west-2` is refused, since runner regions aren't
-chosen (below).
+only — `--runners aws:us-west-2` is refused, since runner regions are fixed;
+`--runner-region` picks the one jobs start in first (below).
 
 On Azure, the plan first checks that your subscription may create the VM
 sizes of the always-on VMs install creates in that region, since some offers,
@@ -143,12 +144,47 @@ backmesh install --org acme --control-plane aws:us-east-1 --control-plane-id bac
 
 ## Regions
 
-Each runner cloud's regions are fixed, not something you choose: every US
-region whose catalog offers every VM type backmesh's labels use, narrowed to
-the ones your account allows (a region your organization's policy denies is
-skipped, printed, and install goes on with the rest). Each job tries the
-cheapest of them, then falls back to another when the cloud refuses for
+Each runner cloud's regions are fixed, not something you choose: every region
+of the runners' geo whose catalog offers every VM type backmesh's labels use,
+narrowed to the ones your account allows (a region your organization's policy
+denies is skipped, printed, and install goes on with the rest). Each job tries
+the cheapest of them, then falls back to another when the cloud refuses for
 capacity or quota; labels stay the same.
+
+`--runner-geo` picks the geo: `us`, the default, or `eu`, which has only
+regions in EU member states, so a job and its [cache](/cache/) stay in the EU:
+
+| Cloud | `us`                                                                                                                  | `eu`                                                                                                                                                                               |
+| ----- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AWS   | `us-east-1`, `us-east-2`, `us-west-2`                                                                                 | `eu-central-1`, `eu-west-1`                                                                                                                                                        |
+| GCP   | `us-east4`, `us-central1`, `us-east1`, `us-east5`, `us-south1`, `us-west1`, `us-west2`, `us-west3`, `us-west4`        | `europe-west4`, `europe-west1`, `europe-west3`, `europe-west9`, `europe-west8`, `europe-west12`, `europe-west10`, `europe-southwest1`, `europe-north1`, `europe-central2`          |
+| Azure | `eastus`, `centralus`, `eastus2`, `northcentralus`, `southcentralus`, `westcentralus`, `westus`, `westus2`, `westus3` | `westeurope`, `northeurope`, `germanywestcentral`, `francecentral`, `swedencentral`, `italynorth`, `polandcentral`, `spaincentral`, `austriaeast`, `belgiumcentral`, `denmarkeast` |
+
+```sh
+backmesh install --org acme --control-plane gcp:europe-west4 --runner-geo eu
+```
+
+`--runner-region <cloud>:<region>`, once per cloud, starts that cloud's jobs
+in one of the geo's regions first, so they keep finding their cache there.
+The geo's other regions take a job only when that region can't: its vCPU
+quota is full, or the cloud refuses the job's spot VM there, and after 3 such
+refusals in 15 minutes for the next 30. A spot job that the other regions
+refuse too falls [back on demand](/labels/#on-demand-fallback) in the
+preferred region first. Without it, each job tries the cheapest region. A
+region outside the geo is refused with the geo's list, and the plan shows
+the order.
+
+```sh
+backmesh install --org acme --runner-geo eu --runner-region gcp:europe-west1
+```
+
+The geo and the preferred regions are the org's: a re-run of install or an
+upgrade without the flags keeps them, and `backmesh upgrade --runner-geo eu`
+moves every org's runners. The
+control plane's region is yours to choose either way; it holds no job's data,
+but keep it in the EU too when that matters to you. AWS's EU list leaves out
+`eu-west-2`, `eu-west-3`, `eu-north-1`, `eu-south-1` and `eu-south-2`, which
+each lack a family a label uses, and GCP's `europe-north2`, which has no `n2`.
 
 ## Quotas
 

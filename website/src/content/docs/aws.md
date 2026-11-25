@@ -29,12 +29,18 @@ on to the next zone or type within seconds. The [KVM labels](/labels/#kvm) use `
 16 GiB), then `g4dn.2xlarge` (the same T4, 8 vCPUs and 32 GiB). When AWS is the control plane's cloud, its labels are plain, as above;
 otherwise they name it, such as `backmesh-aws-ubuntu-2404-4vcpu`.
 
+The [high-memory labels](/labels/#high-memory) use the same sizes with 8 GiB a
+vCPU, on `r8a`, `r8i`, `r7a`, `r7i` then `r6a`: `backmesh-ubuntu-2404-highmem-16vcpu`
+is `r8a.4xlarge` first, 16 vCPUs and 128 GiB. They count against the same
+Standard vCPU quotas.
+
 ## Regions
 
-Runners use a fixed list of US regions, not discovered through your cloud CLI
-or chosen on the command line: every one whose catalog offers every type
-above, which leaves out `us-west-1` (no `m7a` or `m8a`), narrowed to the ones your
-account allows. Each job tries the cheapest region first, then another when
+Runners use a fixed list of US regions, or with `--runner-geo eu` of EU ones,
+not discovered through your cloud CLI or chosen on the command line: every one
+whose catalog offers every type above and below, which leaves out `us-west-1`
+(no `m7a` or `m8a`), and in the EU keeps `eu-central-1` and `eu-west-1`,
+narrowed to the ones your account allows. Each job tries the cheapest region first, then another when
 AWS refuses for capacity or quota. [More](/install/#regions).
 
 ## What install creates

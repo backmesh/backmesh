@@ -28,6 +28,7 @@ import {
   ROTATING_FROM_ENV,
 } from './worker.js';
 import { rollListenerVm } from './listener-vm.js';
+import { preferredOf } from '../runners/regions.js';
 import { execListener } from './status.js';
 import { CACHE_CAP_ENV } from '../listener/sweep.js';
 
@@ -79,6 +80,8 @@ export interface RunnerChanges {
   regions: { cloud: string; added: string[]; removed: string[] }[];
   // Labels whose scale sets are deleted and made again (`routesJson`).
   replaced?: string[];
+  // Per cloud kept, its `--runner-region` set, moved or dropped.
+  preferred?: { cloud: string; was?: string; now?: string }[];
 }
 
 /** The difference between the listener's routes and the plan's classes. */
@@ -104,6 +107,15 @@ export function runnerChanges(
   const [labelsWere, labelsNow] = [before, after].map((c) =>
     c.map((r) => r.label),
   ) as [string[], string[]];
+  const [preferredWas, preferredNow] = [before, after].map(preferredOf);
+  const preferred = (now as Cloud[])
+    .filter((cloud) => was.includes(cloud))
+    .filter((cloud) => preferredWas![cloud] !== preferredNow![cloud])
+    .map((cloud) => ({
+      cloud,
+      ...(preferredWas![cloud] && { was: preferredWas![cloud] }),
+      ...(preferredNow![cloud] && { now: preferredNow![cloud] }),
+    }));
   return {
     added: now.filter((c) => !was.includes(c)),
     removed: was.filter((c) => !now.includes(c)),
@@ -134,6 +146,7 @@ export function runnerChanges(
       })
       .filter((r) => r.added.length || r.removed.length),
     ...(replaced.length && { replaced: [...replaced] }),
+    ...(preferred.length && { preferred }),
   };
 }
 
@@ -145,7 +158,8 @@ export const changed = (c: RunnerChanges) =>
     c.labelsRemoved.length ||
     c.labelsChanged.length ||
     c.regions.length ||
-    c.replaced?.length
+    c.replaced?.length ||
+    c.preferred?.length
   );
 
 /**
@@ -204,6 +218,13 @@ export function changeLines(
       ...(removed.length ? [`leave ${removed.join(', ')}`] : []),
     ];
     lines.push(`${org}'s ${cloud} runners ${parts.join(' and ')}.`);
+  }
+  for (const { cloud, was, now } of c.preferred ?? []) {
+    lines.push(
+      now
+        ? `${org}'s ${cloud} runners start in ${now} first${was ? `, not ${was}` : ''}.`
+        : `${org}'s ${cloud} runners no longer start in ${was} first: each goes to the cheapest runner region.`,
+    );
   }
   if (c.labelsAdded.length) {
     lines.push(`New labels: ${c.labelsAdded.join(', ')}.`);

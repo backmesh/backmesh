@@ -9,13 +9,14 @@ head:
 A label reads left to right: `backmesh-`, an optional cloud, the OS, optional
 parts, then the number of vCPUs.
 
-| Part             | Means                                                           | Example                          |
-| ---------------- | --------------------------------------------------------------- | -------------------------------- |
-| `gcp-`, `azure-` | That cloud. Without it, the control plane's cloud               | `backmesh-gcp-ubuntu-2404-4vcpu` |
-| `ubuntu-2404`    | The job runs on Ubuntu 24.04, as GitHub's `ubuntu-24.04` does   | `backmesh-ubuntu-2404-4vcpu`     |
-| `kvm-`           | The VM has `/dev/kvm`                                           | `backmesh-ubuntu-2404-kvm-4vcpu` |
-| `od-`            | On-demand instead of spot, for jobs that mustn't be interrupted | `backmesh-ubuntu-2404-od-4vcpu`  |
-| `<n>vcpu`        | vCPUs, with 4 GiB of memory each                                | `backmesh-ubuntu-2404-8vcpu`     |
+| Part             | Means                                                           | Example                               |
+| ---------------- | --------------------------------------------------------------- | ------------------------------------- |
+| `gcp-`, `azure-` | That cloud. Without it, the control plane's cloud               | `backmesh-gcp-ubuntu-2404-4vcpu`      |
+| `ubuntu-2404`    | The job runs on Ubuntu 24.04, as GitHub's `ubuntu-24.04` does   | `backmesh-ubuntu-2404-4vcpu`          |
+| `kvm-`           | The VM has `/dev/kvm`                                           | `backmesh-ubuntu-2404-kvm-4vcpu`      |
+| `highmem-`       | 8 GiB of memory a vCPU instead of 4                             | `backmesh-ubuntu-2404-highmem-16vcpu` |
+| `od-`            | On-demand instead of spot, for jobs that mustn't be interrupted | `backmesh-ubuntu-2404-od-4vcpu`       |
+| `<n>vcpu`        | vCPUs, with 4 GiB of memory each                                | `backmesh-ubuntu-2404-8vcpu`          |
 
 The [GPU labels](#gpu), `backmesh-ubuntu-2404-gpu-t4` and `backmesh-ubuntu-2404-gpu-od-t4`, end in
 their GPU instead of a number.
@@ -34,7 +35,7 @@ gets its own VM of its label's size, which is deleted when the job ends:
 | `backmesh-ubuntu-2404-16vcpu`          | 16   | 64 GiB |
 
 A job has its whole VM, less what the VM's own system and Docker use. Sizes
-aren't configurable.
+aren't configurable; for more memory, see [High memory](#high-memory).
 
 With [`--public-repos`](/public-repos/), the control plane's cloud also gets
 `backmesh-ubuntu-2404-public-2vcpu` and `backmesh-ubuntu-2404-public-4vcpu`: spot VMs, without KVM, and the
@@ -107,7 +108,9 @@ VM of the same types, in any runner region. After 3 such refusals in a region
 within 15 minutes, the region is [avoided](/status/) for spot for 30 minutes,
 and while every spot region of the label is avoided, its jobs' runners start on
 demand at once; after the 30 minutes they start on spot again. Runners started
-ahead of predicted or cued jobs don't fall back: they wait for spot. A job that fell back bills at the on-demand rate,
+ahead of predicted or cued jobs don't fall back: they wait for spot. With a
+[`--runner-region`](/install/#regions), the order is spot in that region,
+then spot in the geo's others, then on demand in that region first. A job that fell back bills at the on-demand rate,
 about 1.7 to 5.4 times spot ([Cost](/cost/#whats-left-out)). The listener logs
 each with `"fallback": true` on its `job completed` line, and
 [`backmesh status`](/status/) counts a label's jobs that fell back today. Public
@@ -137,6 +140,40 @@ Like the other labels, they have no VM while idle, retry on demand after a spot
 reclaim, and have on-demand twins, `backmesh-ubuntu-2404-kvm-od-2vcpu` to `backmesh-ubuntu-2404-kvm-od-16vcpu`.
 On another cloud than the control plane's they name it: `backmesh-azure-ubuntu-2404-kvm-8vcpu`. They share their
 cloud's spot and on-demand vCPU quotas with the other labels.
+
+## High memory
+
+Jobs that run out of memory at 4 GiB a vCPU, such as a large Rust or C++
+link, run on `backmesh-ubuntu-2404-highmem-2vcpu` to
+`backmesh-ubuntu-2404-highmem-16vcpu`: the same four sizes with 8 GiB a vCPU,
+on each cloud's memory-optimized twin of the families above.
+
+| Label                                 | vCPU | Memory  |
+| ------------------------------------- | ---- | ------- |
+| `backmesh-ubuntu-2404-highmem-2vcpu`  | 2    | 16 GiB  |
+| `backmesh-ubuntu-2404-highmem-4vcpu`  | 4    | 32 GiB  |
+| `backmesh-ubuntu-2404-highmem-8vcpu`  | 8    | 64 GiB  |
+| `backmesh-ubuntu-2404-highmem-16vcpu` | 16   | 128 GiB |
+
+| Cloud | Types for `backmesh-ubuntu-2404-highmem-16vcpu`, in order                 |
+| ----- | ------------------------------------------------------------------------- |
+| AWS   | `r8a.4xlarge`, `r8i.4xlarge`, `r7a.4xlarge`, `r7i.4xlarge`, `r6a.4xlarge` |
+| GCP   | `n2-highmem-16`, `n2d-highmem-16`                                         |
+| Azure | `Standard_E16ads_v5`, `Standard_E16as_v5`, `Standard_E16s_v5`             |
+
+```yaml
+runs-on: backmesh-ubuntu-2404-highmem-16vcpu
+```
+
+Their on-demand twins are `backmesh-ubuntu-2404-highmem-od-2vcpu` to
+`backmesh-ubuntu-2404-highmem-od-16vcpu`, with the same types (GCP's don't try
+`c4d` or `c3d` first), and on another cloud than the control plane's they name
+it: `backmesh-gcp-ubuntu-2404-highmem-16vcpu`. A spot reclaim pauses only the
+high-memory labels' spot, and retries go to the high-memory on-demand label of
+the same size. They share their cloud's spot and on-demand vCPU quotas with
+the other labels, and cost about 1.3 times the same size's general label on
+demand ([Cost](/cost/#high-memory)). There are no KVM, GPU or public
+high-memory labels.
 
 ## GPU
 

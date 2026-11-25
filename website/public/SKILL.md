@@ -59,7 +59,8 @@ backmesh install --org <org> --control-plane aws:us-east-2 --runners aws --runne
 ```
 
 `--runners` repeats, one cloud each — never a region, which backmesh fixes
-per cloud and narrows to what the account allows. Without either flag, both
+per cloud and narrows to what the account allows; `--runner-region
+<cloud>:<region>` starts that cloud's jobs in one of them first. Without either flag, both
 go on the signed-in cloud in US East. The plan shows prices, quotas, the
 labels this installation will have, and the full install command.
 

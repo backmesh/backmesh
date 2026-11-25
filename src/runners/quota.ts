@@ -72,6 +72,30 @@ export function quotaKinds(
   return [spot ? 'gpuSpot' : 'gpuOnDemand'];
 }
 
+/**
+ * Azure's high-memory types' families (`HIGHMEM_TYPES`): an on-demand one
+ * counts against its family's vCPUs as well as the regional ones, which
+ * `quotaCheck` reads alone, and a new subscription's are often 0 or 10.
+ */
+const HIGHMEM_FAMILIES = [
+  '"Standard EADSv5 Family vCPUs"',
+  '"Standard EASv5 Family vCPUs"',
+  '"Standard ESv5 Family vCPUs"',
+];
+
+/** The plan's warning for Azure's on-demand high-memory labels, if any. */
+export const highmemFamilyLine = (
+  cloud: Cloud,
+  classes: readonly { label: string; spot: boolean; highmem?: true }[],
+) => {
+  const labels = classes.filter((c) => c.highmem && !c.spot);
+  return cloud === 'azure' && labels.length
+    ? [
+        `azure's on-demand high-memory runners (${labels.map((c) => c.label).join(', ')}) also need their E-series family's vCPU quota in a region, not only its regional vCPUs: raise one of ${HIGHMEM_FAMILIES.join(', ')} to the vCPUs they should run at once.`,
+      ]
+    : [];
+};
+
 /** A quota kind as plans and status name it. */
 export const KIND_NAME: Record<QuotaKind, string> = {
   spot: 'spot',

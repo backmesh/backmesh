@@ -9,7 +9,7 @@
 // types in each US region that offers them, as all of backmesh's do. Their
 // quotas are `alwaysOnQuota`'s, in install.
 import { UsageError } from './errors.js';
-import { RUNNER_REGIONS, type RunCommand } from '../runners/regions.js';
+import { GEOS, RUNNER_REGIONS, type RunCommand } from '../runners/regions.js';
 import { usageNamed, type Usage } from '../runners/quota.js';
 
 export interface AlwaysOn {
@@ -250,11 +250,13 @@ export async function alwaysOnRegions(
   return fallback ? passing : passing.slice(0, 1);
 }
 
-/** `region` first, then backmesh's other US regions when it's one of them. */
-export const candidateRegions = (region: string) =>
-  RUNNER_REGIONS.azure.includes(region)
-    ? [region, ...RUNNER_REGIONS.azure.filter((r) => r !== region)]
+/** `region` first, then its geo's other Azure runner regions when it's one of them. */
+export function candidateRegions(region: string) {
+  const geo = GEOS.find((g) => RUNNER_REGIONS[g].azure.includes(region));
+  return geo
+    ? [region, ...RUNNER_REGIONS[geo].azure.filter((r) => r !== region)]
     : [region];
+}
 
 // Azure's refusal of a create for capacity or a size the region can't take
 // now: `SkuNotAvailable`, an allocation failure, or a family or regional

@@ -38,8 +38,19 @@ function family(
   }));
 }
 
-const aws = (f: string, prices: [number, number], nested = false) =>
-  family((n) => `${f}.${AWS_SIZE[n]}`, 'us-east-2', prices, nested);
+const aws = (
+  f: string,
+  prices: [number, number],
+  nested = false,
+  gibPerVcpu = 4,
+) =>
+  family((n) => `${f}.${AWS_SIZE[n]}`, 'us-east-2', prices, nested, {
+    gibPerVcpu,
+  });
+
+// The high-memory classes' types, at 8 GiB a vCPU: the catalog's of
+// 2026-11-25.
+const HIGHMEM = { gibPerVcpu: 8 };
 
 // A GPU type with one T4, at the catalog's prices of 2026-11-18.
 const t4 = (
@@ -66,6 +77,11 @@ export const CATALOG = {
     ...aws('m8i', [0.0543, 0.2117], true),
     // The catalog's of 2026-11-23.
     ...aws('m8a', [0.065, 0.2434]),
+    ...aws('r8a', [0.096, 0.3195], false, 8),
+    ...aws('r8i', [0.0837, 0.2778], false, 8),
+    ...aws('r7a', [0.116, 0.3043], false, 8),
+    ...aws('r7i', [0.1008, 0.2646], false, 8),
+    ...aws('r6a', [0.0764, 0.2268], false, 8),
     t4('g4dn.xlarge', 4, 16, 'us-east-2', [0.2732, 0.526]),
     t4('g4dn.2xlarge', 8, 32, 'us-east-2', [0.3696, 0.752]),
   ],
@@ -98,6 +114,20 @@ export const CATALOG = {
       false,
       { sizes: [4, 8, 16] },
     ),
+    ...family(
+      (n) => `n2-highmem-${n}`,
+      'us-central1-a',
+      [0.1572, 0.262],
+      true,
+      HIGHMEM,
+    ),
+    ...family(
+      (n) => `n2d-highmem-${n}`,
+      'us-central1-a',
+      [0.1267, 0.228],
+      false,
+      HIGHMEM,
+    ),
   ],
   // The catalog may spell a type in another case than the classes' list.
   azure: [
@@ -105,6 +135,27 @@ export const CATALOG = {
     ...family((n) => `Standard_D${n}ads_v5`, 'westus2', [0.043, 0.233], false),
     ...family((n) => `standard_d${n}as_v5`, 'westus2', [0.0318, 0.172], true),
     ...family((n) => `Standard_D${n}s_v5`, 'westus2', [0.0355, 0.192], true),
+    ...family(
+      (n) => `Standard_E${n}ads_v5`,
+      'westus2',
+      [0.0484, 0.262],
+      false,
+      HIGHMEM,
+    ),
+    ...family(
+      (n) => `Standard_E${n}as_v5`,
+      'westus2',
+      [0.0418, 0.226],
+      true,
+      HIGHMEM,
+    ),
+    ...family(
+      (n) => `Standard_E${n}s_v5`,
+      'westus2',
+      [0.0466, 0.252],
+      true,
+      HIGHMEM,
+    ),
     t4('Standard_NC4as_T4_v3', 4, 28, 'westus2', [0.1766, 0.526]),
   ],
 };

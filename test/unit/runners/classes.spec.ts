@@ -69,6 +69,18 @@ describe('runner classes', () => {
         'backmesh-ubuntu-2404-gpu-t4 d4',
         'backmesh-ubuntu-2404-gpu-od-t4 e4',
       ],
+      ...[
+        'backmesh-ubuntu-2404-highmem-2vcpu ah',
+        'backmesh-ubuntu-2404-highmem-4vcpu ai',
+        'backmesh-ubuntu-2404-highmem-8vcpu aj',
+        'backmesh-ubuntu-2404-highmem-16vcpu ak',
+      ],
+      ...[
+        'backmesh-ubuntu-2404-highmem-od-2vcpu bh',
+        'backmesh-ubuntu-2404-highmem-od-4vcpu bi',
+        'backmesh-ubuntu-2404-highmem-od-8vcpu bj',
+        'backmesh-ubuntu-2404-highmem-od-16vcpu bk',
+      ],
     ]);
     expect(classes[1]).toEqual({
       ...AWS,
@@ -288,6 +300,95 @@ describe('runner classes', () => {
         (size) => `m8a.${size} isn't offered in aws us-east-2`,
       ),
     );
+  });
+
+  it("gives each size a high-memory class of 8 GiB types on spot and on demand, each cloud's memory-optimized twin of its general families", () => {
+    const { classes, problems } = planClasses(
+      [AWS, GCP, AZURE],
+      catalog,
+      'gcp',
+    );
+    expect(problems).toEqual([]);
+    const highmem = classes.filter((c) => c.highmem);
+    expect(
+      highmem
+        .filter((c) => c.vcpus === 16)
+        .map(({ label, code, spot, vmTypes }) => [label, code, spot, vmTypes]),
+    ).toEqual([
+      [
+        'backmesh-aws-ubuntu-2404-highmem-16vcpu',
+        'ak',
+        true,
+        ['r8a', 'r8i', 'r7a', 'r7i', 'r6a'].map((f) => `${f}.4xlarge`),
+      ],
+      [
+        'backmesh-aws-ubuntu-2404-highmem-od-16vcpu',
+        'bk',
+        false,
+        ['r8a', 'r8i', 'r7a', 'r7i', 'r6a'].map((f) => `${f}.4xlarge`),
+      ],
+      [
+        'backmesh-ubuntu-2404-highmem-16vcpu',
+        'gk',
+        true,
+        ['n2-highmem-16', 'n2d-highmem-16'],
+      ],
+      [
+        'backmesh-ubuntu-2404-highmem-od-16vcpu',
+        'hk',
+        false,
+        ['n2-highmem-16', 'n2d-highmem-16'],
+      ],
+      [
+        'backmesh-azure-ubuntu-2404-highmem-16vcpu',
+        'zk',
+        true,
+        ['Standard_E16ads_v5', 'Standard_E16as_v5', 'Standard_E16s_v5'],
+      ],
+      [
+        'backmesh-azure-ubuntu-2404-highmem-od-16vcpu',
+        'yk',
+        false,
+        ['Standard_E16ads_v5', 'Standard_E16as_v5', 'Standard_E16s_v5'],
+      ],
+    ]);
+    expect(highmem.every((c) => !c.kvm && !c.gpu && !c.public)).toBe(true);
+    // Every code is unique, and another listener's high-memory runner reads
+    // as its size, on its cloud's general quota.
+    const codes = classes.map((c) => c.code);
+    expect(new Set(codes).size).toBe(codes.length);
+    expect(codeClass('gk')).toEqual({
+      cloud: 'gcp',
+      spot: true,
+      vcpus: 16,
+      gpu: false,
+    });
+    expect(codeClass('bh')).toEqual({
+      cloud: 'aws',
+      spot: false,
+      vcpus: 2,
+      gpu: false,
+    });
+    // --public-repos never makes a high-memory label public.
+    expect(
+      planClasses([GCP], catalog, 'gcp', true).classes.filter(
+        (c) => c.public && c.highmem,
+      ),
+    ).toEqual([]);
+  });
+
+  it('names a high-memory type a region lacks or offers in the wrong shape', () => {
+    const odd = catalogs({
+      gcp: CATALOG.gcp
+        .filter((type) => type.vmType !== 'n2d-highmem-8')
+        .map((type) =>
+          type.vmType === 'n2-highmem-4' ? { ...type, memoryGiB: 16 } : type,
+        ),
+    });
+    expect(planClasses([GCP], odd, 'gcp').problems).toEqual([
+      'n2-highmem-4 is 4 vCPU / 16 GiB, not a 4 vCPU / 32 GiB CPU type',
+      "n2d-highmem-8 isn't offered in gcp us-central1",
+    ]);
   });
 
   it('names each type a region lacks or offers in the wrong shape', () => {
