@@ -1,0 +1,1662 @@
+{
+  "date": "2026-11-25",
+  "pr": "https://github.com/backmesh/backmesh/pull/117",
+  "installation": "backmesh org CI, AWS, anycloud 0.1.83",
+  "target": "backmesh/benchmarks",
+  "label": "backmesh-ubuntu-2404-16vcpu",
+  "width": 8,
+  "rounds": 10,
+  "leadS": 75,
+  "order": "B, then ci-install back to v0.7.1, then A",
+  "arms": {
+    "A": {
+      "backmesh": "0.7.1",
+      "run": "https://github.com/backmesh/backmesh/actions/runs/45688492534",
+      "pushes": [
+        {
+          "round": 0,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "e84b5923fc3b5e4b8f321298d192ec9f34db16ef",
+          "runners": [
+            "bm8ot2o-ag-69ssod1u",
+            "bm8ot2o-ag-rhrckxqe",
+            "bm8ot2o-ag-mteownxz",
+            "bm8ot2o-ag-dt5f55rx",
+            "bm8ot2o-ag-mi7fnngm",
+            "bm8ot2o-ag-o4iz1uzk",
+            "bm8ot2o-ag-pa5n43jw",
+            "bm8ot2o-ag-ij9ixqnj"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 10,
+            "pushToMarker": 14,
+            "queuedToAssigned": 2,
+            "pushToQueued": 4,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 14
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+        },
+        {
+          "round": 1,
+          "arm": "Not cued",
+          "sha": "531b9dbbb2faf3c4090fa4248416b7d697773d1a",
+          "runners": [
+            "bm8ot2o-ag-lxtv7si8",
+            "bm8ot2o-ag-r6lzww0o",
+            "bm8ot2o-ag-sigxyls9",
+            "bm8ot2o-ag-r2qq2s2r",
+            "bm8ot2o-ag-ghqz0ew8",
+            "bm8ot2o-ag-d5fs3dt1",
+            "bm8ot2o-ag-6aavk33n",
+            "bm8ot2o-ag-y9donakl"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 56,
+            "pushToMarker": 59,
+            "queuedToAssigned": 47,
+            "pushToQueued": 3,
+            "setup": 9,
+            "install": 4,
+            "queuedToDone": 59
+          }
+        },
+        {
+          "round": 2,
+          "arm": "GitHub-hosted",
+          "sha": "4420c3898ab3eed71a67140d0b308263d8a4b81b",
+          "runners": [
+            "GitHub Actions 1000001905",
+            "GitHub Actions 1000001907",
+            "GitHub Actions 1000001908",
+            "GitHub Actions 1000001906",
+            "GitHub Actions 1000001909",
+            "GitHub Actions 1000001910",
+            "GitHub Actions 1000001911",
+            "GitHub Actions 1000001912"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 14,
+            "pushToMarker": 17,
+            "queuedToAssigned": 3,
+            "pushToQueued": 3,
+            "setup": 11,
+            "install": 7.5,
+            "queuedToDone": 16.5
+          }
+        },
+        {
+          "round": 3,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "8ce789df74c8573bcbb62b5e2318ac1f2108f0a0",
+          "runners": [
+            "bm8ot2o-ag-ft3wgos6",
+            "bm8ot2o-ag-vxdu50l0",
+            "bm8ot2o-ag-vhqtkh5n",
+            "bm8ot2o-ag-44zc1h8z",
+            "bm8ot2o-ag-2c5ubbar",
+            "bm8ot2o-ag-uz2suxso",
+            "bm8ot2o-ag-2o04vn82",
+            "bm8ot2o-ag-gwlepcfm"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 11,
+            "pushToMarker": 14,
+            "queuedToAssigned": 2,
+            "pushToQueued": 3,
+            "setup": 9,
+            "install": 3.5,
+            "queuedToDone": 14
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+        },
+        {
+          "round": 4,
+          "arm": "Not cued",
+          "sha": "0d13aaf2a97696c0ef06a0060075893c4e0608f3",
+          "runners": [
+            "bm8ot2o-ag-cce3edqn",
+            "bm8ot2o-ag-zpjhhnkf",
+            "bm8ot2o-ag-sftwtz4i",
+            "bm8ot2o-ag-wrv07t2w",
+            "bm8ot2o-ag-5wrr2ssn",
+            "bm8ot2o-ag-9hn807rs",
+            "bm8ot2o-ag-uvs5wtep",
+            "bm8ot2o-ag-39mhyu8y"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 54,
+            "pushToMarker": 57,
+            "queuedToAssigned": 44,
+            "pushToQueued": 3,
+            "setup": 10,
+            "install": 4,
+            "queuedToDone": 58
+          }
+        },
+        {
+          "round": 5,
+          "arm": "GitHub-hosted",
+          "sha": "4e3910bfb5f32460ffe50947cd2a879d5f44acc5",
+          "runners": [
+            "GitHub Actions 1000001921",
+            "GitHub Actions 1000001916",
+            "GitHub Actions 1000001917",
+            "GitHub Actions 1000001920",
+            "GitHub Actions 1000001919",
+            "GitHub Actions 1000001918",
+            "GitHub Actions 1000001922",
+            "GitHub Actions 1000001923"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 13,
+            "pushToMarker": 16,
+            "queuedToAssigned": 3,
+            "pushToQueued": 3,
+            "setup": 10,
+            "install": 7,
+            "queuedToDone": 16
+          }
+        },
+        {
+          "round": 6,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "b0afecd832d67aeaaf08d229d76cbea6aed40676",
+          "runners": [
+            "bm8ot2o-ag-s1u0bgez",
+            "bm8ot2o-ag-96yvqu41",
+            "bm8ot2o-ag-tnud5fiq",
+            "bm8ot2o-ag-0h7b6bos",
+            "bm8ot2o-ag-bwq9v8lf",
+            "bm8ot2o-ag-q9vkvkuq",
+            "bm8ot2o-ag-heic0suq",
+            "bm8ot2o-ag-g50lw2m4"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 11,
+            "pushToMarker": 14,
+            "queuedToAssigned": 2,
+            "pushToQueued": 3,
+            "setup": 9,
+            "install": 3,
+            "queuedToDone": 14
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+        },
+        {
+          "round": 7,
+          "arm": "Not cued",
+          "sha": "a1c93bf77f46b5f1d6127b13cb79bf72ffac7a45",
+          "runners": [
+            "bm8ot2o-ag-l9kb11wt",
+            "bm8ot2o-ag-6e4n3uyq",
+            "bm8ot2o-ag-9gcnhtbq",
+            "bm8ot2o-ag-j4ele0dc",
+            "bm8ot2o-ag-2dlcmnfx",
+            "bm8ot2o-ag-lg2riw43",
+            "bm8ot2o-ag-ao2s36cm",
+            "bm8ot2o-ag-8ikw7a9p"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 54,
+            "pushToMarker": 57,
+            "queuedToAssigned": 45.5,
+            "pushToQueued": 3,
+            "setup": 9,
+            "install": 4,
+            "queuedToDone": 58
+          }
+        },
+        {
+          "round": 8,
+          "arm": "GitHub-hosted",
+          "sha": "6d82c53bbdf731325e1c6060d1fafe298f84d557",
+          "runners": [
+            "GitHub Actions 1000001927",
+            "GitHub Actions 1000001931",
+            "GitHub Actions 1000001928",
+            "GitHub Actions 1000001932",
+            "GitHub Actions 1000001929",
+            "GitHub Actions 1000001930",
+            "GitHub Actions 1000001934",
+            "GitHub Actions 1000001933"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 13,
+            "pushToMarker": 15,
+            "queuedToAssigned": 3,
+            "pushToQueued": 2,
+            "setup": 10,
+            "install": 6,
+            "queuedToDone": 15.5
+          }
+        },
+        {
+          "round": 9,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "f022777f7f48f12dfce1c0fb874a22df5dc6f229",
+          "runners": [
+            "bm8ot2o-ag-kwzqjold",
+            "bm8ot2o-ag-gg76frzl",
+            "bm8ot2o-ag-86g0l8zf",
+            "bm8ot2o-ag-q9nd5qs6",
+            "bm8ot2o-ag-4e1e05iq",
+            "bm8ot2o-ag-k2nz9sbj",
+            "bm8ot2o-ag-krcikxww",
+            "bm8ot2o-ag-s076sxcj"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 10.5,
+            "pushToMarker": 13.5,
+            "queuedToAssigned": 2,
+            "pushToQueued": 3,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 14
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0]
+        },
+        {
+          "round": 10,
+          "arm": "Not cued",
+          "sha": "a53db90f8b54b30acb023e736d89f8634db80264",
+          "runners": [
+            "bm8ot2o-ag-ibpxj7p6",
+            "bm8ot2o-ag-rrqcd7xq",
+            "bm8ot2o-ag-udfwmmir",
+            "bm8ot2o-ag-eegxkdsj",
+            "bm8ot2o-ag-4agmi0rv",
+            "bm8ot2o-ag-jccln0pv",
+            "bm8ot2o-ag-8fyj0o9k",
+            "bm8ot2o-ag-racwmxjb"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 50.5,
+            "pushToMarker": 54.5,
+            "queuedToAssigned": 42.5,
+            "pushToQueued": 4,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 54
+          }
+        },
+        {
+          "round": 11,
+          "arm": "GitHub-hosted",
+          "sha": "5831dbdedba85276efa82fd0e1d1da208bc6aba7",
+          "runners": [
+            "GitHub Actions 1000001938",
+            "GitHub Actions 1000001939",
+            "GitHub Actions 1000001940",
+            "GitHub Actions 1000001941",
+            "GitHub Actions 1000001942",
+            "GitHub Actions 1000001943",
+            "GitHub Actions 1000001944",
+            "GitHub Actions 1000001945"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 13,
+            "pushToMarker": 16,
+            "queuedToAssigned": 2,
+            "pushToQueued": 3,
+            "setup": 11,
+            "install": 7.5,
+            "queuedToDone": 15
+          }
+        },
+        {
+          "round": 12,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "3a669dca8643fbc559411986e1ac27af859aaa6b",
+          "runners": [
+            "bm8ot2o-ag-wlgwhrda",
+            "bm8ot2o-ag-0hbazw2r",
+            "bm8ot2o-ag-bc947om3",
+            "bm8ot2o-ag-wtggx6nd",
+            "bm8ot2o-ag-51vqqhit",
+            "bm8ot2o-ag-nu8f9wq1",
+            "bm8ot2o-ag-1epsnein",
+            "bm8ot2o-ag-ver4o19m"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 10,
+            "pushToMarker": 13,
+            "queuedToAssigned": 2,
+            "pushToQueued": 3,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 14
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+        },
+        {
+          "round": 13,
+          "arm": "Not cued",
+          "sha": "1b8e0b35c9596460f40f1bf1187e98cb22c9ebdb",
+          "runners": [
+            "bm8ot2o-ag-kivhbqpv",
+            "bm8ot2o-ag-fnh0fkfj",
+            "bm8ot2o-ag-ckuojdm1",
+            "bm8ot2o-ag-60raf0f5",
+            "bm8ot2o-ag-7hbx5y77",
+            "bm8ot2o-ag-l8369qsx",
+            "bm8ot2o-ag-e5wn5kn5",
+            "bm8ot2o-ag-cih4rkhl"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 51,
+            "pushToMarker": 55,
+            "queuedToAssigned": 42,
+            "pushToQueued": 4,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 54.5
+          }
+        },
+        {
+          "round": 14,
+          "arm": "GitHub-hosted",
+          "sha": "6d588842b637d087f1d5a8235aa0ade9e816faad",
+          "runners": [
+            "GitHub Actions 1000001949",
+            "GitHub Actions 1000001953",
+            "GitHub Actions 1000001954",
+            "GitHub Actions 1000001951",
+            "GitHub Actions 1000001950",
+            "GitHub Actions 1000001952",
+            "GitHub Actions 1000001956",
+            "GitHub Actions 1000001955"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 13,
+            "pushToMarker": 16,
+            "queuedToAssigned": 3,
+            "pushToQueued": 3,
+            "setup": 10,
+            "install": 7,
+            "queuedToDone": 16
+          }
+        },
+        {
+          "round": 15,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "90060bfd3d09e0cf8c2d63ac5fe1adb0b7ec0427",
+          "runners": [
+            "bm8ot2o-ag-lx3xln4k",
+            "bm8ot2o-ag-db72mrqr",
+            "bm8ot2o-ag-7myf0uwv",
+            "bm8ot2o-ag-it6pq5qd",
+            "bm8ot2o-ag-i3v7bg2f",
+            "bm8ot2o-ag-o87aacek",
+            "bm8ot2o-ag-xwombyt1",
+            "bm8ot2o-ag-ppgusjkv"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 10,
+            "pushToMarker": 13,
+            "queuedToAssigned": 2,
+            "pushToQueued": 3,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 14
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+        },
+        {
+          "round": 16,
+          "arm": "Not cued",
+          "sha": "e31ca1409764d11b434b57cacf8d6c9385dbfaca",
+          "runners": [
+            "bm8ot2o-ag-gh6nn5st",
+            "bm8ot2o-ag-2ur5p38t",
+            "bm8ot2o-ag-hnicubs4",
+            "bm8ot2o-ag-ssyym70n",
+            "bm8ot2o-ag-ysimjp5m",
+            "bm8ot2o-ag-6mi5fl40",
+            "bm8ot2o-ag-2hw2ytjn",
+            "bm8ot2o-ag-2gbabtau"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 52.5,
+            "pushToMarker": 55.5,
+            "queuedToAssigned": 44,
+            "pushToQueued": 3,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 56
+          }
+        },
+        {
+          "round": 17,
+          "arm": "GitHub-hosted",
+          "sha": "4fb491416a9fa658b116d63753eda07a31207e45",
+          "runners": [
+            "GitHub Actions 1000001960",
+            "GitHub Actions 1000001961",
+            "GitHub Actions 1000001962",
+            "GitHub Actions 1000001967",
+            "GitHub Actions 1000001964",
+            "GitHub Actions 1000001963",
+            "GitHub Actions 1000001965",
+            "GitHub Actions 1000001966"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 13,
+            "pushToMarker": 16,
+            "queuedToAssigned": 3,
+            "pushToQueued": 3,
+            "setup": 10,
+            "install": 7,
+            "queuedToDone": 15
+          }
+        },
+        {
+          "round": 18,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "2912a63eeb1f808eaec98c76f4ce128dae35b5ae",
+          "runners": [
+            "bm8ot2o-ag-w5zpyyxz",
+            "bm8ot2o-ag-6bre4nch",
+            "bm8ot2o-ag-fjt33hm2",
+            "bm8ot2o-ag-rewrep9v",
+            "bm8ot2o-ag-f8v874xh",
+            "bm8ot2o-ag-aasa110e",
+            "bm8ot2o-ag-93i6mn49",
+            "bm8ot2o-ag-sqqkpks3"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 11,
+            "pushToMarker": 14,
+            "queuedToAssigned": 2,
+            "pushToQueued": 3,
+            "setup": 9,
+            "install": 3,
+            "queuedToDone": 14
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 3.0]
+        },
+        {
+          "round": 19,
+          "arm": "Not cued",
+          "sha": "2ccef9982a8e69f54ea22a01c993a0f484a28a36",
+          "runners": [
+            "bm8ot2o-ag-it4k5v1e",
+            "bm8ot2o-ag-a8ug5fj2",
+            "bm8ot2o-ag-adp0gmrv",
+            "bm8ot2o-ag-dh19tlcu",
+            "bm8ot2o-ag-oi4ecm5m",
+            "bm8ot2o-ag-zgos8vna",
+            "bm8ot2o-ag-6oxmyji9",
+            "bm8ot2o-ag-itg6rgc9"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 60.5,
+            "pushToMarker": 64.5,
+            "queuedToAssigned": 51.5,
+            "pushToQueued": 4,
+            "setup": 9,
+            "install": 4,
+            "queuedToDone": 64.5
+          }
+        },
+        {
+          "round": 20,
+          "arm": "GitHub-hosted",
+          "sha": "8727bad05455217793790671582412f9de4f605b",
+          "runners": [
+            "GitHub Actions 1000001971",
+            "GitHub Actions 1000001972",
+            "GitHub Actions 1000001975",
+            "GitHub Actions 1000001973",
+            "GitHub Actions 1000001974",
+            "GitHub Actions 1000001977",
+            "GitHub Actions 1000001978",
+            "GitHub Actions 1000001976"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 13,
+            "pushToMarker": 16,
+            "queuedToAssigned": 2,
+            "pushToQueued": 3,
+            "setup": 10.5,
+            "install": 7,
+            "queuedToDone": 15
+          }
+        },
+        {
+          "round": 21,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "809e949d773c1ff2fc9719046e606fb92d13f7cc",
+          "runners": [
+            "bm8ot2o-ag-ecrodzkv",
+            "bm8ot2o-ag-013pu9jq",
+            "bm8ot2o-ag-i197mh5k",
+            "bm8ot2o-ag-6wmhkuv0",
+            "bm8ot2o-ag-bsibxywv",
+            "bm8ot2o-ag-aywkd499",
+            "bm8ot2o-ag-vrl53zyf",
+            "bm8ot2o-ag-o2myvcvi"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 10,
+            "pushToMarker": 16,
+            "queuedToAssigned": 2,
+            "pushToQueued": 6,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 14
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+        },
+        {
+          "round": 22,
+          "arm": "Not cued",
+          "sha": "fe1ded57ec38719d624ac880088c575fd38248b2",
+          "runners": [
+            "bm8ot2o-ag-p5pipm7k",
+            "bm8ot2o-ag-u4zidc77",
+            "bm8ot2o-ag-fovd3c7f",
+            "bm8ot2o-ag-o5vqy7w3",
+            "bm8ot2o-ag-bcwssujj",
+            "bm8ot2o-ag-dhwloceq",
+            "bm8ot2o-ag-4gf6hw40",
+            "bm8ot2o-ag-1ydx3mtn"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 49,
+            "pushToMarker": 52,
+            "queuedToAssigned": 41,
+            "pushToQueued": 3,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 53
+          }
+        },
+        {
+          "round": 23,
+          "arm": "GitHub-hosted",
+          "sha": "d7062ba140cdac35d7193fcbb8d6f38407db05cd",
+          "runners": [
+            "GitHub Actions 1000001982",
+            "GitHub Actions 1000001984",
+            "GitHub Actions 1000001986",
+            "GitHub Actions 1000001983",
+            "GitHub Actions 1000001985",
+            "GitHub Actions 1000001987",
+            "GitHub Actions 1000001989",
+            "GitHub Actions 1000001988"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 12.5,
+            "pushToMarker": 15.5,
+            "queuedToAssigned": 3,
+            "pushToQueued": 3,
+            "setup": 9.5,
+            "install": 6,
+            "queuedToDone": 14.5
+          }
+        },
+        {
+          "round": 24,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "0e0e661d6d80399de751758084c92d51b921046d",
+          "runners": [
+            "bm8ot2o-ag-srti1ixe",
+            "bm8ot2o-ag-pvovt2yq",
+            "bm8ot2o-ag-w0hawxji",
+            "bm8ot2o-ag-acjdfk18",
+            "bm8ot2o-ag-cxozd2bb",
+            "bm8ot2o-ag-zight1u4",
+            "bm8ot2o-ag-mxlc729j",
+            "bm8ot2o-ag-qllnechq"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 10,
+            "pushToMarker": 13,
+            "queuedToAssigned": 2,
+            "pushToQueued": 3,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 14
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+        },
+        {
+          "round": 25,
+          "arm": "Not cued",
+          "sha": "e57078fe2fe4c3cdcd48c2ecedf38821a2d9d460",
+          "runners": [
+            "bm8ot2o-ag-p2wq4q3u",
+            "bm8ot2o-ag-rdorrru1",
+            "bm8ot2o-ag-fuwpxi7k",
+            "bm8ot2o-ag-wwmhypyr",
+            "bm8ot2o-ag-m4ckqjxu",
+            "bm8ot2o-ag-l68u6d51",
+            "bm8ot2o-ag-xvuenbwd",
+            "bm8ot2o-ag-yw8bfxsd"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 55,
+            "pushToMarker": 58,
+            "queuedToAssigned": 47,
+            "pushToQueued": 3,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 58
+          }
+        },
+        {
+          "round": 26,
+          "arm": "GitHub-hosted",
+          "sha": "d9e4eb6ac568c0476bdbf7ac517c581dee7c591f",
+          "runners": [
+            "GitHub Actions 1000001994",
+            "GitHub Actions 1000001993",
+            "GitHub Actions 1000001998",
+            "GitHub Actions 1000001995",
+            "GitHub Actions 1000001996",
+            "GitHub Actions 1000001997",
+            "GitHub Actions 1000001999",
+            "GitHub Actions 1000002000"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 14,
+            "pushToMarker": 17,
+            "queuedToAssigned": 3,
+            "pushToQueued": 3,
+            "setup": 11,
+            "install": 7,
+            "queuedToDone": 16.5
+          }
+        },
+        {
+          "round": 27,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "025ff17b8879442d76d508d85e433b33e0d8cc93",
+          "runners": [
+            "bm8ot2o-ag-ck8mlrvj",
+            "bm8ot2o-ag-zwpibi3t",
+            "bm8ot2o-ag-xlr6jwxl",
+            "bm8ot2o-ag-7e7dn7r8",
+            "bm8ot2o-ag-2y6j6g9u",
+            "bm8ot2o-ag-vkduxuta",
+            "bm8ot2o-ag-3qt5jn8j",
+            "bm8ot2o-ag-v5xeizh8"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 10.5,
+            "pushToMarker": 12.5,
+            "queuedToAssigned": 2,
+            "pushToQueued": 2,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 14
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 3.0, 3.0]
+        },
+        {
+          "round": 28,
+          "arm": "Not cued",
+          "sha": "6d3e57c2a32fb333b139e392bb7023ba8f4fbdd8",
+          "runners": [
+            "bm8ot2o-ag-loqep4vw",
+            "bm8ot2o-ag-t1ep1joy",
+            "bm8ot2o-ag-p7ng64x5",
+            "bm8ot2o-ag-jmtmisnw",
+            "bm8ot2o-ag-lpc12mqm",
+            "bm8ot2o-ag-xfwxthjx",
+            "bm8ot2o-ag-d7czbloh",
+            "bm8ot2o-ag-lejjbx53"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 49,
+            "pushToMarker": 51,
+            "queuedToAssigned": 41,
+            "pushToQueued": 2,
+            "setup": 9,
+            "install": 3.5,
+            "queuedToDone": 52.5
+          }
+        },
+        {
+          "round": 29,
+          "arm": "GitHub-hosted",
+          "sha": "5789e74e6c61fd639e2b851d3177c707764bf70c",
+          "runners": [
+            "GitHub Actions 1000002004",
+            "GitHub Actions 1000002005",
+            "GitHub Actions 1000002007",
+            "GitHub Actions 1000002009",
+            "GitHub Actions 1000002008",
+            "GitHub Actions 1000002011",
+            "GitHub Actions 1000002006",
+            "GitHub Actions 1000002010"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 15.5,
+            "pushToMarker": 17.5,
+            "queuedToAssigned": 3.5,
+            "pushToQueued": 2,
+            "setup": 12,
+            "install": 6,
+            "queuedToDone": 18.5
+          }
+        }
+      ]
+    },
+    "B": {
+      "backmesh": "0.7.2-rc.1 (#117 at 8fb70612)",
+      "run": "https://github.com/backmesh/backmesh/actions/runs/45662154783",
+      "pushes": [
+        {
+          "round": 0,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "e34224cf92a7c24b7a75a68e4f91f25d77c2243c",
+          "runners": [
+            "bm8ot2o-ag-tpjp3miz",
+            "bm8ot2o-ag-kmqvul30",
+            "bm8ot2o-ag-ymalimvf",
+            "bm8ot2o-ag-pd50llmq",
+            "bm8ot2o-ag-wincyxja",
+            "bm8ot2o-ag-05wl01kl",
+            "bm8ot2o-ag-3dc52qwz",
+            "bm8ot2o-ag-ja6tmkey"
+          ],
+          "figures": {
+            "served": 7,
+            "queuedToMarker": 10,
+            "pushToMarker": 14,
+            "queuedToAssigned": 2,
+            "pushToQueued": 4,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 14
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 41.0]
+        },
+        {
+          "round": 1,
+          "arm": "Not cued",
+          "sha": "4b2959159e75afd6083328bffa222f089dde784f",
+          "runners": [
+            "bm8ot2o-ag-u3flrwo1",
+            "bm8ot2o-ag-4i8a27t7",
+            "bm8ot2o-ag-hafrpoma",
+            "bm8ot2o-ag-2mxn73ut",
+            "bm8ot2o-ag-opx9no3z",
+            "bm8ot2o-ag-jxrntit8",
+            "bm8ot2o-ag-hih8hrkh",
+            "bm8ot2o-ag-ga5vmlgx"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 55.5,
+            "pushToMarker": 58.5,
+            "queuedToAssigned": 47,
+            "pushToQueued": 3,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 59
+          }
+        },
+        {
+          "round": 2,
+          "arm": "GitHub-hosted",
+          "sha": "449d7935b1ece8cbc7342f7c73f5815d20a55317",
+          "runners": [
+            "GitHub Actions 1000001792",
+            "GitHub Actions 1000001795",
+            "GitHub Actions 1000001794",
+            "GitHub Actions 1000001797",
+            "GitHub Actions 1000001793",
+            "GitHub Actions 1000001798",
+            "GitHub Actions 1000001796",
+            "GitHub Actions 1000001799"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 16,
+            "pushToMarker": 19,
+            "queuedToAssigned": 3,
+            "pushToQueued": 3,
+            "setup": 13,
+            "install": 7.5,
+            "queuedToDone": 19
+          }
+        },
+        {
+          "round": 3,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "b06ed6c62da90b9a09b3e4dd6065ec8a09e477c9",
+          "runners": [
+            "bm8ot2o-ag-ov1t3nak",
+            "bm8ot2o-ag-d2xw569u",
+            "bm8ot2o-ag-d3clllma",
+            "bm8ot2o-ag-kfepg7u1",
+            "bm8ot2o-ag-iy4qks2v",
+            "bm8ot2o-ag-cmp2hfhz",
+            "bm8ot2o-ag-rjtcp87j",
+            "bm8ot2o-ag-nabkpcax"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 10,
+            "pushToMarker": 13,
+            "queuedToAssigned": 2,
+            "pushToQueued": 3,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 14
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+        },
+        {
+          "round": 4,
+          "arm": "Not cued",
+          "sha": "10fafe67283d1239fe305a238e4807c2a051a8f7",
+          "runners": [
+            "bm8ot2o-ag-rtlpbrig",
+            "bm8ot2o-ag-cgs86a2w",
+            "bm8ot2o-ag-waz2kjzy",
+            "bm8ot2o-ag-odbvbu1r",
+            "bm8ot2o-ag-67abpq0u",
+            "bm8ot2o-ag-pawrtmpp",
+            "bm8ot2o-ag-pt2pvrrg",
+            "bm8ot2o-ag-cg9k1d32"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 53,
+            "pushToMarker": 56,
+            "queuedToAssigned": 45,
+            "pushToQueued": 3,
+            "setup": 9,
+            "install": 4,
+            "queuedToDone": 57
+          }
+        },
+        {
+          "round": 5,
+          "arm": "GitHub-hosted",
+          "sha": "d9ed41fe1a5a96e42a111cb815e77e321ee6ac4c",
+          "runners": [
+            "GitHub Actions 1000001803",
+            "GitHub Actions 1000001804",
+            "GitHub Actions 1000001805",
+            "GitHub Actions 1000001806",
+            "GitHub Actions 1000001810",
+            "GitHub Actions 1000001807",
+            "GitHub Actions 1000001809",
+            "GitHub Actions 1000001808"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 14,
+            "pushToMarker": 17,
+            "queuedToAssigned": 3,
+            "pushToQueued": 3,
+            "setup": 11,
+            "install": 7.5,
+            "queuedToDone": 17.5
+          }
+        },
+        {
+          "round": 6,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "2f1d34b7d8dabf16ec38e4c7ffcdbb7e6ea67616",
+          "runners": [
+            "bm8ot2o-ag-172o91wd",
+            "bm8ot2o-ag-q0tu2vxd",
+            "bm8ot2o-ag-zmgv1hnj",
+            "bm8ot2o-ag-kphbp1y8",
+            "bm8ot2o-ag-v5wysyzo",
+            "bm8ot2o-ag-ah191ory",
+            "bm8ot2o-ag-p4u9sgjn",
+            "bm8ot2o-ag-x5djs01y"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 11,
+            "pushToMarker": 14,
+            "queuedToAssigned": 2,
+            "pushToQueued": 3,
+            "setup": 9,
+            "install": 3.5,
+            "queuedToDone": 15
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0]
+        },
+        {
+          "round": 7,
+          "arm": "Not cued",
+          "sha": "d617367deadd4702abc57c5bbff2c5629591e017",
+          "runners": [
+            "bm8ot2o-ag-nx40ebfm",
+            "bm8ot2o-ag-6czya3t6",
+            "bm8ot2o-ag-fbbb4ome",
+            "bm8ot2o-ag-4ktg36gr",
+            "bm8ot2o-ag-9cc1wftv",
+            "bm8ot2o-ag-ir3ak6da",
+            "bm8ot2o-ag-twe0a0n2",
+            "bm8ot2o-ag-ncz3w0gh"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 51.5,
+            "pushToMarker": 55.5,
+            "queuedToAssigned": 43,
+            "pushToQueued": 4,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 55
+          }
+        },
+        {
+          "round": 8,
+          "arm": "GitHub-hosted",
+          "sha": "90da9992c773f70873548a90e82504244bcb8eeb",
+          "runners": [
+            "GitHub Actions 1000001814",
+            "GitHub Actions 1000001815",
+            "GitHub Actions 1000001816",
+            "GitHub Actions 1000001818",
+            "GitHub Actions 1000001817",
+            "GitHub Actions 1000001821",
+            "GitHub Actions 1000001819",
+            "GitHub Actions 1000001820"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 13.5,
+            "pushToMarker": 16.5,
+            "queuedToAssigned": 3,
+            "pushToQueued": 3,
+            "setup": 10,
+            "install": 6.5,
+            "queuedToDone": 16
+          }
+        },
+        {
+          "round": 9,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "69d5f532569102a863a1d16f83cae43ee32c3a6f",
+          "runners": [
+            "bm8ot2o-ag-5m0f28fp",
+            "bm8ot2o-ag-c7cmh2lj",
+            "bm8ot2o-ag-q28khz6b",
+            "bm8ot2o-ag-tl4qscfp",
+            "bm8ot2o-ag-wryw85oj",
+            "bm8ot2o-ag-mftm7t5n",
+            "bm8ot2o-ag-0qo2e8f1",
+            "bm8ot2o-ag-13opuly4"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 11,
+            "pushToMarker": 14,
+            "queuedToAssigned": 2,
+            "pushToQueued": 3,
+            "setup": 9,
+            "install": 4,
+            "queuedToDone": 14
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+        },
+        {
+          "round": 10,
+          "arm": "Not cued",
+          "sha": "19ada6f6d5f667a53142cb2136203aee2eb63829",
+          "runners": [
+            "bm8ot2o-ag-0f4lkshy",
+            "bm8ot2o-ag-gsnmy0xq",
+            "bm8ot2o-ag-hz0wday9",
+            "bm8ot2o-ag-jsra3fcx",
+            "bm8ot2o-ag-iql4d6gk",
+            "bm8ot2o-ag-aj4rvqpr",
+            "bm8ot2o-ag-jldblybu",
+            "bm8ot2o-ag-knf8vbn5"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 47,
+            "pushToMarker": 50,
+            "queuedToAssigned": 38.5,
+            "pushToQueued": 3,
+            "setup": 9,
+            "install": 3,
+            "queuedToDone": 51
+          }
+        },
+        {
+          "round": 11,
+          "arm": "GitHub-hosted",
+          "sha": "628e739f1b177b162b7caea3aaef0508675173fe",
+          "runners": [
+            "GitHub Actions 1000001825",
+            "GitHub Actions 1000001826",
+            "GitHub Actions 1000001827",
+            "GitHub Actions 1000001831",
+            "GitHub Actions 1000001832",
+            "GitHub Actions 1000001829",
+            "GitHub Actions 1000001828",
+            "GitHub Actions 1000001830"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 14.5,
+            "pushToMarker": 17.5,
+            "queuedToAssigned": 3,
+            "pushToQueued": 3,
+            "setup": 10.5,
+            "install": 7,
+            "queuedToDone": 17
+          }
+        },
+        {
+          "round": 12,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "1eeb3df2b0cfa42e808ed0b956caeae79b3ff516",
+          "runners": [
+            "bm8ot2o-ag-c33dwpz9",
+            "bm8ot2o-ag-fhjd60ua",
+            "bm8ot2o-ag-hhf3nypp",
+            "bm8ot2o-ag-vyx3wc8o",
+            "bm8ot2o-ag-twdoz933",
+            "bm8ot2o-ag-9xou30aj",
+            "bm8ot2o-ag-xfbuhgbj",
+            "bm8ot2o-ag-unlgvp1n"
+          ],
+          "figures": {
+            "served": 5,
+            "queuedToMarker": 15,
+            "pushToMarker": 18,
+            "queuedToAssigned": 5.5,
+            "pushToQueued": 3,
+            "setup": 9,
+            "install": 4,
+            "queuedToDone": 18.5
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 3.0, 3.0, 8.0, 32.0, 46.0, 55.0]
+        },
+        {
+          "round": 13,
+          "arm": "Not cued",
+          "sha": "63ac52628ea81a681031dd60e82b305b6329d42d",
+          "runners": [
+            "bm8ot2o-ag-hgwmczg0",
+            "bm8ot2o-ag-erb8go2d",
+            "bm8ot2o-ag-ollnk02l",
+            "bm8ot2o-ag-h4325pdd",
+            "bm8ot2o-ag-hg2esw0z",
+            "bm8ot2o-ag-n015ncoc",
+            "bm8ot2o-ag-3dfrd6pp",
+            "bm8ot2o-ag-0hn7p82k"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 53,
+            "pushToMarker": 56,
+            "queuedToAssigned": 45,
+            "pushToQueued": 3,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 57
+          }
+        },
+        {
+          "round": 14,
+          "arm": "GitHub-hosted",
+          "sha": "5dedd659ee355573cc21735ae0557e0d517908bc",
+          "runners": [
+            "GitHub Actions 1000001836",
+            "GitHub Actions 1000001837",
+            "GitHub Actions 1000001841",
+            "GitHub Actions 1000001840",
+            "GitHub Actions 1000001838",
+            "GitHub Actions 1000001839",
+            "GitHub Actions 1000001843",
+            "GitHub Actions 1000001842"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 13.5,
+            "pushToMarker": 16.5,
+            "queuedToAssigned": 3,
+            "pushToQueued": 3,
+            "setup": 10,
+            "install": 7,
+            "queuedToDone": 15.5
+          }
+        },
+        {
+          "round": 15,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "1cf498b72d7b622731c21d7e62c3d39515d73367",
+          "runners": [
+            "bm8ot2o-ag-qhikq08m",
+            "bm8ot2o-ag-simwobcg",
+            "bm8ot2o-ag-d8w3cy48",
+            "bm8ot2o-ag-a0j8he5l",
+            "bm8ot2o-ag-bj4rsziq",
+            "bm8ot2o-ag-9zkz6vbz",
+            "bm8ot2o-ag-vescmc2m",
+            "bm8ot2o-ag-gtqzhasp"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 11,
+            "pushToMarker": 14,
+            "queuedToAssigned": 2,
+            "pushToQueued": 3,
+            "setup": 9,
+            "install": 4,
+            "queuedToDone": 14
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+        },
+        {
+          "round": 16,
+          "arm": "Not cued",
+          "sha": "a5783d40f9b2c62afec74cc0ee057fb8cba0521f",
+          "runners": [
+            "bm8ot2o-ag-47z0xi37",
+            "bm8ot2o-ag-6948hu75",
+            "bm8ot2o-ag-h5uku84k",
+            "bm8ot2o-ag-ni299sw8",
+            "bm8ot2o-ag-6oqpj74m",
+            "bm8ot2o-ag-xazcybul",
+            "bm8ot2o-ag-o0zawiim",
+            "bm8ot2o-ag-iv5ed1lq"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 57,
+            "pushToMarker": 60,
+            "queuedToAssigned": 48,
+            "pushToQueued": 3,
+            "setup": 9,
+            "install": 3,
+            "queuedToDone": 61
+          }
+        },
+        {
+          "round": 17,
+          "arm": "GitHub-hosted",
+          "sha": "5e41a3912da18f8f75e6830048aaf552c0bd72c0",
+          "runners": [
+            "GitHub Actions 1000001847",
+            "GitHub Actions 1000001849",
+            "GitHub Actions 1000001848",
+            "GitHub Actions 1000001850",
+            "GitHub Actions 1000001852",
+            "GitHub Actions 1000001851",
+            "GitHub Actions 1000001854",
+            "GitHub Actions 1000001853"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 13,
+            "pushToMarker": 16,
+            "queuedToAssigned": 3,
+            "pushToQueued": 3.5,
+            "setup": 10,
+            "install": 7,
+            "queuedToDone": 15.5
+          }
+        },
+        {
+          "round": 18,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "a43450c1e84cd60e05874f6762db8b3a5ba24ed6",
+          "runners": [
+            "bm8ot2o-ag-ppu7lb6q",
+            "bm8ot2o-ag-10zr2osc",
+            "bm8ot2o-ag-z9g0hvj0",
+            "bm8ot2o-ag-siykdwmj",
+            "bm8ot2o-ag-w4wdve9x",
+            "bm8ot2o-ag-qdmtbw8n",
+            "bm8ot2o-ag-hdxgaocy",
+            "bm8ot2o-ag-zgfri0xo"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 10,
+            "pushToMarker": 14,
+            "queuedToAssigned": 2,
+            "pushToQueued": 4,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 14
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+        },
+        {
+          "round": 19,
+          "arm": "Not cued",
+          "sha": "71242fb765ff1e3e49d2987dac9adbb88ed911e0",
+          "runners": [
+            "bm8ot2o-ag-f826ybyz",
+            "bm8ot2o-ag-m3z7amvb",
+            "bm8ot2o-ag-1tje1ayl",
+            "bm8ot2o-ag-0phkpxne",
+            "bm8ot2o-ag-1v9fj6gg",
+            "bm8ot2o-ag-o5fm2hom",
+            "bm8ot2o-ag-8c4zmd6l",
+            "bm8ot2o-ag-phhtypay"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 51,
+            "pushToMarker": 54,
+            "queuedToAssigned": 42.5,
+            "pushToQueued": 3,
+            "setup": 8.5,
+            "install": 4,
+            "queuedToDone": 54.5
+          }
+        },
+        {
+          "round": 20,
+          "arm": "GitHub-hosted",
+          "sha": "ee9db606e50319dae003eabf8e2b684f7a9dd89b",
+          "runners": [
+            "GitHub Actions 1000001858",
+            "GitHub Actions 1000001859",
+            "GitHub Actions 1000001862",
+            "GitHub Actions 1000001860",
+            "GitHub Actions 1000001863",
+            "GitHub Actions 1000001861",
+            "GitHub Actions 1000001864",
+            "GitHub Actions 1000001865"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 14,
+            "pushToMarker": 17,
+            "queuedToAssigned": 2,
+            "pushToQueued": 3,
+            "setup": 11.5,
+            "install": 6.5,
+            "queuedToDone": 17
+          }
+        },
+        {
+          "round": 21,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "0816b8eeed06194d94395ed905ea4dbf7c3345bf",
+          "runners": [
+            "bm8ot2o-ag-0mqxtea4",
+            "bm8ot2o-ag-si8pao2f",
+            "bm8ot2o-ag-hw2g2g68",
+            "bm8ot2o-ag-xzdx3jjk",
+            "bm8ot2o-ag-d9615s6b",
+            "bm8ot2o-ag-i7deb8jh",
+            "bm8ot2o-ag-wvzra6sf",
+            "bm8ot2o-ag-ehbdov0i"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 11,
+            "pushToMarker": 14,
+            "queuedToAssigned": 2.5,
+            "pushToQueued": 3,
+            "setup": 9,
+            "install": 3.5,
+            "queuedToDone": 15
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0, 3.0]
+        },
+        {
+          "round": 22,
+          "arm": "Not cued",
+          "sha": "949fbdaba3a28019942a4e786964e4bc8e9ab462",
+          "runners": [
+            "bm8ot2o-ag-6inx2azy",
+            "bm8ot2o-ag-5u85vgyy",
+            "bm8ot2o-ag-h7561wlt",
+            "bm8ot2o-ag-ihuyuc3g",
+            "bm8ot2o-ag-2a7uku8b",
+            "bm8ot2o-ag-5pdfj6vn",
+            "bm8ot2o-ag-0mob8i24",
+            "bm8ot2o-ag-uvyuumd2"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 52,
+            "pushToMarker": 55,
+            "queuedToAssigned": 43,
+            "pushToQueued": 3,
+            "setup": 9,
+            "install": 4,
+            "queuedToDone": 56
+          }
+        },
+        {
+          "round": 23,
+          "arm": "GitHub-hosted",
+          "sha": "ac3b60e3b337ed2fe13340510370a925190010e6",
+          "runners": [
+            "GitHub Actions 1000001869",
+            "GitHub Actions 1000001872",
+            "GitHub Actions 1000001871",
+            "GitHub Actions 1000001873",
+            "GitHub Actions 1000001870",
+            "GitHub Actions 1000001876",
+            "GitHub Actions 1000001874",
+            "GitHub Actions 1000001875"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 15.5,
+            "pushToMarker": 18.5,
+            "queuedToAssigned": 3,
+            "pushToQueued": 3,
+            "setup": 12.5,
+            "install": 7.5,
+            "queuedToDone": 18
+          }
+        },
+        {
+          "round": 24,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "868bbe114342fc9f641718f3f5dec96faac590f2",
+          "runners": [
+            "bm8ot2o-ag-azyqasq5",
+            "bm8ot2o-ag-8qguajp8",
+            "bm8ot2o-ag-i86m0kgz",
+            "bm8ot2o-ag-gnyf7m4m",
+            "bm8ot2o-ag-szgrzcqc",
+            "bm8ot2o-ag-5qg2efqx",
+            "bm8ot2o-ag-j8xv43vk",
+            "bm8ot2o-ag-phkuyc2g"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 11,
+            "pushToMarker": 14,
+            "queuedToAssigned": 2,
+            "pushToQueued": 3,
+            "setup": 9,
+            "install": 4,
+            "queuedToDone": 14
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+        },
+        {
+          "round": 25,
+          "arm": "Not cued",
+          "sha": "582d07125ad2d8bd630d18674cb39a8213e39d77",
+          "runners": [
+            "bm8ot2o-ag-3l7g6pu2",
+            "bm8ot2o-ag-9l4sqsl5",
+            "bm8ot2o-ag-20v6d6gj",
+            "bm8ot2o-ag-wu9ulmq1",
+            "bm8ot2o-ag-19lksw1n",
+            "bm8ot2o-ag-dpyee5of",
+            "bm8ot2o-ag-fnp1mm05",
+            "bm8ot2o-ag-kz4yrh5f"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 56,
+            "pushToMarker": 59,
+            "queuedToAssigned": 48,
+            "pushToQueued": 3,
+            "setup": 8,
+            "install": 3,
+            "queuedToDone": 60
+          }
+        },
+        {
+          "round": 26,
+          "arm": "GitHub-hosted",
+          "sha": "09e893acb11930068bb7081a2eb74a06f32a4d95",
+          "runners": [
+            "GitHub Actions 1000001880",
+            "GitHub Actions 1000001881",
+            "GitHub Actions 1000001883",
+            "GitHub Actions 1000001882",
+            "GitHub Actions 1000001884",
+            "GitHub Actions 1000001886",
+            "GitHub Actions 1000001887",
+            "GitHub Actions 1000001885"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 13,
+            "pushToMarker": 16,
+            "queuedToAssigned": 3,
+            "pushToQueued": 3,
+            "setup": 10,
+            "install": 7,
+            "queuedToDone": 16
+          }
+        },
+        {
+          "round": 27,
+          "arm": "Cued",
+          "cue": {
+            "outcome": "sent",
+            "message": "Cued backmesh/benchmarks bench."
+          },
+          "sha": "f39729f52a5ebf07d068446c1fa77876616c40f0",
+          "runners": [
+            "bm8ot2o-ag-565zyldl",
+            "bm8ot2o-ag-9k0ahf6p",
+            "bm8ot2o-ag-yicg5erd",
+            "bm8ot2o-ag-grqzrc8l",
+            "bm8ot2o-ag-a0ruv05n",
+            "bm8ot2o-ag-glg719zr",
+            "bm8ot2o-ag-pqsqsruy",
+            "bm8ot2o-ag-rtexqe18"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 11,
+            "pushToMarker": 14,
+            "queuedToAssigned": 2,
+            "pushToQueued": 3,
+            "setup": 9,
+            "install": 4,
+            "queuedToDone": 15
+          },
+          "queuedToAssignedPerJob": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 3.0, 3.0]
+        },
+        {
+          "round": 28,
+          "arm": "Not cued",
+          "sha": "2765347417de2d29bded334f2227df8d58ec7019",
+          "runners": [
+            "bm8ot2o-ag-w525rkyn",
+            "bm8ot2o-ag-0mf4inoo",
+            "bm8ot2o-ag-t4f59eck",
+            "bm8ot2o-ag-521nteu8",
+            "bm8ot2o-ag-2w1kckco",
+            "bm8ot2o-ag-d1jsyaqz",
+            "bm8ot2o-ag-2ju58qhz",
+            "bm8ot2o-ag-c9skgdfx"
+          ],
+          "figures": {
+            "served": 0,
+            "queuedToMarker": 54,
+            "pushToMarker": 57,
+            "queuedToAssigned": 45,
+            "pushToQueued": 3,
+            "setup": 9,
+            "install": 4,
+            "queuedToDone": 58
+          }
+        },
+        {
+          "round": 29,
+          "arm": "GitHub-hosted",
+          "sha": "7bc5e96457591de061aecf2be8b68c7998581b37",
+          "runners": [
+            "GitHub Actions 1000001892",
+            "GitHub Actions 1000001893",
+            "GitHub Actions 1000001891",
+            "GitHub Actions 1000001895",
+            "GitHub Actions 1000001894",
+            "GitHub Actions 1000001897",
+            "GitHub Actions 1000001896",
+            "GitHub Actions 1000001898"
+          ],
+          "figures": {
+            "served": 8,
+            "queuedToMarker": 14,
+            "pushToMarker": 18,
+            "queuedToAssigned": 3,
+            "pushToQueued": 4,
+            "setup": 11,
+            "install": 8,
+            "queuedToDone": 17
+          }
+        }
+      ]
+    }
+  },
+  "cued": {
+    "A": {
+      "pushes": 10,
+      "jobs": 80,
+      "within5": 80,
+      "within10": 80,
+      "partialMissPushes": 0,
+      "fullPushes": 10,
+      "jobMarkerMedian": 10.0,
+      "jobMarkerP90": 11.0,
+      "jobAssignedMedian": 2.0,
+      "jobAssignedP90": 2.0,
+      "pushMarkerMedian": 10.25,
+      "pushMarker": [10, 11, 11, 10.5, 10, 10, 11, 10, 10, 10.5],
+      "pushDone": [14, 14, 14, 14, 14, 14, 14, 14, 14, 14]
+    },
+    "B": {
+      "pushes": 10,
+      "jobs": 80,
+      "within5": 75,
+      "within10": 76,
+      "partialMissPushes": 2,
+      "fullPushes": 8,
+      "jobMarkerMedian": 11.0,
+      "jobMarkerP90": 12.0,
+      "jobAssignedMedian": 2.0,
+      "jobAssignedP90": 3.0,
+      "pushMarkerMedian": 11.0,
+      "pushMarker": [10, 10, 11, 11, 15, 11, 10, 11, 11, 11],
+      "pushDone": [14, 14, 15, 14, 18.5, 14, 14, 15, 14, 15]
+    }
+  },
+  "tests": {
+    "queuedToFirstRealStep_pushMedians_exactMannWhitney_p": 0.157,
+    "queuedToDone_pushMedians_exactMannWhitney_p": 0.087,
+    "jobsWithin5s_fisherExact_p": 0.059
+  }
+}
