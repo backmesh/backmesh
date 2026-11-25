@@ -244,11 +244,11 @@ export const noGpuLine = (
     : `${where(cloud, regions)} ${regions.length > 1 ? 'offer' : 'offers'} no ${GPU_TYPES[cloud].join(' or ')}, so ${cloud} gets no GPU labels.`;
 
 export function noArmLine({ cloud }: CloudTarget, regions: readonly string[]) {
-  if (cloud !== 'aws') {
-    return `${cloud} gets no arm64 labels: backmesh runs arm64 on AWS Graviton only so far.`;
+  if (cloud === 'azure') {
+    return 'azure gets no arm64 labels: anycloud boots its arm64 image on AWS and GCP only.';
   }
-  const families = ARM_TYPES.aws(4).map((t) => t.split('.')[0]);
-  return `${where(cloud, regions)} ${regions.length > 1 ? 'offer' : 'offers'} no ${families.join(' or ')}, so aws gets no arm64 labels.`;
+  const families = ARM_TYPES[cloud](4).map((t) => t.split(/[.-]/)[0]);
+  return `${where(cloud, regions)} ${regions.length > 1 ? 'offer' : 'offers'} no ${families.join(' or ')}, so ${cloud} gets no arm64 labels.`;
 }
 
 // The management VM: AWS's is backmesh's sizing; GCP's the nearest size
