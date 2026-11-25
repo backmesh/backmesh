@@ -75,6 +75,7 @@ import {
   classesOf,
   keyLine,
   listedAccount,
+  noArmLine,
   noGpuLine,
   noKvmLine,
   keptPreferred,
@@ -475,6 +476,7 @@ async function upgradeOnce(
     for (const [targets, line] of [
       [plan.noKvm, noKvmLine],
       [plan.noGpu, noGpuLine],
+      [plan.noArm, noArmLine],
     ] as const) {
       for (const target of targets) {
         print(

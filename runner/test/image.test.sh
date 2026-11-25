@@ -85,15 +85,16 @@ docker run --rm --entrypoint node "$image" -e '
 # headless session in the Chrome it finds itself.
 docker run --rm -i --entrypoint sh "$image" \
   -c 'cat >/tmp/step.sh && exec bash --noprofile --norc -e -o pipefail /tmp/step.sh' <<'EOF' || fail "Rust after a restore, ./mvnw or a WebDriver session"
+t=stable-$(uname -m)-unknown-linux-gnu
 cargo --version >/dev/null 2>&1
 rm -rf "$HOME/.rustup"
 out=$(cargo --version 2>&1)
 [[ $out == *"backmesh: installing cargo"*"cargo 1.100.0 "* ]] || { echo "cargo after a restore of ~/.cargo/bin: $out"; exit 1; }
 # This fails once stable moves past RUST_VERSION: the signal to bump it.
-[[ $(rustup toolchain install stable --profile minimal --no-self-update 2>&1) == *'stable-x86_64-unknown-linux-gnu unchanged'* ]]
-cp -a "$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu" /tmp/mine
+[[ $(rustup toolchain install stable --profile minimal --no-self-update 2>&1) == *"$t unchanged"* ]]
+cp -a "$HOME/.rustup/toolchains/$t" /tmp/mine
 rustup toolchain link mine /tmp/mine && rustup default mine >/dev/null 2>&1
-rm -rf "$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu"
+rm -rf "$HOME/.rustup/toolchains/$t"
 [[ $(cargo --version 2>&1) == *"backmesh: installing cargo"* && $(rustup default) == mine* ]] || { echo "the restored default: $(rustup default)"; exit 1; }
 ! grep -q rust.new "$HOME/.cargo/env"
 mkdir -p /tmp/mvnw/.mvn/wrapper && cd /tmp/mvnw

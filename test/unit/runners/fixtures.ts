@@ -82,6 +82,12 @@ export const CATALOG = {
     ...aws('r7a', [0.116, 0.3043], false, 8),
     ...aws('r7i', [0.1008, 0.2646], false, 8),
     ...aws('r6a', [0.0764, 0.2268], false, 8),
+    // Graviton, anycloud 0.1.80's catalog of 2026-11-24, and its
+    // high-memory twins, the catalog's of 2026-11-25.
+    ...aws('m8g', [0.0534, 0.1795]),
+    ...aws('m7g', [0.0608, 0.1632]),
+    ...aws('r8g', [0.0428, 0.2356], false, 8),
+    ...aws('r7g', [0.0748, 0.2142], false, 8),
     t4('g4dn.xlarge', 4, 16, 'us-east-2', [0.2732, 0.526]),
     t4('g4dn.2xlarge', 8, 32, 'us-east-2', [0.3696, 0.752]),
   ],
@@ -127,6 +133,14 @@ export const CATALOG = {
       [0.1267, 0.228],
       false,
       HIGHMEM,
+    ),
+    // arm64: Ampere's t2a, the catalog's of 2026-11-25. Its catalog has no
+    // c4a yet (anycloud#50 adds it when its catalog is next fetched).
+    ...family(
+      (n) => `t2a-standard-${n}`,
+      'us-central1-a',
+      [0.08279, 0.154],
+      false,
     ),
   ],
   // The catalog may spell a type in another case than the classes' list.

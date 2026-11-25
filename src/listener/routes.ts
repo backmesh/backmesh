@@ -34,6 +34,7 @@ const RunnerClasses = z.array(
     gpu: z.literal(GPU.model).optional(),
     highmem: z.literal(true).optional(),
     preferred: z.literal(true).optional(),
+    arm: z.literal(true).optional(),
   }),
 );
 
@@ -71,6 +72,7 @@ export function parseRoutes(json: string): Route[] {
           c.kvm === route.kvm &&
           c.gpu === route.gpu &&
           c.highmem === route.highmem &&
+          c.arm === route.arm &&
           c.vcpus === route.vcpus,
       );
     return { ...route, ...(od && { onDemand: { label: od.label } }) };

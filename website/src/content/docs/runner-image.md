@@ -7,7 +7,10 @@ Every label runs the same image: Ubuntu 24.04 with the GitHub Actions runner,
 the Docker CLI, which uses the VM's Docker, and the apt packages GitHub's
 `ubuntu-24.04` runners have, not their language toolchains, cloud CLIs or
 browsers. It's built from a public Dockerfile and signed,
-and each backmesh release names one image by its digest.
+and each backmesh release names one image by its digest. The image is built
+for x86-64 and arm64, with the same tools at the same versions; an
+[arm64 label](/labels/#arm64)'s VM pulls the arm64 build, and the first-use
+installs fetch arm64 releases there.
 
 ## What's in it
 

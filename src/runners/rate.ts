@@ -38,7 +38,8 @@ const range = (rate: ReturnType<typeof classRate>) =>
 
 /**
  * The lines install prints per cloud: priced at its default class, at its
- * largest high-memory class, and at its GPU class when it has one.
+ * largest high-memory class, and at its GPU and arm64 classes when it has
+ * them.
  */
 export function formatRate(
   classes: readonly RunnerClass[],
@@ -46,15 +47,24 @@ export function formatRate(
 ): string[] {
   const [spot, onDemand] = [true, false].map((s) =>
     classes.find(
-      (c) => c.vcpus === 4 && !c.kvm && !c.gpu && !c.highmem && c.spot === s,
+      (c) =>
+        c.vcpus === 4 &&
+        !c.kvm &&
+        !c.gpu &&
+        !c.highmem &&
+        !c.arm &&
+        c.spot === s,
     ),
   );
   const [highmemSpot, highmemOnDemand] = [true, false].map((s) =>
-    classes.findLast((c) => c.highmem && c.spot === s),
+    classes.findLast((c) => c.highmem && !c.arm && c.spot === s),
   );
   const { cloud, regions } = (spot ?? onDemand)!;
   const [gpuSpot, gpuOnDemand] = [true, false].map((s) =>
     classes.find((c) => c.gpu && c.spot === s),
+  );
+  const [armSpot, armOnDemand] = [true, false].map((s) =>
+    classes.find((c) => c.arm && !c.highmem && c.vcpus === 4 && c.spot === s),
   );
   return [
     `${where(cloud, regions)}: no VM while idle; while its job runs, a ${spot?.label ?? 'backmesh-ubuntu-2404-4vcpu'} VM costs about ${range(spot ? classRate(spot, details) : null)} an hour on spot and ${range(onDemand ? classRate(onDemand, details) : null)} on demand, plus its disk, and the other sizes scale with their vCPUs`,
@@ -66,6 +76,11 @@ export function formatRate(
     ...(gpuSpot && gpuOnDemand
       ? [
           `${where(cloud, gpuSpot.regions)}: a ${gpuSpot.label} VM (${gpuSpot.vmTypes.join(', ')}) costs about ${range(classRate(gpuSpot, details))} an hour on spot and ${range(classRate(gpuOnDemand, details))} on demand, plus its disk`,
+        ]
+      : []),
+    ...(armSpot && armOnDemand
+      ? [
+          `${where(cloud, armSpot.regions)}: a ${armSpot.label} VM (arm64: ${armSpot.vmTypes.join(', ')}) costs about ${range(classRate(armSpot, details))} an hour on spot and ${range(classRate(armOnDemand, details))} on demand, plus its disk, and the other sizes scale with their vCPUs`,
         ]
       : []),
   ];
