@@ -674,30 +674,24 @@ describe('upgrade', () => {
     expect(requests.filter((r) => !r.startsWith('GET'))).toEqual([]);
   });
 
-  it("keeps an install's on-demand fallback, and turns it off with --no-on-demand-fallback", async () => {
-    const withFallback = JSON.stringify(
-      planClasses(
-        [{ cloud: 'aws', region: 'us-east-2', credentials: 'bm-aws' }],
-        catalogs({ aws: CATALOG.aws }),
-        'aws',
-        false,
-        true,
-      ).classes,
-    );
-    const env = {
+  it("drops a Secret's `fallback` from v0.7.2's --on-demand-fallback", async () => {
+    const classes = planClasses(
+      [{ cloud: 'aws', region: 'us-east-2', credentials: 'bm-aws' }],
+      catalogs({ aws: CATALOG.aws }),
+      'aws',
+    ).classes;
+    const { deps, secrets } = setUp({
       version: '0.1.72',
       image: RELEASE.listenerImage,
       runnerImage: RELEASE.runnerImage,
-      runners: withFallback,
+      runners: JSON.stringify(
+        classes.map((c) => ({ ...c, ...(c.spot && { fallback: true }) })),
+      ),
       cacheBuckets: ['bm-cache-l8u5e-us-east-2'],
-    };
-    const kept = setUp(env);
-    await upgrade(kept.deps);
-    expect(mutations(kept.calls)).toEqual([]);
-    const off = setUp(env);
-    await upgrade(off.deps, { plan: true, onDemandFallback: false });
-    expect(off.lines).toContain(
-      "acme's spot labels no longer fall back on demand.",
+    });
+    await upgrade(deps);
+    expect(secrets['backmesh-acme']!.BACKMESH_RUNNERS).not.toContain(
+      'fallback',
     );
   });
 

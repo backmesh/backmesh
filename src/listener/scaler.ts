@@ -104,7 +104,7 @@ type Mint = {
   spot: boolean;
   regions: string[];
   start: Start;
-  // An on-demand VM for a spot route with `fallback` (`placement`).
+  // A spot route's on-demand VM, spot refused everywhere (`placement`).
   fallback?: boolean;
 };
 
@@ -661,7 +661,6 @@ export class Scaler {
           cloud: set.route.cloud,
           ...(set.route.gpu && { gpu: set.route.gpu }),
           ...(set.route.retiring && { retiring: true }),
-          ...(set.route.fallback && { fallback: true }),
           queued: queued.length,
           starting: mine.length - queued.length - running,
           running,
@@ -1096,9 +1095,8 @@ export class Scaler {
   // as many as its assigned jobs lack runners get a replacement, oldest
   // first, so the planner's speculative runners never fail over. The
   // replacement goes to the route's other regions, of the same kind, else
-  // nowhere (owner, 2026-11-09: a spot label never fails over on demand),
-  // unless the route has `fallback` (owner, 2026-11-25): a spot Job with no
-  // other region, or a spot replacement slow too, is replaced on demand.
+  // else, for a spot Job with no other region or a spot replacement slow
+  // too, on demand (owner, 2026-11-25), when the route has an on-demand pair.
   // Once it's submitted the slow Job goes, unless its runner took a job
   // meanwhile, when the replacement is an extra that scale-down removes; a
   // slow Job whose removal failed is retried next cycle, and scale-down
@@ -1219,23 +1217,23 @@ export class Scaler {
       (region) =>
         !from.includes(region) && !this.failover.avoiding(kind, region, now),
     );
-    // With `fallback`, a spot Job with no other region to try, or a spot
-    // replacement slow too, falls back on demand.
+    // A spot Job with no other region to try, or a spot replacement slow
+    // too, falls back on demand.
     const fallsBack =
       job.spot &&
-      !!route.fallback &&
       !!route.onDemand &&
       (!rest.length || this.replacements.has(job.id));
     // Avoiding a region changes something only for a route with another
-    // region its quota fits, or with `fallback`: avoiding the only one would
-    // start none, or start them on demand at once (`placement`).
+    // region its quota fits, or a spot one with an on-demand pair: avoiding
+    // the only one would start none, or start them on demand at once
+    // (`placement`).
     // A miss is a region whose refusal sent it into a backoff, with no
     // untried target left: one anycloud moved on from at once may have
     // launched on its next VM type had it not been replaced at 75 s.
     const missed = () => {
       if (
         this.fits(set, job.spot, now).length > 1 ||
-        (job.spot && route.fallback && route.onDemand)
+        (job.spot && route.onDemand)
       ) {
         this.failover.missed(kind, backedOff, now);
       }
@@ -1472,13 +1470,14 @@ export class Scaler {
       };
     }
     // No region left open (every one skipped for quota, or avoided): none
-    // starts, and its jobs wait at GitHub. A spot label falls back on
-    // demand for it only with `fallback` (owner, 2026-11-09 and 2026-11-25).
+    // starts, and its jobs wait at GitHub, unless a spot label has an
+    // on-demand pair: then its real jobs fall back on demand (owner,
+    // 2026-11-25).
     // On-demand runners whose every region that fits is avoided keep
     // starting in them, as the breaker never left them none before.
     if (!kind.open.length && kind.fit.length) {
       if (!spot) return { spot, regions: kind.fit, fallback: false };
-      const od = route.fallback && route.onDemand ? usable(false) : undefined;
+      const od = route.onDemand ? usable(false) : undefined;
       set.avoiding = {
         regions: kind.fit,
         until: Math.min(

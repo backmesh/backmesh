@@ -1517,50 +1517,28 @@ describe('install', () => {
     ]);
   });
 
-  it('marks the spot labels with --on-demand-fallback, keeps it on a re-run, and drops it with --no-on-demand-fallback', async () => {
-    const rerun = (env: Record<string, string> = {}) =>
-      setUp(
-        {
-          env: OVERRIDE,
-          vms: [acmeVm],
-          hosted: true,
-          cacheBuckets: ['bm-cache-l8u5e-us-east-2'],
-        },
-        probe(env),
-      );
-    const secretRunners = (requests: string[]): string =>
-      JSON.parse(
-        requests
-          .find((r) => r.startsWith('PUT /v1/secrets/backmesh-acme '))!
-          .split(' ')[2]!,
-      ).values.BACKMESH_RUNNERS;
-    const on = rerun();
-    await install({ ...options, onDemandFallback: true }, on.deps);
-    expect(on.lines).toContain(ON_DEMAND_FALLBACK_LINE);
-    expect(on.lines).toContain("acme's spot labels fall back on demand.");
-    const json = secretRunners(on.requests);
-    const routes = parseRoutes(json);
-    expect(routes.filter((r) => r.fallback).map((r) => r.label)).toEqual(
-      routes.filter((r) => r.spot).map((r) => r.label),
+  it("says spot labels fall back on demand, and drops a Secret's `fallback` from v0.7.2's --on-demand-fallback", async () => {
+    const old = (JSON.parse(RUNNERS) as { spot: boolean }[]).map((c) => ({
+      ...c,
+      ...(c.spot && { fallback: true }),
+    }));
+    const { deps, requests, lines } = setUp(
+      {
+        env: OVERRIDE,
+        vms: [acmeVm],
+        hosted: true,
+        cacheBuckets: ['bm-cache-l8u5e-us-east-2'],
+      },
+      probe({ BACKMESH_RUNNERS: JSON.stringify(old) }),
     );
-    expect(routes.some((r) => !r.spot && r.fallback)).toBe(false);
-
-    const kept = rerun({ BACKMESH_RUNNERS: json });
-    await install(options, kept.deps);
-    expect(kept.lines).toContain(ON_DEMAND_FALLBACK_LINE);
-    expect(
-      kept.requests.filter((r) => r.startsWith('PUT /v1/secrets/')),
-    ).toEqual([]);
-
-    const off = rerun({ BACKMESH_RUNNERS: json });
-    await install({ ...options, onDemandFallback: false }, off.deps);
-    expect(off.lines).not.toContain(ON_DEMAND_FALLBACK_LINE);
-    expect(off.lines).toContain(
-      "acme's spot labels no longer fall back on demand.",
+    await install(options, deps);
+    expect(lines).toContain(ON_DEMAND_FALLBACK_LINE);
+    const secret = requests.find((r) =>
+      r.startsWith('PUT /v1/secrets/backmesh-acme '),
+    )!;
+    expect(JSON.parse(secret.split(' ')[2]!).values.BACKMESH_RUNNERS).toBe(
+      RUNNERS,
     );
-    expect(
-      parseRoutes(secretRunners(off.requests)).some((r) => r.fallback),
-    ).toBe(false);
   });
 
   it('adds a cloud to a running listener: the plan shows it, then the Secret and a roll', async () => {

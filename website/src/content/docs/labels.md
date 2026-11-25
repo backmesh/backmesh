@@ -98,29 +98,20 @@ runs-on: [backmesh-ubuntu-2404-4vcpu, backmesh-noretry]
 
 ### On-demand fallback
 
-By default a spot label stays on spot: when every runner region refuses spot
-capacity, its jobs wait at GitHub until capacity comes back. With
-`--on-demand-fallback`, install makes every spot label fall back on demand
-instead:
-
-```bash
-backmesh install --org acme --on-demand-fallback
-```
-
-A spot runner falls back when its launch is still refused 75 s after its
-submit, once anycloud has tried every VM type and zone of a region that refused
-it and backmesh has tried the label's other regions: its replacement is an
-on-demand VM of the same types, in any runner region. After 3 such refusals in
-a region within 15 minutes, the region is [avoided](/status/) for spot for 30
-minutes, and while every spot region of the label is avoided, its jobs' runners
-start on demand at once. Runners started ahead of predicted or cued jobs don't
-fall back: they wait for spot. The job then bills at the
-on-demand rate ([Cost](/cost/#whats-left-out)). The listener logs each job that
-fell back with `"fallback": true` on its `job completed` line, and
-[`backmesh status`](/status/) marks the label and counts its jobs that fell
-back today. A re-run of install or upgrade keeps the setting;
-`--no-on-demand-fallback` turns it off. Public labels have no on-demand pair,
-so they never fall back.
+A spot label falls back on demand by itself when the cloud has no spot capacity
+for it, so its jobs don't wait at GitHub for capacity to come back. A spot
+runner falls back when its launch is still refused 75 s after its submit, once
+anycloud has tried every VM type and zone of a region that refused it and
+backmesh has tried the label's other regions: its replacement is an on-demand
+VM of the same types, in any runner region. After 3 such refusals in a region
+within 15 minutes, the region is [avoided](/status/) for spot for 30 minutes,
+and while every spot region of the label is avoided, its jobs' runners start on
+demand at once; after the 30 minutes they start on spot again. Runners started
+ahead of predicted or cued jobs don't fall back: they wait for spot. A job that fell back bills at the on-demand rate,
+about 1.7 to 5.4 times spot ([Cost](/cost/#whats-left-out)). The listener logs
+each with `"fallback": true` on its `job completed` line, and
+[`backmesh status`](/status/) counts a label's jobs that fell back today. Public
+labels have no on-demand pair, so they never fall back.
 
 ## KVM
 
@@ -169,9 +160,9 @@ A GPU job starts slower than a CPU one: its VM boots NVIDIA's larger image,
 and pulling and starting the runner's image takes longer, as the
 [GPU benchmark](https://github.com/backmesh/backmesh/tree/main/benchmarks/gpu-t4)
 measured. When
-spot T4s are short, a `backmesh-ubuntu-2404-gpu-t4` job waits for one: like every spot
-label, it never falls back on demand. `backmesh-ubuntu-2404-gpu-od-t4` runs on demand
-instead.
+spot T4s are short, a `backmesh-ubuntu-2404-gpu-t4` job
+[falls back on demand](#on-demand-fallback), like every spot label's.
+`backmesh-ubuntu-2404-gpu-od-t4` always runs on demand.
 
 The job sees the GPU as on GitHub's runner: `nvidia-smi` works in a step, and
 `docker run --gpus all` works on the VM's Docker through the NVIDIA container

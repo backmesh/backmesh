@@ -199,9 +199,6 @@ export interface UpgradeOptions {
   // `--public-repos` or `--no-public-repos`, as install's: adds or drops
   // `backmesh-ubuntu-2404-public-<n>vcpu`. Without it, each org keeps what it has.
   publicRepos?: boolean;
-  // `--on-demand-fallback` or `--no-on-demand-fallback`, as install's.
-  // Without it, each org keeps what it has.
-  onDemandFallback?: boolean;
 }
 
 // The oldest anycloud a move starts from: backmesh v0.5.7's, so a v0.5.7
@@ -234,7 +231,6 @@ async function upgradeOnce(
     planId: agreed,
     yes = false,
     publicRepos,
-    onDemandFallback,
   }: UpgradeOptions,
   state: { paused: boolean },
 ) {
@@ -405,17 +401,12 @@ async function upgradeOnce(
       !!running.runners &&
       parseRoutes(running.runners).some((r) => r.public && !r.retiring);
     const isPublic = publicRepos ?? wasPublic;
-    // `install --on-demand-fallback` is kept as its spot classes' `fallback`.
-    const fellBack =
-      !!running.runners &&
-      parseRoutes(running.runners).some((r) => r.fallback && !r.retiring);
     const plan = await classesOf(
       targets,
       catalogs,
       planRegions(multiRegion, { print }),
       home,
       isPublic,
-      onDemandFallback ?? fellBack,
     );
     // The public labels are the control plane's cloud's, as install's.
     if (isPublic && !plan.classes.some((c) => c.public)) {
@@ -482,12 +473,11 @@ async function upgradeOnce(
       org,
       current: fingerprint(running),
       changes,
-      classes: classes.map(({ label, cloud, vmTypes, regions, fallback }) => ({
+      classes: classes.map(({ label, cloud, vmTypes, regions }) => ({
         label,
         cloud,
         vmTypes,
         regions,
-        ...(fallback && { fallback }),
       })),
     })),
   };

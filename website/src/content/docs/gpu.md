@@ -77,7 +77,7 @@ A cold `backmesh-ubuntu-2404-gpu-t4` job on AWS waited a median of 130.5 seconds
 2 minutes 10 seconds, from queued to started (p90 138 s), over 10 samples on
 2026-11-21 with no runner waiting on the label. Each got a spot `g4dn.xlarge`
 and none met a spot capacity refusal, so this is the no-refusal case. When spot
-T4s are short, a spot job waits for one; `backmesh-ubuntu-2404-gpu-od-t4` doesn't. Azure
+T4s are short, a spot job [falls back on demand](/labels/#on-demand-fallback). Azure
 wasn't measured. The samples and method are in
 [benchmarks/gpu-t4](https://github.com/backmesh/backmesh/tree/main/benchmarks/gpu-t4).
 

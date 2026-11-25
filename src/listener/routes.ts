@@ -32,7 +32,6 @@ const RunnerClasses = z.array(
     replaceScaleSetId: z.number().int().positive().optional(),
     public: z.boolean().optional(),
     gpu: z.literal(GPU.model).optional(),
-    fallback: z.literal(true).optional(),
   }),
 );
 
@@ -40,8 +39,8 @@ export interface Route extends RunnerClass {
   retiring?: boolean;
   replaceScaleSetId?: number;
   // A spot route's on-demand label of the same size and kind: where a retry
-  // or a paused spot capacity's runners go, as on-demand VMs, and with
-  // `fallback`, a runner the cloud refused spot in every region.
+  // or a paused spot capacity's runners go, as on-demand VMs, and a runner
+  // the cloud refused spot in every region.
   onDemand?: { label: string };
 }
 

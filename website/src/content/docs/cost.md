@@ -77,10 +77,9 @@ shows the same figures.
   bills for its boot and a short idle time.
 - **Buckets.** The checkpoint bucket and the [cache](/cache/) buckets bill for
   what they store.
-- **On-demand retries** after a spot reclaim, and with
-  [`--on-demand-fallback`](/labels/#on-demand-fallback), spot jobs that fell
-  back on demand when no runner region had spot capacity. `backmesh status`
-  counts them per label.
+- **On-demand retries** after a spot reclaim, and spot jobs that
+  [fell back on demand](/labels/#on-demand-fallback) when no runner region had
+  spot capacity. `backmesh status` counts them per label.
 
 Spot prices change by the hour and by zone, and other regions differ. On
 demand cost about 1.7 to 5.4 times spot on 2026-11-13, depending on the type.

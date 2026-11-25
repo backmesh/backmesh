@@ -96,11 +96,8 @@ describe('regions skipped for quota', () => {
     });
   });
 
-  it('starts nothing for a spot label with every spot region skipped or avoided, never on demand (owner, 2026-11-09)', async () => {
-    const SPOT8: Route = {
-      ...EIGHT,
-      onDemand: { label: 'backmesh-ubuntu-2404-od-8vcpu' },
-    };
+  it('starts nothing for a spot label with no on-demand pair and every spot region skipped or avoided', async () => {
+    const SPOT8: Route = EIGHT;
     const OD8: Route = {
       ...EIGHT,
       label: 'backmesh-ubuntu-2404-od-8vcpu',
@@ -304,9 +301,11 @@ describe('regions skipped for quota', () => {
     await env.scaler.reconcile();
     const [id] = env.anycloud.submitted.map((spec) => spec.id);
     env.anycloud.setState(id!, 'retrying');
-    (await env.anycloud.jobs.timeline(id!))!.refusals = [
+    const timeline = (await env.anycloud.jobs.timeline(id!))!;
+    timeline.refusals = [
       { region: 'us-east-2', diagnosis: 'capacity-exhausted' },
     ];
+    timeline.backedOff = ['us-east-2'];
     env.clock.now = 180_000;
     await env.scaler.reconcile();
     expect(env.anycloud.submitted).toHaveLength(1);
