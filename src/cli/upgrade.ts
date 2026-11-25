@@ -89,6 +89,7 @@ import {
   runnerClouds,
   signInRequired,
   SIGNED_IN,
+  takesArm,
   takesRegions,
 } from './install.js';
 import { parseRoutes } from '../listener/routes.js';
@@ -458,6 +459,7 @@ async function upgradeOnce(
       home,
       isPublic,
       preferred,
+      takesArm(release.anycloud, deps.features),
     );
     preferredLines(preferred, (cloud) => [
       ...(plan.catalog.get(cloud)?.keys() ?? []),

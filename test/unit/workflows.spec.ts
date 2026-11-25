@@ -930,7 +930,12 @@ describe("e2e.yml's AWS leg, away from our production control plane", () => {
         inputs: Record<string, { default: string }>;
       }
     ).inputs.labels!.default;
-    for (const entry of labels.trim().split(/\s+/)) {
+    const onAws = labels
+      .trim()
+      .split(/\s+/)
+      .filter((entry) => entry.includes('=aws:'));
+    expect(onAws.length).toBeGreaterThan(0);
+    for (const entry of onAws) {
       expect(entry.split(':')[1]!.split(','), entry).toContain('us-west-2');
     }
   });

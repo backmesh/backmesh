@@ -53,6 +53,7 @@ const RELEASED: FeatureTable = {
   c28: '0.1.0',
   'vm-job-regions': undefined,
   'service-tokens': '0.1.0',
+  arm64: '0.1.0',
 };
 const OVERRIDE = { BACKMESH_UNSUPPORTED_CI_OVERRIDE: 'anycloud-ci' };
 const images = {

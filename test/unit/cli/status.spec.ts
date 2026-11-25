@@ -205,6 +205,7 @@ function setUp({
           'service-tokens': '0.1.0',
           'role-apply': undefined,
           c28: undefined,
+          arm64: undefined,
         },
       }),
   };
