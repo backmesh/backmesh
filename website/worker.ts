@@ -1,11 +1,16 @@
 // Serves the static site. It runs before the assets, so it can send
 // www.backmesh.com to the apex, /pricing to the landing page's pricing,
 // serve install.sh as text so a browser shows it, and retire the old site's
-// other paths.
+// other paths: a 410 where this site has no page, so search engines drop
+// them. This site's own pages there, such as the blog, are served first.
 const RETIRED = /^\/(docs|blog|app|firebase-jwt|supabase-jwt)(\/|$)/;
 
+export interface Env {
+  ASSETS: { fetch(request: Request): Promise<Response> };
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (url.hostname.startsWith('www.')) {
       url.hostname = url.hostname.slice(4);
@@ -19,15 +24,18 @@ export default {
     if (/^\/pricing(\/|$)/.test(url.pathname)) {
       return Response.redirect(new URL('/#pricing', url).href, 301);
     }
-    if (RETIRED.test(url.pathname)) {
-      return Response.redirect(new URL('/', url).href, 301);
-    }
     const response = await env.ASSETS.fetch(request);
     // The assets add a page's trailing slash with a 307; a 301 tells search
     // engines the slashed URL is the page's one address.
     if (response.status === 307) {
       const location = response.headers.get('location');
       if (location) return Response.redirect(new URL(location, url).href, 301);
+    }
+    if (response.status === 404 && RETIRED.test(url.pathname)) {
+      return new Response(response.body, {
+        status: 410,
+        headers: response.headers,
+      });
     }
     if (url.pathname === '/install.sh' && response.ok) {
       const text = new Response(response.body, response);
