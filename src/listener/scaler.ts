@@ -147,7 +147,7 @@ export interface ScaleSet {
   };
   // A spot label's regions that fit its quota, every one avoided for slow
   // boots: none starts until the first avoidance ends (ms).
-  avoiding?: { regions: string[]; until: number };
+  avoiding?: { regions: string[]; until: number; onDemand?: true };
   // When GitHub last ended one of its jobs with no runner (ms): `reconcile`
   // holds its scale-down for REQUEUE_HOLD_MS after.
   requeuedAt?: number;
@@ -677,6 +677,7 @@ export class Scaler {
             avoiding: {
               regions: set.avoiding.regions,
               until: new Date(set.avoiding.until).toISOString(),
+              ...(set.avoiding.onDemand && { onDemand: true }),
             },
           }),
           ...(set.quota && {
@@ -1249,7 +1250,9 @@ export class Scaler {
     if (onDemand.length) {
       if (!quota.take(set, false, true, onDemand)) return undefined;
       to = onDemand.join(', ');
-      name = await this.mint(set, false, onDemand, false, 'reactive', true);
+      // A predicted or cued runner's replacement keeps its start kind.
+      const start = this.startedFor.get(job.id) ?? 'reactive';
+      name = await this.mint(set, false, onDemand, false, start, true);
     } else if (rest.length) {
       // Pinned to regions the slow one wasn't in: their quota, not its.
       if (!quota.take(set, job.spot, true, rest)) return undefined;
@@ -1476,13 +1479,6 @@ export class Scaler {
     if (!kind.open.length && kind.fit.length) {
       if (!spot) return { spot, regions: kind.fit, fallback: false };
       const od = route.fallback && route.onDemand ? usable(false) : undefined;
-      if (od?.fit.length) {
-        return {
-          spot: false,
-          regions: od.open.length ? od.open : od.fit,
-          fallback: true,
-        };
-      }
       set.avoiding = {
         regions: kind.fit,
         until: Math.min(
@@ -1490,7 +1486,15 @@ export class Scaler {
             this.failover.until({ ...route, spot }, region),
           ),
         ),
+        ...(od?.fit.length && { onDemand: true }),
       };
+      if (od?.fit.length) {
+        return {
+          spot: false,
+          regions: od.open.length ? od.open : od.fit,
+          fallback: true,
+        };
+      }
     }
     return { spot, regions: kind.open, fallback: false };
   }

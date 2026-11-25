@@ -173,10 +173,15 @@ export const listenerStatusSchema = z.object({
         })
         .optional(),
       // A spot label's regions that fit its quota, every one avoided for
-      // slow boots, so none starts until `until`. Optional, as an older
-      // listener has none.
+      // slow boots, so none starts until `until`, or with `onDemand`
+      // (`fallback`) its real jobs' runners start on demand until then.
+      // Optional, as an older listener has none.
       avoiding: z
-        .object({ regions: z.array(z.string()), until: z.iso.datetime() })
+        .object({
+          regions: z.array(z.string()),
+          until: z.iso.datetime(),
+          onDemand: z.boolean().optional(),
+        })
         .optional(),
       // The cloud's spot or on-demand vCPU quota held this scale set back.
       // Optional, as an older listener has none.

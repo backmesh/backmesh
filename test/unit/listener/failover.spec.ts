@@ -305,7 +305,13 @@ describe('boot deadline', () => {
     env.sets[0]!.statistics = assigned(4);
     await env.scaler.reconcile();
     expect(env.anycloud.submitted.slice(6).map((s) => s.spot)).toEqual([false]);
-    expect(env.scaler.status().scaleSets[0]!.avoiding).toBeUndefined();
+    expect(env.scaler.status().scaleSets[0]!.avoiding).toEqual({
+      regions: ['us-east-2'],
+      until: new Date(BOOT_DEADLINE_MS + 30 * 60_000).toISOString(),
+      onDemand: true,
+    });
+    const served = { installed: true, broker: null, ...env.scaler.status() };
+    expect(listenerStatusSchema.parse(served)).toEqual(served);
     // Once the avoidance ends, spot again.
     wanted = 0;
     env.clock.now += 30 * 60_000;
@@ -339,7 +345,10 @@ describe('boot deadline', () => {
     env.sets[0]!.statistics = assigned(4);
     await env.scaler.reconcile();
     expect(env.anycloud.submitted.at(-1)).toMatchObject({ spot: false });
-    expect(env.scaler.status().scaleSets[0]!.avoiding).toBeUndefined();
+    expect(env.scaler.status().scaleSets[0]!.avoiding).toMatchObject({
+      regions: ['us-east-2', 'us-west-2'],
+      onDemand: true,
+    });
   });
 
   it('replaces an on-demand runner in its other on-demand regions', async () => {

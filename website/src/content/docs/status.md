@@ -22,9 +22,10 @@ It shows the shared control plane once, then one section for each org on it.
   a warning when a label's quota fits no region, or its spot runners' regions
   are avoided for slow starts, so its jobs wait at GitHub. A label with
   [on-demand fallback](/labels/#on-demand-fallback) shows "falls back on
-  demand", and its slow-start line counts the runners replaced on demand. A
-  label that install or upgrade removed shows as draining until its scale set
-  is deleted.
+  demand", its slow-start line counts the runners replaced on demand, and while
+  every spot region of it is avoided, a warning says its runners start on demand
+  until when. A label that install or upgrade removed shows as draining until
+  its scale set is deleted.
 - **Planner**, as counts only: per label, the runners started ahead of
   predicted jobs; per org, the workflows learned and how many of them scale
   only reactively because too few predictions were right; and whether the
