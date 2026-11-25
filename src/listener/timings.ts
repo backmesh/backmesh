@@ -79,6 +79,9 @@ type Completed = { kind: 'job completed'; at: number } & ReturnType<
     start: Start | null;
     // A rerun backmesh recognized as its retry.
     retry?: true;
+    // A spot label's job on an on-demand VM after spot was refused in every
+    // region (`fallback`).
+    fallback?: true;
   };
 
 export type JobRow =
@@ -256,6 +259,7 @@ export class JobRows {
       startupFailures: count('runner failed to start'),
       reruns: count('run rerun'),
       retries: { onDemand, spot: started.length - onDemand },
+      fellBack: jobs.filter((r) => r.fallback).length,
       regions: Object.fromEntries(
         [...launched].map(([region, rows]) => [
           region,

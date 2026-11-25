@@ -213,6 +213,7 @@ describe('job rows', () => {
       startupFailures: 0,
       reruns: 0,
       retries: { onDemand: 0, spot: 0 },
+      fellBack: 0,
       regions: {
         'us-east-2': { jobs: 18, vmMs: { p50: 161_100, p95: 171_900 } },
         'us-west-2': { jobs: 7, vmMs: { p50: 162_000, p95: 172_800 } },

@@ -169,6 +169,11 @@ export interface RunnerClass extends CloudTarget {
   public?: boolean;
   /** `backmesh-ubuntu-2404-gpu-t4`: its VMs' one GPU, passed into the job. */
   gpu?: typeof GPU.model;
+  /**
+   * `install --on-demand-fallback`: a spot class whose runner the cloud
+   * refused in every region gets an on-demand VM instead (`Scaler.replace`).
+   */
+  fallback?: true;
 }
 
 /**
@@ -235,6 +240,9 @@ function shapeProblem(
     : `${vmType} is ${type.vCPUs} vCPU / ${type.memoryGiB} GiB, not a ${vcpus} vCPU / ${memory} GiB CPU type`;
 }
 
+// A public class has no on-demand pair to fall back on (`parseRoutes`).
+const withoutFallback = ({ fallback: _, ...c }: RunnerClass): RunnerClass => c;
+
 /** Each region's `vm-types --details` records, the install region first. */
 export type RegionCatalog = ReadonlyMap<string, readonly VmTypeDetails[]>;
 
@@ -275,6 +283,8 @@ export function planClasses(
   home: Cloud | undefined,
   // `install --public-repos`: the home cloud's `backmesh-ubuntu-2404-public-<n>vcpu` too.
   publicRepos = false,
+  // `install --on-demand-fallback`: the spot classes fall back on demand.
+  fallback = false,
 ): ClassPlan {
   const plan: ClassPlan = { classes: [], problems: [], noKvm: [], noGpu: [] };
   for (const target of targets) {
@@ -335,6 +345,7 @@ export function planClasses(
               kvm,
               vmTypes,
               regions,
+              ...(fallback && spot && { fallback: true as const }),
             },
           ];
         }),
@@ -391,6 +402,7 @@ export function planClasses(
           vmTypes: GPU_TYPES[target.cloud],
           regions: gpuRegions,
           gpu: GPU.model,
+          ...(fallback && spot && { fallback: true as const }),
         }))
       : [];
     if (!gpu.length) plan.noGpu.push(target);
@@ -403,7 +415,7 @@ export function planClasses(
           (PUBLIC_VCPUS as readonly number[]).includes(c.vcpus)
             ? [
                 {
-                  ...c,
+                  ...withoutFallback(c),
                   label: publicLabel(c.vcpus),
                   code: `${CLOUD_CODE[target.cloud][4]}${c.vcpus.toString(36)}`,
                   public: true,

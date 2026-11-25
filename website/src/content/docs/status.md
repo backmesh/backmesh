@@ -20,15 +20,20 @@ It shows the shared control plane once, then one section for each org on it.
   runners are short, such as no spot capacity or a quota limit; the regions
   skipped because their quota can't fit one runner, with the quota to raise; and
   a warning when a label's quota fits no region, or its spot runners' regions
-  are avoided for slow starts, so its jobs wait at GitHub. A label that install
-  or upgrade removed shows as draining until its scale set is deleted.
+  are avoided for slow starts, so its jobs wait at GitHub. A label with
+  [on-demand fallback](/labels/#on-demand-fallback) shows "falls back on
+  demand", its slow-start line counts the runners replaced on demand, and while
+  every spot region of it is avoided, a warning says its runners start on demand
+  until when. A label that install or upgrade removed shows as draining until
+  its scale set is deleted.
 - **Planner**, as counts only: per label, the runners started ahead of
   predicted jobs; per org, the workflows learned and how many of them scale
   only reactively because too few predictions were right; and whether the
   planner is off after an error.
 - **Jobs**, per label, over the last 24 hours: how many completed and how long
   they took to start, typical (p50) and slowest (p95); how many were reclaimed
-  or failed to start, when any were; and a warning when runners waited for
+  or failed to start, and how many fell back on demand
+  ([on-demand fallback](/labels/#on-demand-fallback)), when any were; and a warning when runners waited for
   cloud quota, with the quota to raise. It warns at 3 or more runners refused
   for quota with the slowest waits (p95) at 2 minutes or more. `--json` has
   both 24 hours and 7 days, with every percentile and start stage.

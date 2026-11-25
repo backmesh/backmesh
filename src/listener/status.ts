@@ -32,6 +32,9 @@ const jobsSummary = z.object({
   // Runs backmesh reran, and where the retries started.
   reruns: z.number().int(),
   retries: z.object({ onDemand: z.number().int(), spot: z.number().int() }),
+  // Jobs that fell back on demand (`fallback`). Optional, as an older
+  // listener doesn't report it.
+  fellBack: z.number().int().optional(),
   // Jobs and submit to running by launched region, and refused launches by
   // region. Optional, as an older listener doesn't report them.
   regions: z
@@ -122,6 +125,8 @@ export const listenerStatusSchema = z.object({
       gpu: z.string().optional(),
       // Removed by install or upgrade: draining, then deleted.
       retiring: z.boolean().optional(),
+      // `install --on-demand-fallback`'s spot label (`fallback`).
+      fallback: z.boolean().optional(),
       // Waiting for a VM; launching; running a runner.
       queued: z.number().int(),
       starting: z.number().int(),
@@ -139,6 +144,9 @@ export const listenerStatusSchema = z.object({
       slow: z
         .object({
           replaced: z.number().int(),
+          // Of them, spot ones replaced on demand (`fallback`). Optional, as
+          // an older listener has none.
+          onDemand: z.number().int().optional(),
           // Slow ones with no other region of their kind to go to.
           stuck: z.number().int(),
           from: z.array(z.string()),
@@ -165,10 +173,15 @@ export const listenerStatusSchema = z.object({
         })
         .optional(),
       // A spot label's regions that fit its quota, every one avoided for
-      // slow boots, so none starts until `until`. Optional, as an older
-      // listener has none.
+      // slow boots, so none starts until `until`, or with `onDemand`
+      // (`fallback`) its real jobs' runners start on demand until then.
+      // Optional, as an older listener has none.
       avoiding: z
-        .object({ regions: z.array(z.string()), until: z.iso.datetime() })
+        .object({
+          regions: z.array(z.string()),
+          until: z.iso.datetime(),
+          onDemand: z.boolean().optional(),
+        })
         .optional(),
       // The cloud's spot or on-demand vCPU quota held this scale set back.
       // Optional, as an older listener has none.
@@ -232,6 +245,9 @@ export function formatJobs(set: ListenerStatus['scaleSets'][number]): string[] {
   const retry = [
     ...(day.reclaims ? [`${count(day.reclaims, 'job')} reclaimed`] : []),
     ...(day.reruns ? [`${count(day.reruns, 'run')} rerun`] : []),
+    ...(day.fellBack
+      ? [`${count(day.fellBack, 'job')} fell back on demand`]
+      : []),
   ].join(', ');
   // Split once a cue or a prediction started a runner that took a job.
   const by = Object.entries(day.startedFor ?? {});
@@ -326,7 +342,7 @@ export function formatSlow(set: ListenerStatus['scaleSets'][number]): string[] {
   const runners = (n: number) => `${n} runner${n === 1 ? '' : 's'}`;
   if (slow?.replaced) {
     lines.push(
-      `    ${runners(slow.replaced)} starting slowly in ${slow.from.join(', ')}; replaced ${slow.to.map((to) => `in ${to}`).join('; ')}`,
+      `    ${runners(slow.replaced)} starting slowly in ${slow.from.join(', ')}; replaced ${slow.to.map((to) => `in ${to}`).join('; ')}${slow.onDemand ? `, ${slow.onDemand} on demand` : ''}`,
     );
   }
   if (slow?.stuck) {

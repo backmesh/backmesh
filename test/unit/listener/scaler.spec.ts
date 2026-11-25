@@ -621,6 +621,7 @@ describe('Scaler', () => {
               startupFailures: 0,
               reruns: 0,
               retries: { onDemand: 0, spot: 0 },
+              fellBack: 0,
               regions: {
                 'us-east-2': {
                   jobs: 1,

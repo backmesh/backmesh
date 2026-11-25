@@ -302,7 +302,11 @@ export async function readStatus({
       }
       for (const set of listener.status.scaleSets) {
         const { skipped, avoiding } = set;
-        if (avoiding) {
+        if (avoiding?.onDemand) {
+          warnings.push(
+            `${listener.org}: ${set.label} starts its runners on demand until ${avoiding.until.slice(11, 16)}Z: spot runners in ${avoiding.regions.join(', ')} missed the start deadline.`,
+          );
+        } else if (avoiding) {
           warnings.push(
             `${listener.org}: ${set.label} starts no runners until ${avoiding.until.slice(11, 16)}Z: runners in ${avoiding.regions.join(', ')} missed the 3-minute start deadline${skipped?.regions.length ? ', and its other regions are skipped for quota' : ''}. Its jobs wait at GitHub meanwhile.`,
           );
@@ -443,7 +447,7 @@ export function formatStatus(report: StatusReport): string {
       for (const set of status.scaleSets) {
         const stats = set.statistics;
         lines.push(
-          `  ${set.label}${set.retiring ? ' (draining, then deleted)' : ''}: ${stats ? `${stats.totalAssignedJobs} assigned, ${stats.totalRunningJobs} running; ` : ''}runners ${set.queued} queued, ${set.starting} starting, ${set.running} running`,
+          `  ${set.label}${set.retiring ? ' (draining, then deleted)' : ''}${set.fallback ? ' (falls back on demand)' : ''}: ${stats ? `${stats.totalAssignedJobs} assigned, ${stats.totalRunningJobs} running; ` : ''}runners ${set.queued} queued, ${set.starting} starting, ${set.running} running`,
         );
         if (set.oldestQueuedMs !== null) {
           lines.push(`    oldest queued ${minutes(set.oldestQueuedMs)}`);

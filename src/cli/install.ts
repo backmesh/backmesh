@@ -143,6 +143,8 @@ export async function classesOf(
   home: Cloud | undefined,
   // `--public-repos`: `backmesh-ubuntu-2404-public-<n>vcpu` too.
   publicRepos = false,
+  // `--on-demand-fallback`: the spot classes fall back on demand.
+  fallback = false,
 ) {
   const catalog = new Map<Cloud, Map<string, VmTypeDetails[]>>();
   for (const target of targets) {
@@ -164,7 +166,7 @@ export async function classesOf(
     );
     catalog.set(cloud, new Map(entries));
   }
-  const plan = planClasses(targets, catalog, home, publicRepos);
+  const plan = planClasses(targets, catalog, home, publicRepos, fallback);
   return { ...plan, catalog, json: JSON.stringify(plan.classes) };
 }
 
@@ -252,7 +254,15 @@ export interface InstallOptions {
   // runners, their fork pull requests only `backmesh-ubuntu-2404-public-<n>vcpu`. Without
   // either, a re-run keeps the listener's.
   publicRepos?: boolean;
+  // `--on-demand-fallback` or `--no-on-demand-fallback`: a spot label's
+  // runner refused in every region gets an on-demand VM. Without either, a
+  // re-run keeps the listener's.
+  onDemandFallback?: boolean;
 }
+
+// What `--on-demand-fallback` changes, and what it may cost.
+export const ON_DEMAND_FALLBACK_LINE =
+  "On-demand fallback: a spot label's runner the cloud refuses in every runner region, once anycloud has tried every VM type and zone of a region that refused it, gets an on-demand VM instead, billed at the on-demand rate. Each job that falls back says so in the listener's log and `backmesh status`.";
 
 // What `--public-repos` opens, and what it needs.
 export const PUBLIC_REPOS_LINE = `Public repositories: the org's public repositories may use the runners. Their forks' pull requests run only on ${PUBLIC_VCPUS.map(publicLabel).join(' and ')}, with ${PUBLIC_VCPU_CAP} vCPUs at once; a fork run that asks for another label is cancelled. Set GitHub's "Require approval for all external contributors" for the org, and keep nothing else in the runners' cloud network: a job can reach the network's other instances.`;
@@ -1197,12 +1207,16 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   const publicRepos =
     options.publicRepos ??
     !!current?.routes.some((r) => r.public && !r.retiring);
+  const fallback =
+    options.onDemandFallback ??
+    !!current?.routes.some((r) => r.fallback && !r.retiring);
   const classPlan = await classesOf(
     runners,
     anycloudRunners(deps.run),
     planRegions(multiRegion, note),
     placement.controlPlane.cloud,
     publicRepos,
+    fallback,
   );
   const regionsOf = (cloud: Cloud) => [
     ...(classPlan.catalog.get(cloud)?.keys() ?? []),
@@ -1422,7 +1436,18 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       regions: regionsOf(target.cloud),
     })),
     classes: classPlan.classes.map(
-      ({ label, cloud, region, vcpus, spot, kvm, vmTypes, regions, gpu }) => ({
+      ({
+        label,
+        cloud,
+        region,
+        vcpus,
+        spot,
+        kvm,
+        vmTypes,
+        regions,
+        gpu,
+        fallback,
+      }) => ({
         label,
         cloud,
         region,
@@ -1432,6 +1457,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         vmTypes,
         regions,
         ...(gpu && { gpu }),
+        ...(fallback && { fallback }),
       }),
     ),
     rates: runners.flatMap(({ cloud, region }) =>
@@ -1475,6 +1501,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     ui.print(
       `Cache: each repository keeps up to ${plan.cacheCapGb ?? 10} GB in each region.`,
     );
+  if (fallback) ui.print(ON_DEMAND_FALLBACK_LINE);
   if (publicRepos) ui.print(PUBLIC_REPOS_LINE);
   else {
     const repos = await readPublicRepos(options.org, deps.fetch, deps.env);

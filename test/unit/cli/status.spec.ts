@@ -668,6 +668,33 @@ describe('status', () => {
     ]);
   });
 
+  it('says when a fallback scale set starts its runners on demand while every spot region is avoided', async () => {
+    const [set] = LISTENER.status.scaleSets;
+    const report = await setUp({
+      listener: probed({
+        ...LISTENER.status,
+        scaleSets: [
+          {
+            ...set,
+            backoff: null,
+            fallback: true,
+            avoiding: {
+              regions: ['us-east-2'],
+              until: '2026-11-09T14:30:00.000Z',
+              onDemand: true,
+            },
+          },
+        ],
+      }),
+    }).read();
+    expect(report.warnings).toEqual([
+      'acme: backmesh-ubuntu-2404-4vcpu starts its runners on demand until 14:30Z: spot runners in us-east-2 missed the start deadline.',
+    ]);
+    expect(formatStatus(report)).toContain(
+      '  backmesh-ubuntu-2404-4vcpu (falls back on demand): ',
+    );
+  });
+
   it('warns while the listener waits for the App installation', async () => {
     const { read } = setUp({
       listener: probed({

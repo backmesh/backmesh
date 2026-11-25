@@ -9,7 +9,7 @@ import {
   listenerStatusSchema,
 } from '../../../src/listener/status.js';
 import type { QuotaLimits } from '../../../src/runners/quota.js';
-import { assigned, ROUTE, setup } from './fakes.js';
+import { assigned, message, ROUTE, setup } from './fakes.js';
 import type { Planner } from '../../../src/listener/prewarm.js';
 
 // AM's burst: spot launches in us-east-2 refused, so its runner Jobs sat
@@ -22,6 +22,8 @@ const OD: Route = {
   spot: false,
 };
 const SPOT = { ...ROUTE, onDemand: { label: OD.label } };
+// `install --on-demand-fallback`'s spot route.
+const FALLBACK: Route = { ...SPOT, fallback: true };
 const refused = (region: string) => ({
   region,
   diagnosis: 'capacity-exhausted',
@@ -37,8 +39,9 @@ async function slowRunners(
   ageMs: number,
   refusedIn: string[] = [],
   backedOff = refusedIn,
+  planner?: Planner,
 ) {
-  const env = setup(routes);
+  const env = setup(routes, undefined, undefined, undefined, planner);
   env.sets[0]!.statistics = assigned(n);
   await env.scaler.reconcile();
   const slow = env.anycloud.submitted.map((spec) => spec.id);
@@ -177,6 +180,175 @@ describe('boot deadline', () => {
         '    1 runner still retrying a launch 75 s after submit, with no other region to replace it in',
       ]);
     }
+  });
+
+  it('with fallback, replaces a one-region spot runner on demand, and its job says it fell back (owner, 2026-11-25)', async () => {
+    const env = await slowRunners([FALLBACK, OD], 1, BOOT_DEADLINE_MS, [
+      'us-east-2',
+    ]);
+    await env.scaler.reconcile();
+    const replacement = env.anycloud.submitted.at(-1)!;
+    expect(replacement).toMatchObject({ spot: false, regions: ['us-east-2'] });
+    expect(env.anycloud.terminated).toEqual(env.slow);
+    expect(env.logs).toContainEqual(
+      expect.objectContaining({
+        msg: 'spot refused in every region; replaced on demand',
+        runner: env.slow[0],
+        replacement: replacement.id,
+        label: FALLBACK.label,
+      }),
+    );
+    const fields = { runnerName: replacement.id, result: 'Succeeded' };
+    env.scaler.observe(env.sets[0]!, message('JobStarted', fields));
+    env.scaler.observe(env.sets[0]!, message('JobCompleted', fields));
+    await env.scaler.reconcile();
+    expect(env.logs).toContainEqual(
+      expect.objectContaining({
+        msg: 'job completed',
+        runner: replacement.id,
+        fallback: true,
+      }),
+    );
+    const set = env.scaler.status().scaleSets[0]!;
+    expect(set).toMatchObject({
+      fallback: true,
+      slow: { replaced: 1, onDemand: 1, stuck: 0 },
+      jobs: { day: { fellBack: 1 } },
+    });
+    expect(formatSlow(set)).toEqual([
+      '    1 runner starting slowly in us-east-2; replaced in us-east-2, 1 on demand',
+    ]);
+    const served = {
+      installed: true,
+      broker: null,
+      ...env.scaler.status(),
+    };
+    expect(listenerStatusSchema.parse(served)).toEqual(served);
+  });
+
+  it('with fallback, replaces on demand a spot replacement refused too, after failing over to the other regions', async () => {
+    const env = await slowRunners(
+      [{ ...FALLBACK, regions: TWO.regions }, OD],
+      1,
+      BOOT_DEADLINE_MS,
+      ['us-east-2'],
+    );
+    await env.scaler.reconcile();
+    const spot = env.anycloud.submitted.at(-1)!;
+    expect(spot).toMatchObject({ spot: true, regions: ['us-west-2'] });
+    env.anycloud.setState(spot.id, 'retrying', { spot: true });
+    const timeline = (await env.anycloud.jobs.timeline(spot.id))!;
+    timeline.runningAt = null;
+    timeline.refusals = [refused('us-west-2')];
+    timeline.backedOff = ['us-west-2'];
+    env.clock.now += BOOT_DEADLINE_MS;
+    await env.scaler.reconcile();
+    expect(env.anycloud.submitted.at(-1)).toMatchObject({
+      spot: false,
+      regions: ['us-east-2', 'us-west-2'],
+    });
+    expect(env.anycloud.submitted).toHaveLength(3);
+  });
+
+  it("with fallback, waits for anycloud to try every type and zone, and never falls back a runner that wasn't refused", async () => {
+    const unrefused = await slowRunners([FALLBACK, OD], 1, BOOT_DEADLINE_MS);
+    await unrefused.scaler.reconcile();
+    expect(unrefused.anycloud.submitted).toHaveLength(1);
+
+    // Refused with a type or zone still untried: not yet.
+    const env = await slowRunners(
+      [FALLBACK, OD],
+      1,
+      BOOT_DEADLINE_MS,
+      ['us-east-2'],
+      [],
+    );
+    await env.scaler.reconcile();
+    expect(env.anycloud.submitted).toHaveLength(1);
+    expect(env.anycloud.terminated).toEqual([]);
+    // Backed off there, it falls back once its cached read is a minute old.
+    (await env.anycloud.jobs.timeline(env.slow[0]!))!.backedOff = ['us-east-2'];
+    env.clock.now += 60_000;
+    await env.scaler.reconcile();
+    expect(env.anycloud.submitted.at(-1)).toMatchObject({ spot: false });
+    expect(env.anycloud.terminated).toEqual(env.slow);
+  });
+
+  it("with fallback, avoids a one-region route's only region, starts its real jobs on demand meanwhile, none ahead of predicted ones, and goes back to spot after", async () => {
+    let wanted = 0;
+    const planner = {
+      observe: () => undefined,
+      speculative: () => wanted,
+      nextDue: () => undefined,
+      booted: () => undefined,
+      status: () => ({ keys: 0, guarded: 0, off: false }),
+    } as unknown as Planner;
+    const env = await slowRunners(
+      [FALLBACK, OD],
+      3,
+      BOOT_DEADLINE_MS,
+      ['us-east-2'],
+      ['us-east-2'],
+      planner,
+    );
+    await env.scaler.reconcile();
+    expect(env.anycloud.submitted.slice(3).map((s) => s.spot)).toEqual([
+      false,
+      false,
+      false,
+    ]);
+    expect(env.scaler.status().avoided?.map((a) => a.where)).toEqual([
+      'aws us-east-2 spot',
+    ]);
+    // A new job's runner starts on demand at once; predicted ones don't.
+    wanted = 2;
+    env.sets[0]!.statistics = assigned(4);
+    await env.scaler.reconcile();
+    expect(env.anycloud.submitted.slice(6).map((s) => s.spot)).toEqual([false]);
+    expect(env.scaler.status().scaleSets[0]!.avoiding).toEqual({
+      regions: ['us-east-2'],
+      until: new Date(BOOT_DEADLINE_MS + 30 * 60_000).toISOString(),
+      onDemand: true,
+    });
+    const served = { installed: true, broker: null, ...env.scaler.status() };
+    expect(listenerStatusSchema.parse(served)).toEqual(served);
+    // Once the avoidance ends, spot again.
+    wanted = 0;
+    env.clock.now += 30 * 60_000;
+    env.sets[0]!.statistics = assigned(5);
+    await env.scaler.reconcile();
+    expect(env.anycloud.submitted.slice(7).map((s) => s.spot)).toEqual([true]);
+  });
+
+  it('with fallback, starts on demand while every spot region is avoided', async () => {
+    const env = await slowRunners(
+      [{ ...FALLBACK, regions: TWO.regions }, OD],
+      3,
+      BOOT_DEADLINE_MS,
+      ['us-east-2'],
+    );
+    await env.scaler.reconcile();
+    // Their replacements in us-west-2 miss the deadline too.
+    for (const spec of env.anycloud.submitted.slice(3)) {
+      env.anycloud.setState(spec.id, 'retrying', { spot: true });
+      const timeline = (await env.anycloud.jobs.timeline(spec.id))!;
+      timeline.runningAt = null;
+      timeline.refusals = [refused('us-west-2')];
+      timeline.backedOff = ['us-west-2'];
+    }
+    env.clock.now += BOOT_DEADLINE_MS;
+    await env.scaler.reconcile();
+    expect(env.scaler.status().avoided?.map((a) => a.where)).toEqual([
+      'aws us-east-2 spot',
+      'aws us-west-2 spot',
+    ]);
+    env.sets[0]!.statistics = assigned(4);
+    await env.scaler.reconcile();
+    expect(env.anycloud.submitted.at(-1)).toMatchObject({ spot: false });
+    expect(env.scaler.status().scaleSets[0]!.avoiding).toMatchObject({
+      regions: ['us-east-2', 'us-west-2'],
+      onDemand: true,
+    });
   });
 
   it('replaces an on-demand runner in its other on-demand regions', async () => {
