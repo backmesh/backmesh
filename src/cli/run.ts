@@ -56,6 +56,12 @@ export interface CliIo {
 
 const execFileAsync = promisify(execFile);
 
+// The plan's re-run line keeps `--on-demand-fallback` as given.
+const fallbackFlag = (on: boolean | undefined) =>
+  on === undefined
+    ? []
+    : [on ? '--on-demand-fallback' : '--no-on-demand-fallback'];
+
 // `bun build --define` replaces this name (scripts/build-binaries.sh).
 declare const BACKMESH_VERSION: string | undefined;
 
@@ -310,12 +316,21 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       '--no-public-repos',
       "keep the org's public repositories off the runners",
     )
+    .option(
+      '--on-demand-fallback',
+      "give a spot label's runner an on-demand VM when the cloud refuses spot in every runner region. See https://backmesh.com/labels/#on-demand-fallback",
+    )
+    .option(
+      '--no-on-demand-fallback',
+      'keep spot labels on spot: their jobs wait for spot capacity',
+    )
     .option('--verbose', "show the cloud CLIs' own errors")
     .action(
       async (opts: {
         org?: string;
         cacheCap?: number;
         publicRepos?: boolean;
+        onDemandFallback?: boolean;
         controlPlane?: string;
         controlPlaneId?: string;
         runners: string[];
@@ -340,6 +355,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
             planId: opts.planId,
             cacheCapGb: opts.cacheCap,
             publicRepos: opts.publicRepos,
+            onDemandFallback: opts.onDemandFallback,
           },
           deps,
         );
@@ -357,6 +373,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
             ...(opts.publicRepos === undefined
               ? []
               : [opts.publicRepos ? '--public-repos' : '--no-public-repos']),
+            ...fallbackFlag(opts.onDemandFallback),
           ].join(' ');
           print(
             result,
@@ -498,6 +515,11 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       '--no-public-repos',
       'remove backmesh-ubuntu-2404-public-2vcpu and backmesh-ubuntu-2404-public-4vcpu',
     )
+    .option(
+      '--on-demand-fallback',
+      "let spot labels fall back on demand, as install's --on-demand-fallback does; without it or --no-on-demand-fallback, each org keeps what it has",
+    )
+    .option('--no-on-demand-fallback', 'keep spot labels on spot')
     .action(
       async (opts: {
         runners: string[];
@@ -505,6 +527,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
         planId?: string;
         yes?: boolean;
         publicRepos?: boolean;
+        onDemandFallback?: boolean;
       }) => {
         const result = await upgrade(
           (io.upgradeDeps ?? realUpgradeDeps)(io, json),
@@ -514,6 +537,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
             planId: opts.planId,
             yes: opts.yes ?? false,
             publicRepos: opts.publicRepos,
+            onDemandFallback: opts.onDemandFallback,
           },
         );
         if ('planId' in result) {
@@ -522,6 +546,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
             ...(opts.publicRepos === undefined
               ? []
               : [opts.publicRepos ? '--public-repos' : '--no-public-repos']),
+            ...fallbackFlag(opts.onDemandFallback),
           ].join(' ');
           print(
             result,

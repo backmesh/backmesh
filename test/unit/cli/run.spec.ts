@@ -300,6 +300,23 @@ describe('backmesh CLI', () => {
     }
   });
 
+  it("hands install and upgrade --on-demand-fallback, and keeps it in the plan's re-run", async () => {
+    for (const command of ['install', 'upgrade']) {
+      const { stdout } = await run(command, '--help');
+      expect(stdout).toMatch(/^\s+--on-demand-fallback\s/m);
+      expect(stdout).toMatch(/^\s+--no-on-demand-fallback\s/m);
+    }
+    const plan = { planId: 'u-0123456789ab' };
+    vi.mocked(upgrade).mockResolvedValueOnce(plan as never);
+    const result = await run('upgrade', '--no-on-demand-fallback', '--plan');
+    expect(vi.mocked(upgrade).mock.lastCall![1]).toMatchObject({
+      onDemandFallback: false,
+    });
+    expect(result.stdout).toContain(
+      'To apply it: backmesh upgrade --no-on-demand-fallback --yes --plan-id u-0123456789ab',
+    );
+  });
+
   it("hands upgrade --public-repos, and keeps it in the plan's re-run", async () => {
     const plan = { planId: 'u-0123456789ab' };
     vi.mocked(upgrade).mockResolvedValueOnce(plan as never);

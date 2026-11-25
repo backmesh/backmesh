@@ -99,7 +99,14 @@ const NO_RETRY: Record<
   'attempt-cap': () => "This run is at attempt 3, backmesh's limit.",
 };
 
-type Mint = { set: ScaleSet; spot: boolean; regions: string[]; start: Start };
+type Mint = {
+  set: ScaleSet;
+  spot: boolean;
+  regions: string[];
+  start: Start;
+  // An on-demand VM for a spot route with `fallback` (`placement`).
+  fallback?: boolean;
+};
 
 // A runner whose job failed, until its Job's end says whether it was a
 // reclaim.
@@ -190,6 +197,12 @@ export class Scaler {
   private readonly minted = new Map<string, boolean>();
   // What each was started for, until its job's row or its end.
   private readonly startedFor = new Map<string, Start>();
+  // Spot routes' runners that fell back on demand (`fallback`), until their
+  // job's row or their end.
+  private readonly fellBack = new Set<string>();
+  // Spot replacements of slow Jobs (`replace`): one slow too was refused in
+  // its slow predecessor's regions and its own, every region it could try.
+  private readonly replacements = new Set<string>();
   private readonly terminated = new Set<string>();
   // Runner Jobs past the boot deadline that were replaced, or that had
   // nowhere to be.
@@ -442,6 +455,7 @@ export class Scaler {
       set: ScaleSet;
       spot: boolean;
       regions: string[];
+      fallback: boolean;
       extra: number;
     }[] = [];
     for (const set of this.sets.values()) {
@@ -477,7 +491,7 @@ export class Scaler {
         Math.min(desired - have, tick, short + Math.max(0, spareTick)),
         now,
       );
-      const { spot, regions } = this.placement(set, onDemand, now);
+      const { spot, regions, fallback } = this.placement(set, onDemand, now);
       const needed = Math.min(
         allowed,
         short,
@@ -487,16 +501,16 @@ export class Scaler {
       );
       let count = 0;
       for (; count < needed && quota.take(set, spot, true, regions); count++) {
-        mints.push({ set, spot, regions, start: 'reactive' });
+        mints.push({ set, spot, regions, start: 'reactive', fallback });
       }
       if (set.route.public) publicLeft -= count * set.route.vcpus;
       room -= count;
       tick -= count;
       if (count === needed && allowed > needed && !set.route.public) {
-        extras.push({ set, spot, regions, extra: allowed - needed });
+        extras.push({ set, spot, regions, fallback, extra: allowed - needed });
       }
     }
-    for (const { set, spot, regions, extra } of extras) {
+    for (const { set, spot, regions, fallback, extra } of extras) {
       let count = 0;
       const most = Math.min(extra, tick, room, Math.max(0, spareTick));
       // A cue's slots that no idle cue runner fills yet get the first.
@@ -511,7 +525,7 @@ export class Scaler {
         idle;
       for (; count < most && quota.take(set, spot, false, regions); count++) {
         const start = cues-- > 0 ? 'cue' : 'predicted';
-        mints.push({ set, spot, regions, start });
+        mints.push({ set, spot, regions, start, fallback });
       }
       room -= count;
       tick -= count;
@@ -551,6 +565,7 @@ export class Scaler {
       this.slowSeen,
       this.refusals,
       this.orphans,
+      this.replacements,
     ]) {
       for (const name of names.keys()) {
         if (!ids.has(name) && !this.minted.has(name)) names.delete(name);
@@ -643,6 +658,7 @@ export class Scaler {
           cloud: set.route.cloud,
           ...(set.route.gpu && { gpu: set.route.gpu }),
           ...(set.route.retiring && { retiring: true }),
+          ...(set.route.fallback && { fallback: true }),
           queued: queued.length,
           starting: mine.length - queued.length - running,
           running,
@@ -734,6 +750,7 @@ export class Scaler {
         // A job's row still to join reads it.
         if (![...this.joins].some((e) => e.job.runnerName === name)) {
           this.startedFor.delete(name);
+          this.fellBack.delete(name);
         }
         const delay = set?.backoff.delayMs;
         set?.backoff.ended(name, failure, now);
@@ -925,6 +942,7 @@ export class Scaler {
       this.deps.planner?.booted(label, startMs, registerMs);
       const { result } = job;
       const retry = this.deps.routing?.retried(job.jobId);
+      const fallback = this.fellBack.delete(job.runnerName);
       this.rows.add({
         kind: 'job completed',
         at,
@@ -933,6 +951,7 @@ export class Scaler {
         runnerJob,
         start,
         ...(retry && { retry }),
+        ...(fallback && { fallback }),
       });
     }
   }
@@ -994,8 +1013,8 @@ export class Scaler {
     let stopped = false;
     const worker = async (queue: typeof mints) => {
       for (let next = queue.shift(); next && !stopped; next = queue.shift()) {
-        const { set, spot, regions, start } = next;
-        await this.mint(set, spot, regions, true, start).catch(
+        const { set, spot, regions, start, fallback } = next;
+        await this.mint(set, spot, regions, true, start, fallback).catch(
           (error: unknown) => {
             stopped = true;
             this.deps.log({
@@ -1023,6 +1042,7 @@ export class Scaler {
     regions: readonly string[],
     probe = true,
     start: Start = 'reactive',
+    fallback = false,
   ): Promise<string> {
     const { install, github, jobs } = this.deps;
     const { cloud, credentials, vmTypes, kvm, vcpus, gpu, code } = set.route;
@@ -1035,6 +1055,7 @@ export class Scaler {
     ]);
     this.minted.set(name, spot);
     this.startedFor.set(name, start);
+    if (fallback) this.fellBack.add(name);
     if (probe) set.backoff.minted(name);
     try {
       await jobs.submit({
@@ -1057,6 +1078,7 @@ export class Scaler {
       if (error instanceof ORPCError && error.status < 500) {
         this.minted.delete(name);
         this.startedFor.delete(name);
+        this.fellBack.delete(name);
         set.backoff.ended(name, undefined, this.now());
         await github.removeRunner(jit.runner.id);
       }
@@ -1070,7 +1092,9 @@ export class Scaler {
   // as many as its assigned jobs lack runners get a replacement, oldest
   // first, so the planner's speculative runners never fail over. The
   // replacement goes to the route's other regions, of the same kind, else
-  // nowhere (owner, 2026-11-09: a spot label never fails over on demand).
+  // nowhere (owner, 2026-11-09: a spot label never fails over on demand),
+  // unless the route has `fallback` (owner, 2026-11-25): a spot Job with no
+  // other region, or a spot replacement slow too, is replaced on demand.
   // Once it's submitted the slow Job goes, unless its runner took a job
   // meanwhile, when the replacement is an extra that scale-down removes; a
   // slow Job whose removal failed is retried next cycle, and scale-down
@@ -1203,11 +1227,23 @@ export class Scaler {
     };
     let to: string;
     let name: string;
-    if (rest.length) {
+    const onDemand =
+      job.spot &&
+      !!route.fallback &&
+      !!route.onDemand &&
+      (!rest.length || this.replacements.has(job.id))
+        ? this.fits(set, false, now)
+        : [];
+    if (onDemand.length) {
+      if (!quota.take(set, false, true, onDemand)) return undefined;
+      to = onDemand.join(', ');
+      name = await this.mint(set, false, onDemand, false, 'reactive', true);
+    } else if (rest.length) {
       // Pinned to regions the slow one wasn't in: their quota, not its.
       if (!quota.take(set, job.spot, true, rest)) return undefined;
       to = rest.join(', ');
       name = await this.mint(set, job.spot, rest, false);
+      if (job.spot) this.replacements.add(name);
     } else {
       this.slow.add(job.id);
       missed();
@@ -1227,9 +1263,17 @@ export class Scaler {
     this.slow.add(job.id);
     this.replaced.add(job.id);
     missed();
-    this.failover.replacedOne({ label: route.label, from, to, at: now });
+    this.failover.replacedOne({
+      label: route.label,
+      from,
+      to,
+      at: now,
+      ...(onDemand.length && { onDemand: true }),
+    });
     this.deps.log({
-      msg: 'runner starting slowly; replaced',
+      msg: onDemand.length
+        ? 'spot refused in every region; replaced on demand'
+        : 'runner starting slowly; replaced',
       runner: job.id,
       replacement: name,
       label: route.label,
@@ -1413,12 +1457,20 @@ export class Scaler {
       };
     }
     // No region left open (every one skipped for quota, or avoided): none
-    // starts, and its jobs wait at GitHub. A spot label never falls back on
-    // demand for it (owner, 2026-11-09). On-demand runners whose every
-    // region that fits is avoided keep starting in them, as the breaker never
-    // left them none before.
+    // starts, and its jobs wait at GitHub. A spot label falls back on
+    // demand for it only with `fallback` (owner, 2026-11-09 and 2026-11-25).
+    // On-demand runners whose every region that fits is avoided keep
+    // starting in them, as the breaker never left them none before.
     if (!kind.open.length && kind.fit.length) {
-      if (!spot) return { spot, regions: kind.fit };
+      if (!spot) return { spot, regions: kind.fit, fallback: false };
+      const od = route.fallback && route.onDemand ? usable(false) : undefined;
+      if (od?.fit.length) {
+        return {
+          spot: false,
+          regions: od.open.length ? od.open : od.fit,
+          fallback: true,
+        };
+      }
       set.avoiding = {
         regions: kind.fit,
         until: Math.min(
@@ -1428,7 +1480,7 @@ export class Scaler {
         ),
       };
     }
-    return { spot, regions: kind.open };
+    return { spot, regions: kind.open, fallback: false };
   }
 
   // The route's runner regions whose quota fits one of its runners, or isn't

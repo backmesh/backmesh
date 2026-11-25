@@ -28,12 +28,14 @@ const SHOWN_MS = 15 * 60_000;
 
 // A replacement: the slow Job's regions (where its launches were refused,
 // or its one region), and the region its replacement went to, or null when
-// there was nowhere to put one.
+// there was nowhere to put one; `onDemand` when a spot Job's replacement
+// fell back on demand (`fallback`).
 export interface Replacement {
   label: string;
   from: string[];
   to: string | null;
   at: number;
+  onDemand?: true;
 }
 
 // Which runners a region's misses count for: such as "aws us-east-2 spot".
@@ -90,8 +92,10 @@ export class Failover {
     );
     if (!mine.length) return undefined;
     const done = mine.filter((r) => r.to !== null);
+    const onDemand = done.filter((r) => r.onDemand).length;
     return {
       replaced: done.length,
+      ...(onDemand && { onDemand }),
       stuck: mine.length - done.length,
       from: [...new Set(done.flatMap((r) => r.from))].sort(),
       to: [...new Set(done.map((r) => r.to!))].sort(),

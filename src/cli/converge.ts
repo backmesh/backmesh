@@ -79,6 +79,8 @@ export interface RunnerChanges {
   regions: { cloud: string; added: string[]; removed: string[] }[];
   // Labels whose scale sets are deleted and made again (`routesJson`).
   replaced?: string[];
+  // `--on-demand-fallback` turned on (true) or off (false); absent when kept.
+  fallback?: boolean;
 }
 
 /** The difference between the listener's routes and the plan's classes. */
@@ -104,6 +106,9 @@ export function runnerChanges(
   const [labelsWere, labelsNow] = [before, after].map((c) =>
     c.map((r) => r.label),
   ) as [string[], string[]];
+  const [fellBack, fallsBack] = [before, after].map((c) =>
+    c.some((r) => r.fallback),
+  );
   return {
     added: now.filter((c) => !was.includes(c)),
     removed: was.filter((c) => !now.includes(c)),
@@ -134,6 +139,7 @@ export function runnerChanges(
       })
       .filter((r) => r.added.length || r.removed.length),
     ...(replaced.length && { replaced: [...replaced] }),
+    ...(fellBack !== fallsBack && { fallback: fallsBack }),
   };
 }
 
@@ -145,7 +151,8 @@ export const changed = (c: RunnerChanges) =>
     c.labelsRemoved.length ||
     c.labelsChanged.length ||
     c.regions.length ||
-    c.replaced?.length
+    c.replaced?.length ||
+    c.fallback !== undefined
   );
 
 /**
@@ -210,6 +217,13 @@ export function changeLines(
   }
   if (c.labelsChanged.length) {
     lines.push(`New VM types or regions for: ${c.labelsChanged.join(', ')}.`);
+  }
+  if (c.fallback !== undefined) {
+    lines.push(
+      c.fallback
+        ? `${org}'s spot labels fall back on demand.`
+        : `${org}'s spot labels no longer fall back on demand.`,
+    );
   }
   if (c.replaced?.length) {
     lines.push(

@@ -115,6 +115,8 @@ jobs:
   to 5 times spot. When spot reclaims were a run's only failures, backmesh
   reruns its failed jobs on demand, at most twice; add `backmesh-noretry` to
   `runs-on` to turn that off.
+  `backmesh install --on-demand-fallback` also runs a spot job on demand when
+  no runner region has spot capacity, instead of leaving it waiting.
 - `backmesh-ubuntu-2404-kvm-4vcpu` and the like give a job `/dev/kvm`.
 
 Full list: https://backmesh.com/labels/.
