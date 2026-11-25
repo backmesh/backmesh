@@ -1154,6 +1154,58 @@ describe('upgrade', () => {
       expect(result.listeners?.[0]?.rolled).toBe(true);
     });
 
+    it('starts --runner-region first, keeps it on the next upgrade, and refuses one outside the geo before any change', async () => {
+      const { deps, lines, requests } = wide();
+      regions(deps);
+      deps.confirm = async () => true;
+      await upgrade(deps, { runnerRegions: ['aws:us-west-2'] });
+      expect(lines).toContain(
+        "acme: aws's runners start in us-west-2 first, for its cache, and in us-east-1, us-east-2 only when aws refuses them there.",
+      );
+      expect(lines).toContain("acme's aws runners start in us-west-2 first.");
+      const runners = JSON.parse(
+        requests
+          .find((r) => r.startsWith('PUT /v1/secrets/backmesh-acme '))!
+          .split(' ')[2]!,
+      ).values.BACKMESH_RUNNERS as string;
+      const routes = parseRoutes(runners).filter((r) => !r.retiring);
+      expect(
+        routes.every((r) => r.preferred && r.regions[0] === 'us-west-2'),
+      ).toBe(true);
+
+      const again = setUp({
+        version: RELEASE.anycloud,
+        image: RELEASE.listenerImage,
+        runnerImage: RELEASE.runnerImage,
+        runners,
+        catalog: awsInRegions({ 'us-east-1': 1, 'us-west-2': 1 }),
+      });
+      regions(again.deps);
+      await upgrade(again.deps);
+      expect(again.lines.some((l) => l.includes('runners start in'))).toBe(
+        true,
+      );
+      expect(again.lines.some((l) => l.includes('first.'))).toBe(false);
+
+      for (const [value, message] of [
+        [
+          'aws:eu-west-1',
+          "--runner-region aws:eu-west-1: not one of aws's us runner regions: us-east-1, us-east-2, us-west-2.",
+        ],
+        [
+          'gcp:us-east4',
+          "--runner-region gcp:us-east4: no org's runners are on that cloud.",
+        ],
+      ]) {
+        const { deps, calls } = wide();
+        regions(deps);
+        await expect(
+          upgrade(deps, { runnerRegions: [value!] }),
+        ).rejects.toThrow(message);
+        expect(mutations(calls)).toEqual([]);
+      }
+    });
+
     it('refuses a --runner-geo it has no regions for, before any change', async () => {
       const { deps, calls } = wide();
       await expect(upgrade(deps, { runnerGeo: 'asia' })).rejects.toThrow(

@@ -50,7 +50,8 @@ export interface InstallPlan {
   // Each runner cloud's regions, fixed (`RUNNER_REGIONS`, `regions.ts`) and
   // account-allowed; hashed with the classes' regions, so another account
   // or placement is another plan.
-  runners: { cloud: string; regions: string[] }[];
+  // `preferred`: its `--runner-region`, tried first.
+  runners: { cloud: string; regions: string[]; preferred?: string }[];
   classes: Pick<
     RunnerClass,
     | 'label'
@@ -63,6 +64,7 @@ export interface InstallPlan {
     | 'regions'
     | 'gpu'
     | 'highmem'
+    | 'preferred'
   >[];
   // Shown, not hashed, as `quotas`.
   rates: string[];
@@ -112,6 +114,9 @@ export interface UpgradePlan {
     // The listener it read (`fingerprint`), and what changes in its runners.
     current: string | null;
     changes: RunnerChanges;
-    classes: Pick<RunnerClass, 'label' | 'cloud' | 'vmTypes' | 'regions'>[];
+    classes: Pick<
+      RunnerClass,
+      'label' | 'cloud' | 'vmTypes' | 'regions' | 'preferred'
+    >[];
   }[];
 }

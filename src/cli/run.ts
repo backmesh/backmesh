@@ -288,6 +288,12 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       "the runners' fixed regions: us or eu (EU member states' regions only). Without it, a re-run keeps the org's, and a new install is us",
     )
     .option(
+      '--runner-region <cloud:region>',
+      "repeatable, one per cloud: a region of the geo the cloud's runners start in first, for its cache; the geo's others take them only when the cloud refuses them there. Without it, a re-run keeps the org's",
+      (value: string, previous: string[]) => [...previous, value],
+      [],
+    )
+    .option(
       '--plan',
       'print what install would create and its plan ID, and change nothing',
     )
@@ -324,6 +330,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
         controlPlaneId?: string;
         runners: string[];
         runnerGeo?: string;
+        runnerRegion: string[];
         plan?: boolean;
         planId?: string;
         yes?: boolean;
@@ -341,6 +348,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
             controlPlaneId: opts.controlPlaneId,
             runners: opts.runners,
             runnerGeo: opts.runnerGeo,
+            runnerRegions: opts.runnerRegion,
             yes: opts.yes ?? false,
             plan: opts.plan,
             planId: opts.planId,
@@ -361,6 +369,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
               : []),
             ...runners.map((r) => `--runners ${r.cloud}`),
             ...(opts.runnerGeo ? [`--runner-geo ${opts.runnerGeo}`] : []),
+            ...opts.runnerRegion.map((r) => `--runner-region ${r}`),
             ...(opts.publicRepos === undefined
               ? []
               : [opts.publicRepos ? '--public-repos' : '--no-public-repos']),
@@ -502,6 +511,12 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       "move every org's runners to another geo's fixed regions: us or eu. Without it, each org keeps its own",
     )
     .option(
+      '--runner-region <cloud:region>',
+      "as install's, for every org with runners on that cloud. Without it, each org keeps its own",
+      (value: string, previous: string[]) => [...previous, value],
+      [],
+    )
+    .option(
       '--public-repos',
       "add backmesh-ubuntu-2404-public-2vcpu and backmesh-ubuntu-2404-public-4vcpu, as install's --public-repos does; without it or --no-public-repos, each org keeps what it has",
     )
@@ -516,6 +531,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
         planId?: string;
         yes?: boolean;
         runnerGeo?: string;
+        runnerRegion: string[];
         publicRepos?: boolean;
       }) => {
         const result = await upgrade(
@@ -526,6 +542,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
             planId: opts.planId,
             yes: opts.yes ?? false,
             runnerGeo: opts.runnerGeo,
+            runnerRegions: opts.runnerRegion,
             publicRepos: opts.publicRepos,
           },
         );
@@ -533,6 +550,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
           const again = [
             ...opts.runners.map((r) => `--runners ${r}`),
             ...(opts.runnerGeo ? [`--runner-geo ${opts.runnerGeo}`] : []),
+            ...opts.runnerRegion.map((r) => `--runner-region ${r}`),
             ...(opts.publicRepos === undefined
               ? []
               : [opts.publicRepos ? '--public-repos' : '--no-public-repos']),

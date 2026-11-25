@@ -2316,6 +2316,62 @@ describe('install', () => {
       ).rejects.toThrow('--runner-geo asia: expected one of us, eu');
     });
 
+    it('starts --runner-region first, refuses one outside the geo, and keeps it on a re-run', async () => {
+      const features = { ...RELEASED, 'vm-job-regions': '0.1.0' };
+      const binary = Object.fromEntries(
+        RUNNER_REGIONS.eu.aws.map((region) => [
+          `vm-types aws ${region}`,
+          JSON.stringify(CATALOG.aws),
+        ]),
+      );
+      const eu = {
+        ...options,
+        controlPlane: 'aws:eu-central-1',
+        runnerGeo: 'eu',
+      };
+      const { deps, lines } = setUp({ features }, binary);
+      const plan = await planned(deps, {
+        ...eu,
+        runnerRegions: ['aws:eu-west-1'],
+      });
+      expect(plan.runners).toEqual([
+        {
+          cloud: 'aws',
+          regions: ['eu-west-1', 'eu-central-1'],
+          preferred: 'eu-west-1',
+        },
+      ]);
+      expect(plan.classes.every((c) => c.preferred)).toBe(true);
+      expect(lines).toContain(
+        "aws's runners start in eu-west-1 first, for its cache, and in eu-central-1 only when aws refuses them there.",
+      );
+      expect(plan.planId).not.toBe(
+        (await planned(setUp({ features }, binary).deps, eu)).planId,
+      );
+      for (const [value, message] of [
+        [
+          'aws:us-east-1',
+          "--runner-region aws:us-east-1: not one of aws's eu runner regions: eu-central-1, eu-west-1.",
+        ],
+        ['gcp:europe-west4', "gcp isn't a runner cloud here (aws)"],
+      ]) {
+        await expect(
+          planned(setUp({ features }, binary).deps, {
+            ...eu,
+            runnerRegions: [value!],
+          }),
+        ).rejects.toThrow(message);
+      }
+    });
+
+    it("refuses --runner-geo eu when this control plane can't take a region list and the runners would stay in the US", async () => {
+      await expect(
+        planned(setUp().deps, { ...options, runnerGeo: 'eu' }),
+      ).rejects.toThrow(
+        "--runner-geo eu: aws's runners would stay in us-east-2, outside the geo",
+      );
+    });
+
     it('stops before billing when an account changes while the human signs in', async () => {
       const { planId } = await planned(setUp().deps);
       const account = { aws: '123456789012', gcp: 'proj-1', azure: 'sub-1' };

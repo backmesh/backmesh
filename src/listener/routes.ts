@@ -33,6 +33,7 @@ const RunnerClasses = z.array(
     public: z.boolean().optional(),
     gpu: z.literal(GPU.model).optional(),
     highmem: z.literal(true).optional(),
+    preferred: z.literal(true).optional(),
   }),
 );
 

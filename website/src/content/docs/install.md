@@ -116,8 +116,8 @@ deleted when it ends, can be in other clouds; the control plane's cloud gets pla
 | `--runner-geo eu`              | Runners in the EU's [regions](#regions), and without `--control-plane`, the control plane near Amsterdam (AWS `eu-central-1`, GCP `europe-west4`, Azure `westeurope`) |
 
 `--control-plane` still takes `<cloud>:<region>`. `--runners` takes a cloud
-only — `--runners aws:us-west-2` is refused, since runner regions aren't
-chosen (below).
+only — `--runners aws:us-west-2` is refused, since runner regions are fixed;
+`--runner-region` picks the one jobs start in first (below).
 
 On Azure, the plan first checks that your subscription may create the VM
 sizes of the always-on VMs install creates in that region, since some offers,
@@ -164,8 +164,20 @@ regions in EU member states, so a job and its [cache](/cache/) stay in the EU:
 backmesh install --org acme --control-plane gcp:europe-west4 --runner-geo eu
 ```
 
-The geo is the org's: a re-run of install or an upgrade without the flag keeps
-it, and `backmesh upgrade --runner-geo eu` moves every org's runners. The
+`--runner-region <cloud>:<region>`, once per cloud, starts that cloud's jobs
+in one of the geo's regions first, so they keep finding their cache there; the
+geo's other regions take a job only when the cloud refuses it there for
+capacity or quota, and after 3 such refusals in 15 minutes for the next 30.
+Without it, each job tries the cheapest region. A region outside the geo is
+refused with the geo's list, and the plan shows the order.
+
+```sh
+backmesh install --org acme --runner-geo eu --runner-region gcp:europe-west1
+```
+
+The geo and the preferred regions are the org's: a re-run of install or an
+upgrade without the flags keeps them, and `backmesh upgrade --runner-geo eu`
+moves every org's runners. The
 control plane's region is yours to choose either way; it holds no job's data,
 but keep it in the EU too when that matters to you. AWS's EU list leaves out
 `eu-west-2`, `eu-west-3`, `eu-north-1`, `eu-south-1` and `eu-south-2`, which

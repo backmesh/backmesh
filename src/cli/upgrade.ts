@@ -56,7 +56,7 @@ import {
   startListener,
 } from './listener-vm.js';
 import type { Cloud, CloudTarget } from '../runners/classes.js';
-import { geoOf, type RunCommand } from '../runners/regions.js';
+import { geoOf, preferredOf, type RunCommand } from '../runners/regions.js';
 import { keyFrom, type SignInCheck } from './github-sign-in.js';
 import {
   clusterIdOf,
@@ -77,8 +77,11 @@ import {
   listedAccount,
   noGpuLine,
   noKvmLine,
+  keptPreferred,
   parseGeo,
+  parseRunnerRegions,
   planRegions,
+  preferredLines,
   ROLE_SETUP,
   ON_DEMAND_FALLBACK_LINE,
   PUBLIC_REPOS_LINE,
@@ -90,6 +93,7 @@ import {
 import { parseRoutes } from '../listener/routes.js';
 import { ensureCacheBuckets, withAllowedRegions } from './cache-buckets.js';
 import {
+  highmemFamilyLine,
   readQuotas,
   readQuotaStatus,
   startsNoRunners,
@@ -201,6 +205,9 @@ export interface UpgradeOptions {
   // `--runner-geo`, as install's: every org's runners move to that geo's
   // regions. Without it, each org keeps its own (`geoOf`).
   runnerGeo?: string;
+  // `--runner-region <cloud>:<region>`, as install's, for every org with
+  // runners on that cloud. Without it, each org keeps its own.
+  runnerRegions?: string[];
   // `--public-repos` or `--no-public-repos`, as install's: adds or drops
   // `backmesh-ubuntu-2404-public-<n>vcpu`. Without it, each org keeps what it has.
   publicRepos?: boolean;
@@ -236,6 +243,7 @@ async function upgradeOnce(
     planId: agreed,
     yes = false,
     runnerGeo,
+    runnerRegions = [],
     publicRepos,
   }: UpgradeOptions,
   state: { paused: boolean },
@@ -319,6 +327,8 @@ async function upgradeOnce(
   // older API must move first, leaves `--plan` and `--plan-id` nothing to
   // read until a run without them has done that.
   const read = [];
+  // The `--runner-region` values some org's runners take.
+  const used = new Set<string>();
   const revived: string[] = [];
   // Every org's runner clouds, by connection, for their role setup.
   const connections = new Map<string, CloudTarget>();
@@ -362,15 +372,45 @@ async function upgradeOnce(
         `${org}'s runners don't use ${added}: \`backmesh install\` adds a cloud.`,
       );
     }
+    // Its geo and preferred regions, checked before anything changes. A
+    // cloud an org's runners don't use leaves its `--runner-region` out; a
+    // cloud without one keeps its own.
+    const orgGeo = geo ?? geoOf(routes);
+    const clouds = targets.map((t) => t.cloud);
+    const given = runnerRegions.filter((value) =>
+      clouds.some((cloud) => value.startsWith(`${cloud}:`)),
+    );
+    given.forEach((value) => used.add(value));
+    const preferred = {
+      ...keptPreferred(preferredOf(routes), orgGeo, clouds, print),
+      ...parseRunnerRegions(given, orgGeo, clouds, multiRegion),
+    };
+    // A geo this control plane can't reach yet refuses here, not later.
+    targets.forEach(planRegions(multiRegion, orgGeo, { print: () => {} }));
     const home = homeOf(routes);
     // For the scale sets a class replaces (`routesJson`).
     const ids = await loggedScaleSetIds(exec, listener.vm.id);
-    read.push({ listener, running, org, targets, home, ids });
+    read.push({
+      listener,
+      running,
+      org,
+      targets,
+      home,
+      ids,
+      geo: orgGeo,
+      preferred,
+    });
     for (const target of all) {
       if (!connections.has(target.credentials)) {
         connections.set(target.credentials, target);
       }
     }
+  }
+  const unused = runnerRegions.filter((value) => !used.has(value));
+  if (unused.length) {
+    throw new UsageError(
+      `--runner-region ${unused.join(', ')}: no org's runners are on that cloud.`,
+    );
   }
   // Only the runners' connections: their VM Jobs need the new rights.
   const roles = setups.flatMap(({ credentials, account }) => {
@@ -404,7 +444,7 @@ async function upgradeOnce(
   if (read.length) print(ON_DEMAND_FALLBACK_LINE);
   const planned = [];
   for (const entry of read) {
-    const { org, targets, running, home } = entry;
+    const { org, targets, running, home, preferred } = entry;
     // `install --public-repos` is kept as its public classes.
     const wasPublic =
       !!running.runners &&
@@ -413,14 +453,14 @@ async function upgradeOnce(
     const plan = await classesOf(
       targets,
       catalogs,
-      planRegions(
-        multiRegion,
-        geo ?? geoOf(parseRoutes(running.runners ?? '[]')),
-        { print },
-      ),
+      planRegions(multiRegion, entry.geo, { print }),
       home,
       isPublic,
+      preferred,
     );
+    preferredLines(preferred, (cloud) => [
+      ...(plan.catalog.get(cloud)?.keys() ?? []),
+    ]).forEach((line) => print(`${org}: ${line}`));
     // The public labels are the control plane's cloud's, as install's.
     if (isPublic && !plan.classes.some((c) => c.public)) {
       plan.problems.push(
@@ -486,11 +526,12 @@ async function upgradeOnce(
       org,
       current: fingerprint(running),
       changes,
-      classes: classes.map(({ label, cloud, vmTypes, regions }) => ({
+      classes: classes.map(({ label, cloud, vmTypes, regions, preferred }) => ({
         label,
         cloud,
         vmTypes,
         regions,
+        ...(preferred && { preferred }),
       })),
     })),
   };
@@ -513,6 +554,11 @@ async function upgradeOnce(
   };
   for (const { org, changes, classes } of consent) {
     changeLines(org, changes, classes).forEach((line) => print(line));
+    const added = classes.filter((c) => changes.labelsAdded.includes(c.label));
+    highmemFamilyLine(
+      'azure',
+      added.filter((c) => c.cloud === 'azure'),
+    ).forEach((line) => print(`${org}: ${line}`));
   }
   // `--plan` ends below, its only chance to say so: for any org that
   // looks like a reorder alone (none in `consent` above, since `changed()`

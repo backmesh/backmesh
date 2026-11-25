@@ -54,6 +54,7 @@ import {
   quotaCheck,
   quotaCode,
   quotaToRaise,
+  highmemFamilyLine,
   readQuota,
   readQuotas,
   readServiceQuota,
@@ -109,9 +110,11 @@ import { checkOwn, namedControlPlane } from './named-control-plane.js';
 import {
   GEOS,
   geoOf,
+  preferredOf,
   RUNNER_REGIONS,
   SUGGESTED_REGION,
   type Geo,
+  type Preferred,
   type RunCommand,
 } from '../runners/regions.js';
 import {
@@ -146,10 +149,16 @@ export async function classesOf(
   home: Cloud | undefined,
   // `--public-repos`: `backmesh-ubuntu-2404-public-<n>vcpu` too.
   publicRepos = false,
+  // `--runner-region`: each cloud's region first, its classes `preferred`.
+  preferred: Preferred = {},
 ) {
   const catalog = new Map<Cloud, Map<string, VmTypeDetails[]>>();
+  // Each cloud's first region, which prices its rate line: the preferred
+  // one, else the anchor (`target.region`, else the geo's first).
+  const anchors = new Map<Cloud, string>();
   for (const target of targets) {
-    const { cloud, region } = target;
+    const { cloud } = target;
+    const region = preferred[cloud] ?? target.region;
     // Only `regionsOf`'s regions — every one a `RUNNER_REGIONS` candidate
     // (`planRegions`) — ever become runner regions; `target.region` is
     // just where `--control-plane` put the management VM, which this
@@ -166,9 +175,21 @@ export async function classesOf(
       ),
     );
     catalog.set(cloud, new Map(entries));
+    if (ordered[0]) anchors.set(cloud, ordered[0]);
   }
   const plan = planClasses(targets, catalog, home, publicRepos);
-  return { ...plan, catalog, json: JSON.stringify(plan.classes) };
+  const classes = plan.classes.map((c) =>
+    preferred[c.cloud] === c.regions[0]
+      ? { ...c, preferred: true as const }
+      : c,
+  );
+  return {
+    ...plan,
+    classes,
+    catalog,
+    anchors,
+    json: JSON.stringify(classes),
+  };
 }
 
 /** A target's runner regions. */
@@ -192,6 +213,14 @@ export const planRegions =
   ): RegionsOf =>
   (target) => {
     if (multiRegion) return RUNNER_REGIONS[geo][target.cloud];
+    if (
+      geo !== 'us' &&
+      !RUNNER_REGIONS[geo][target.cloud].includes(target.region)
+    ) {
+      throw new UsageError(
+        `--runner-geo ${geo}: ${target.cloud}'s runners would stay in ${target.region}, outside the geo, as this control plane can't take a region list yet. Run \`backmesh upgrade\` first.`,
+      );
+    }
     report.print(
       `${target.cloud}'s runners stay in ${target.region}: this control plane can't take a region list yet.`,
     );
@@ -255,6 +284,9 @@ export interface InstallOptions {
   // `--runner-geo`: the runners' region group. Without it, a re-run keeps
   // the listener's, and a new one is US.
   runnerGeo?: string;
+  // `--runner-region <cloud>:<region>`, repeatable: each cloud's runners go
+  // there first. Without it, a re-run keeps the listener's.
+  runnerRegions?: string[];
   // `--public-repos` or `--no-public-repos`: public repositories may use the
   // runners, their fork pull requests only `backmesh-ubuntu-2404-public-<n>vcpu`. Without
   // either, a re-run keeps the listener's.
@@ -345,6 +377,81 @@ export function parseGeo(value: string): Geo {
 }
 
 /**
+ * `--runner-region <cloud>:<region>`, repeatable, one per cloud: a runner
+ * cloud's region its runners try first, for its cache, failing over to the
+ * geo's others (owner, 2026-11-25). Only one of the geo's `RUNNER_REGIONS`.
+ */
+export function parseRunnerRegions(
+  values: readonly string[],
+  geo: Geo,
+  clouds: readonly Cloud[],
+  multiRegion: boolean,
+): Preferred {
+  const preferred: Preferred = {};
+  for (const value of values) {
+    const [name = '', region = ''] = value.split(':');
+    const cloud = cloudOf(
+      name,
+      '--runner-region',
+      '--runner-region gcp:europe-west4',
+    );
+    const regions = RUNNER_REGIONS[geo][cloud];
+    if (!clouds.includes(cloud)) {
+      throw new UsageError(
+        `--runner-region ${value}: ${cloud} isn't a runner cloud here (${clouds.join(', ')}).`,
+      );
+    }
+    if (preferred[cloud]) {
+      throw new UsageError(`--runner-region ${cloud} is given twice.`);
+    }
+    if (!regions.includes(region)) {
+      throw new UsageError(
+        `--runner-region ${value}: not one of ${cloud}'s ${geo} runner regions: ${regions.join(', ')}.`,
+      );
+    }
+    if (!multiRegion) {
+      throw new UsageError(
+        `--runner-region ${value}: this control plane can't take a region list yet. Run \`backmesh upgrade\` first.`,
+      );
+    }
+    preferred[cloud] = region;
+  }
+  return preferred;
+}
+
+/**
+ * Each cloud's kept preferred region (`preferredOf`) that's still a runner
+ * region of `geo` on one of `clouds`: a geo change drops it, named.
+ */
+export function keptPreferred(
+  kept: Preferred,
+  geo: Geo,
+  clouds: readonly Cloud[],
+  print: (line: string) => void,
+): Preferred {
+  const preferred: Preferred = {};
+  for (const [cloud, region] of Object.entries(kept) as [Cloud, string][]) {
+    if (!clouds.includes(cloud)) continue;
+    if (RUNNER_REGIONS[geo][cloud].includes(region)) preferred[cloud] = region;
+    else
+      print(
+        `${cloud}'s runners no longer prefer ${region}: it isn't one of the ${geo} runner regions.`,
+      );
+  }
+  return preferred;
+}
+
+/** The plan's line for each cloud's preferred region. */
+export const preferredLines = (
+  preferred: Preferred,
+  regionsOf: (cloud: Cloud) => readonly string[],
+) =>
+  (Object.entries(preferred) as [Cloud, string][]).map(([cloud, region]) => {
+    const rest = regionsOf(cloud).filter((r) => r !== region);
+    return `${cloud}'s runners start in ${region} first, for its cache${rest.length ? `, and in ${rest.join(', ')} only when ${cloud} refuses them there` : ''}.`;
+  });
+
+/**
  * `--runners <cloud>`, repeatable: the clouds the runners use, each with
  * the geo's fixed candidate regions (`regions.ts`'s `RUNNER_REGIONS`, owner,
  * 2026-11-13) — never a region list on the command line. Without
@@ -376,7 +483,7 @@ export function runnerClouds(values: readonly string[]): Cloud[] {
   const parsed = values.map((value) => {
     if (value.includes(':')) {
       throw new UsageError(
-        `--runners ${value}: takes a cloud only, not a region; backmesh's runner regions are fixed, not chosen. Try ${example}.`,
+        `--runners ${value}: takes a cloud only, not a region; backmesh's runner regions are fixed. Try ${example}, and --runner-region ${value} to start its runners there first.`,
       );
     }
     return cloudOf(value, '--runners', example);
@@ -1225,12 +1332,29 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   const publicRepos =
     options.publicRepos ??
     !!current?.routes.some((r) => r.public && !r.retiring);
+  const clouds = runners.map((r) => r.cloud);
+  // A cloud without a `--runner-region` keeps the listener's.
+  const preferred = {
+    ...keptPreferred(
+      current ? preferredOf(current.routes) : {},
+      geo,
+      clouds,
+      note.print,
+    ),
+    ...parseRunnerRegions(
+      options.runnerRegions ?? [],
+      geo,
+      clouds,
+      multiRegion,
+    ),
+  };
   const classPlan = await classesOf(
     runners,
     anycloudRunners(deps.run),
     planRegions(multiRegion, geo, note),
     placement.controlPlane.cloud,
     publicRepos,
+    preferred,
   );
   const regionsOf = (cloud: Cloud) => [
     ...(classPlan.catalog.get(cloud)?.keys() ?? []),
@@ -1288,6 +1412,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         )}`,
       );
     }
+    quotas.push(...highmemFamilyLine(cloud, mine));
     // A GPU label's quota is usually 0 on a new account: shown, not asked
     // about.
     quotas.push(...startsNoRunners(cloud, limits, mine));
@@ -1448,6 +1573,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     runners: runners.map((target) => ({
       cloud: target.cloud,
       regions: regionsOf(target.cloud),
+      ...(preferred[target.cloud] && { preferred: preferred[target.cloud] }),
     })),
     classes: classPlan.classes.map(
       ({
@@ -1461,6 +1587,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         regions,
         gpu,
         highmem,
+        preferred,
       }) => ({
         label,
         cloud,
@@ -1472,14 +1599,14 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         regions,
         ...(gpu && { gpu }),
         ...(highmem && { highmem }),
+        ...(preferred && { preferred }),
       }),
     ),
-    // The anchor's catalog, first when it's a runner region; any runner
-    // region's prices every region.
+    // The preferred or anchor region's catalog, which prices every region.
     rates: runners.flatMap(({ cloud }) =>
       formatRate(
         classPlan.classes.filter((c) => c.cloud === cloud),
-        [...(classPlan.catalog.get(cloud)?.values() ?? [])][0] ?? [],
+        classPlan.catalog.get(cloud)?.get(classPlan.anchors.get(cloud)!) ?? [],
       ),
     ),
     noKvm: classPlan.noKvm.map((target) =>
@@ -1498,9 +1625,14 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     quotas,
   };
   const id = planId(plan);
-  [...notes, ...plan.rates, ...quotas, ...plan.noKvm, ...plan.noGpu].forEach(
-    (line) => ui.print(line),
-  );
+  [
+    ...notes,
+    ...preferredLines(preferred, regionsOf),
+    ...plan.rates,
+    ...quotas,
+    ...plan.noKvm,
+    ...plan.noGpu,
+  ].forEach((line) => ui.print(line));
   ui.print(labelsLine(plan.classes, placement.controlPlane.cloud));
   if (!plan.controlPlane.exists) {
     ui.print(

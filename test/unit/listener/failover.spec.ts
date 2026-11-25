@@ -471,6 +471,32 @@ describe('boot deadline', () => {
     ]);
   });
 
+  it('starts a preferred route in its first region alone, fails over to the rest, and starts them all while it is avoided (owner, 2026-11-25)', async () => {
+    const PREFERRED: Route = {
+      ...TWO,
+      regions: ['us-west-2', 'us-east-2'],
+      preferred: true,
+    };
+    const env = await slowRunners([PREFERRED], 3, BOOT_DEADLINE_MS, [
+      'us-west-2',
+    ]);
+    expect(env.anycloud.submitted.map((s) => s.regions)).toEqual(
+      Array(3).fill(['us-west-2']),
+    );
+    await env.scaler.reconcile();
+    expect(env.anycloud.submitted.slice(3).map((s) => s.regions)).toEqual(
+      Array(3).fill(['us-east-2']),
+    );
+    // 3 misses avoid it: the rest take new runners until 30 minutes pass.
+    env.sets[0]!.statistics = assigned(4);
+    await env.scaler.reconcile();
+    expect(env.anycloud.submitted.at(-1)!.regions).toEqual(['us-east-2']);
+    env.clock.now += 30 * 60_000;
+    env.sets[0]!.statistics = assigned(5);
+    await env.scaler.reconcile();
+    expect(env.anycloud.submitted.at(-1)!.regions).toEqual(['us-west-2']);
+  });
+
   it('replaces at the 500-runner cap, where each replacement nets out', async () => {
     const full = await slowRunners([TWO], 1, BOOT_DEADLINE_MS, ['us-east-2']);
     full.anycloud.control.others = RUNNER_CAP - 1;

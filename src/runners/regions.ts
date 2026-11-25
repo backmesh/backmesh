@@ -123,6 +123,24 @@ export const geoOf = (
     ),
   ) ?? 'us';
 
+/** A cloud's `--runner-region`: tried first, the geo's others its failover. */
+export type Preferred = Partial<Record<Cloud, string>>;
+
+/** The preferred regions an installation's routes keep (`preferred`). */
+export const preferredOf = (
+  routes: readonly {
+    cloud: Cloud;
+    regions: readonly string[];
+    preferred?: true;
+    retiring?: boolean;
+  }[],
+): Preferred =>
+  Object.fromEntries(
+    routes
+      .filter((r) => r.preferred && !r.retiring)
+      .map((r) => [r.cloud, r.regions[0]!]),
+  );
+
 /** A catalog offering's region: GCP's are zones, such as us-central1-a. */
 export const regionOf = (cloud: Cloud, offering: string) =>
   cloud === 'gcp' ? offering.replace(/-[a-z]$/, '') : offering;

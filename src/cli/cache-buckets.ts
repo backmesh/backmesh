@@ -197,7 +197,8 @@ export async function allowedRegions(
  * allowed set shrank to exclude exactly its regions while leaving others
  * for the same cloud — stops install or upgrade rather than silently
  * queuing that label's jobs forever; one that doesn't exist yet is just
- * dropped and named (owner, 2026-11-13).
+ * dropped and named (owner, 2026-11-13). A `--runner-region` the account
+ * denies stops it too, as its runners would start elsewhere.
  */
 export async function withAllowedRegions(
   api: Api,
@@ -236,6 +237,11 @@ export async function withAllowedRegions(
     const regions = c.regions.filter((r) =>
       (allowedByCloud.get(c.cloud) ?? []).includes(r),
     );
+    if (c.preferred && regions[0] !== c.regions[0]) {
+      throw new Error(
+        `--runner-region ${c.cloud}:${c.regions[0]}: the account isn't allowed to use it. Nothing changed; pass another of ${c.cloud}'s runner regions (${regions.join(', ')}).`,
+      );
+    }
     if (regions.length) return [{ ...c, regions }];
     if (live.has(c.label)) {
       throw new Error(

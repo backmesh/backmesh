@@ -1433,8 +1433,15 @@ export class Scaler {
   // `od-*` label or in the on-demand window; then the regions that fit
   // that kind's quota, less those the failover avoids. Records the regions
   // skipped for `status`; none left means none of its runners can start.
+  // A route with a preferred region (`--runner-region`) starts its runners
+  // there alone while it's open; a runner the cloud refuses there fails
+  // over to the rest (`replace`), and the failover's avoidance opens them
+  // all.
   private placement(set: ScaleSet, onDemand: boolean, now: number) {
     const { route } = set;
+    const [first] = route.regions;
+    const pin = (regions: string[]) =>
+      route.preferred && regions.includes(first!) ? [first!] : regions;
     const usable = (spot: boolean) => {
       const { fit, skipped } = this.fitting(set, spot, now);
       return {
@@ -1476,7 +1483,7 @@ export class Scaler {
     // On-demand runners whose every region that fits is avoided keep
     // starting in them, as the breaker never left them none before.
     if (!kind.open.length && kind.fit.length) {
-      if (!spot) return { spot, regions: kind.fit, fallback: false };
+      if (!spot) return { spot, regions: pin(kind.fit), fallback: false };
       const od = route.onDemand ? usable(false) : undefined;
       set.avoiding = {
         regions: kind.fit,
@@ -1490,12 +1497,12 @@ export class Scaler {
       if (od?.fit.length) {
         return {
           spot: false,
-          regions: od.open.length ? od.open : od.fit,
+          regions: pin(od.open.length ? od.open : od.fit),
           fallback: true,
         };
       }
     }
-    return { spot, regions: kind.open, fallback: false };
+    return { spot, regions: pin(kind.open), fallback: false };
   }
 
   // The route's runner regions whose quota fits one of its runners, or isn't

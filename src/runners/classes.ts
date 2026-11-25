@@ -209,6 +209,12 @@ export interface RunnerClass extends CloudTarget {
   gpu?: typeof GPU.model;
   /** `backmesh-ubuntu-2404-highmem-<n>vcpu`: 8 GiB a vCPU (`HIGHMEM_TYPES`). */
   highmem?: true;
+  /**
+   * `--runner-region`: its runners try `regions[0]` alone first, for its
+   * cache, and the other regions only when the cloud refuses them there.
+   * Without it, anycloud places each in the cheapest of `regions`.
+   */
+  preferred?: true;
 }
 
 /**
