@@ -304,7 +304,7 @@ export async function readStatus({
         const { skipped, avoiding } = set;
         if (avoiding?.onDemand) {
           warnings.push(
-            `${listener.org}: ${set.label} starts its runners on demand until ${avoiding.until.slice(11, 16)}Z: spot runners in ${avoiding.regions.join(', ')} missed the start deadline.`,
+            `${listener.org}: ${set.label} starts its runners on demand until ${avoiding.until.slice(11, 16)}Z: spot runners in ${avoiding.regions.join(', ')} missed the start deadline, so its jobs bill at the on-demand rate until then.`,
           );
         } else if (avoiding) {
           warnings.push(
@@ -447,7 +447,7 @@ export function formatStatus(report: StatusReport): string {
       for (const set of status.scaleSets) {
         const stats = set.statistics;
         lines.push(
-          `  ${set.label}${set.retiring ? ' (draining, then deleted)' : ''}${set.fallback ? ' (falls back on demand)' : ''}: ${stats ? `${stats.totalAssignedJobs} assigned, ${stats.totalRunningJobs} running; ` : ''}runners ${set.queued} queued, ${set.starting} starting, ${set.running} running`,
+          `  ${set.label}${set.retiring ? ' (draining, then deleted)' : ''}: ${stats ? `${stats.totalAssignedJobs} assigned, ${stats.totalRunningJobs} running; ` : ''}runners ${set.queued} queued, ${set.starting} starting, ${set.running} running`,
         );
         if (set.oldestQueuedMs !== null) {
           lines.push(`    oldest queued ${minutes(set.oldestQueuedMs)}`);

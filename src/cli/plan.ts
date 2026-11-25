@@ -62,7 +62,6 @@ export interface InstallPlan {
     | 'vmTypes'
     | 'regions'
     | 'gpu'
-    | 'fallback'
   >[];
   // Shown, not hashed, as `quotas`.
   rates: string[];
@@ -112,9 +111,6 @@ export interface UpgradePlan {
     // The listener it read (`fingerprint`), and what changes in its runners.
     current: string | null;
     changes: RunnerChanges;
-    classes: Pick<
-      RunnerClass,
-      'label' | 'cloud' | 'vmTypes' | 'regions' | 'fallback'
-    >[];
+    classes: Pick<RunnerClass, 'label' | 'cloud' | 'vmTypes' | 'regions'>[];
   }[];
 }

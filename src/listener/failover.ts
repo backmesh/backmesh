@@ -1,8 +1,8 @@
 // The boot deadline: a runner Job with no VM
 // BOOT_DEADLINE_MS after its submit gets a replacement in another of its
-// runner regions, of its own kind (owner, 2026-11-09: never on demand for a
-// spot label), and a region that keeps missing the deadline is avoided for a
-// while, like the spot breaker. In memory only.
+// runner regions, of its own kind, or a spot one with nowhere left on demand
+// (owner, 2026-11-25), and a region that keeps missing the deadline is
+// avoided for a while, like the spot breaker. In memory only.
 //
 // Only a Job whose launch the cloud refused counts: one waiting its turn in
 // the control plane's own provisioning queue, or already booting in another

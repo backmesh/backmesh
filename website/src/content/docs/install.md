@@ -172,13 +172,6 @@ changes it, and one without the flag keeps the current one.
 backmesh install --org acme --cache-cap 25
 ```
 
-## On-demand fallback
-
-`--on-demand-fallback` gives a spot label's runner an on-demand VM when every
-runner region refuses spot capacity, so its jobs don't wait for it, at the
-on-demand rate. A re-run without the flag keeps the current setting, and
-`--no-on-demand-fallback` turns it off. [More](/labels/#on-demand-fallback).
-
 ## Use it in a workflow
 
 Set `runs-on` to a [label](/labels/):

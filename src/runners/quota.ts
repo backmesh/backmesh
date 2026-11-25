@@ -245,9 +245,9 @@ export function skippedRegions(
 /**
  * The labels that would start no runners: in every one of their runner
  * regions, one of the quotas of their kind (spot, or on demand for an `od`
- * label; the GPU family's for a GPU label) is under one of their VMs, and a
- * spot label never falls back on demand (owner, 2026-11-09). One line each
- * for install's and upgrade's plans.
+ * label; the GPU family's for a GPU label) is under one of their VMs, as a
+ * spot label falls back on demand for spot capacity, never for quota. One
+ * line each for install's and upgrade's plans.
  */
 export function startsNoRunners(
   cloud: Cloud,

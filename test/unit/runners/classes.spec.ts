@@ -171,19 +171,6 @@ describe('runner classes', () => {
     ).toBe(false);
   });
 
-  it('marks every spot class with a pair on demand for --on-demand-fallback, and nothing without it', () => {
-    const { classes } = planClasses([AWS, GCP], catalog, 'aws', true, true);
-    expect(classes.filter((c) => c.fallback)).toEqual(
-      classes.filter((c) => c.spot && !c.public),
-    );
-    expect(classes.some((c) => c.gpu && c.fallback)).toBe(true);
-    expect(
-      planClasses([AWS, GCP], catalog, 'aws', true).classes.some(
-        (c) => c.fallback,
-      ),
-    ).toBe(false);
-  });
-
   it("gives GCP KVM classes on n2 only, since AMD's n2d doesn't nest", () => {
     const { classes, noKvm } = planClasses([GCP], catalog, 'gcp');
     expect(noKvm).toEqual([]);

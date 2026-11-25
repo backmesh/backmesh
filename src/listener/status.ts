@@ -125,8 +125,6 @@ export const listenerStatusSchema = z.object({
       gpu: z.string().optional(),
       // Removed by install or upgrade: draining, then deleted.
       retiring: z.boolean().optional(),
-      // `install --on-demand-fallback`'s spot label (`fallback`).
-      fallback: z.boolean().optional(),
       // Waiting for a VM; launching; running a runner.
       queued: z.number().int(),
       starting: z.number().int(),
@@ -173,8 +171,8 @@ export const listenerStatusSchema = z.object({
         })
         .optional(),
       // A spot label's regions that fit its quota, every one avoided for
-      // slow boots, so none starts until `until`, or with `onDemand`
-      // (`fallback`) its real jobs' runners start on demand until then.
+      // slow boots, so none starts until `until`, or with `onDemand` (an
+      // on-demand pair) its real jobs' runners start on demand until then.
       // Optional, as an older listener has none.
       avoiding: z
         .object({

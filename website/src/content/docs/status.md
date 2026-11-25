@@ -19,11 +19,10 @@ It shows the shared control plane once, then one section for each org on it.
   queued, starting and running, the oldest queued runner's age, and the reasons
   runners are short, such as no spot capacity or a quota limit; the regions
   skipped because their quota can't fit one runner, with the quota to raise; and
-  a warning when a label's quota fits no region, or its spot runners' regions
-  are avoided for slow starts, so its jobs wait at GitHub. A label with
-  [on-demand fallback](/labels/#on-demand-fallback) shows "falls back on
-  demand", its slow-start line counts the runners replaced on demand, and while
-  every spot region of it is avoided, a warning says its runners start on demand
+  a warning when a label's quota fits no region, so its jobs wait at GitHub. A
+  spot label's slow-start line counts the runners replaced
+  [on demand](/labels/#on-demand-fallback), and while every spot region of it
+  is avoided, a warning says its runners start on demand, at the on-demand rate,
   until when. A label that install or upgrade removed shows as draining until
   its scale set is deleted.
 - **Planner**, as counts only: per label, the runners started ahead of

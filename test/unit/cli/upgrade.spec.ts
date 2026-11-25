@@ -7,7 +7,11 @@ import type { StatusReport } from '../../../src/cli/status.js';
 import { StepFailed } from '../../../src/anycloud/binary.js';
 import { GitHubError } from '../../../src/app/github.js';
 import { NeedsPlan, PlanChanged, UsageError } from '../../../src/cli/errors.js';
-import { PUBLIC_REPOS_LINE, ROLE_SETUP } from '../../../src/cli/install.js';
+import {
+  ON_DEMAND_FALLBACK_LINE,
+  PUBLIC_REPOS_LINE,
+  ROLE_SETUP,
+} from '../../../src/cli/install.js';
 import { OLDEST, upgrade, type UpgradeDeps } from '../../../src/cli/upgrade.js';
 import { ANYCLOUD_PREVIOUS_VERSION } from '../../../src/anycloud/contract.generated.js';
 import { parseRoutes } from '../../../src/listener/routes.js';
@@ -674,33 +678,6 @@ describe('upgrade', () => {
     expect(requests.filter((r) => !r.startsWith('GET'))).toEqual([]);
   });
 
-  it("keeps an install's on-demand fallback, and turns it off with --no-on-demand-fallback", async () => {
-    const withFallback = JSON.stringify(
-      planClasses(
-        [{ cloud: 'aws', region: 'us-east-2', credentials: 'bm-aws' }],
-        catalogs({ aws: CATALOG.aws }),
-        'aws',
-        false,
-        true,
-      ).classes,
-    );
-    const env = {
-      version: '0.1.72',
-      image: RELEASE.listenerImage,
-      runnerImage: RELEASE.runnerImage,
-      runners: withFallback,
-      cacheBuckets: ['bm-cache-l8u5e-us-east-2'],
-    };
-    const kept = setUp(env);
-    await upgrade(kept.deps);
-    expect(mutations(kept.calls)).toEqual([]);
-    const off = setUp(env);
-    await upgrade(off.deps, { plan: true, onDemandFallback: false });
-    expect(off.lines).toContain(
-      "acme's spot labels no longer fall back on demand.",
-    );
-  });
-
   // Our own installs gain them this way: install refuses a re-run's
   // sign-in that upgrade takes.
   it('adds the public classes with --public-repos, and names the public repos that need them', async () => {
@@ -713,6 +690,7 @@ describe('upgrade', () => {
         cacheBuckets: ['bm-cache-l8u5e-us-east-2'],
       });
       await upgrade(deps, { plan: true });
+      expect(lines).toContain(ON_DEMAND_FALLBACK_LINE);
       expect(lines).toContain(
         "acme: 1 public repository (such as acme/site) can't use these runners, and their jobs wait at GitHub. `backmesh upgrade --public-repos` adds backmesh-ubuntu-2404-public-2vcpu and backmesh-ubuntu-2404-public-4vcpu for them to use.",
       );

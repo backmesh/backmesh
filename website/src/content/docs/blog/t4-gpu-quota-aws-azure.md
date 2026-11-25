@@ -52,7 +52,8 @@ aws service-quotas request-service-quota-increase \
 ```
 
 Request the spot and on-demand quotas separately; a spot label
-(`backmesh-ubuntu-2404-gpu-t4`) never falls back on demand, and the on-demand label
+(`backmesh-ubuntu-2404-gpu-t4`) uses the on-demand quota only when it
+[falls back on demand](/labels/#on-demand-fallback), and the on-demand label
 (`backmesh-ubuntu-2404-gpu-od-t4`) uses only the on-demand quota.
 
 ## Azure

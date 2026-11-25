@@ -50,29 +50,6 @@ describe('converge', () => {
     ]);
   });
 
-  it('names --on-demand-fallback turned on or off as a change', () => {
-    const fallback = planClasses(
-      [AWS, GCP],
-      catalogs(),
-      'aws',
-      false,
-      true,
-    ).classes;
-    const on = runnerChanges(running, fallback);
-    expect(on).toMatchObject({ fallback: true, labelsChanged: [] });
-    expect(changed(on)).toBe(true);
-    expect(changeLines('acme', on, fallback)).toEqual([
-      "acme's spot labels fall back on demand.",
-    ]);
-    const off = runnerChanges(parseRoutes(JSON.stringify(fallback)), both);
-    expect(changeLines('acme', off, both)).toEqual([
-      "acme's spot labels no longer fall back on demand.",
-    ]);
-    expect(
-      changed(runnerChanges(parseRoutes(JSON.stringify(fallback)), fallback)),
-    ).toBe(false);
-  });
-
   it('replaces the scale set of a label renamed under the same class code, by its logged ID', () => {
     // As v0.6.1 named them.
     const old = running.map((r) => ({

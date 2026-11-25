@@ -22,8 +22,6 @@ const OD: Route = {
   spot: false,
 };
 const SPOT = { ...ROUTE, onDemand: { label: OD.label } };
-// `install --on-demand-fallback`'s spot route.
-const FALLBACK: Route = { ...SPOT, fallback: true };
 const refused = (region: string) => ({
   region,
   diagnosis: 'capacity-exhausted',
@@ -170,8 +168,8 @@ describe('boot deadline', () => {
     expect(env.anycloud.terminated).toEqual(env.slow);
   });
 
-  it("never replaces a spot runner on demand: a one-region route's slow runners have nowhere to go (owner, 2026-11-09)", async () => {
-    for (const routes of [[SPOT, OD], [OD]]) {
+  it("leaves a one-region route's slow runners nowhere to go, on demand or with no on-demand pair", async () => {
+    for (const routes of [[ROUTE], [OD]]) {
       const env = await slowRunners(routes, 1, BOOT_DEADLINE_MS, ['us-east-2']);
       await env.scaler.reconcile();
       expect(env.anycloud.submitted).toHaveLength(1);
@@ -182,8 +180,8 @@ describe('boot deadline', () => {
     }
   });
 
-  it('with fallback, replaces a one-region spot runner on demand, and its job says it fell back (owner, 2026-11-25)', async () => {
-    const env = await slowRunners([FALLBACK, OD], 1, BOOT_DEADLINE_MS, [
+  it('replaces a one-region spot runner on demand, and its job says it fell back (owner, 2026-11-25)', async () => {
+    const env = await slowRunners([SPOT, OD], 1, BOOT_DEADLINE_MS, [
       'us-east-2',
     ]);
     await env.scaler.reconcile();
@@ -195,7 +193,7 @@ describe('boot deadline', () => {
         msg: 'spot refused in every region; replaced on demand',
         runner: env.slow[0],
         replacement: replacement.id,
-        label: FALLBACK.label,
+        label: SPOT.label,
       }),
     );
     const fields = { runnerName: replacement.id, result: 'Succeeded' };
@@ -211,7 +209,6 @@ describe('boot deadline', () => {
     );
     const set = env.scaler.status().scaleSets[0]!;
     expect(set).toMatchObject({
-      fallback: true,
       slow: { replaced: 1, onDemand: 1, stuck: 0 },
       jobs: { day: { fellBack: 1 } },
     });
@@ -226,9 +223,9 @@ describe('boot deadline', () => {
     expect(listenerStatusSchema.parse(served)).toEqual(served);
   });
 
-  it('with fallback, replaces on demand a spot replacement refused too, after failing over to the other regions', async () => {
+  it('replaces on demand a spot replacement refused too, after failing over to the other regions', async () => {
     const env = await slowRunners(
-      [{ ...FALLBACK, regions: TWO.regions }, OD],
+      [{ ...SPOT, regions: TWO.regions }, OD],
       1,
       BOOT_DEADLINE_MS,
       ['us-east-2'],
@@ -250,14 +247,14 @@ describe('boot deadline', () => {
     expect(env.anycloud.submitted).toHaveLength(3);
   });
 
-  it("with fallback, waits for anycloud to try every type and zone, and never falls back a runner that wasn't refused", async () => {
-    const unrefused = await slowRunners([FALLBACK, OD], 1, BOOT_DEADLINE_MS);
+  it("waits for anycloud to try every type and zone, and never falls back a runner that wasn't refused", async () => {
+    const unrefused = await slowRunners([SPOT, OD], 1, BOOT_DEADLINE_MS);
     await unrefused.scaler.reconcile();
     expect(unrefused.anycloud.submitted).toHaveLength(1);
 
     // Refused with a type or zone still untried: not yet.
     const env = await slowRunners(
-      [FALLBACK, OD],
+      [SPOT, OD],
       1,
       BOOT_DEADLINE_MS,
       ['us-east-2'],
@@ -274,7 +271,7 @@ describe('boot deadline', () => {
     expect(env.anycloud.terminated).toEqual(env.slow);
   });
 
-  it("with fallback, avoids a one-region route's only region, starts its real jobs on demand meanwhile, none ahead of predicted ones, and goes back to spot after", async () => {
+  it("avoids a one-region route's only region, starts its real jobs on demand meanwhile, none ahead of predicted ones, and goes back to spot after", async () => {
     let wanted = 0;
     const planner = {
       observe: () => undefined,
@@ -284,7 +281,7 @@ describe('boot deadline', () => {
       status: () => ({ keys: 0, guarded: 0, off: false }),
     } as unknown as Planner;
     const env = await slowRunners(
-      [FALLBACK, OD],
+      [SPOT, OD],
       3,
       BOOT_DEADLINE_MS,
       ['us-east-2'],
@@ -320,9 +317,9 @@ describe('boot deadline', () => {
     expect(env.anycloud.submitted.slice(7).map((s) => s.spot)).toEqual([true]);
   });
 
-  it('with fallback, starts on demand while every spot region is avoided', async () => {
+  it('starts on demand while every spot region is avoided', async () => {
     const env = await slowRunners(
-      [{ ...FALLBACK, regions: TWO.regions }, OD],
+      [{ ...SPOT, regions: TWO.regions }, OD],
       3,
       BOOT_DEADLINE_MS,
       ['us-east-2'],
@@ -482,8 +479,8 @@ describe('boot deadline', () => {
     expect(full.anycloud.live.size).toBe(1);
   });
 
-  it("keeps a one-region spot route on spot after misses, and doesn't avoid its only region", async () => {
-    const env = await slowRunners([SPOT, OD], 3, BOOT_DEADLINE_MS, [
+  it("keeps a one-region spot route with no on-demand pair on spot after misses, and doesn't avoid its only region", async () => {
+    const env = await slowRunners([ROUTE, OD], 3, BOOT_DEADLINE_MS, [
       'us-east-2',
     ]);
     await env.scaler.reconcile();
@@ -748,9 +745,9 @@ describe('quota cap', () => {
     expect(codes.sort()).toEqual(['a4', 'g4', 'g4', 'g4']);
   });
 
-  it('never replaces a slow spot runner on demand, whatever the on-demand quota', async () => {
+  it('never replaces a slow spot runner with no on-demand pair on demand, whatever the on-demand quota', async () => {
     const { q } = quotas({ 'us-east-2': { spot: 400, onDemand: 400 } });
-    const env = withQuotas([SPOT, OD], q);
+    const env = withQuotas([ROUTE, OD], q);
     await flush();
     env.sets[0]!.statistics = assigned(1);
     await env.scaler.reconcile();
