@@ -511,6 +511,9 @@ export class Scaler {
       }
     }
     for (const { set, spot, regions, fallback, extra } of extras) {
+      // Only real jobs fall back on demand: a speculative runner would idle
+      // at the on-demand rate.
+      if (fallback) continue;
       let count = 0;
       const most = Math.min(extra, tick, room, Math.max(0, spareTick));
       // A cue's slots that no idle cue runner fills yet get the first.
@@ -1215,25 +1218,34 @@ export class Scaler {
       (region) =>
         !from.includes(region) && !this.failover.avoiding(kind, region, now),
     );
+    // With `fallback`, a spot Job with no other region to try, or a spot
+    // replacement slow too, falls back on demand.
+    const fallsBack =
+      job.spot &&
+      !!route.fallback &&
+      !!route.onDemand &&
+      (!rest.length || this.replacements.has(job.id));
     // Avoiding a region changes something only for a route with another
-    // region its quota fits: avoiding the only one would start none.
+    // region its quota fits, or with `fallback`: avoiding the only one would
+    // start none, or start them on demand at once (`placement`).
     // A miss is a region whose refusal sent it into a backoff, with no
     // untried target left: one anycloud moved on from at once may have
     // launched on its next VM type had it not been replaced at 75 s.
     const missed = () => {
-      if (this.fits(set, job.spot, now).length > 1) {
+      if (
+        this.fits(set, job.spot, now).length > 1 ||
+        (job.spot && route.fallback && route.onDemand)
+      ) {
         this.failover.missed(kind, backedOff, now);
       }
     };
+    // It falls back only once anycloud has tried every VM type and zone in
+    // one of its regions (a backoff); until then it waits, re-read in a
+    // minute.
+    if (fallsBack && !backedOff.length) return undefined;
     let to: string;
     let name: string;
-    const onDemand =
-      job.spot &&
-      !!route.fallback &&
-      !!route.onDemand &&
-      (!rest.length || this.replacements.has(job.id))
-        ? this.fits(set, false, now)
-        : [];
+    const onDemand = fallsBack ? this.fits(set, false, now) : [];
     if (onDemand.length) {
       if (!quota.take(set, false, true, onDemand)) return undefined;
       to = onDemand.join(', ');

@@ -108,10 +108,13 @@ backmesh install --org acme --on-demand-fallback
 ```
 
 A spot runner falls back when its launch is still refused 75 s after its
-submit, once anycloud has tried every VM type and zone in its regions and
-backmesh has tried the label's other regions: its replacement is an on-demand
-VM of the same types, in any runner region. It also falls back while slow
-starts have every spot region [avoided](/status/). The job then bills at the
+submit, once anycloud has tried every VM type and zone of a region that refused
+it and backmesh has tried the label's other regions: its replacement is an
+on-demand VM of the same types, in any runner region. After 3 such refusals in
+a region within 15 minutes, the region is [avoided](/status/) for spot for 30
+minutes, and while every spot region of the label is avoided, its jobs' runners
+start on demand at once. Runners started ahead of predicted or cued jobs don't
+fall back: they wait for spot. The job then bills at the
 on-demand rate ([Cost](/cost/#whats-left-out)). The listener logs each job that
 fell back with `"fallback": true` on its `job completed` line, and
 [`backmesh status`](/status/) marks the label and counts its jobs that fell

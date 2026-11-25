@@ -262,7 +262,7 @@ export interface InstallOptions {
 
 // What `--on-demand-fallback` changes, and what it may cost.
 export const ON_DEMAND_FALLBACK_LINE =
-  "On-demand fallback: a spot label's runner the cloud refuses in every runner region, after anycloud's failover across VM types and zones, gets an on-demand VM instead, billed at the on-demand rate. Each job that falls back says so in the listener's log and `backmesh status`.";
+  "On-demand fallback: a spot label's runner the cloud refuses in every runner region, once anycloud has tried every VM type and zone of a region that refused it, gets an on-demand VM instead, billed at the on-demand rate. Each job that falls back says so in the listener's log and `backmesh status`.";
 
 // What `--public-repos` opens, and what it needs.
 export const PUBLIC_REPOS_LINE = `Public repositories: the org's public repositories may use the runners. Their forks' pull requests run only on ${PUBLIC_VCPUS.map(publicLabel).join(' and ')}, with ${PUBLIC_VCPU_CAP} vCPUs at once; a fork run that asks for another label is cancelled. Set GitHub's "Require approval for all external contributors" for the org, and keep nothing else in the runners' cloud network: a job can reach the network's other instances.`;
