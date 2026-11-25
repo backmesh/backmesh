@@ -80,6 +80,14 @@ describe('build benchmark figures', () => {
 });
 
 describe('mannWhitney', () => {
+  it('returns one when either sample is empty or every observation ties', () => {
+    expect(mannWhitney([], [1])).toBe(1);
+    expect(mannWhitney([1], [])).toBe(1);
+    expect(mannWhitney([], [])).toBe(1);
+    expect(mannWhitney([5], [5])).toBe(1);
+    expect(mannWhitney([3, 3], [3, 3])).toBe(1);
+  });
+
   it('matches the tie-corrected normal approximation', () => {
     // U = 5; ties of 3 and 2 make the variance 25/12 × (11 − 30/90).
     expect(mannWhitney([1, 2, 2, 3, 5], [2, 4, 4, 6, 7])).toBeCloseTo(
