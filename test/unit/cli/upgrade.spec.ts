@@ -236,6 +236,8 @@ function setUp({
     'vm-types aws us-east-2': JSON.stringify(catalog),
     'vm-types aws us-east-1': JSON.stringify(CATALOG.aws),
     'vm-types aws us-west-2': JSON.stringify(CATALOG.aws),
+    'vm-types aws eu-central-1': JSON.stringify(CATALOG.aws),
+    'vm-types aws eu-west-1': JSON.stringify(CATALOG.aws),
     'vm-types gcp us-central1': JSON.stringify(CATALOG.gcp),
     'vm-types azure westus2': JSON.stringify(CATALOG.azure),
     'api status --json': JSON.stringify({ url: HOSTED }),
@@ -1137,6 +1139,27 @@ describe('upgrade', () => {
       expect(calls).toContain('vm-types aws us-west-2 --details --json');
       expect(lines).toContain("acme's aws runners add us-east-1, us-west-2.");
       expect(result.listeners?.[0]?.rolled).toBe(true);
+    });
+
+    it("moves the runners to --runner-geo's regions", async () => {
+      const { deps, calls, lines } = wide();
+      regions(deps);
+      deps.confirm = async () => true;
+      const result = await upgrade(deps, { runnerGeo: 'eu' });
+      expect(calls).toContain('vm-types aws eu-central-1 --details --json');
+      expect(calls).not.toContain('vm-types aws us-west-2 --details --json');
+      expect(lines).toContain(
+        "acme's aws runners add eu-central-1, eu-west-1 and leave us-east-2.",
+      );
+      expect(result.listeners?.[0]?.rolled).toBe(true);
+    });
+
+    it('refuses a --runner-geo it has no regions for, before any change', async () => {
+      const { deps, calls } = wide();
+      await expect(upgrade(deps, { runnerGeo: 'asia' })).rejects.toThrow(
+        '--runner-geo asia: expected one of us, eu, such as --runner-geo eu.',
+      );
+      expect(mutations(calls)).toEqual([]);
     });
 
     it('stays on the single anchor region without that feature, no --runners needed', async () => {

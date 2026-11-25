@@ -107,8 +107,11 @@ import {
 } from './vm-sizes.js';
 import { checkOwn, namedControlPlane } from './named-control-plane.js';
 import {
+  GEOS,
+  geoOf,
   RUNNER_REGIONS,
   SUGGESTED_REGION,
+  type Geo,
   type RunCommand,
 } from '../runners/regions.js';
 import {
@@ -172,7 +175,7 @@ export async function classesOf(
 export type RegionsOf = (target: CloudTarget) => Promise<string[]> | string[];
 
 /**
- * The runner regions install and upgrade plan: every one of
+ * The runner regions install and upgrade plan: every one of the geo's
  * `RUNNER_REGIONS` (fixed in code, not discovered through a cloud CLI;
  * owner, 2026-11-13), or just the target's region alone while this control
  * plane can't take a region list yet. Account-allowed filtering
@@ -183,11 +186,12 @@ export type RegionsOf = (target: CloudTarget) => Promise<string[]> | string[];
 export const planRegions =
   (
     multiRegion: boolean,
+    geo: Geo,
     // Prints why a cloud keeps one region.
     report: { print: (line: string) => void },
   ): RegionsOf =>
   (target) => {
-    if (multiRegion) return RUNNER_REGIONS[target.cloud];
+    if (multiRegion) return RUNNER_REGIONS[geo][target.cloud];
     report.print(
       `${target.cloud}'s runners stay in ${target.region}: this control plane can't take a region list yet.`,
     );
@@ -248,6 +252,9 @@ export interface InstallOptions {
   // `--cache-cap`: each repository's cache per region, in GB, set when the
   // listener is created.
   cacheCapGb?: number;
+  // `--runner-geo`: the runners' region group. Without it, a re-run keeps
+  // the listener's, and a new one is US.
+  runnerGeo?: string;
   // `--public-repos` or `--no-public-repos`: public repositories may use the
   // runners, their fork pull requests only `backmesh-ubuntu-2404-public-<n>vcpu`. Without
   // either, a re-run keeps the listener's.
@@ -327,15 +334,26 @@ export function parseControlPlane(value: string): CloudTarget {
   return { cloud, region, credentials: '' };
 }
 
+/** `--runner-geo <geo>`: one of `GEOS`, whose fixed regions the runners use. */
+export function parseGeo(value: string): Geo {
+  if (!GEOS.includes(value as Geo)) {
+    throw new UsageError(
+      `--runner-geo ${value}: expected one of ${GEOS.join(', ')}, such as --runner-geo eu.`,
+    );
+  }
+  return value as Geo;
+}
+
 /**
  * `--runners <cloud>`, repeatable: the clouds the runners use, each with
- * its fixed candidate regions (`regions.ts`'s `RUNNER_REGIONS`, owner,
+ * the geo's fixed candidate regions (`regions.ts`'s `RUNNER_REGIONS`, owner,
  * 2026-11-13) — never a region list on the command line. Without
  * `--runners`, the control plane's cloud alone.
  */
 export function parseRunners(
   values: readonly string[],
   controlPlane: Pick<CloudTarget, 'cloud' | 'region'>,
+  geo: Geo = 'us',
 ): CloudTarget[] {
   const given = values.length ? values : [controlPlane.cloud];
   return runnerClouds(given).map((cloud) => ({
@@ -343,7 +361,7 @@ export function parseRunners(
     region:
       cloud === controlPlane.cloud
         ? controlPlane.region
-        : SUGGESTED_REGION[cloud],
+        : SUGGESTED_REGION[geo][cloud],
     credentials: '',
   }));
 }
@@ -950,6 +968,8 @@ async function placementOf(
   // This machine's control plane is reused with a listener on it:
   // `connections` then excludes its cloud unless it's also a runner cloud.
   reuse = false,
+  // The runners' geo, whose anchor a new control plane is suggested in.
+  geo: Geo = 'us',
 ) {
   const { ui } = deps;
   // At a terminal, for a run that will ask before creating anything, each
@@ -1023,14 +1043,14 @@ async function placementOf(
           : first;
       const region = await ask(
         `Control plane region on ${cloud}?`,
-        SUGGESTED_REGION[cloud],
+        SUGGESTED_REGION[geo][cloud],
       );
       controlPlane = parseControlPlane(`${cloud}:${region}`);
     } else {
-      const region = SUGGESTED_REGION[first];
+      const region = SUGGESTED_REGION[geo][first];
       controlPlane = { cloud: first, region, credentials: '' };
       ui.print(
-        `The control plane goes on ${first} ${region}, near GitHub's US East${signedIn.length > 1 ? `, the first signed-in of ${signedIn.join(', ')}` : ''}; pass --control-plane <cloud>:<region> to choose another.`,
+        `The control plane goes on ${first} ${region}, ${geo === 'us' ? "near GitHub's US East" : 'with the runners'}${signedIn.length > 1 ? `, the first signed-in of ${signedIn.join(', ')}` : ''}; pass --control-plane <cloud>:<region> to choose another.`,
       );
     }
   }
@@ -1049,7 +1069,7 @@ async function placementOf(
         .map((c) => c.trim()),
     );
   }
-  const runners = parseRunners(given, controlPlane);
+  const runners = parseRunners(given, controlPlane, geo);
   return {
     controlPlane,
     runners,
@@ -1148,6 +1168,8 @@ async function currentListener(
 export async function install(options: InstallOptions, deps: InstallDeps) {
   const { ui } = deps;
   const multiRegion = takesRegions(ANYCLOUD_VERSION, deps.features);
+  const runnerGeo =
+    options.runnerGeo === undefined ? undefined : parseGeo(options.runnerGeo);
   const override = readOverride(deps.env);
   if (!options.plan) {
     if (!options.yes && !ui.confirm) {
@@ -1176,12 +1198,14 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       ? targeted
       : undefined;
   const current = await currentListener(options.org, targeted, release);
+  const geo = runnerGeo ?? (current ? geoOf(current.routes) : 'us');
   const placement = await placementOf(
     options,
     deps,
     targeted,
     current && targetsOf(current.routes),
     !!reused?.orgs.length,
+    geo,
   );
   const { runners } = placement;
   const { identities, signedIn } = await checkPrerequisites(
@@ -1204,7 +1228,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
   const classPlan = await classesOf(
     runners,
     anycloudRunners(deps.run),
-    planRegions(multiRegion, note),
+    planRegions(multiRegion, geo, note),
     placement.controlPlane.cloud,
     publicRepos,
   );
@@ -1426,7 +1450,18 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       regions: regionsOf(target.cloud),
     })),
     classes: classPlan.classes.map(
-      ({ label, cloud, region, vcpus, spot, kvm, vmTypes, regions, gpu }) => ({
+      ({
+        label,
+        cloud,
+        region,
+        vcpus,
+        spot,
+        kvm,
+        vmTypes,
+        regions,
+        gpu,
+        highmem,
+      }) => ({
         label,
         cloud,
         region,
@@ -1436,12 +1471,15 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         vmTypes,
         regions,
         ...(gpu && { gpu }),
+        ...(highmem && { highmem }),
       }),
     ),
-    rates: runners.flatMap(({ cloud, region }) =>
+    // The anchor's catalog, first when it's a runner region; any runner
+    // region's prices every region.
+    rates: runners.flatMap(({ cloud }) =>
       formatRate(
         classPlan.classes.filter((c) => c.cloud === cloud),
-        classPlan.catalog.get(cloud)?.get(region) ?? [],
+        [...(classPlan.catalog.get(cloud)?.values() ?? [])][0] ?? [],
       ),
     ),
     noKvm: classPlan.noKvm.map((target) =>
@@ -1807,6 +1845,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         c.spot &&
         !c.kvm &&
         !c.gpu &&
+        !c.highmem &&
         !c.public &&
         c.vcpus <= 4 &&
         !blocked.has(c.label),

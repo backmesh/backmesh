@@ -587,7 +587,7 @@ describe('install', () => {
       'Lowered vol-api from 8000 IOPS and 125 MiB/s to 3000 IOPS and 125 MiB/s.',
     );
     expect(lines.slice(-2)).toEqual([
-      'Labels for runs-on: backmesh-ubuntu-2404-2vcpu, backmesh-ubuntu-2404-4vcpu, backmesh-ubuntu-2404-8vcpu, backmesh-ubuntu-2404-16vcpu, backmesh-ubuntu-2404-od-2vcpu, backmesh-ubuntu-2404-od-4vcpu, backmesh-ubuntu-2404-od-8vcpu, backmesh-ubuntu-2404-od-16vcpu, backmesh-ubuntu-2404-kvm-2vcpu, backmesh-ubuntu-2404-kvm-4vcpu, backmesh-ubuntu-2404-kvm-8vcpu, backmesh-ubuntu-2404-kvm-16vcpu, backmesh-ubuntu-2404-kvm-od-2vcpu, backmesh-ubuntu-2404-kvm-od-4vcpu, backmesh-ubuntu-2404-kvm-od-8vcpu, backmesh-ubuntu-2404-kvm-od-16vcpu, backmesh-ubuntu-2404-gpu-t4, backmesh-ubuntu-2404-gpu-od-t4 (aws\'s carry no "aws-": it runs the control plane).',
+      'Labels for runs-on: backmesh-ubuntu-2404-2vcpu, backmesh-ubuntu-2404-4vcpu, backmesh-ubuntu-2404-8vcpu, backmesh-ubuntu-2404-16vcpu, backmesh-ubuntu-2404-od-2vcpu, backmesh-ubuntu-2404-od-4vcpu, backmesh-ubuntu-2404-od-8vcpu, backmesh-ubuntu-2404-od-16vcpu, backmesh-ubuntu-2404-kvm-2vcpu, backmesh-ubuntu-2404-kvm-4vcpu, backmesh-ubuntu-2404-kvm-8vcpu, backmesh-ubuntu-2404-kvm-16vcpu, backmesh-ubuntu-2404-kvm-od-2vcpu, backmesh-ubuntu-2404-kvm-od-4vcpu, backmesh-ubuntu-2404-kvm-od-8vcpu, backmesh-ubuntu-2404-kvm-od-16vcpu, backmesh-ubuntu-2404-gpu-t4, backmesh-ubuntu-2404-gpu-od-t4, backmesh-ubuntu-2404-highmem-2vcpu, backmesh-ubuntu-2404-highmem-4vcpu, backmesh-ubuntu-2404-highmem-8vcpu, backmesh-ubuntu-2404-highmem-16vcpu, backmesh-ubuntu-2404-highmem-od-2vcpu, backmesh-ubuntu-2404-highmem-od-4vcpu, backmesh-ubuntu-2404-highmem-od-8vcpu, backmesh-ubuntu-2404-highmem-od-16vcpu (aws\'s carry no "aws-": it runs the control plane).',
       'Done. Use `runs-on: backmesh-ubuntu-2404-4vcpu` (a 4-vCPU spot VM) in a workflow; other sizes: https://backmesh.com/labels/',
     ]);
     expect(lines).toContain(
@@ -852,7 +852,7 @@ describe('install', () => {
     const routes = parseRoutes(
       JSON.parse(secret.split(' ')[2]!).values.BACKMESH_RUNNERS,
     );
-    expect(routes).toHaveLength(18);
+    expect(routes).toHaveLength(26);
     expect(
       routes.find((r) => r.label === 'backmesh-ubuntu-2404-kvm-od-4vcpu'),
     ).toEqual({
@@ -899,7 +899,8 @@ describe('install', () => {
   });
 
   it('names a label that would start no runners, and asks before going on, no unless yes', async () => {
-    // 6 spot vCPUs in us-east-2: under one 8- or 16-vCPU spot runner.
+    // 6 spot vCPUs in us-east-2: under one 8- or 16-vCPU spot runner,
+    // high-memory or not.
     const confirm = vi.fn(
       async (question: string) => !question.includes('start no runners'),
     );
@@ -915,7 +916,7 @@ describe('install', () => {
       "backmesh-ubuntu-2404-8vcpu would start no runners: every runner region's spot quota is under one 8-vCPU runner (us-east-2 6 vCPU); raise L-34B43A08 in us-east-2 to use it.",
     );
     expect(confirm).toHaveBeenCalledWith(
-      '4 labels would start no runners until a quota is raised. Install anyway?',
+      '6 labels would start no runners until a quota is raised. Install anyway?',
     );
     expect(calls.some((c) => c.startsWith('api create'))).toBe(false);
   });
@@ -2252,14 +2253,14 @@ describe('install', () => {
       ]);
       const features = { ...RELEASED, 'vm-job-regions': '0.1.0' };
       const binary = Object.fromEntries(
-        RUNNER_REGIONS.aws.map((region) => [
+        RUNNER_REGIONS.us.aws.map((region) => [
           `vm-types aws ${region}`,
           JSON.stringify(CATALOG.aws),
         ]),
       );
       const wide = await planned(setUp({ features }, binary).deps);
       // Home (the control plane's own region) first, then the rest of
-      // RUNNER_REGIONS.aws in order.
+      // RUNNER_REGIONS.us.aws in order.
       expect(wide.classes[0]?.regions).toEqual([
         'us-east-2',
         'us-east-1',
@@ -2270,12 +2271,12 @@ describe('install', () => {
 
     it("never runs runners in the control plane's own region when that region isn't a RUNNER_REGIONS candidate", async () => {
       // us-west-1 lacks m7a (regions.spec.ts), so it's excluded from
-      // RUNNER_REGIONS.aws; putting the control plane there must not leak
+      // RUNNER_REGIONS.us.aws; putting the control plane there must not leak
       // it into the runner catalog or classes.
-      expect(RUNNER_REGIONS.aws).not.toContain('us-west-1');
+      expect(RUNNER_REGIONS.us.aws).not.toContain('us-west-1');
       const features = { ...RELEASED, 'vm-job-regions': '0.1.0' };
       const binary = Object.fromEntries(
-        RUNNER_REGIONS.aws.map((region) => [
+        RUNNER_REGIONS.us.aws.map((region) => [
           `vm-types aws ${region}`,
           JSON.stringify(CATALOG.aws),
         ]),
@@ -2284,8 +2285,35 @@ describe('install', () => {
         ...options,
         controlPlane: 'aws:us-west-1',
       });
-      expect(plan.classes[0]?.regions).toEqual(RUNNER_REGIONS.aws);
+      expect(plan.classes[0]?.regions).toEqual(RUNNER_REGIONS.us.aws);
       expect(plan.classes[0]?.regions).not.toContain('us-west-1');
+    });
+
+    it("plans --runner-geo eu's regions, anchored on the control plane's, and refuses a geo it doesn't know", async () => {
+      const features = { ...RELEASED, 'vm-job-regions': '0.1.0' };
+      const binary = Object.fromEntries(
+        RUNNER_REGIONS.eu.aws.map((region) => [
+          `vm-types aws ${region}`,
+          JSON.stringify(CATALOG.aws),
+        ]),
+      );
+      const plan = await planned(setUp({ features }, binary).deps, {
+        ...options,
+        controlPlane: 'aws:eu-west-1',
+        runnerGeo: 'eu',
+      });
+      expect(plan.runners).toEqual([
+        { cloud: 'aws', regions: ['eu-west-1', 'eu-central-1'] },
+      ]);
+      expect(plan.classes.every((c) => c.regions[0] === 'eu-west-1')).toBe(
+        true,
+      );
+      await expect(
+        planned(setUp({ features }, binary).deps, {
+          ...options,
+          runnerGeo: 'asia',
+        }),
+      ).rejects.toThrow('--runner-geo asia: expected one of us, eu');
     });
 
     it('stops before billing when an account changes while the human signs in', async () => {
@@ -2353,6 +2381,11 @@ describe('install', () => {
       { cloud: 'aws', region: 'us-east-2', credentials: '' },
       { cloud: 'gcp', region: 'us-east4', credentials: '' },
       { cloud: 'azure', region: 'eastus', credentials: '' },
+    ]);
+    // --runner-geo eu anchors another cloud near Amsterdam.
+    expect(parseRunners(['aws', 'gcp'], controlPlane, 'eu')).toEqual([
+      { cloud: 'aws', region: 'us-east-2', credentials: '' },
+      { cloud: 'gcp', region: 'europe-west4', credentials: '' },
     ]);
     expect(() => parseRunners(['oracle'], controlPlane)).toThrow(
       'expected one of aws, gcp, azure',
@@ -2536,7 +2569,7 @@ describe('install', () => {
     );
     const features = { ...RELEASED, 'vm-job-regions': '0.1.0' };
     const binary = Object.fromEntries(
-      RUNNER_REGIONS.aws.map((region) => [
+      RUNNER_REGIONS.us.aws.map((region) => [
         `vm-types aws ${region}`,
         JSON.stringify(CATALOG.aws),
       ]),
@@ -2571,7 +2604,7 @@ describe('install', () => {
   describe('with VM Job region lists', () => {
     const features = { ...RELEASED, 'vm-job-regions': '0.1.0' };
     const binary = Object.fromEntries(
-      RUNNER_REGIONS.aws.map((region) => [
+      RUNNER_REGIONS.us.aws.map((region) => [
         `vm-types aws ${region}`,
         JSON.stringify(CATALOG.aws),
       ]),
@@ -2642,7 +2675,7 @@ describe('install', () => {
 function skus(restricted: Record<string, string[]>) {
   return JSON.stringify(
     Object.keys(FAMILY).flatMap((name) =>
-      RUNNER_REGIONS.azure.map((location) => ({
+      RUNNER_REGIONS.us.azure.map((location) => ({
         name,
         family: FAMILY[name],
         locations: [location],
@@ -2709,7 +2742,7 @@ const SPONSORSHIP = refusedAll(LISTENER_SIZES, [
 
 describe("install's always-on VM sizes on Azure", () => {
   const binary = Object.fromEntries(
-    RUNNER_REGIONS.azure.map((r) => [
+    RUNNER_REGIONS.us.azure.map((r) => [
       `vm-types azure ${r}`,
       JSON.stringify(CATALOG.azure),
     ]),
@@ -2802,7 +2835,7 @@ describe("install's always-on VM sizes on Azure", () => {
 
   it('stops before any sign-in when no region offers a VM any of its sizes', async () => {
     const { deps, worker } = azure(
-      refusedAll(CONTROL_SIZES, RUNNER_REGIONS.azure),
+      refusedAll(CONTROL_SIZES, RUNNER_REGIONS.us.azure),
     );
     const error = await install({ ...eastus, plan: true }, deps).catch(
       (e: unknown) => e as Error,
@@ -2817,7 +2850,7 @@ describe("install's always-on VM sizes on Azure", () => {
   it("takes the listener's next size where Azure refuses Standard_B2s in every region, as some offers do", async () => {
     const { deps, lines, calls } = azure({
       ...refusedAll(LISTENER_SIZES, []),
-      Standard_B2s: RUNNER_REGIONS.azure,
+      Standard_B2s: RUNNER_REGIONS.us.azure,
     });
     const { plan, run } = await planned(eastus, deps);
     expect(plan).toMatchObject({
@@ -2847,7 +2880,7 @@ describe("install's always-on VM sizes on Azure", () => {
 
   it("takes the control plane's next size where Azure refuses Standard_D2s_v5", async () => {
     const { deps, lines } = azure({
-      Standard_D2s_v5: RUNNER_REGIONS.azure,
+      Standard_D2s_v5: RUNNER_REGIONS.us.azure,
     });
     const { plan } = await planned(eastus, deps);
     expect(plan).toMatchObject({
@@ -2955,7 +2988,7 @@ describe("install's always-on VM sizes on Azure", () => {
       {},
       {
         families: Object.fromEntries(
-          RUNNER_REGIONS.azure.map((r) => [
+          RUNNER_REGIONS.us.azure.map((r) => [
             r,
             {
               standardDSv5Family: [0, 0],
@@ -3147,14 +3180,17 @@ describe("install's always-on VM sizes on Azure", () => {
     // A sponsorship subscription's 3 spot vCPUs in each region.
     const spot = (limit: number) =>
       Object.fromEntries(
-        RUNNER_REGIONS.azure.map((r) => [r, { lowPriorityCores: [limit, 0] }]),
+        RUNNER_REGIONS.us.azure.map((r) => [
+          r,
+          { lowPriorityCores: [limit, 0] },
+        ]),
       ) as Record<string, Record<string, [number, number]>>;
     const features = { ...RELEASED, 'vm-job-regions': '0.1.0' };
     const { deps, lines } = azure({}, { families: spot(3), features });
     const { run } = await planned(eastus, deps);
     const labels = lines.filter((l) => l.startsWith('Labels for runs-on: '));
     expect(labels[0]).toMatch(
-      /^Labels for runs-on: backmesh-ubuntu-2404-2vcpu, backmesh-ubuntu-2404-4vcpu, .*backmesh-ubuntu-2404-gpu-t4, backmesh-ubuntu-2404-gpu-od-t4 \(azure's carry no "azure-": it runs the control plane\)\.$/,
+      /^Labels for runs-on: backmesh-ubuntu-2404-2vcpu, backmesh-ubuntu-2404-4vcpu, .*backmesh-ubuntu-2404-gpu-t4, backmesh-ubuntu-2404-gpu-od-t4, backmesh-ubuntu-2404-highmem-2vcpu, .*backmesh-ubuntu-2404-highmem-od-16vcpu \(azure's carry no "azure-": it runs the control plane\)\.$/,
     );
     expect(labels[0]).not.toContain('backmesh-azure-');
     expect(lines).toContainEqual(

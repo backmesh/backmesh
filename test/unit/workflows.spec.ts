@@ -1624,7 +1624,7 @@ describe("labels.yml's cache warm hit", () => {
 
   it('runs in turn on the same label, one job more than any cloud has regions', () => {
     expect(warm).toHaveLength(
-      Math.max(...Object.values(RUNNER_REGIONS).map((r) => r.length)) + 1,
+      Math.max(...Object.values(RUNNER_REGIONS.us).map((r) => r.length)) + 1,
     );
     expect(jobs['warm-1']!.needs).toBe('read');
     for (const [i, name] of warm.entries()) {

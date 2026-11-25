@@ -94,6 +94,7 @@ where install would put it. The control plane stays in its region.
 **Which regions does backmesh run jobs in by default?** A fixed list per
 cloud, not discovered or chosen: every US region whose catalog offers every
 VM type backmesh's labels use, narrowed to the ones your account allows.
+`--runner-geo eu` uses the EU member states' regions instead.
 [More](/install/#regions).
 
 **Can several orgs share one backmesh control plane?** Yes, when they have the same owner:

@@ -27,11 +27,17 @@ as above, and its [GPU labels](/labels/#gpu) are `backmesh-ubuntu-2404-gpu-t4`, 
 and `backmesh-ubuntu-2404-gpu-od-t4`, on demand; otherwise they name it, such as
 `backmesh-azure-ubuntu-2404-4vcpu`. Install prints the labels it made.
 
+The [high-memory labels](/labels/#high-memory) use the E-series twins,
+`Standard_E<n>ads_v5`, `Standard_E<n>as_v5` then `Standard_E<n>s_v5`, 8 GiB a
+vCPU: `backmesh-ubuntu-2404-highmem-16vcpu` is 16 vCPUs and 128 GiB. Their
+spot VMs count against "Total Regional Low-priority vCPUs" with the others.
+
 ## Regions
 
-Runners use a fixed list of US regions, not discovered through your cloud CLI
-or chosen on the command line: every one whose catalog offers every type
-above — every US region qualifies — narrowed to the ones your account allows.
+Runners use a fixed list of US regions, or with `--runner-geo eu` of the EU
+member states' ones, not discovered through your cloud CLI or chosen on the
+command line: every one whose catalog offers every type above — every US and
+EU region qualifies — narrowed to the ones your account allows.
 Each job tries the cheapest region first, then another when Azure refuses for
 capacity or quota. [More](/install/#regions).
 

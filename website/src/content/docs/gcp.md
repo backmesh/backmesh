@@ -45,12 +45,18 @@ don't support nested virtualization. GCP has no [GPU labels](/labels/#gpu) yet: 
 can't launch a T4 VM there. When GCP is the control plane's cloud, its labels are
 plain, as above; otherwise they name it, such as `backmesh-gcp-ubuntu-2404-4vcpu`.
 
+The [high-memory labels](/labels/#high-memory) use `n2-highmem-<n>` then
+`n2d-highmem-<n>`, 8 GiB a vCPU, on spot and on demand alike:
+`backmesh-ubuntu-2404-highmem-16vcpu` is 16 vCPUs and 128 GiB. They count
+against the same `N2_CPUS`, `N2D_CPUS` and `PREEMPTIBLE_CPUS` quotas.
+
 ## Regions
 
-Runners use a fixed list of US regions, not discovered through your cloud CLI
-or chosen on the command line: every one whose catalog offers every spot type
-above, which leaves out `us-central2` (almost no general-purpose types),
-narrowed to the ones your account allows. Each job tries the cheapest region
+Runners use a fixed list of US regions, or with `--runner-geo eu` of EU ones
+anchored on `europe-west4`, not discovered through your cloud CLI or chosen on
+the command line: every one whose catalog offers every spot type above, which
+leaves out `us-central2` (almost no general-purpose types) and `europe-north2`
+(no `n2` or `n2d`), narrowed to the ones your account allows. Each job tries the cheapest region
 first, then another when Google refuses for capacity or quota.
 [More](/install/#regions).
 

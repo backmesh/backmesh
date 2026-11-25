@@ -32,6 +32,7 @@ const RunnerClasses = z.array(
     replaceScaleSetId: z.number().int().positive().optional(),
     public: z.boolean().optional(),
     gpu: z.literal(GPU.model).optional(),
+    highmem: z.literal(true).optional(),
   }),
 );
 
@@ -68,6 +69,7 @@ export function parseRoutes(json: string): Route[] {
           c.cloud === route.cloud &&
           c.kvm === route.kvm &&
           c.gpu === route.gpu &&
+          c.highmem === route.highmem &&
           c.vcpus === route.vcpus,
       );
     return { ...route, ...(od && { onDemand: { label: od.label } }) };

@@ -56,7 +56,7 @@ import {
   startListener,
 } from './listener-vm.js';
 import type { Cloud, CloudTarget } from '../runners/classes.js';
-import type { RunCommand } from '../runners/regions.js';
+import { geoOf, type RunCommand } from '../runners/regions.js';
 import { keyFrom, type SignInCheck } from './github-sign-in.js';
 import {
   clusterIdOf,
@@ -77,6 +77,7 @@ import {
   listedAccount,
   noGpuLine,
   noKvmLine,
+  parseGeo,
   planRegions,
   ROLE_SETUP,
   ON_DEMAND_FALLBACK_LINE,
@@ -197,6 +198,9 @@ export interface UpgradeOptions {
   // `--plan-id`: the plan `--yes` agrees to.
   planId?: string;
   yes?: boolean;
+  // `--runner-geo`, as install's: every org's runners move to that geo's
+  // regions. Without it, each org keeps its own (`geoOf`).
+  runnerGeo?: string;
   // `--public-repos` or `--no-public-repos`, as install's: adds or drops
   // `backmesh-ubuntu-2404-public-<n>vcpu`. Without it, each org keeps what it has.
   publicRepos?: boolean;
@@ -231,11 +235,13 @@ async function upgradeOnce(
     plan: planOnly = false,
     planId: agreed,
     yes = false,
+    runnerGeo,
     publicRepos,
   }: UpgradeOptions,
   state: { paused: boolean },
 ) {
   const moved = new Set(runnerClouds(runners));
+  const geo = runnerGeo === undefined ? undefined : parseGeo(runnerGeo);
   const { run, print } = deps;
   const release = await deps.release();
   checkPinned(release.anycloud, deps.features);
@@ -407,7 +413,11 @@ async function upgradeOnce(
     const plan = await classesOf(
       targets,
       catalogs,
-      planRegions(multiRegion, { print }),
+      planRegions(
+        multiRegion,
+        geo ?? geoOf(parseRoutes(running.runners ?? '[]')),
+        { print },
+      ),
       home,
       isPublic,
     );

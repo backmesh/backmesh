@@ -284,6 +284,10 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       [],
     )
     .option(
+      '--runner-geo <geo>',
+      "the runners' fixed regions: us or eu (EU member states' regions only). Without it, a re-run keeps the org's, and a new install is us",
+    )
+    .option(
       '--plan',
       'print what install would create and its plan ID, and change nothing',
     )
@@ -319,6 +323,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
         controlPlane?: string;
         controlPlaneId?: string;
         runners: string[];
+        runnerGeo?: string;
         plan?: boolean;
         planId?: string;
         yes?: boolean;
@@ -335,6 +340,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
             controlPlane: opts.controlPlane,
             controlPlaneId: opts.controlPlaneId,
             runners: opts.runners,
+            runnerGeo: opts.runnerGeo,
             yes: opts.yes ?? false,
             plan: opts.plan,
             planId: opts.planId,
@@ -354,6 +360,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
               ? [`--control-plane-id ${opts.controlPlaneId}`]
               : []),
             ...runners.map((r) => `--runners ${r.cloud}`),
+            ...(opts.runnerGeo ? [`--runner-geo ${opts.runnerGeo}`] : []),
             ...(opts.publicRepos === undefined
               ? []
               : [opts.publicRepos ? '--public-repos' : '--no-public-repos']),
@@ -491,6 +498,10 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
     .option('--plan-id <id>', 'the plan --yes agrees to, from --plan')
     .option('--yes', 'apply the plan --plan-id names without asking')
     .option(
+      '--runner-geo <geo>',
+      "move every org's runners to another geo's fixed regions: us or eu. Without it, each org keeps its own",
+    )
+    .option(
       '--public-repos',
       "add backmesh-ubuntu-2404-public-2vcpu and backmesh-ubuntu-2404-public-4vcpu, as install's --public-repos does; without it or --no-public-repos, each org keeps what it has",
     )
@@ -504,6 +515,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
         plan?: boolean;
         planId?: string;
         yes?: boolean;
+        runnerGeo?: string;
         publicRepos?: boolean;
       }) => {
         const result = await upgrade(
@@ -513,12 +525,14 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
             plan: opts.plan,
             planId: opts.planId,
             yes: opts.yes ?? false,
+            runnerGeo: opts.runnerGeo,
             publicRepos: opts.publicRepos,
           },
         );
         if ('planId' in result) {
           const again = [
             ...opts.runners.map((r) => `--runners ${r}`),
+            ...(opts.runnerGeo ? [`--runner-geo ${opts.runnerGeo}`] : []),
             ...(opts.publicRepos === undefined
               ? []
               : [opts.publicRepos ? '--public-repos' : '--no-public-repos']),

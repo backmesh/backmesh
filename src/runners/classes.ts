@@ -85,6 +85,42 @@ const CLOUD_CODE: Record<
 };
 const SPOT_CODES = [0, 2, 4, 5];
 const GPU_CODES = [5, 6];
+/**
+ * A high-memory class's second character: its vCPUs, as the general
+ * class's base-36 digit is, under a first character shared with the
+ * general class of its cloud and spot-ness. Few first characters are left
+ * (36, less the 21 above), so a memory variant takes none of them, and an
+ * arm64 high-memory class can pair these with the arm64 letters. No base-36
+ * vCPU digit is one of these, since 17 to 20 vCPUs is no class's size.
+ */
+const HIGHMEM_SIZE: Record<number, string> = {
+  2: 'h',
+  4: 'i',
+  8: 'j',
+  16: 'k',
+};
+
+/**
+ * The high-memory classes' types, in launch order: 8 GiB a vCPU, twice the
+ * general classes', at the same vCPUs, for jobs a general class's memory
+ * runs out of, such as a big Rust link (owner, 2026-11-25). Each cloud's
+ * memory-optimized twin of its general families, in the same order: AWS's
+ * `r` for `m`, GCP's `highmem` for `standard`, Azure's `E` for `D`. GCP's
+ * on-demand ones don't lead with `c4d` or `c3d` as the general classes'
+ * do: neither was measured at this shape, and `c4d-highmem` has 7.875 GiB a
+ * vCPU. They count against the general classes' vCPU quotas (`quota.ts`).
+ */
+export const HIGHMEM_TYPES: Record<Cloud, (vcpus: number) => string[]> = {
+  aws: (n) =>
+    ['r8a', 'r8i', 'r7a', 'r7i', 'r6a'].map((f) => `${f}.${AWS_SIZE[n]}`),
+  gcp: (n) => [`n2-highmem-${n}`, `n2d-highmem-${n}`],
+  azure: (n) => [
+    `Standard_E${n}ads_v5`,
+    `Standard_E${n}as_v5`,
+    `Standard_E${n}s_v5`,
+  ],
+};
+export const HIGHMEM_GIB_PER_VCPU = 8;
 
 /**
  * The GPU classes' types, in launch order, as GitHub's GPU runner: one
@@ -118,9 +154,11 @@ export const PUBLIC_VCPU_CAP = 32;
 export function codeClass(
   code: string,
 ): { cloud: Cloud; spot: boolean; vcpus: number; gpu: boolean } | undefined {
+  const size = code.slice(1);
+  const highmem = Object.entries(HIGHMEM_SIZE).find(([, c]) => c === size);
   for (const [cloud, letters] of Object.entries(CLOUD_CODE)) {
     const i = letters.indexOf(code[0] ?? '');
-    const vcpus = parseInt(code.slice(1), 36);
+    const vcpus = highmem ? Number(highmem[0]) : parseInt(size, 36);
     if (i >= 0 && Number.isInteger(vcpus) && vcpus > 0) {
       return {
         cloud: cloud as Cloud,
@@ -169,6 +207,8 @@ export interface RunnerClass extends CloudTarget {
   public?: boolean;
   /** `backmesh-ubuntu-2404-gpu-t4`: its VMs' one GPU, passed into the job. */
   gpu?: typeof GPU.model;
+  /** `backmesh-ubuntu-2404-highmem-<n>vcpu`: 8 GiB a vCPU (`HIGHMEM_TYPES`). */
+  highmem?: true;
 }
 
 /**
@@ -197,30 +237,46 @@ export const classLabel = (
 export const gpuLabel = (cloud: Cloud, prefixed: boolean, onDemand: boolean) =>
   `backmesh-${prefixed ? `${cloud}-` : ''}${OS}-gpu-${onDemand ? 'od-' : ''}${GPU.model.toLowerCase()}`;
 
+/** A high-memory class's label, such as `backmesh-ubuntu-2404-highmem-16vcpu` or `backmesh-aws-ubuntu-2404-highmem-od-16vcpu`. */
+export const highmemLabel = (
+  cloud: Cloud,
+  prefixed: boolean,
+  onDemand: boolean,
+  vcpus: number,
+) =>
+  `backmesh-${prefixed ? `${cloud}-` : ''}${OS}-highmem-${onDemand ? 'od-' : ''}${vcpus}vcpu`;
+
 /** A public class's label, such as `backmesh-ubuntu-2404-public-4vcpu`. */
 export const publicLabel = (vcpus: number) =>
   `backmesh-${OS}-public-${vcpus}vcpu`;
 
-/** Where a spot class's reclaims count for the breaker, such as "aws spot". */
+/**
+ * Where a spot class's reclaims count for the breaker, such as "aws spot":
+ * a high-memory family's spot capacity is its own, as KVM's and GPU's are.
+ */
 export const spotCapacity = ({
   cloud,
   kvm,
   gpu,
+  highmem,
 }: {
   cloud: Cloud;
   kvm: boolean;
   gpu?: string;
-}) => `${cloud}${kvm ? ' KVM' : ''}${gpu ? ' GPU' : ''} spot`;
+  highmem?: boolean;
+}) =>
+  `${cloud}${kvm ? ' KVM' : ''}${gpu ? ' GPU' : ''}${highmem ? ' high-memory' : ''} spot`;
 
 /** Why `vmType`, offered in `details`, can't be a class's VM; undefined when it can. */
 function shapeProblem(
   details: readonly VmTypeDetails[],
   vmType: string,
   vcpus: number,
+  gibPerVcpu = GIB_PER_VCPU,
 ): string | undefined {
   const type = findVmType(details, vmType);
   if (!type) return;
-  const memory = vcpus * GIB_PER_VCPU;
+  const memory = vcpus * gibPerVcpu;
   const gib = type.memoryGiB ?? 0;
   const least = vmType.startsWith('c4d-')
     ? Math.floor(vcpus * C4D_GIB_PER_VCPU)
@@ -283,7 +339,10 @@ export function planClasses(
       details: readonly VmTypeDetails[],
       vmType: string,
       n: number,
-    ) => !!findVmType(details, vmType) && !shapeProblem(details, vmType, n);
+      gibPerVcpu = GIB_PER_VCPU,
+    ) =>
+      !!findVmType(details, vmType) &&
+      !shapeProblem(details, vmType, n, gibPerVcpu);
     // A KVM class tries the same types as the general one, in the same
     // order, filtered to the ones a runner region's catalog reports nested
     // virtualization for: GCP's `n2d` doesn't nest, and `n2` does
@@ -394,7 +453,47 @@ export function planClasses(
         }))
       : [];
     if (!gpu.length) plan.noGpu.push(target);
-    plan.classes.push(...classes, ...gpu);
+    // The high-memory classes: spot and on demand of each size, in the
+    // regions that offer one of its types. Every runner region offers them
+    // all, as the general classes' (`regions.ts`), so a type a region lacks
+    // or of another shape is a problem, as theirs is.
+    const highmem = [true, false].flatMap((spot) =>
+      CLASS_VCPUS.map((vcpus): RunnerClass => {
+        const vmTypes = HIGHMEM_TYPES[target.cloud](vcpus);
+        return {
+          ...target,
+          label: highmemLabel(
+            target.cloud,
+            target.cloud !== home,
+            !spot,
+            vcpus,
+          ),
+          code: `${CLOUD_CODE[target.cloud][spot ? 0 : 1]}${HIGHMEM_SIZE[vcpus]}`,
+          vcpus,
+          spot,
+          kvm: false,
+          vmTypes,
+          regions: byRegion.flatMap(([region, details]) =>
+            vmTypes.some((t) => fits(details, t, vcpus, HIGHMEM_GIB_PER_VCPU))
+              ? [region]
+              : [],
+          ),
+          highmem: true,
+        };
+      }),
+    );
+    plan.problems.push(
+      ...CLASS_VCPUS.flatMap((vcpus) =>
+        HIGHMEM_TYPES[target.cloud](vcpus).flatMap((vmType) => {
+          const offered = byRegion.find(([, d]) => findVmType(d, vmType));
+          return offered
+            ? (shapeProblem(offered[1], vmType, vcpus, HIGHMEM_GIB_PER_VCPU) ??
+                [])
+            : [`${vmType} isn't offered in ${where(target.cloud, names)}`];
+        }),
+      ),
+    );
+    plan.classes.push(...classes, ...gpu, ...highmem);
     if (publicRepos && target.cloud === home) {
       plan.classes.push(
         ...classes.flatMap((c) =>

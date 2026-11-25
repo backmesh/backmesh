@@ -62,6 +62,7 @@ export interface InstallPlan {
     | 'vmTypes'
     | 'regions'
     | 'gpu'
+    | 'highmem'
   >[];
   // Shown, not hashed, as `quotas`.
   rates: string[];

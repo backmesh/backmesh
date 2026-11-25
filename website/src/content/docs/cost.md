@@ -84,6 +84,25 @@ shows the same figures.
 Spot prices change by the hour and by zone, and other regions differ. On
 demand cost about 1.7 to 5.4 times spot on 2026-11-13, depending on the type.
 
+## High memory
+
+The [high-memory labels](/labels/#high-memory) by the same method: the
+catalog's prices on 2026-11-25, spot in the lowest zone, at 16 vCPUs, against
+the same size's general label. Arithmetic, not measured.
+
+| Cloud | Region         | `backmesh-ubuntu-2404-highmem-16vcpu` (128 GiB), spot $/h | `backmesh-ubuntu-2404-16vcpu` (64 GiB), spot $/h | On demand $/h, high memory against general |
+| ----- | -------------- | --------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------ |
+| AWS   | `us-east-1`    | `r8a.4xlarge` 0.3228, `r8i.4xlarge` 0.3197                | `m8a.4xlarge` 0.3913                             | 1.2781 against 0.9738 (`r8a`, `m8a`)       |
+| GCP   | `us-east4`     | `n2-highmem-16` 0.3222, `n2d-highmem-16` 0.6163           | `n2-standard-16` 0.2389                          | 1.1804 against 0.8750 (`n2`)               |
+| GCP   | `europe-west4` | `n2-highmem-16` 0.4065, `n2d-highmem-16` 0.4627           | `n2-standard-16` 0.3013                          | 1.1538 against 0.8553 (`n2`)               |
+| Azure | `eastus`       | `Standard_E16ads_v5` 0.2207, `Standard_E16as_v5` 0.1904   | `Standard_D16ads_v5` 0.1739                      | 1.048 against 0.824 (`ads_v5`)             |
+
+So a high-memory job costs about 1.3 times the same size's general one on
+demand, for twice the memory. On spot it's 1.27 to 1.35 times on GCP and
+Azure at each cloud's first type, and on AWS, where `r8a`'s spot price was
+under `m8a`'s that day, 0.82 times. GitHub-hosted has no high-memory Linux
+runner to compare against: its 16-core runner has 64 GB.
+
 ## GPU
 
 The [GPU labels](/labels/#gpu) by the same method, at list prices: arithmetic,
