@@ -83,13 +83,14 @@ export class ActionsClient {
   // Ephemeral runners that never self-update, as ARC's controller creates
   // them (`autoscalingrunnerset_controller.go:428-442` at 0.13.0, with the Go
   // JSON tags' casing). Labels: the scale set's name, and the retry's opt-out
-  // as a second one. A class whose label changed (`renamedFrom`) gets its
-  // old scale set back under the new name, as ARC's `UpdateRunnerScaleSet`
-  // renames one, so its runners and the jobs assigned to it carry over.
+  // as a second one. GitHub matches jobs on the labels a scale set was
+  // created with, which a PATCH (ARC's `UpdateRunnerScaleSet`) doesn't
+  // change, so a scale set left with an old label (`replaceId`) is deleted
+  // and made again, unless the one under `name` is already another.
   async ensureScaleSet(
     name: string,
     runnerGroupId: number,
-    renamedFrom?: string,
+    replaceId?: number,
   ): Promise<ScaleSet> {
     const body = {
       name,
@@ -101,12 +102,17 @@ export class ActionsClient {
       RunnerSetting: { ephemeral: true, disableUpdate: true },
     };
     const existing = await this.getScaleSet(runnerGroupId, name);
-    if (existing) return existing;
-    const old =
-      renamedFrom && (await this.getScaleSet(runnerGroupId, renamedFrom));
-    return old
-      ? this.service('PATCH', `${SCALE_SETS}/${old.id}`, scaleSetSchema, body)
-      : this.service('POST', SCALE_SETS, scaleSetSchema, body);
+    if (existing && existing.id !== replaceId) return existing;
+    if (replaceId) {
+      this.options.log?.({
+        msg: 'replacing scale set',
+        name,
+        scaleSetId: replaceId,
+        reason: existing ? 'renamed in place' : 'old label',
+      });
+      await this.deleteScaleSet(replaceId);
+    }
+    return this.service('POST', SCALE_SETS, scaleSetSchema, body);
   }
 
   async deleteScaleSet(id: number): Promise<void> {

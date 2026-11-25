@@ -11,7 +11,10 @@
 // another.
 import { randomBytes } from 'node:crypto';
 
+import { z } from 'zod';
+
 import type { RunAnycloud } from '../anycloud/binary.js';
+
 import type { AnycloudApi, AnycloudExec } from '../anycloud/client.js';
 import type { Cloud } from '../runners/classes.js';
 import { OVERRIDE_ENV } from '../app/override.js';
@@ -285,6 +288,42 @@ export async function createListenerVm(
 /** Starts the listener on its VM again, from its last settings. */
 export const startListener = (exec: AnycloudExec, org: string, id: string) =>
   checked(exec, id, startCommand(), `${org}'s listener start`);
+
+const ready = z.object({
+  msg: z.literal('scale set ready'),
+  name: z.string(),
+  scaleSetId: z.number().int(),
+});
+
+/**
+ * Each scale set's ID, from the `scale set ready` lines the listener logs
+ * at every start: the newest under each name.
+ */
+export async function loggedScaleSetIds(
+  exec: AnycloudExec,
+  id: string,
+): Promise<Map<string, number>> {
+  const { code, stdout, stderr } = await exec(
+    id,
+    `docker logs ${CONTAINER} 2>&1 | { grep -F '"msg":"scale set ready"' || true; }`,
+  );
+  if (code !== 0) {
+    throw new Error(
+      `Reading the listener's log on ${id} failed${stderr.trim() ? `: ${stderr.trim().split('\n').at(-1)}` : ''}.`,
+    );
+  }
+  const ids = new Map<string, number>();
+  for (const line of stdout.split('\n')) {
+    let parsed;
+    try {
+      parsed = ready.safeParse(JSON.parse(line));
+    } catch {
+      continue;
+    }
+    if (parsed.success) ids.set(parsed.data.name, parsed.data.scaleSetId);
+  }
+  return ids;
+}
 
 /** Writes the listener's settings to its VM and restarts it with them. */
 export const rollListenerVm = (

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  V0_7_0_LISTENER,
   changed,
   changeLines,
   rollListener,
@@ -49,33 +50,88 @@ describe('converge', () => {
     ]);
   });
 
-  it('renames the scale set of a label renamed under the same class code', () => {
+  it('replaces the scale set of a label renamed under the same class code, by its logged ID', () => {
     // As v0.6.1 named them.
     const old = running.map((r) => ({
       ...r,
       label: r.label.replace('ubuntu-2404-', '').replace('vcpu', ''),
     }));
-    // Each class renames its old scale set, and none retires: two routes
+    // Each class replaces its old scale set, and none retires: two routes
     // can't share a code.
     const live = new Set(old.map((r) => r.label));
-    const written = parseRoutes(routesJson(both, old, live));
+    const ids = new Map(old.map((r, i) => [r.label, i + 1]));
+    const written = parseRoutes(routesJson(both, old, live, ids));
     expect(written.filter((r) => r.retiring)).toEqual([]);
-    expect(
-      written.find((r) => r.label === 'backmesh-ubuntu-2404-4vcpu')
-        ?.renamedFrom,
-    ).toBe('backmesh-4');
-    // A rerun before the listener has renamed them keeps the old names, and
-    // drops them once it lists the new ones.
-    const again = parseRoutes(routesJson(both, written, live));
-    expect(again.map((r) => r.renamedFrom)).toEqual(
-      written.map((r) => r.renamedFrom),
+    const four = (routes: Route[]) =>
+      routes.find((r) => r.label === 'backmesh-ubuntu-2404-4vcpu')
+        ?.replaceScaleSetId;
+    expect(four(written)).toBe(ids.get('backmesh-4'));
+    expect(() => routesJson(both, old, live)).toThrow(
+      /^The listener's log doesn't name backmesh-\S+'s scale set, which backmesh-ubuntu-2404-\S+ replaces: restart the listener/,
+    );
+    // A rerun before the listener has replaced them keeps the IDs, and
+    // drops them once it logs new ones under the new labels.
+    expect(four(parseRoutes(routesJson(both, written, live, ids)))).toBe(
+      ids.get('backmesh-4'),
     );
     const renamed = new Set(both.map((c) => c.label));
+    const made = new Map(both.map((c, i) => [c.label, 100 + i]));
     expect(
-      parseRoutes(routesJson(both, written, renamed)).some(
-        (r) => r.renamedFrom,
+      parseRoutes(routesJson(both, written, renamed, made)).some(
+        (r) => r.replaceScaleSetId,
       ),
     ).toBe(false);
+  });
+
+  it("replaces each scale set v0.7.0's listener renamed in place, with consent", () => {
+    // A set whose rename wasn't applied isn't listed and logged no ready
+    // line: it's made under its label, with nothing to replace.
+    const live = new Set(both.slice(1).map((c) => c.label));
+    const ids = new Map(both.slice(1).map((c, i) => [c.label, i + 2]));
+    const written = parseRoutes(
+      routesJson(both, running, live, ids, V0_7_0_LISTENER),
+    );
+    expect(written.map((r) => r.replaceScaleSetId)).toEqual(
+      written.map((r) => ids.get(r.label)),
+    );
+    expect(written[0]?.replaceScaleSetId).toBeUndefined();
+    // Listed without a logged ID, as after the log rotated: refused.
+    expect(() =>
+      routesJson(
+        both,
+        running,
+        new Set([...live, both[0]!.label]),
+        ids,
+        V0_7_0_LISTENER,
+      ),
+    ).toThrow(
+      /^The listener's log doesn't name \S+'s scale set, which v0.7.0 renamed in place: restart the listener/,
+    );
+    // Replacing ends jobs, so it asks first.
+    const replaced = written
+      .filter((r) => r.replaceScaleSetId)
+      .map((r) => r.label);
+    const changes = runnerChanges(running, both, replaced);
+    expect(changed(changes)).toBe(true);
+    expect(changeLines('acme', changes, both)).toEqual([
+      `These labels' scale sets are made again, as their old labels still match: ${replaced.join(', ')}. Jobs running on them end.`,
+    ]);
+    // Another release's listener created its sets under their labels.
+    expect(
+      parseRoutes(routesJson(both, running, live, ids, 'other')).some(
+        (r) => r.replaceScaleSetId,
+      ),
+    ).toBe(false);
+  });
+
+  it("refuses a renamed label whose old scale set the listener doesn't list", () => {
+    const old = running.map((r) => ({
+      ...r,
+      label: r.label.replace('ubuntu-2404-', '').replace('vcpu', ''),
+    }));
+    expect(() => routesJson(both, old, new Set())).toThrow(
+      /^backmesh-\S+'s scale set, which backmesh-ubuntu-2404-\S+ replaces, isn't in the listener's status/,
+    );
   });
 
   it("doesn't flag a label changed when a release only reorders its VM types", () => {

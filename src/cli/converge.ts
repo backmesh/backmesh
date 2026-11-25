@@ -77,12 +77,15 @@ export interface RunnerChanges {
   labelsChanged: string[];
   // Per cloud kept, its runner regions added and removed.
   regions: { cloud: string; added: string[]; removed: string[] }[];
+  // Labels whose scale sets are deleted and made again (`routesJson`).
+  replaced?: string[];
 }
 
 /** The difference between the listener's routes and the plan's classes. */
 export function runnerChanges(
   routes: readonly Route[],
   after: readonly RunnerClass[],
+  replaced: readonly string[] = [],
 ): RunnerChanges {
   // A class already retiring was removed by an earlier run.
   const before = routes.filter((r) => !r.retiring);
@@ -130,6 +133,7 @@ export function runnerChanges(
         };
       })
       .filter((r) => r.added.length || r.removed.length),
+    ...(replaced.length && { replaced: [...replaced] }),
   };
 }
 
@@ -140,7 +144,8 @@ export const changed = (c: RunnerChanges) =>
     c.labelsAdded.length ||
     c.labelsRemoved.length ||
     c.labelsChanged.length ||
-    c.regions.length
+    c.regions.length ||
+    c.replaced?.length
   );
 
 /**
@@ -205,6 +210,11 @@ export function changeLines(
   }
   if (c.labelsChanged.length) {
     lines.push(`New VM types or regions for: ${c.labelsChanged.join(', ')}.`);
+  }
+  if (c.replaced?.length) {
+    lines.push(
+      `These labels' scale sets are made again, as their old labels still match: ${c.replaced.join(', ')}. Jobs running on them end.`,
+    );
   }
   if (c.labelsRemoved.length) {
     lines.push(
@@ -421,31 +431,63 @@ export function targetsOf(all: readonly Route[]): CloudTarget[] {
 export const homeOf = (routes: readonly Route[]) =>
   routes.find((r) => !r.label.startsWith(`backmesh-${r.cloud}-`))?.cloud;
 
+// v0.7.0's listener (its compatibility.json), which renamed each scale set
+// in place, so the set kept its old label.
+export const V0_7_0_LISTENER =
+  'ghcr.io/backmesh/backmesh-listener@sha256:bd0afae344d3eb94630c2797232e8970a2787b9b99b0142ab3bcaccc38f04e61';
+
 /**
  * The listener's classes as the plan writes them: the new ones, then each
  * one it drops, retiring (`routes.ts`), until the listener has deleted its
- * scale set: `live` is the labels its status still lists.
+ * scale set: `live` is the labels its status still lists, `ids` their
+ * scale sets' IDs, from its log (`loggedScaleSetIds`), and `image` the
+ * listener's.
  */
 export function routesJson(
   classes: readonly RunnerClass[],
   before: readonly Route[],
   live: ReadonlySet<string>,
+  ids: ReadonlyMap<string, number> = new Map(),
+  image?: string,
 ): string {
   const labels = new Set(classes.map((c) => c.label));
   // A listener still setting its scale sets up, which lists only some of
   // the active ones, can't say a retiring one is gone.
   const ready = before.every((r) => r.retiring || live.has(r.label));
   const gone = (label: string) => ready && !live.has(label);
-  // A class kept under a new label, its code the same, renames its scale
-  // set until the listener lists the new name, so the old one doesn't
-  // retire: two routes can't share a code.
+  // A class whose scale set keeps an old label has it replaced, by ID, so
+  // the old one doesn't retire (two routes can't share a code): one under
+  // a label this upgrade renames, or each one v0.7.0's listener renamed in
+  // place, until the listener logs another ID under the label.
   const renamed = classes.map((c) => {
     const was = before.find((r) => r.code === c.code && !r.retiring);
-    const from =
-      was?.label !== c.label
-        ? was?.label
-        : !live.has(c.label) && was.renamedFrom;
-    return from ? { ...c, renamedFrom: from } : c;
+    let id: number | undefined;
+    if (was && was.label !== c.label) {
+      if (!live.has(was.label)) {
+        throw new Error(
+          `${was.label}'s scale set, which ${c.label} replaces, isn't in the listener's status: wait until \`backmesh status\` lists it, then run upgrade again.`,
+        );
+      }
+      id = ids.get(was.label);
+      if (!id) {
+        throw new Error(
+          `The listener's log doesn't name ${was.label}'s scale set, which ${c.label} replaces: restart the listener (\`docker restart backmesh-listener\` on its VM), which logs it as it starts, then run upgrade again.`,
+        );
+      }
+    } else if (was && image === V0_7_0_LISTENER) {
+      id = ids.get(c.label);
+      if (!id && live.has(c.label)) {
+        throw new Error(
+          `The listener's log doesn't name ${c.label}'s scale set, which v0.7.0 renamed in place: restart the listener (\`docker restart backmesh-listener\` on its VM), which logs it as it starts, then run upgrade again.`,
+        );
+      }
+    } else if (was?.replaceScaleSetId) {
+      const logged = ids.get(c.label);
+      if ((logged ?? was.replaceScaleSetId) === was.replaceScaleSetId) {
+        id = was.replaceScaleSetId;
+      }
+    }
+    return id ? { ...c, replaceScaleSetId: id } : c;
   });
   const codes = new Set(classes.map((c) => c.code));
   const retiring = before
@@ -453,11 +495,11 @@ export function routesJson(
       (r) =>
         !labels.has(r.label) &&
         // A retiring route sharing a class's code under another label is
-        // dropped, not kept: the class renames its scale set instead.
+        // dropped, not kept: the class replaces its scale set instead.
         !codes.has(r.code) &&
         !(r.retiring && gone(r.label)),
     )
-    .map(({ onDemand: _, renamedFrom: __, ...route }) => ({
+    .map(({ onDemand: _, replaceScaleSetId: __, ...route }) => ({
       ...route,
       retiring: true,
     }));
