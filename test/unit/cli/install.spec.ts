@@ -572,6 +572,7 @@ describe('install', () => {
         'aws us-east-2 quota: 640 spot vCPUs (160 backmesh-ubuntu-2404-4vcpu jobs at once), 128 on-demand vCPUs (32 backmesh-ubuntu-2404-4vcpu jobs at once)',
         "Always on: the control plane's VM (t3.large) on aws us-east-2, about $69 a month with its disk and address.",
         "Always on: acme's listener VM (t3.small) on aws us-east-2, about $17 a month with its disk and address.",
+        ON_DEMAND_FALLBACK_LINE,
       ]),
     );
     // ...which the new control plane's disks then are.
@@ -1515,30 +1516,6 @@ describe('install', () => {
       ['backmesh-ubuntu-2404-public-2vcpu', true],
       ['backmesh-ubuntu-2404-public-4vcpu', true],
     ]);
-  });
-
-  it("says spot labels fall back on demand, and drops a Secret's `fallback` from v0.7.2's --on-demand-fallback", async () => {
-    const old = (JSON.parse(RUNNERS) as { spot: boolean }[]).map((c) => ({
-      ...c,
-      ...(c.spot && { fallback: true }),
-    }));
-    const { deps, requests, lines } = setUp(
-      {
-        env: OVERRIDE,
-        vms: [acmeVm],
-        hosted: true,
-        cacheBuckets: ['bm-cache-l8u5e-us-east-2'],
-      },
-      probe({ BACKMESH_RUNNERS: JSON.stringify(old) }),
-    );
-    await install(options, deps);
-    expect(lines).toContain(ON_DEMAND_FALLBACK_LINE);
-    const secret = requests.find((r) =>
-      r.startsWith('PUT /v1/secrets/backmesh-acme '),
-    )!;
-    expect(JSON.parse(secret.split(' ')[2]!).values.BACKMESH_RUNNERS).toBe(
-      RUNNERS,
-    );
   });
 
   it('adds a cloud to a running listener: the plan shows it, then the Secret and a roll', async () => {

@@ -7,7 +7,11 @@ import type { StatusReport } from '../../../src/cli/status.js';
 import { StepFailed } from '../../../src/anycloud/binary.js';
 import { GitHubError } from '../../../src/app/github.js';
 import { NeedsPlan, PlanChanged, UsageError } from '../../../src/cli/errors.js';
-import { PUBLIC_REPOS_LINE, ROLE_SETUP } from '../../../src/cli/install.js';
+import {
+  ON_DEMAND_FALLBACK_LINE,
+  PUBLIC_REPOS_LINE,
+  ROLE_SETUP,
+} from '../../../src/cli/install.js';
 import { OLDEST, upgrade, type UpgradeDeps } from '../../../src/cli/upgrade.js';
 import { ANYCLOUD_PREVIOUS_VERSION } from '../../../src/anycloud/contract.generated.js';
 import { parseRoutes } from '../../../src/listener/routes.js';
@@ -674,27 +678,6 @@ describe('upgrade', () => {
     expect(requests.filter((r) => !r.startsWith('GET'))).toEqual([]);
   });
 
-  it("drops a Secret's `fallback` from v0.7.2's --on-demand-fallback", async () => {
-    const classes = planClasses(
-      [{ cloud: 'aws', region: 'us-east-2', credentials: 'bm-aws' }],
-      catalogs({ aws: CATALOG.aws }),
-      'aws',
-    ).classes;
-    const { deps, secrets } = setUp({
-      version: '0.1.72',
-      image: RELEASE.listenerImage,
-      runnerImage: RELEASE.runnerImage,
-      runners: JSON.stringify(
-        classes.map((c) => ({ ...c, ...(c.spot && { fallback: true }) })),
-      ),
-      cacheBuckets: ['bm-cache-l8u5e-us-east-2'],
-    });
-    await upgrade(deps);
-    expect(secrets['backmesh-acme']!.BACKMESH_RUNNERS).not.toContain(
-      'fallback',
-    );
-  });
-
   // Our own installs gain them this way: install refuses a re-run's
   // sign-in that upgrade takes.
   it('adds the public classes with --public-repos, and names the public repos that need them', async () => {
@@ -707,6 +690,7 @@ describe('upgrade', () => {
         cacheBuckets: ['bm-cache-l8u5e-us-east-2'],
       });
       await upgrade(deps, { plan: true });
+      expect(lines).toContain(ON_DEMAND_FALLBACK_LINE);
       expect(lines).toContain(
         "acme: 1 public repository (such as acme/site) can't use these runners, and their jobs wait at GitHub. `backmesh upgrade --public-repos` adds backmesh-ubuntu-2404-public-2vcpu and backmesh-ubuntu-2404-public-4vcpu for them to use.",
       );

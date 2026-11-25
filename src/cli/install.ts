@@ -1479,7 +1479,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     ui.print(
       `Cache: each repository keeps up to ${plan.cacheCapGb ?? 10} GB in each region.`,
     );
-  if (plan.classes.some((c) => c.spot)) ui.print(ON_DEMAND_FALLBACK_LINE);
+  ui.print(ON_DEMAND_FALLBACK_LINE);
   if (publicRepos) ui.print(PUBLIC_REPOS_LINE);
   else {
     const repos = await readPublicRepos(options.org, deps.fetch, deps.env);

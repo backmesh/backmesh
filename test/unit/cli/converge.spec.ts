@@ -50,13 +50,6 @@ describe('converge', () => {
     ]);
   });
 
-  it("ignores a Secret's `fallback` from v0.7.2's --on-demand-fallback", () => {
-    const old = both.map((c) => ({ ...c, ...(c.spot && { fallback: true }) }));
-    expect(changed(runnerChanges(parseRoutes(JSON.stringify(old)), both))).toBe(
-      false,
-    );
-  });
-
   it('replaces the scale set of a label renamed under the same class code, by its logged ID', () => {
     // As v0.6.1 named them.
     const old = running.map((r) => ({

@@ -79,6 +79,7 @@ import {
   noKvmLine,
   planRegions,
   ROLE_SETUP,
+  ON_DEMAND_FALLBACK_LINE,
   PUBLIC_REPOS_LINE,
   runnerClouds,
   signInRequired,
@@ -393,6 +394,8 @@ async function upgradeOnce(
   // Each org's classes, planned again with the pinned catalog's types,
   // before any listener changes.
   const catalogs = anycloudRunners(run);
+  // Every org has spot labels; listeners from before v0.7.2 kept them on spot.
+  if (read.length) print(ON_DEMAND_FALLBACK_LINE);
   const planned = [];
   for (const entry of read) {
     const { org, targets, running, home } = entry;
