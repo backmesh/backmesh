@@ -39,8 +39,9 @@ the control plane's, `backmesh-gcp-ubuntu-2404-4vcpu` in GCP.
 
 ## Will it work?
 
-**Which platforms does backmesh support?** Linux x86-64 only. There are no macOS, Windows or Arm
-runners. Jobs that need `/dev/kvm` use the
+**Which platforms does backmesh support?** Linux x86-64, and Linux arm64 on
+AWS Graviton with the [arm64 labels](/labels/#arm64). There are no macOS or
+Windows runners. Jobs that need `/dev/kvm` use the
 [KVM labels](/labels/#kvm), and jobs that need an NVIDIA GPU the
 [GPU labels](/labels/#gpu) on AWS and Azure.
 

@@ -2,8 +2,8 @@
 // naming the cloud and runner regions its class promises,
 // so the per-label job can check instance metadata against them without a
 // live install to read `BACKMESH_RUNNERS` from. A label naming `-kvm-` also
-// gets the `/dev/kvm` check (KVM classes), and one naming `-gpu-` the GPU
-// check (GPU classes).
+// gets the `/dev/kvm` check (KVM classes), one naming `-gpu-` the GPU
+// check (GPU classes), and one naming `-arm-` the arm64 check.
 
 export type Cloud = 'aws' | 'gcp' | 'azure';
 
@@ -15,6 +15,7 @@ export interface LabelSpec {
   regions: string[];
   kvm: boolean;
   gpu: boolean;
+  arm: boolean;
 }
 
 const isCloud = (value: string): value is Cloud =>
@@ -57,6 +58,7 @@ export function parseLabels(spec: string): LabelSpec[] {
       regions,
       kvm: label.includes('-kvm-'),
       gpu: label.includes('-gpu-'),
+      arm: label.includes('-arm-'),
     };
   });
 }

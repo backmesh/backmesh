@@ -37,6 +37,7 @@ import {
   type VmTypeDetails,
 } from '../runners/anycloud.js';
 import {
+  ARM_TYPES,
   CLOUDS,
   GPU_TYPES,
   planClasses,
@@ -241,6 +242,14 @@ export const noGpuLine = (
   cloud === 'gcp'
     ? "gcp gets no GPU labels: anycloud can't launch a T4 VM on GCP yet."
     : `${where(cloud, regions)} ${regions.length > 1 ? 'offer' : 'offers'} no ${GPU_TYPES[cloud].join(' or ')}, so ${cloud} gets no GPU labels.`;
+
+export function noArmLine({ cloud }: CloudTarget, regions: readonly string[]) {
+  if (cloud !== 'aws') {
+    return `${cloud} gets no arm64 labels: backmesh runs arm64 on AWS Graviton only so far.`;
+  }
+  const families = ARM_TYPES.aws(4).map((t) => t.split('.')[0]);
+  return `${where(cloud, regions)} ${regions.length > 1 ? 'offer' : 'offers'} no ${families.join(' or ')}, so aws gets no arm64 labels.`;
+}
 
 // The management VM: AWS's is backmesh's sizing; GCP's the nearest size
 // _(inference)_. Azure's first is the size anycloud qualifies the
@@ -1588,6 +1597,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         gpu,
         highmem,
         preferred,
+        arm,
       }) => ({
         label,
         cloud,
@@ -1600,6 +1610,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         ...(gpu && { gpu }),
         ...(highmem && { highmem }),
         ...(preferred && { preferred }),
+        ...(arm && { arm }),
       }),
     ),
     // The preferred or anchor region's catalog, which prices every region.
@@ -1614,6 +1625,9 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     ),
     noGpu: classPlan.noGpu.map((target) =>
       noGpuLine(target, regionsOf(target.cloud)),
+    ),
+    noArm: classPlan.noArm.map((target) =>
+      noArmLine(target, regionsOf(target.cloud)),
     ),
     sameOwner: sharedWith.length
       ? sameOwnerLine(options.org, sharedWith)
@@ -1632,6 +1646,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     ...quotas,
     ...plan.noKvm,
     ...plan.noGpu,
+    ...plan.noArm,
   ].forEach((line) => ui.print(line));
   ui.print(labelsLine(plan.classes, placement.controlPlane.cloud));
   if (!plan.controlPlane.exists) {
@@ -1978,6 +1993,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         !c.kvm &&
         !c.gpu &&
         !c.highmem &&
+        !c.arm &&
         !c.public &&
         c.vcpus <= 4 &&
         !blocked.has(c.label),

@@ -11,6 +11,7 @@ describe('parseLabels', () => {
         regions: ['us-east-2'],
         kvm: false,
         gpu: false,
+        arm: false,
       },
     ]);
   });
@@ -27,6 +28,7 @@ describe('parseLabels', () => {
         regions: ['us-east-2', 'us-east-1', 'us-west-2'],
         kvm: false,
         gpu: false,
+        arm: false,
       },
       {
         label: 'backmesh-gcp-ubuntu-2404-4vcpu',
@@ -34,6 +36,7 @@ describe('parseLabels', () => {
         regions: ['us-central1'],
         kvm: false,
         gpu: false,
+        arm: false,
       },
     ]);
   });
@@ -48,6 +51,7 @@ describe('parseLabels', () => {
         regions: ['us-east-2'],
         kvm: false,
         gpu: false,
+        arm: false,
       },
     ]);
   });
@@ -71,6 +75,20 @@ describe('parseLabels', () => {
     });
     expect(
       parseLabels('backmesh-azure-ubuntu-2404-gpu-od-t4=azure:eastus')[0]?.gpu,
+    ).toBe(true);
+  });
+
+  it('marks a label naming -arm- as an arm64 label', () => {
+    expect(
+      parseLabels('backmesh-ubuntu-2404-arm-4vcpu=aws:us-east-2')[0],
+    ).toMatchObject({
+      kvm: false,
+      gpu: false,
+      arm: true,
+    });
+    expect(
+      parseLabels('backmesh-aws-ubuntu-2404-arm-od-16vcpu=aws:us-east-2')[0]
+        ?.arm,
     ).toBe(true);
   });
 

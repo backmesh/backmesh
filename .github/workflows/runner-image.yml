@@ -58,6 +58,8 @@ jobs:
       name: backmesh-runner
       context: runner
       file: runner/Dockerfile
+      # The arm64 image runs backmesh-ubuntu-2404-arm-<n>vcpu's jobs on Graviton.
+      platforms: '["linux/amd64","linux/arm64"]'
       # It refuses to run without a JIT config.
       expect-status: 1
       expect-output: RUNNER_JITCONFIG is required

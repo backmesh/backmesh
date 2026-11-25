@@ -15,6 +15,7 @@ import type { FeatureTable } from '../../../src/anycloud/features.js';
 import { signInCheck } from '../../../src/app/github.js';
 import {
   install,
+  noArmLine,
   parseControlPlane,
   parseRunners,
   ON_DEMAND_FALLBACK_LINE,
@@ -900,7 +901,7 @@ describe('install', () => {
 
   it('names a label that would start no runners, and asks before going on, no unless yes', async () => {
     // 6 spot vCPUs in us-east-2: under one 8- or 16-vCPU spot runner,
-    // high-memory or not.
+    // high-memory, arm64 or not, which share the quota.
     const confirm = vi.fn(
       async (question: string) => !question.includes('start no runners'),
     );
@@ -3645,6 +3646,18 @@ describe("a control plane named backmesh that this machine doesn't use", () => {
     };
     await expect(install(options, deps)).rejects.toThrow(
       `(API_NOT_READY)\nTo resume it, run install again with --control-plane-id ${ID}.`,
+    );
+  });
+});
+
+describe("install's arm64 line", () => {
+  it('says why a cloud gets no arm64 labels', () => {
+    const target = { region: 'us-east-2', credentials: 'bm' };
+    expect(noArmLine({ ...target, cloud: 'aws' }, ['us-east-2'])).toBe(
+      'aws us-east-2 offers no m8g or m7g, so aws gets no arm64 labels.',
+    );
+    expect(noArmLine({ ...target, cloud: 'gcp' }, ['us-central1'])).toBe(
+      'gcp gets no arm64 labels: backmesh runs arm64 on AWS Graviton only so far.',
     );
   });
 });

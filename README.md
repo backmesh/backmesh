@@ -45,7 +45,7 @@ jobs:
       - run: make test
 ```
 
-Linux x86-64 jobs in private repositories, or
+Linux x86-64 jobs, or arm64 on AWS Graviton, in private repositories, or
 [public ones](https://backmesh.com/public-repos/) if you turn them on. See
 [Install](https://backmesh.com/install/), [Labels](https://backmesh.com/labels/)
 and the [FAQ](https://backmesh.com/faq/#installing), such as for orgs that

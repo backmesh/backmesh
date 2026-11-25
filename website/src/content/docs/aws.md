@@ -26,7 +26,10 @@ first because it ran backmesh's builds in 0.64–0.88 times `m8i`'s time,
 typically about 1.3 times as fast. When a zone has no spot `m8a`, the job moves
 on to the next zone or type within seconds. The [KVM labels](/labels/#kvm) use `m8i`, then `m7i` (`m8a`, `m7a` and
 `m6a` don't nest). The [GPU labels](/labels/#gpu) use `g4dn.xlarge` (one T4, 4 vCPUs and
-16 GiB), then `g4dn.2xlarge` (the same T4, 8 vCPUs and 32 GiB). When AWS is the control plane's cloud, its labels are plain, as above;
+16 GiB), then `g4dn.2xlarge` (the same T4, 8 vCPUs and 32 GiB). The
+[arm64 labels](/labels/#arm64), `backmesh-ubuntu-2404-arm-2vcpu` to `backmesh-ubuntu-2404-arm-16vcpu` and their
+on-demand twins, use Graviton's `m8g`, then `m7g`, at the same sizes:
+`m8g.xlarge` and `m7g.xlarge` for `backmesh-ubuntu-2404-arm-4vcpu`. When AWS is the control plane's cloud, its labels are plain, as above;
 otherwise they name it, such as `backmesh-aws-ubuntu-2404-4vcpu`.
 
 The [high-memory labels](/labels/#high-memory) use the same sizes with 8 GiB a
@@ -65,7 +68,7 @@ delete in the console.
 Spot labels count against EC2's "All Standard (A, C, D, H, I, M, R, T, Z) Spot
 Instance Requests" quota (`L-34B43A08`), and on-demand labels against "Running
 On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances" (`L-1216C47A`), in
-vCPUs per region. Install reads both through `aws service-quotas` and prints
+vCPUs per region, the arm64 labels' Graviton VMs with the rest. Install reads both through `aws service-quotas` and prints
 them as how many `backmesh-ubuntu-2404-4vcpu` jobs fit at once. A region whose quota is at AWS's
 default 5 vCPUs gets no `backmesh-ubuntu-2404-8vcpu` or `backmesh-ubuntu-2404-16vcpu` runners until you raise
 it; install and [`backmesh status`](/status/) name the quota. The GPU labels
@@ -87,6 +90,8 @@ These are catalog prices in `us-east-2`, spot in the lowest zone, for a
 | `m7a.xlarge` | 0.07     | 0.2318        |
 | `m7i.xlarge` | 0.0497   | 0.2016        |
 | `m6a.xlarge` | 0.0547   | 0.1728        |
+| `m8g.xlarge` | 0.0534   | 0.1795        |
+| `m7g.xlarge` | 0.0608   | 0.1632        |
 
 `m8a`'s prices are from the catalog on 2026-11-23, when `m8i.xlarge`'s spot
 price was 0.0649. On spot, `m8a.xlarge` then cost about the same an hour as
@@ -94,6 +99,9 @@ price was 0.0649. On spot, `m8a.xlarge` then cost about the same an hour as
 `m8a.4xlarge` cost about 27 % more than `m8i.4xlarge`, about even a job. On
 demand `m8a` costs 15 % more an hour than `m8i`, so a job costs about 9 % less at
 `backmesh-ubuntu-2404-od-4vcpu` and about the same at `backmesh-ubuntu-2404-od-16vcpu`.
+
+The arm64 labels' `m8g` and `m7g` are from the catalog on 2026-11-24. On
+demand, `m8g` costs 0.85 of `m8i` an hour.
 
 Other sizes scale with their vCPUs. Each job also pays for its VM's boot and its
 100 GB gp3 disk at 4,000 IOPS and 500 MiB/s, about $0.038 an hour. The

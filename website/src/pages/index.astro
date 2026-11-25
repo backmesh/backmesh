@@ -126,9 +126,9 @@ const aws = clouds.find((c) => c.cloud === 'AWS')!;
 const faq = [
   {
     q: 'Will backmesh work for my jobs?',
-    short: 'Linux x86-64 only. Public repos with --public-repos.',
+    short: 'Linux only, x86-64 or arm64. Public repos with --public-repos.',
     points: [
-      'No macOS, Windows or Arm runners.',
+      'No macOS or Windows runners. arm64 runs on AWS Graviton only.',
       `Each job waits for its VM to boot: about ${seconds(bench.wait)} on AWS, longer on GCP and Azure. Starting runners ahead of predicted jobs, and your agent's cue, mostly hide it.`,
       "A reclaimed spot VM fails its job; if reclaims were the run's only failures, backmesh reruns them, up to twice.",
       'Each job starts with an empty Docker layer cache.',
