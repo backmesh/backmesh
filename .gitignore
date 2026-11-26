@@ -8,3 +8,4 @@ binaries/
 # The cache action runs from its committed bundle (ci.yml checks it).
 !/cache/dist/
 !/runner/dist/
+!/experiments/sccache/dist/
