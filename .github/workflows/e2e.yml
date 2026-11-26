@@ -603,7 +603,7 @@ jobs:
       # The control plane's VM over the burst, once its cloud's metrics have
       # caught up: on AWS, its CPU and credits (the VM of anycloud's
       # documented stack anycloud-<id>); on GCP, memory (the balloon
-      # driver's) and CPU of the VMs the sweep finds. A record only.
+      # driver's) and CPU of the sweep's anycloud-cluster-<id> VM. A record only.
       - name: The control plane VM over the burst
         if: ${{ always() && steps.burst.outcome != 'skipped' && env.BURST_STARTED && env.CLUSTER_ID && (matrix.cloud == 'aws' || matrix.cloud == 'gcp') }}
         continue-on-error: true
@@ -614,8 +614,8 @@ jobs:
           sleep 240
           start=$(date -u -d "$BURST_STARTED 10 minutes ago" +%FT%TZ) end=$(date -u +%FT%TZ)
           if [[ $CLOUD == aws ]]; then
-            id=$(aws cloudformation describe-stack-resources --region "$CONTROL_PLANE_REGION" --stack-name "$STACK" \
-              --query "StackResources[?ResourceType=='AWS::EC2::Instance'].PhysicalResourceId" --output text)
+            id=$(aws ec2 describe-instances --region "$CONTROL_PLANE_REGION" --filters "Name=tag:aws:cloudformation:stack-name,Values=$STACK" \
+              --query 'Reservations[].Instances[].InstanceId' --output text)
             for m in CPUUtilization CPUCreditBalance; do
               aws cloudwatch get-metric-statistics --region "$CONTROL_PLANE_REGION" --namespace AWS/EC2 --metric-name "$m" \
                 --dimensions "Name=InstanceId,Value=$id" --start-time "$start" --end-time "$end" --period 300 \
@@ -625,7 +625,7 @@ jobs:
           else
             project=$(gcloud config get-value project)
             token=$(gcloud auth print-access-token)
-            gcloud compute instances list --filter="name=anycloud-cluster-$CLUSTER_ID OR labels.anycloud_cluster=$CLUSTER_ID" \
+            gcloud compute instances list --filter="name=anycloud-cluster-$CLUSTER_ID" \
               --format='value(id,name,machineType.basename())' | while read -r id name type; do
               for m in memory/balloon/ram_used memory/balloon/ram_size cpu/utilization; do
                 curl -fsSG -H "Authorization: Bearer $token" "https://monitoring.googleapis.com/v3/projects/$project/timeSeries" \

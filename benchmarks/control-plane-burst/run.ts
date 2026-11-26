@@ -124,19 +124,23 @@ interface Step {
 }
 type Job = { createdAt: string; startedAt: string | null; steps: Step[] };
 
-await git('push', '-q', 'origin', `HEAD:refs/heads/${BRANCH}`);
-const deadline = Date.now() + RESULT_WAIT_MS;
 let row: { jobs: Job[] } | undefined;
-while (!row && Date.now() < deadline) {
-  await sleep(15_000);
-  await git('fetch', '-q', 'origin', 'results');
-  const text = await git('show', `FETCH_HEAD:results/${sha}.json`).catch(
-    () => undefined,
-  );
-  if (text) row = JSON.parse(text) as { jobs: Job[] };
+// A failed push or fetch cleans up too.
+try {
+  await git('push', '-q', 'origin', `HEAD:refs/heads/${BRANCH}`);
+  const deadline = Date.now() + RESULT_WAIT_MS;
+  while (!row && Date.now() < deadline) {
+    await sleep(15_000);
+    await git('fetch', '-q', 'origin', 'results');
+    const text = await git('show', `FETCH_HEAD:results/${sha}.json`).catch(
+      () => undefined,
+    );
+    if (text) row = JSON.parse(text) as { jobs: Job[] };
+  }
+} finally {
+  done = true;
+  await cleanUp(!row);
 }
-done = true;
-await cleanUp(!row);
 if (!row) {
   throw new Error(`no row for ${sha} within ${RESULT_WAIT_MS / 60_000} min`);
 }
