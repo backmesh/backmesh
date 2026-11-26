@@ -214,7 +214,7 @@ describe('anycloudRunnerJobs', () => {
     await jobs.submit(spec);
     await jobs.submit({ ...spec, id: 'b', spot: false });
     // anycloud refuses the fields for a Job none of whose types takes
-    // Hyperdisk, such as backmesh-2's or a KVM class's.
+    // Hyperdisk, such as backmesh-ubuntu-2404-2vcpu's or a KVM class's.
     await jobs.submit({ ...spec, id: 'c', vmTypes: ['n2-standard-2'] });
 
     const [spot, onDemand, noC4d] = requests.map(({ body }) => body);

@@ -29,7 +29,7 @@ floor. backmesh's core features are free; your clouds bill you for the VMs.
 | Azure | `westus2`     | `Standard_D4ads_v5` 0.0381, `Standard_D4as_v5` 0.0318, `Standard_D4s_v5` 0.0355                                   |
 | GCP   | `us-central1` | `n2-standard-4` 0.1165, `n2d-standard-4` 0.0899                                                                   |
 
-GCP's `backmesh-4` tries `c4d-standard-4` first (from v0.6.2), which isn't
+GCP's `backmesh-ubuntu-2404-4vcpu` tries `c4d-standard-4` first (from v0.7.2), which isn't
 priced here: a spot job on it would cost about 1.05 times one on `n2`, for
 about 0.6 of its VM time, estimated at `c4d-standard-4`'s catalog spot price ($0.0967 an hour in
 `us-east4`, the VM alone) against `n2`'s VM time and cost per job from
