@@ -11,6 +11,7 @@ import {
   gateGitHub,
   recentRuns,
   runBranch,
+  runJobs,
   workflowFiles,
   workflowRuns,
 } from '../github/runs.js';
@@ -37,6 +38,7 @@ import { anycloudRunnerJobs, runnerVm } from './runner-jobs.js';
 import { Quotas } from './quota.js';
 import { readQuotaStatus } from '../runners/quota.js';
 import { Scaler } from './scaler.js';
+import { Starts } from './starts.js';
 import { API_TOKEN_ENV, API_URL_ENV, RUNNER_GROUP_ENV } from './env.js';
 
 const log: Log = (entry) =>
@@ -185,6 +187,15 @@ const listening = control.listen(async (signal) => {
       null,
     log,
   });
+  // A job's start from the REST jobs list, for its cache token, ahead of
+  // GitHub's late JobStarted.
+  const starts = new Starts({
+    jobs: runJobs(octokit),
+    waiting: (route, runner) =>
+      codeOf(install, runner) === route.code && cache.waiting(runner),
+    started: (route, job, startedAt) => cache.started(route, job, startedAt),
+    log,
+  });
   const jobs = anycloudRunnerJobs(api, install, env('BACKMESH_RUNNER_IMAGE'));
   // A note on a run (a reclaim, a fork run held, the runtime limit), in the
   // listener's log: the App posts no check runs.
@@ -283,6 +294,7 @@ const listening = control.listen(async (signal) => {
     actionsPermission: () => tokens.actionsPermission(),
     drain: (progress) => drain({ scaler, log }, progress),
   });
+  void starts.run(signal);
   await runListener(
     {
       actions,
@@ -290,6 +302,7 @@ const listening = control.listen(async (signal) => {
         listenerRunnerGroup(octokit, org, runnerGroup, actions, allowPublic),
       scaler,
       gate,
+      starts,
       routes,
       owner: hostname(),
       log,

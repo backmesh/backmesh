@@ -6,6 +6,7 @@ import { ensureRunnerGroup } from '../github/runner-group.js';
 import type { Gate } from './gate.js';
 import type { Route } from './routes.js';
 import type { Scaler, ScaleSet } from './scaler.js';
+import type { Starts } from './starts.js';
 
 const RECONCILE_EVERY_MS = 50_000;
 const SESSION_RETRY_MS = 10_000;
@@ -48,6 +49,8 @@ export interface ListenerDeps {
   scaler: Scaler;
   // With `--public-repos`, hears every message before the scaler.
   gate?: Pick<Gate, 'observe'>;
+  // Hears every message too, for a job's start ahead of its JobStarted.
+  starts?: Pick<Starts, 'observe'>;
   routes: Route[];
   // The session owner GitHub shows: the Pod's hostname.
   owner: string;
@@ -238,6 +241,7 @@ async function poll(
           );
           for (const job of message.jobs) {
             deps.gate?.observe(set.route, job);
+            deps.starts?.observe(set.route, job);
             scaler.observe(set, job);
           }
           // After the planner has heard the jobs, so a reconcile between

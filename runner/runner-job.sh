@@ -256,9 +256,10 @@ auto_save_min=60
 
 # The job-started hook: notes the job's start (`started`, epoch ms) in
 # $BACKMESH_AUTO_STATE, from which the restorer counts its limit and times
-# its lines. The job doesn't wait for the restores: GitHub tells the listener
-# of a job's start, which mints its token, a median 12 s into the job, so
-# they run in the background as its steps do.
+# its lines. The job doesn't wait for the restores: the listener hears of a
+# job's start, which mints its token, from GitHub's jobs list or its later
+# JobStarted, seconds into the job, so they run in the background as its
+# steps do.
 auto_started() {
   local dir=${BACKMESH_AUTO_STATE:-}
   [[ -n $dir && -d $dir ]] || return 0

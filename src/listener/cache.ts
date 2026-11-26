@@ -25,6 +25,8 @@ const RETRY_MS = 30_000;
 // A Secret this old whose runner Job isn't listed is an orphan.
 const ORPHAN_MS = 10 * 60_000;
 const DAY = 24 * 3_600_000;
+// A run's facts serve its burst's jobs: one read, not one per job.
+const RUN_KEPT_MS = 10 * 60_000;
 
 export type Refs = Partial<Record<RefLabel, string>>;
 
@@ -93,9 +95,11 @@ export interface CacheDeps {
 interface Runner {
   name: string;
   savedAt: number;
-  // `at`: when the listener heard JobStarted.
-  job?: { route: Route; message: JobMessage; at: number };
-  // Its first `ready` save is logged, with the time from JobStarted.
+  // `at`: when the listener heard of the start; `rest`: GitHub's start, when
+  // the REST jobs list told it before JobStarted (`starts.ts`).
+  job?: { route: Route; message: JobMessage; at: number; rest?: number };
+  // Its first `ready` save is logged, with the time from hearing of the
+  // start, from which source, and how long after GitHub's start that was.
   ready?: true;
   grants?: { region: string; bucket: string; refs: Refs };
   next?: number;
@@ -112,6 +116,10 @@ export class CacheTokens {
   // Default branches' ref prefixes, which the sweep keeps longest.
   private readonly defaults = new Set<string>();
   private sweptAt = -Infinity;
+  private readonly runs = new Map<
+    string,
+    { facts: Promise<RunFacts>; at: number }
+  >();
 
   constructor(private readonly deps: CacheDeps) {}
 
@@ -155,11 +163,19 @@ export class CacheTokens {
     await this.remove(runner.name);
   }
 
-  started(route: Route, message: JobMessage): void {
+  // Whether a runner of this listener's is still waiting for its job.
+  waiting(name: string): boolean {
+    const runner = this.runners.get(name);
+    return runner !== undefined && runner.job === undefined;
+  }
+
+  // At JobStarted, or the REST jobs list's start first, `rest` its time;
+  // whichever comes second mints nothing.
+  started(route: Route, message: JobMessage, rest?: number): void {
     const runner = this.runners.get(message.runnerName);
     // Another listener's, one with no Secret, or a redelivery.
     if (!runner || runner.job) return;
-    runner.job = { route, message, at: this.now() };
+    runner.job = { route, message, at: this.now(), rest };
     void this.mint(runner);
   }
 
@@ -217,16 +233,27 @@ export class CacheTokens {
       );
   }
 
+  // A failed read is read again by the next mint.
+  private run(m: JobMessage): Promise<RunFacts> {
+    const now = this.now();
+    for (const [k, { at }] of this.runs)
+      if (now - at > RUN_KEPT_MS) this.runs.delete(k);
+    const k = `${m.ownerName}/${m.repositoryName}/${m.workflowRunId}`;
+    const kept = this.runs.get(k);
+    if (kept) return kept.facts;
+    const facts = this.deps.run(m.ownerName, m.repositoryName, m.workflowRunId);
+    this.runs.set(k, { facts, at: now });
+    facts.catch(() => this.runs.delete(k));
+    return facts;
+  }
+
   private async grants({ name, job }: Runner) {
-    const m = job!.message;
-    const region = await this.deps.region(name);
+    const [region, run] = await Promise.all([
+      this.deps.region(name),
+      this.run(job!.message),
+    ]);
     if (!region) throw new Error('no region yet');
-    const run = await this.deps.run(
-      m.ownerName,
-      m.repositoryName,
-      m.workflowRunId,
-    );
-    const refs = deriveRefs(m, run);
+    const refs = deriveRefs(job!.message, run);
     for (const label of Object.keys(refs) as RefLabel[])
       refs[label] = refPrefix(run.repoId, refs[label]!);
     this.defaults.add(refs.default!);
@@ -286,11 +313,15 @@ export class CacheTokens {
       runner.next = this.now() + RENEW_MS;
       if (!runner.ready) {
         runner.ready = true;
+        const { at, rest } = runner.job!;
+        const start = rest ?? m.runnerAssignTime;
         // The runner's restores wait for this.
         this.deps.log({
           msg: 'cache token ready',
           runner: runner.name,
-          ms: this.now() - runner.job!.at,
+          ms: this.now() - at,
+          source: rest === undefined ? 'JobStarted' : 'jobs list',
+          heard: start === null ? null : at - start,
         });
       }
     } catch (error) {

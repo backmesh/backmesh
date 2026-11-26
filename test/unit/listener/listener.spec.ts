@@ -93,6 +93,10 @@ describe('runListener', () => {
           observe: (route, job) =>
             void calls.push(`gate ${route.label} ${job.jobId}`),
         },
+        starts: {
+          observe: (route, job) =>
+            void calls.push(`starts ${route.label} ${job.jobId}`),
+        },
         routes: [ROUTE],
         owner: 'pod',
         log: (line) => void logs.push(line),
@@ -119,8 +123,11 @@ describe('runListener', () => {
       'poll after 0',
       'acquire 10,11',
       'gate backmesh-ubuntu-2404-4vcpu job-0',
+      'starts backmesh-ubuntu-2404-4vcpu job-0',
       'gate backmesh-ubuntu-2404-4vcpu job-1',
+      'starts backmesh-ubuntu-2404-4vcpu job-1',
       'gate backmesh-ubuntu-2404-4vcpu job-2',
+      'starts backmesh-ubuntu-2404-4vcpu job-2',
       'reconcile',
       'ack 1',
       'poll after 1',
