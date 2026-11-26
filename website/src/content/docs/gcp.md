@@ -45,10 +45,10 @@ demand's: Hyperdisk Balanced at 3,000 IOPS and 750 MiB/s, not 8,000 and
 reclaimed ([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38)).
 With that disk, a job's VM time was 1.02 of on-demand's disk's, its
 kernel-to-container start 1.06 (p = 0.050), its image pulls 1.04 and its
-`docker build` 1.03 ([anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)). A spot job on `c4d` would cost about 1.05 of one
-on `n2` for about 0.6 of its VM time, estimated at `c4d-standard-4`'s catalog spot price ($0.0967 an hour in
-`us-east4`, the VM alone) against `n2`'s VM time and cost per job from
-on-demand runs in `us-central1` ([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38), [anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)).
+`docker build` 1.03 ([anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)). At both types' `us-east4` spot prices
+(`c4d-standard-4` $0.0967 an hour, `n2-standard-4` $0.057, the VMs alone), a
+spot job on `c4d` would cost about 1.05 of one on `n2` for about 0.6 of its VM
+time, estimated from VM times measured on demand in `us-central1` ([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38), [anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)).
 `c3d` isn't in the spot lists, as its spot capacity wasn't measured.
 
 The [KVM labels](/labels/#kvm) use `n2` only, since `n2d`, `c4d` and `c3d`

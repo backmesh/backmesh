@@ -30,10 +30,13 @@ floor. backmesh's core features are free; your clouds bill you for the VMs.
 | GCP   | `us-central1` | `n2-standard-4` 0.1165, `n2d-standard-4` 0.0899                                                                   |
 
 GCP's `backmesh-ubuntu-2404-4vcpu` tries `c4d-standard-4` first (from v0.7.2), which isn't
-priced here: a spot job on it would cost about 1.05 times one on `n2`, for
-about 0.6 of its VM time, estimated at `c4d-standard-4`'s catalog spot price ($0.0967 an hour in
-`us-east4`, the VM alone) against `n2`'s VM time and cost per job from
-on-demand runs in `us-central1` ([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38), [anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)).
+priced here, as its spot price was looked up in `us-east4`, not `us-central1`.
+There, at both types' spot prices (`c4d-standard-4` $0.0967 an hour,
+`n2-standard-4` $0.057, the VMs alone), a job on `c4d` would cost about 1.05
+times one on `n2`, for about 0.6 of its VM time. That's an estimate from VM
+times measured on demand in `us-central1`, not from spot jobs ([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38), [anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)). Set against the
+`us-central1` `n2` price above instead, it would read as 0.6, but that pairs two
+regions' prices.
 
 - **The always-on VMs:** the control plane's VM and one listener VM for each
   org, with their disks and public addresses. For one org that's about $86 a

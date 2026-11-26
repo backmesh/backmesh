@@ -123,7 +123,7 @@ On v0.7.1, p75 timing already put a runner on every cued job within 2 s.
 The partial misses #117 aimed at, where a few jobs wait 8 to 52 s, didn't
 happen once in 80 jobs. #117's two misses were slow launches, not late
 timing. Round 0 was a fresh listener's first cue, where one job waited
-41 s. In round 12, three jobs waited 32 to 55 s. The 0.5.7 run's misses
+41 s. In round 12, four jobs waited over 5 s: 8, 32, 46 and 55 s. The 0.5.7 run's misses
 (below) came before AWS's spot fail-fast (anycloud#35, in v0.6.1), which
 fits slow spot launches as their cause. No figure favours #117, and it idles
 each cued runner longer.

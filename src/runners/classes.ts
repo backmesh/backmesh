@@ -49,7 +49,8 @@ const AWS_SIZE: Record<number, string> = {
  * (`GCP_SPOT_RUNNER_DISK_IOPS`, `runner-jobs.ts`; owner, 2026-11-24): spot
  * `c4d-standard-4` launched 13 of 13 times in us-east4 with none preempted
  * (anycloud#38), and at 3,000 IOPS and 750 MiB/s a Job costs about 1.05 of
- * `n2`'s spot cost for about 0.6 of its VM time (anycloud#43). `c3d` has no
+ * `n2`'s at both types' us-east4 spot prices ($0.0967 and $0.057 an hour),
+ * for about 0.6 of its VM time (anycloud#43). `c3d` has no
  * spot measurements, so spot leaves it out.
  */
 export const VM_TYPES: Record<

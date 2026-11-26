@@ -43,8 +43,9 @@ export const GCP_RUNNER_DISK_TIER = 'high';
 // the tier's 8,000 and 1,000: anycloud#43's A/B (c4d-standard-4, us-east4,
 // n=12) measured VM time 1.02 (p=0.51), toolchain pulls 1.04 and `docker
 // build` 1.03 of the tier's, for $0.044 an hour instead of $0.092, bringing a
-// spot `c4d` Job to about 1.05 of `n2`'s cost. The owner took the slowdown
-// for spot only (2026-11-24); on-demand runners keep the tier. anycloud
+// spot `c4d` Job to about 1.05 of `n2`'s at us-east4 spot prices. The owner
+// took the slowdown for spot only (2026-11-24); on-demand runners keep the
+// tier. anycloud
 // (0.1.84) applies them only to a Hyperdisk type, so `n2` and `n2d` keep the
 // tier's pd-ssd.
 export const GCP_SPOT_RUNNER_DISK_IOPS = 3_000;
