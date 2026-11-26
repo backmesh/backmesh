@@ -175,7 +175,7 @@ who else can reach it, is part of your risk.
 | Start time                                 | None, the runner is waiting                        | A boot per job, unless runners are started ahead |
 | GitHub's view                              | "not recommended" for autoscaling                  | Recommended                                      |
 
-The trade is speed and cache warmth against isolation. An ephemeral container
+An ephemeral container
 on a shared Kubernetes node is one job per runner, but the pod shares the
 node's kernel with other pods. An ephemeral VM shares only the hypervisor.
 
@@ -339,9 +339,9 @@ contributors" setting for any org that turns this on.
 
 ### Limits that come with it
 
-backmesh runs Linux x86-64 jobs only, with no macOS, Windows or Arm runners.
-Each job waits for its VM to boot; the [benchmarks](/benchmarks/) carry the
-latest median wait. A spot VM can be reclaimed, which fails the job; when
+backmesh runs Linux x86-64 and arm64 jobs (arm64 on AWS and GCP), with no
+macOS or Windows runners. Each job waits about 40 s for its VM to boot, about 15 s when cued; the
+[benchmarks](/benchmarks/) carry the latest median wait. A spot VM can be reclaimed, which fails the job; when
 reclaims were a run's only failures, backmesh reruns them, preferring an
 on-demand runner ([labels](/labels/#on-demand)). The control plane and listener
 VMs run all the time, about $86 a month on AWS, $74 on GCP and $111 on Azure
