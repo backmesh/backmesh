@@ -336,22 +336,16 @@ export interface RunJobs {
   rate?: { remaining: number; limit: number; reset: number };
 }
 
-// A run's latest attempt's jobs, conditional on the last read's ETag. A run
-// past one page is read in full, with no ETag: the first page's can't tell
-// whether the others changed.
-export function runJobs(octokit: Octokit) {
+// A run's latest attempt's jobs, conditional on the last read's ETag, its
+// first 100 only. A run past one page is read with no ETag: the first
+// page's can't tell whether the others changed. `fetch` doesn't retry, so a
+// 429 reaches the caller, which holds its reads.
+export function runJobs(octokit: Octokit, fetch: typeof globalThis.fetch) {
   return async (
     { owner, repo, runId }: WorkflowRun,
     etag?: string,
     signal?: AbortSignal,
   ): Promise<RunJobs> => {
-    const params = {
-      owner,
-      repo,
-      run_id: runId,
-      per_page: 100,
-      request: { signal },
-    };
     const rate = (headers: Record<string, unknown> = {}) => {
       const [remaining, limit, reset] = [
         'x-ratelimit-remaining',
@@ -364,18 +358,16 @@ export function runJobs(octokit: Octokit) {
     };
     try {
       const response = await octokit.rest.actions.listJobsForWorkflowRun({
-        ...params,
+        owner,
+        repo,
+        run_id: runId,
+        per_page: 100,
         headers: etag ? { 'if-none-match': etag } : {},
+        request: { signal, fetch },
       });
-      let { jobs } = response.data;
-      const paged = response.data.total_count > jobs.length;
-      if (paged)
-        jobs = await octokit.paginate(
-          octokit.rest.actions.listJobsForWorkflowRun,
-          params,
-        );
+      const { jobs, total_count } = response.data;
       return {
-        etag: paged ? undefined : response.headers.etag,
+        etag: total_count > jobs.length ? undefined : response.headers.etag,
         jobs: jobs.map((job) => ({
           ...gateJob(job),
           attempt: `${job.run_attempt}:${job.head_sha}`,

@@ -173,8 +173,19 @@ export class CacheTokens {
   // whichever comes second mints nothing.
   started(route: Route, message: JobMessage, rest?: number): void {
     const runner = this.runners.get(message.runnerName);
-    // Another listener's, one with no Secret, or a redelivery.
-    if (!runner || runner.job) return;
+    // Another listener's, or one with no Secret.
+    if (!runner) return;
+    // A redelivery, or the second source; the two must name one job.
+    if (runner.job) {
+      if (runner.job.message.jobId !== message.jobId)
+        this.deps.log({
+          msg: 'cache job mismatch',
+          runner: runner.name,
+          minted: runner.job.message.jobId,
+          started: message.jobId,
+        });
+      return;
+    }
     runner.job = { route, message, at: this.now(), rest };
     void this.mint(runner);
   }

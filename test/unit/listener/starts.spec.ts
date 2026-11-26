@@ -5,6 +5,9 @@ import type { JobMessage } from '../../../src/github/types.js';
 import type { WorkflowRun } from '../../../src/github/checks.js';
 import { AFTER_S, Starts } from '../../../src/listener/starts.js';
 import type { Route } from '../../../src/listener/routes.js';
+import { retryingFetch } from '../../../src/github/retry.js';
+import { runJobs } from '../../../src/github/runs.js';
+import { fakeGitHub, json, octokitFor } from '../github/fake-github.js';
 import { message, ROUTE } from './fakes.js';
 
 const RUNNER = 'bmabc12-a4-00000001';
@@ -82,12 +85,9 @@ describe('Starts', () => {
       {
         msg: 'job start reads',
         run: 'acme/app/7',
-        jobs: 1,
         reads: 1,
         unchanged: 0,
-        failed: 0,
         fromList: 1,
-        fromJobStarted: 0,
       },
     ]);
   });
@@ -104,9 +104,7 @@ describe('Starts', () => {
     // b isn't listed: it's left to JobStarted after the first read.
     expect(s.reads.map((r) => r.at / 1000)).toEqual(AFTER_S);
     expect(s.reads.slice(1).every((r) => r.etag === '"1"')).toBe(true);
-    expect(s.logs).toMatchObject([
-      { jobs: 2, reads: 10, unchanged: 9, fromList: 0 },
-    ]);
+    expect(s.logs).toMatchObject([{ reads: 10, unchanged: 9, fromList: 0 }]);
   });
 
   it('starts a job whose runner the list names only on a later read', async () => {
@@ -155,9 +153,7 @@ describe('Starts', () => {
     );
     await first.until(100_000);
     expect(first.reads).toEqual([]);
-    expect(first.logs).toMatchObject([
-      { reads: 0, fromJobStarted: 1, fromList: 0 },
-    ]);
+    expect(first.logs).toMatchObject([{ reads: 0, fromList: 0 }]);
   });
 
   it('keeps a redelivered job on its first schedule', async () => {
@@ -210,5 +206,38 @@ describe('Starts', () => {
     expect(s.reads).toHaveLength(refused);
     await s.until(90_000);
     expect(s.reads.length).toBeGreaterThan(refused);
+  });
+
+  it("holds its reads on a 429 through the listener's retrying octokit, and leaves to JobStarted jobs whose schedule passed meanwhile", async () => {
+    const { fetch, calls } = fakeGitHub({
+      'GET https://api.github.com/repos/acme/app/actions/runs/7/jobs': json(
+        429,
+        {},
+        { 'retry-after': '120' },
+      ),
+    });
+    const octokit = octokitFor(retryingFetch(fetch, { sleep: async () => {} }));
+    let now = 0;
+    const logs: Record<string, unknown>[] = [];
+    const watch = new Starts({
+      jobs: runJobs(octokit, fetch),
+      waiting: () => true,
+      started: () => {},
+      log: (entry) => logs.push(entry),
+      now: () => now,
+    });
+    watch.observe(ROUTE, assignedJob());
+    for (; now <= 200_000; now += 1_000) await watch.poll();
+    expect(calls).toHaveLength(1);
+    expect(logs).toEqual([
+      { msg: 'job start reads paused', seconds: 120 },
+      {
+        msg: 'job start reads',
+        run: 'acme/app/7',
+        reads: 1,
+        unchanged: 0,
+        fromList: 0,
+      },
+    ]);
   });
 });

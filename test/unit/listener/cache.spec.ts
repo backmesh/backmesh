@@ -373,6 +373,14 @@ describe('CacheTokens', () => {
       },
     ]);
     expect(t.cache.waiting('bmabc12-a4-00000009')).toBe(false);
+    // A JobStarted naming another job than the list's is logged, not minted.
+    t.cache.started(route, { ...started(name), jobId: 'other' });
+    expect(t.mints).toHaveLength(1);
+    expect(t.logs.at(-1)).toMatchObject({
+      msg: 'cache job mismatch',
+      runner: name,
+      started: 'other',
+    });
   });
 
   it("reads a run's facts once for its burst's runners, and again after a failed read", async () => {

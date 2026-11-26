@@ -60,14 +60,8 @@ interface Run {
   next: number;
   etag?: string;
   reading?: true;
-  counts: {
-    jobs: number;
-    reads: number;
-    unchanged: number;
-    failed: number;
-    fromList: number;
-    fromJobStarted: number;
-  };
+  // Logged when its watch ends: reads, 304s among them, tokens started.
+  counts: { reads: number; unchanged: number; fromList: number };
 }
 
 const key = (job: JobMessage) =>
@@ -116,14 +110,7 @@ export class Starts {
           },
           jobs: new Map(),
           next: Infinity,
-          counts: {
-            jobs: 0,
-            reads: 0,
-            unchanged: 0,
-            failed: 0,
-            fromList: 0,
-            fromJobStarted: 0,
-          },
+          counts: { reads: 0, unchanged: 0, fromList: 0 },
         };
         this.runs.set(key(job), run);
       }
@@ -131,16 +118,13 @@ export class Starts {
       if (run.jobs.has(job.jobId)) return;
       const w = { route, job, at: this.now() };
       run.jobs.set(job.jobId, w);
-      run.counts.jobs++;
       run.next = Math.min(run.next, slot(w, -Infinity)!);
     } else if (
       job.messageType === 'JobStarted' ||
       job.messageType === 'JobCompleted'
     ) {
       const run = this.runs.get(key(job));
-      if (!run?.jobs.delete(job.jobId)) return;
-      if (job.messageType === 'JobStarted') run.counts.fromJobStarted++;
-      this.end(run);
+      if (run?.jobs.delete(job.jobId)) this.end(run);
     }
   }
 
@@ -171,6 +155,13 @@ export class Starts {
       this.tokens + (now - this.filledAt) * PER_MS,
     );
     this.filledAt = now;
+    // Jobs whose schedule passed, as during a hold, are left to JobStarted.
+    for (const run of this.runs.values()) {
+      for (const [id, w] of run.jobs)
+        if (!run.reading && slot(w, now - GAP_MS) === undefined)
+          run.jobs.delete(id);
+      this.end(run);
+    }
     if (now < this.heldUntil) return Promise.resolve();
     const due = [...this.runs.values()]
       .filter((run) => !run.reading && run.next <= now)
@@ -179,12 +170,12 @@ export class Starts {
     for (const run of due) {
       if (this.tokens < 1 || this.reading >= AT_ONCE) break;
       this.tokens -= 1;
-      reads.push(this.read(run, now));
+      reads.push(this.read(run));
     }
     return Promise.all(reads).then(() => undefined);
   }
 
-  private async read(run: Run, now: number): Promise<void> {
+  private async read(run: Run): Promise<void> {
     run.reading = true;
     this.reading++;
     run.counts.reads++;
@@ -196,13 +187,13 @@ export class Starts {
         AbortSignal.timeout(READ_TIMEOUT_MS),
       );
     } catch (error) {
-      run.counts.failed++;
       this.refused(error);
     }
     delete run.reading;
     this.reading--;
     if (listed) this.listed(run, listed);
     // The next read: the earliest of the jobs' next slots, a gap after this.
+    const now = this.now();
     for (const [id, w] of run.jobs)
       if (slot(w, now) === undefined) run.jobs.delete(id);
     run.next = Math.max(
