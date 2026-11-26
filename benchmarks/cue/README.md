@@ -88,6 +88,46 @@ Runs before backmesh v0.7.0 name the labels as they were then: `backmesh-4`
 is today's `backmesh-ubuntu-2404-4vcpu`, and `backmesh-gpu-t4` today's
 `backmesh-ubuntu-2404-gpu-t4`.
 
+### 2026-11-25, p75 against p95 boot plus 5 s (#117), backmesh 0.7.1
+
+The A/B for [#117](https://github.com/backmesh/backmesh/pull/117), which
+times a cue's runners by the label's p95 boot plus 5 s instead of its p75.
+Both arms ran on backmesh's own CI installation (AWS, anycloud 0.1.83):
+target `backmesh/benchmarks`, `backmesh-ubuntu-2404-16vcpu`, width 8, 10
+rounds, lead 75 s. They ran back to back:
+[run 45662154783](https://github.com/backmesh/backmesh/actions/runs/45662154783)
+with the installation on v0.7.2-rc.1 (#117), then ci-install back to v0.7.1
+and
+[run 45688492534](https://github.com/backmesh/backmesh/actions/runs/45688492534).
+Each upgrade restarted the listener, so each arm's first cue had no boot
+history and used the 71 s default. The per-job figures are the cued pushes'
+80 jobs, and p90 is the nearest rank. The p-values are exact two-sided
+Mann–Whitney tests on the 10 push medians, and Fisher's exact test for the
+share taken within 5 s.
+[`results/2026-11-25-0.7.1-vs-0.7.2-rc.1.json`](results/2026-11-25-0.7.1-vs-0.7.2-rc.1.json)
+has every push and each cued job's wait.
+
+| Cued pushes                            | p75 (v0.7.1)    | p95 + 5 s (#117) | p     |
+| -------------------------------------- | --------------- | ---------------- | ----- |
+| Jobs taken within 5 s                  | 80 of 80 (100%) | 75 of 80 (94%)   | 0.059 |
+| Pushes with a partial miss             | 0 of 10         | 2 of 10          |       |
+| Queued to first real step, push        | 10.25 s (10–11) | 11 s (10–15)     | 0.16  |
+| Queued to first real step, job p50/p90 | 10 / 11 s       | 11 / 12 s        |       |
+| Queued to assigned, job p50/p90        | 2 / 2 s         | 2 / 3 s          |       |
+| Queued to done, push                   | 14 s (14–14)    | 14 s (14–18.5)   | 0.087 |
+
+Uncued pushes took 53.25 s and 53 s to the first real step, and hosted ones
+13 s and 14 s, so the two arms ran in about the same conditions.
+
+On v0.7.1, p75 timing already put a runner on every cued job within 2 s.
+The partial misses #117 aimed at, where a few jobs wait 8 to 52 s, didn't
+happen once in 80 jobs. #117's two misses were slow launches, not late
+timing. Round 0 was a fresh listener's first cue, where one job waited
+41 s. In round 12, four jobs waited over 5 s: 8, 32, 46 and 55 s. The 0.5.7 run's misses
+(below) came before AWS's spot fail-fast (anycloud#35, in v0.6.1), which
+fits slow spot launches as their cause. No figure favours #117, and it idles
+each cued runner longer.
+
 ### 2026-11-23, backmesh 0.5.7, against GitHub-hosted
 
 [Run 45245714397](https://github.com/backmesh/backmesh/actions/runs/45245714397)

@@ -14,15 +14,15 @@ Google bills you for it.
 
 A job's VM is the first type in its [label's](/labels/) list that has capacity:
 
-| Label                         | vCPU | Memory | Types, in order                     |
-| ----------------------------- | ---- | ------ | ----------------------------------- |
-| `backmesh-ubuntu-2404-2vcpu`  | 2    | 8 GiB  | `n2-standard-2`, `n2d-standard-2`   |
-| `backmesh-ubuntu-2404-4vcpu`  | 4    | 16 GiB | `n2-standard-4`, `n2d-standard-4`   |
-| `backmesh-ubuntu-2404-8vcpu`  | 8    | 32 GiB | `n2-standard-8`, `n2d-standard-8`   |
-| `backmesh-ubuntu-2404-16vcpu` | 16   | 64 GiB | `n2-standard-16`, `n2d-standard-16` |
+| Label                         | vCPU | Memory       | Types, in order                                        |
+| ----------------------------- | ---- | ------------ | ------------------------------------------------------ |
+| `backmesh-ubuntu-2404-2vcpu`  | 2    | 8 GiB        | `n2-standard-2`, `n2d-standard-2`                      |
+| `backmesh-ubuntu-2404-4vcpu`  | 4    | 15 or 16 GiB | `c4d-standard-4`, `n2-standard-4`, `n2d-standard-4`    |
+| `backmesh-ubuntu-2404-8vcpu`  | 8    | 31 or 32 GiB | `c4d-standard-8`, `n2-standard-8`, `n2d-standard-8`    |
+| `backmesh-ubuntu-2404-16vcpu` | 16   | 62 or 64 GiB | `c4d-standard-16`, `n2-standard-16`, `n2d-standard-16` |
 
 [On-demand labels](/labels/#on-demand) from 4 vCPUs try AMD's `c4d` (Zen 5)
-and `c3d` (Zen 4) first, then the same types; `backmesh-ubuntu-2404-od-2vcpu` keeps `n2` and
+and `c3d` (Zen 4) first, then `n2` and `n2d`; `backmesh-ubuntu-2404-od-2vcpu` keeps `n2` and
 `n2d`:
 
 | Label                            | vCPU | Memory       | Types, in order                                                           |
@@ -37,8 +37,19 @@ it, for 0.78 and 0.76 of its cost per job, disk included
 ([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38)); at 16
 vCPUs, a few runs gave 0.52 and 0.75 of its time, and 8 vCPUs wasn't
 measured. `us-south1` offers neither, and `us-west2` and `us-west3` no
-`c3d`, so jobs there start on the next type in the list. Spot labels stay on
-`n2` and `n2d` for now.
+`c3d`, so jobs there start on the next type in the list.
+
+Spot labels from 4 vCPUs try `c4d` first too, with a cheaper disk than on
+demand's: Hyperdisk Balanced at 3,000 IOPS and 750 MiB/s, not 8,000 and
+1,000. Spot `c4d-standard-4` launched 13 times of 13 in `us-east4` with none
+reclaimed ([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38)).
+With that disk, a job's VM time was 1.02 of on-demand's disk's, its
+kernel-to-container start 1.06 (p = 0.050), its image pulls 1.04 and its
+`docker build` 1.03 ([anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)). At both types' `us-east4` spot prices
+(`c4d-standard-4` $0.0967 an hour, `n2-standard-4` $0.057, the VMs alone), a
+spot job on `c4d` would cost about 1.05 of one on `n2` for about 0.6 of its VM
+time, estimated from VM times measured on demand in `us-central1` ([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38), [anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)).
+`c3d` isn't in the spot lists, as its spot capacity wasn't measured.
 
 The [KVM labels](/labels/#kvm) use `n2` only, since `n2d`, `c4d` and `c3d`
 don't support nested virtualization. GCP has no [GPU labels](/labels/#gpu) yet: anycloud
@@ -49,6 +60,12 @@ The [high-memory labels](/labels/#high-memory) use `n2-highmem-<n>` then
 `n2d-highmem-<n>`, 8 GiB a vCPU, on spot and on demand alike:
 `backmesh-ubuntu-2404-highmem-16vcpu` is 16 vCPUs and 128 GiB. They count
 against the same `N2_CPUS`, `N2D_CPUS` and `PREEMPTIBLE_CPUS` quotas.
+
+The [arm64 labels](/labels/#arm64) use Google's Axion, `c4a-standard-<n>`,
+then Ampere's `t2a-standard-<n>`, at the same sizes, and the arm64
+high-memory ones `c4a-highmem-<n>`; `t2a` has no high-memory shape. Only
+`us-central1` and `europe-west4` among the runner regions offer `t2a`, and an
+arm64 label's jobs launch only in the regions that offer one of its types.
 
 ## Regions
 
@@ -83,11 +100,14 @@ delete in the console.
 Install can't read GCP's quotas, so it names the ones to raise instead. The one
 that bites first is `CPUS_ALL_REGIONS`, 32 vCPUs by default across all regions:
 8 `backmesh-ubuntu-2404-4vcpu` jobs at once. Raise it before big bursts. Each runner region
-also has `N2D_CPUS` and `N2_CPUS`, and `PREEMPTIBLE_CPUS` for spot or `CPUS`,
-`C4D_CPUS` and `C3D_CPUS` for on demand. Each on-demand `c4d` runner's disk
-also counts 100 GB, 8,000 IOPS and 1,000 MB/s against the region's
+also has `N2D_CPUS`, `N2_CPUS` and `C4D_CPUS`, and `PREEMPTIBLE_CPUS` for spot
+or `CPUS` and `C3D_CPUS` for on demand, and the arm64 labels' `C4A_CPUS` and
+`T2A_CPUS` on demand. Each `c4d` runner's disk also counts 100 GB against the
+region's
 [Hyperdisk Balanced quotas](https://cloud.google.com/compute/docs/disks/hyperdisks)
-for capacity, IOPS and throughput, which install doesn't name. Runners past a quota wait, and [`backmesh status`](/status/) warns
+for capacity, and its IOPS and throughput (8,000 and 1,000 MB/s on demand,
+3,000 and 750 on spot) against those for IOPS and throughput, which install
+doesn't name. Runners past a quota wait, and [`backmesh status`](/status/) warns
 when they do, as in this example with illustrative numbers:
 
 ```text
@@ -109,8 +129,11 @@ These are catalog prices in `us-central1`, spot in the lowest zone, for a
 
 Other sizes scale with their vCPUs. Each job also pays for its VM's boot and its
 100 GB disk: pd-ssd, about $0.023 an hour, or on `c4d`, which can't take
-pd-ssd, Hyperdisk Balanced with 8,000 IOPS and 1,000 MB/s provisioned, about
-$0.092 an hour. The control plane and one org's listener VM cost about $74 a
+pd-ssd, Hyperdisk Balanced: on demand with 8,000 IOPS and 1,000 MB/s
+provisioned, about $0.092 an hour, and on spot with 3,000 and 750, about
+$0.044. `c4d-standard-4`'s catalog spot price in `us-east4`, where its spot
+launches were measured, is $0.0967 an hour for the VM alone
+([anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)). The control plane and one org's listener VM cost about $74 a
 month. At those prices, 150,000 minutes a month of `backmesh-ubuntu-2404-4vcpu` jobs cost at
 least $299–$365 with one org's always-on VMs, before disks, boots and runners started ahead of jobs; see [the
 costs](/#cost). Spot prices change by the hour.

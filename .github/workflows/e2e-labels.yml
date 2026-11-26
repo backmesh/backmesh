@@ -1,8 +1,8 @@
 name: E2E labels
 
 # e2e.yml's label member: assertions 1-4 and the kill-all, on the label
-# itself, so instance metadata, the VM's own Docker, /dev/kvm and a GPU
-# label's GPU are all the real thing. Called by e2e.yml for our own org, and by the test org's
+# itself, so instance metadata, the VM's own Docker, /dev/kvm, a GPU
+# label's GPU and an arm64 label's architecture are all the real thing. Called by e2e.yml for our own org, and by the test org's
 # backmesh-dryrun/e2e, whose runners only its own repositories reach
 # (e2e.yml's `test-org` job dispatches it). The checks come from
 # backmesh/backmesh at `ref` either way: a caller in another repository
@@ -61,6 +61,18 @@ jobs:
       - name: The GPU works in the job and through docker --gpus all
         if: matrix.gpu
         run: node test/e2e/check-gpu.ts
+
+      # The VM, the runner image and a job's own container are all arm64,
+      # and the first-use installs fetch arm64 builds.
+      - name: The job runs on arm64
+        if: matrix.arm
+        run: |
+          [[ $(uname -m) == aarch64 && $(dpkg --print-architecture) == arm64 ]] \
+            || { echo "::error::this arm64 label's job runs on $(uname -m)"; exit 1; }
+          [[ $(docker run --rm mirror.gcr.io/library/busybox:1.37 uname -m) == aarch64 ]] \
+            || { echo "::error::a container on this label's VM isn't arm64"; exit 1; }
+          [[ $(go version) == *linux/arm64 ]] \
+            || { echo "::error::go's first-use install isn't arm64: $(go version)"; exit 1; }
 
       # The runner is a container on this VM's Docker, which the image's
       # `docker` (runner/docker.sh) leaves out, as GitHub's runners aren't

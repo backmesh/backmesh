@@ -67,6 +67,7 @@ const RELEASED: FeatureTable = {
   c28: '0.1.0',
   'vm-job-regions': undefined,
   'service-tokens': '0.1.0',
+  arm64: '0.1.0',
 };
 const DELETE_HOSTED = 'api delete c1 --delete-buckets --confirm c1 --json';
 

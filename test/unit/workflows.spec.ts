@@ -45,10 +45,14 @@ type Job = {
   needs?: string | string[];
   env?: Record<string, string>;
   outputs?: Record<string, string>;
-  strategy?: { 'max-parallel'?: number; matrix?: { include?: unknown[] } };
+  strategy?: {
+    'max-parallel'?: number;
+    matrix?: { include?: unknown[] } & Record<string, unknown>;
+  };
   steps?: Step[];
   'runs-on'?: string;
   uses?: string;
+  with?: Record<string, unknown>;
   environment?: unknown;
   secrets?: unknown;
   permissions?: Permissions;
@@ -145,8 +149,40 @@ const noSecrets = (where: string, value: unknown) =>
     where,
   ).not.toMatch(/secrets\./);
 
+// A reusable workflow's inputs as `inputs.<name>`: its caller's `with`, or
+// their defaults.
+function inputsOf(workflow: Workflow, given: Record<string, unknown> = {}) {
+  const declared = ((
+    workflow.on.workflow_call as { inputs?: Record<string, unknown> } | null
+  )?.inputs ?? {}) as Record<string, { default?: unknown }>;
+  return Object.fromEntries(
+    Object.entries(declared).map(([name, { default: d }]) => [
+      `inputs.${name}`,
+      String(given[name] ?? d ?? ''),
+    ]),
+  );
+}
+
+// A job's matrix legs, each as `matrix.<key>`: the one-key lists our
+// workflows use, given in place or as `fromJSON(inputs.<name>)`.
+function legs(job: Job, context: Context): Context[] {
+  const matrix = Object.entries(job.strategy?.matrix ?? {}).filter(
+    ([key]) => key !== 'include',
+  );
+  if (!matrix.length) return [{}];
+  expect(matrix.length).toBe(1);
+  const [key, value] = matrix[0]!;
+  const input = /^fromJSON\((inputs\.[\w-]+)\)$/.exec(
+    unwrap(String(value))?.trim() ?? '',
+  )?.[1];
+  const values = (
+    input ? JSON.parse(context[input] ?? 'null') : value
+  ) as string[];
+  return values.map((v) => ({ [`matrix.${key}`]: v }));
+}
+
 // The jobs a pull request starts, through local reusable workflows, with the
-// runner each lands on.
+// runner each lands on: a matrix job's legs each name theirs.
 function started(
   file: string,
   context: Context,
@@ -160,8 +196,13 @@ function started(
     noSecrets(where, job);
     expect(job.secrets, where).toBeUndefined();
     expect(job.environment, where).toBeUndefined();
-    if (job.uses?.startsWith('./'))
-      return started(job.uses.replace(`./${DIR}/`, ''), context);
+    if (job.uses?.startsWith('./')) {
+      const called = job.uses.replace(`./${DIR}/`, '');
+      return started(called, {
+        ...context,
+        ...inputsOf(read(called), job.with),
+      });
+    }
     // A reusable workflow's own permissions cap what its caller grants.
     const permissions = job.permissions ?? workflow.permissions;
     expect(permissions, where).toBeDefined();
@@ -171,12 +212,11 @@ function started(
     expect(writes, where).toEqual([]);
     const runsOn = job['runs-on'] ?? '';
     const expr = unwrap(runsOn);
-    return [
-      {
-        job: where,
-        runsOn: expr === undefined ? runsOn : evaluate(expr, context),
-      },
-    ];
+    return legs(job, context).map((leg) => ({
+      job: [where, ...Object.values(leg)].join(' '),
+      runsOn:
+        expr === undefined ? runsOn : evaluate(expr, { ...context, ...leg }),
+    }));
   });
 }
 
@@ -229,11 +269,19 @@ describe('the workflows', () => {
     }
   });
 
-  it('keep a same-repository pull request on backmesh', () => {
+  // backmesh's runners are x86-64: an arm64 image builds on GitHub's arm64
+  // runner, free for a public repository.
+  it('keep a same-repository pull request on backmesh, and build arm64 on ubuntu-24.04-arm', () => {
     const jobs = onPullRequest.flatMap((f) => started(f, SAME_REPO));
     expect(jobs.length).toBeGreaterThan(0);
-    for (const { job, runsOn } of jobs)
-      expect(runsOn, job).toBe('backmesh-ubuntu-2404-4vcpu');
+    expect(jobs.map(({ job }) => job)).toContain('image.yml build linux/arm64');
+    for (const { job, runsOn } of jobs) {
+      expect(runsOn, job).toBe(
+        job.endsWith(' linux/arm64')
+          ? 'ubuntu-24.04-arm'
+          : 'backmesh-ubuntu-2404-4vcpu',
+      );
+    }
   });
 });
 
@@ -499,6 +547,11 @@ describe("e2e.yml's Worker and Azure checks", () => {
           cloud: 'aws',
           regions: ['us-east-2'],
         },
+        {
+          label: 'backmesh-gcp-ubuntu-2404-arm-4vcpu',
+          cloud: 'gcp',
+          regions: ['us-east4'],
+        },
       ],
     };
     const args = join(dir, 'args');
@@ -510,6 +563,7 @@ describe("e2e.yml's Worker and Azure checks", () => {
         CLOUD: cloud,
         PLACEMENT: leg.placement!,
         LABEL: leg.label ?? '',
+        ARM_LABEL: leg['arm-label'] ?? '',
         CONTROL_PLANE_REGION: leg['control-plane-region'] ?? '',
         MATRIX: JSON.stringify(matrix),
         GITHUB_ENV: env,
@@ -532,7 +586,7 @@ describe("e2e.yml's Worker and Azure checks", () => {
 
   // Our Azure CI subscription has 3 spot vCPUs per region until its quota
   // is raised: the Azure leg's one job runs on backmesh-ubuntu-2404-2vcpu, AWS's on `labels`.
-  it("runs the Azure leg's one job on its leg's label, and AWS's labels unchanged", () => {
+  it("runs the Azure leg's one job on its leg's label, and AWS's own labels only", () => {
     const azure = labelMatrix('azure');
     expect(azure.got.include).toEqual([
       expect.objectContaining({
@@ -542,11 +596,11 @@ describe("e2e.yml's Worker and Azure checks", () => {
       }),
     ]);
     const aws = labelMatrix('aws');
-    expect(aws.got).toEqual(aws.matrix);
+    expect(aws.got.include).toEqual([aws.matrix.include[0]]);
   });
 
   // GCP's control plane makes it the home cloud, whose labels are plain.
-  it("runs the GCP leg's one job on backmesh-ubuntu-2404-4vcpu in the plan's GCP regions", () => {
+  it("runs the GCP leg's jobs on backmesh-ubuntu-2404-4vcpu and its arm64 twin in the plan's GCP regions", () => {
     expect(labelMatrix('gcp').got.include).toEqual([
       expect.objectContaining({
         label: 'backmesh-ubuntu-2404-4vcpu',
@@ -554,6 +608,13 @@ describe("e2e.yml's Worker and Azure checks", () => {
         regions: ['us-central1', 'us-east1'],
         kvm: false,
         gpu: false,
+        arm: false,
+      }),
+      expect.objectContaining({
+        label: 'backmesh-ubuntu-2404-arm-4vcpu',
+        cloud: 'gcp',
+        regions: ['us-central1', 'us-east1'],
+        arm: true,
       }),
     ]);
   });
@@ -882,7 +943,12 @@ describe("e2e.yml's AWS leg, away from our production control plane", () => {
         inputs: Record<string, { default: string }>;
       }
     ).inputs.labels!.default;
-    for (const entry of labels.trim().split(/\s+/)) {
+    const onAws = labels
+      .trim()
+      .split(/\s+/)
+      .filter((entry) => entry.includes('=aws:'));
+    expect(onAws.length).toBeGreaterThan(0);
+    for (const entry of onAws) {
       expect(entry.split(':')[1]!.split(','), entry).toContain('us-west-2');
     }
   });

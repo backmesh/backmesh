@@ -205,6 +205,7 @@ function setUp({
           'service-tokens': '0.1.0',
           'role-apply': undefined,
           c28: undefined,
+          arm64: undefined,
         },
       }),
   };
@@ -221,7 +222,7 @@ describe('status', () => {
           org: 'acme',
           listener: {
             runners: [
-              'aws us-east-2, 26 labels; quota: 640 spot vCPUs (160 backmesh-ubuntu-2404-4vcpu jobs at once), 128 on-demand vCPUs (32 backmesh-ubuntu-2404-4vcpu jobs at once); GPU quota: 0 spot vCPUs (0 backmesh-ubuntu-2404-gpu-t4 jobs at once), 8 on-demand vCPUs (2 backmesh-ubuntu-2404-gpu-od-t4 jobs at once); raise EC2 "All G and VT Spot Instance Requests" (L-3819A6DF) in us-east-2 to run backmesh-ubuntu-2404-gpu-t4',
+              'aws us-east-2, 42 labels; quota: 640 spot vCPUs (160 backmesh-ubuntu-2404-4vcpu jobs at once), 128 on-demand vCPUs (32 backmesh-ubuntu-2404-4vcpu jobs at once); GPU quota: 0 spot vCPUs (0 backmesh-ubuntu-2404-gpu-t4 jobs at once), 8 on-demand vCPUs (2 backmesh-ubuntu-2404-gpu-od-t4 jobs at once); raise EC2 "All G and VT Spot Instance Requests" (L-3819A6DF) in us-east-2 to run backmesh-ubuntu-2404-gpu-t4',
             ],
           },
           vm: 'bml-l8u5e-acme00',
@@ -386,7 +387,7 @@ describe('status', () => {
     );
     expect(text).toContain(`Runner image: ${RUNNER_IMAGE}`);
     expect(text).toContain(
-      'Runner VMs: aws us-east-2, 26 labels; quota: 640 spot vCPUs (160 backmesh-ubuntu-2404-4vcpu jobs at once), 128 on-demand vCPUs (32 backmesh-ubuntu-2404-4vcpu jobs at once); GPU quota: 0 spot vCPUs (0 backmesh-ubuntu-2404-gpu-t4 jobs at once), 8 on-demand vCPUs (2 backmesh-ubuntu-2404-gpu-od-t4 jobs at once); raise EC2 "All G and VT Spot Instance Requests" (L-3819A6DF) in us-east-2 to run backmesh-ubuntu-2404-gpu-t4',
+      'Runner VMs: aws us-east-2, 42 labels; quota: 640 spot vCPUs (160 backmesh-ubuntu-2404-4vcpu jobs at once), 128 on-demand vCPUs (32 backmesh-ubuntu-2404-4vcpu jobs at once); GPU quota: 0 spot vCPUs (0 backmesh-ubuntu-2404-gpu-t4 jobs at once), 8 on-demand vCPUs (2 backmesh-ubuntu-2404-gpu-od-t4 jobs at once); raise EC2 "All G and VT Spot Instance Requests" (L-3819A6DF) in us-east-2 to run backmesh-ubuntu-2404-gpu-t4',
     );
     expect(text).toContain('No warnings.');
     expect(text).not.toContain('\n\n\n');
@@ -416,7 +417,7 @@ describe('status', () => {
       ),
     });
     expect(formatStatus(await read())).toContain(
-      'Runner VMs: aws us-east-2, 26 labels; quota: unread (Credential "bm-aws" not found)',
+      'Runner VMs: aws us-east-2, 42 labels; quota: unread (Credential "bm-aws" not found)',
     );
     // A read the control plane made and the cloud refused.
     const { read: refused } = setUp({

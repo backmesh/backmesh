@@ -324,9 +324,9 @@ export function quotaCheck(
   if (cloud === 'gcp') {
     // Google's quota names (external): spot VMs count against
     // PREEMPTIBLE_CPUS when the region sets it, and against the family
-    // quotas otherwise; on-demand ones try c4d and c3d first.
+    // quotas otherwise; spot ones try c4d first, on-demand ones c4d and c3d.
     return {
-      increase: `"CPUS_ALL_REGIONS" (32 by default) and ${names}'s ${spot ? '"PREEMPTIBLE_CPUS", ' : '"CPUS", "C4D_CPUS", "C3D_CPUS", '}"N2D_CPUS" and "N2_CPUS"`,
+      increase: `"CPUS_ALL_REGIONS" (32 by default) and ${names}'s ${spot ? '"PREEMPTIBLE_CPUS", "C4D_CPUS", ' : '"CPUS", "C4D_CPUS", "C3D_CPUS", '}"N2D_CPUS" and "N2_CPUS"`,
     };
   }
   const kind = spot ? 'spot' : 'onDemand';

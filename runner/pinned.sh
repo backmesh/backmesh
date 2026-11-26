@@ -14,10 +14,16 @@ set -Eeuo pipefail
 
 name=${0##*/} args=()
 keys=/usr/share/keyrings/backmesh
-# The versions and checksums, x86-64 only as the image is: the Dockerfile's
-# ARGs, the versions GitHub's Ubuntu 24.04 image has.
+# The versions, and the checksums of the image's platform's downloads: the
+# Dockerfile's ARGs, the versions GitHub's Ubuntu 24.04 image has.
 # shellcheck source=/dev/null # the image writes it
 . /usr/share/backmesh/pinned.env
+# The platform, as releases name it: x86_64 or aarch64, amd64 or arm64, and
+# Chrome for Testing's linux64 or linux-arm64. Temurin's home is named by the
+# second, as Ubuntu's JDK packages are.
+uname=$(uname -m) deb=$(dpkg --print-architecture)
+cft=linux64 jdk=/usr/lib/jvm/temurin-17-jdk-$deb
+[[ $deb == amd64 ]] || cft=linux-$deb
 # Rust's homes: the runner user's, as on GitHub's image, whoever calls.
 export CARGO_HOME=${CARGO_HOME:-/home/runner/.cargo} RUSTUP_HOME=${RUSTUP_HOME:-/home/runner/.rustup}
 
@@ -49,7 +55,7 @@ tarball() {
 # and its dependencies are base Ubuntu libraries. So dpkg keeps no record of
 # azure-cli (dpkg -l doesn't list it), and its bash completion isn't installed.
 az_install() {
-  pinned "https://packages.microsoft.com/repos/azure-cli/pool/main/a/azure-cli/azure-cli_${az_version}-1~noble_amd64.deb" "$az_sha256" \
+  pinned "https://packages.microsoft.com/repos/azure-cli/pool/main/a/azure-cli/azure-cli_${az_version}-1~noble_${deb}.deb" "$az_sha256" \
     && sudo -n rm -rf /opt/az.new /opt/az \
     && sudo -n dpkg-deb -x "$dir"/*.deb /opt/az.new \
     && sudo -n mv /opt/az.new/opt/az /opt/az \
@@ -59,7 +65,7 @@ az_install() {
 
 # Google's archive, with its own Python, where its package puts it.
 gcloud_install() {
-  pinned "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-${gcloud_version}-linux-x86_64.tar.gz" "$gcloud_sha256" \
+  pinned "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-${gcloud_version}-linux-${uname/aarch64/arm}.tar.gz" "$gcloud_sha256" \
     && sudo -n rm -rf /usr/lib/google-cloud-sdk.new /usr/lib/google-cloud-sdk \
     && sudo -n mkdir /usr/lib/google-cloud-sdk.new \
     && sudo -n tar -xzf "$dir"/*.tar.gz -C /usr/lib/google-cloud-sdk.new \
@@ -69,7 +75,7 @@ gcloud_install() {
 
 # AWS's v2 installer, checked against AWS's signature with only its pinned key.
 aws_install() {
-  local url=https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${aws_version}.zip
+  local url=https://awscli.amazonaws.com/awscli-exe-linux-${uname}-${aws_version}.zip
   fetch "$url" "$dir/aws.zip" \
     && fetch "$url.sig" "$dir/aws.zip.sig" \
     && mkdir -m 0700 "$dir/gnupg" \
@@ -88,8 +94,8 @@ aws_install() {
 # a cache restore may have made already, with the proxies last; a restored
 # settings.toml that names a default keeps it.
 rust_install() {
-  local stage=/home/runner/.rust.new t=x86_64-unknown-linux-gnu
-  pinned "https://static.rust-lang.org/rustup/archive/${rustup_version}/x86_64-unknown-linux-gnu/rustup-init" "$rustup_sha256" \
+  local stage=/home/runner/.rust.new t=$uname-unknown-linux-gnu
+  pinned "https://static.rust-lang.org/rustup/archive/${rustup_version}/$t/rustup-init" "$rustup_sha256" \
     && sudo -n rm -rf "$stage" \
     && sudo -n install -d -o runner -g runner "$stage" "$RUSTUP_HOME" "$CARGO_HOME" "$CARGO_HOME/bin" \
     && sudo -n install -o runner -m 0755 "$dir/rustup-init" "$stage/" \
@@ -107,7 +113,7 @@ rust_install() {
 
 # PowerShell's release, where Microsoft's package puts it.
 pwsh_install() {
-  local url=https://github.com/PowerShell/PowerShell/releases/download/v${pwsh_version}/powershell-${pwsh_version}-linux-x64.tar.gz
+  local url=https://github.com/PowerShell/PowerShell/releases/download/v${pwsh_version}/powershell-${pwsh_version}-linux-${deb/amd64/x64}.tar.gz
   pinned "$url" "$pwsh_sha256" \
     && sudo -n rm -rf /opt/microsoft/powershell/7.new /opt/microsoft/powershell/7 \
     && sudo -n mkdir -p /opt/microsoft/powershell/7.new \
@@ -117,46 +123,46 @@ pwsh_install() {
 }
 
 go_install() {
-  tarball "https://go.dev/dl/go${go_version}.linux-amd64.tar.gz" "$go_sha256" /usr/local/go
+  tarball "https://go.dev/dl/go${go_version}.linux-${deb}.tar.gz" "$go_sha256" /usr/local/go
 }
 
 # Temurin's JDK, where GitHub's image has its default one: JAVA_HOME, whose
 # bin has the image's shims for java, javac, jar and keytool until it's in.
 java_install() {
-  local tag=jdk-${java_version} file=OpenJDK17U-jdk_x64_linux_hotspot_${java_version/+/_}.tar.gz
+  local tag=jdk-${java_version} file=OpenJDK17U-jdk_${uname/x86_64/x64}_linux_hotspot_${java_version/+/_}.tar.gz
   tarball "https://github.com/adoptium/temurin17-binaries/releases/download/${tag/+/%2B}/$file" "$java_sha256" \
-    /usr/lib/jvm/temurin-17-jdk-amd64
+    "$jdk"
 }
 
-# Chrome for Testing, Google's versioned build of Chrome: its URLs are fixed,
-# unlike the .deb's, which Google drops from its pool at the next release.
+# Chrome for Testing, Google's versioned build of Chrome, for linux64 or
+# linux-arm64: its URLs are fixed, unlike the .deb's, which Google drops from
+# its pool at the next release.
 # Chrome's libraries come from Ubuntu's archive, through apt, as the .deb's
 # would: a package of only its deb.deps as Depends, so apt picks Ubuntu's
 # names for them.
 chrome_install() {
-  local url=https://storage.googleapis.com/chrome-for-testing-public/${chrome_version}/linux64/chrome-linux64.zip
-  pinned "$url" "$chrome_sha256" \
-    && unzip -q "$dir/chrome-linux64.zip" -d "$dir" \
-    && test -s "$dir/chrome-linux64/deb.deps" \
+  pinned "https://storage.googleapis.com/chrome-for-testing-public/${chrome_version}/$cft/chrome-$cft.zip" "$chrome_sha256" \
+    && unzip -q "$dir/chrome-$cft.zip" -d "$dir" \
+    && test -s "$dir/chrome-$cft/deb.deps" \
     && mkdir -p "$dir/deps/DEBIAN" \
-    && printf 'Package: backmesh-chrome-deps\nVersion: %s\nArchitecture: amd64\nMaintainer: backmesh\nDescription: Chrome for Testing'"'"'s libraries\nDepends: %s\n' \
-      "$chrome_version" "$(paste -sd , "$dir/chrome-linux64/deb.deps" | sed 's/,/, /g')" >"$dir/deps/DEBIAN/control" \
+    && printf 'Package: backmesh-chrome-deps\nVersion: %s\nArchitecture: %s\nMaintainer: backmesh\nDescription: Chrome for Testing'"'"'s libraries\nDepends: %s\n' \
+      "$chrome_version" "$deb" "$(paste -sd , "$dir/chrome-$cft/deb.deps" | sed 's/,/, /g')" >"$dir/deps/DEBIAN/control" \
     && dpkg-deb --build "$dir/deps" "$dir/chrome-deps.deb" \
     && sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=120 install -yq --no-install-recommends "$dir/chrome-deps.deb" \
     && sudo -n rm -rf /opt/google/chrome-for-testing \
-    && sudo -n chown -R root:root "$dir/chrome-linux64" \
-    && sudo -n mv "$dir/chrome-linux64" /opt/google/chrome-for-testing
+    && sudo -n chown -R root:root "$dir/chrome-$cft" \
+    && sudo -n mv "$dir/chrome-$cft" /opt/google/chrome-for-testing
 }
 
 # Chrome for Testing's driver for the same version, where GitHub's image has it
-# (CHROMEWEBDRIVER), in place of the image's shim there. Chrome first, whose
-# libraries it needs too.
+# (CHROMEWEBDRIVER, named linux64 on arm64 too), in place of the image's shim
+# there. Chrome first, whose libraries it needs too.
 chromedriver_install() {
   { [[ -x /opt/google/chrome-for-testing/chrome ]] || chrome_install; } \
-    && pinned "https://storage.googleapis.com/chrome-for-testing-public/${chrome_version}/linux64/chromedriver-linux64.zip" "$chromedriver_sha256" \
-    && unzip -q "$dir/chromedriver-linux64.zip" -d "$dir" \
+    && pinned "https://storage.googleapis.com/chrome-for-testing-public/${chrome_version}/$cft/chromedriver-$cft.zip" "$chromedriver_sha256" \
+    && unzip -q "$dir/chromedriver-$cft.zip" -d "$dir" \
     && sudo -n rm -rf /usr/local/share/chromedriver-linux64 \
-    && sudo -n mv "$dir/chromedriver-linux64" /usr/local/share/chromedriver-linux64
+    && sudo -n mv "$dir/chromedriver-$cft" /usr/local/share/chromedriver-linux64
 }
 
 # $real runs the command once $ready, by default $real, exists.
@@ -167,12 +173,12 @@ case $name in
   # rustup's proxies, once the toolchain is in: a cache may restore
   # $CARGO_HOME/bin without $RUSTUP_HOME.
   rustup | cargo | rustc | rustdoc | rustfmt | cargo-fmt | cargo-clippy | clippy-driver)
-    real=$CARGO_HOME/bin/$name ready=$RUSTUP_HOME/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc
+    real=$CARGO_HOME/bin/$name ready=$RUSTUP_HOME/toolchains/stable-$uname-unknown-linux-gnu/bin/rustc
     install=(rust_install) ;;
   pwsh) real=/opt/microsoft/powershell/7/pwsh install=(pwsh_install) ;;
   go | gofmt) real=/usr/local/go/bin/$name install=(go_install) ;;
   java | javac | jar | keytool)
-    real=/usr/lib/jvm/temurin-17-jdk-amd64/bin/$name ready=/usr/lib/jvm/temurin-17-jdk-amd64/release
+    real=$jdk/bin/$name ready=$jdk/release
     install=(java_install) ;;
   # The job's container can't make the namespaces Chrome's sandbox needs, so
   # Chrome runs without it, whether called by name, as /usr/bin/google-chrome,

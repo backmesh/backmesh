@@ -37,6 +37,7 @@ import {
   type VmTypeDetails,
 } from '../runners/anycloud.js';
 import {
+  ARM_TYPES,
   CLOUDS,
   GPU_TYPES,
   planClasses,
@@ -151,6 +152,8 @@ export async function classesOf(
   publicRepos = false,
   // `--runner-region`: each cloud's region first, its classes `preferred`.
   preferred: Preferred = {},
+  // `takesArm`: the arm64 classes too.
+  arm = true,
 ) {
   const catalog = new Map<Cloud, Map<string, VmTypeDetails[]>>();
   // Each cloud's first region, which prices its rate line: the preferred
@@ -177,7 +180,7 @@ export async function classesOf(
     catalog.set(cloud, new Map(entries));
     if (ordered[0]) anchors.set(cloud, ordered[0]);
   }
-  const plan = planClasses(targets, catalog, home, publicRepos);
+  const plan = planClasses(targets, catalog, home, publicRepos, arm);
   const classes = plan.classes.map((c) =>
     preferred[c.cloud] === c.regions[0]
       ? { ...c, preferred: true as const }
@@ -227,6 +230,10 @@ export const planRegions =
     return [target.region];
   };
 
+/** Whether `version` boots arm64 types on anycloud's arm64 image. */
+export const takesArm = (version: string, features?: FeatureTable) =>
+  !missingFeatures(version, ['arm64'], features).length;
+
 /** Whether `version`'s VM Jobs take a region list. */
 export const takesRegions = (version: string, features?: FeatureTable) =>
   !missingFeatures(version, ['vm-job-regions'], features).length;
@@ -241,6 +248,14 @@ export const noGpuLine = (
   cloud === 'gcp'
     ? "gcp gets no GPU labels: anycloud can't launch a T4 VM on GCP yet."
     : `${where(cloud, regions)} ${regions.length > 1 ? 'offer' : 'offers'} no ${GPU_TYPES[cloud].join(' or ')}, so ${cloud} gets no GPU labels.`;
+
+export function noArmLine({ cloud }: CloudTarget, regions: readonly string[]) {
+  if (cloud === 'azure') {
+    return 'azure gets no arm64 labels: anycloud boots its arm64 image on AWS and GCP only.';
+  }
+  const families = ARM_TYPES[cloud](4).map((t) => t.split(/[.-]/)[0]);
+  return `${where(cloud, regions)} ${regions.length > 1 ? 'offer' : 'offers'} no ${families.join(' or ')}, so ${cloud} gets no arm64 labels.`;
+}
 
 // The management VM: AWS's is backmesh's sizing; GCP's the nearest size
 // _(inference)_. Azure's first is the size anycloud qualifies the
@@ -1355,6 +1370,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     placement.controlPlane.cloud,
     publicRepos,
     preferred,
+    takesArm(ANYCLOUD_VERSION, deps.features),
   );
   const regionsOf = (cloud: Cloud) => [
     ...(classPlan.catalog.get(cloud)?.keys() ?? []),
@@ -1588,6 +1604,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         gpu,
         highmem,
         preferred,
+        arm,
       }) => ({
         label,
         cloud,
@@ -1600,6 +1617,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         ...(gpu && { gpu }),
         ...(highmem && { highmem }),
         ...(preferred && { preferred }),
+        ...(arm && { arm }),
       }),
     ),
     // The preferred or anchor region's catalog, which prices every region.
@@ -1614,6 +1632,9 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     ),
     noGpu: classPlan.noGpu.map((target) =>
       noGpuLine(target, regionsOf(target.cloud)),
+    ),
+    noArm: classPlan.noArm.map((target) =>
+      noArmLine(target, regionsOf(target.cloud)),
     ),
     sameOwner: sharedWith.length
       ? sameOwnerLine(options.org, sharedWith)
@@ -1632,6 +1653,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     ...quotas,
     ...plan.noKvm,
     ...plan.noGpu,
+    ...plan.noArm,
   ].forEach((line) => ui.print(line));
   ui.print(labelsLine(plan.classes, placement.controlPlane.cloud));
   if (!plan.controlPlane.exists) {
@@ -1978,6 +2000,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         !c.kvm &&
         !c.gpu &&
         !c.highmem &&
+        !c.arm &&
         !c.public &&
         c.vcpus <= 4 &&
         !blocked.has(c.label),

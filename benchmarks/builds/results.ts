@@ -127,6 +127,7 @@ export const median = (v: readonly number[]) => {
 // Two-sided Mann-Whitney U test's p: the normal approximation with continuity
 // and tie corrections.
 export function mannWhitney(x: readonly number[], y: readonly number[]) {
+  if (!x.length || !y.length) return 1;
   const all = [...x.map((v) => [v, 0]), ...y.map((v) => [v, 1])].sort(
     (a, b) => a[0]! - b[0]!,
   );
@@ -142,6 +143,7 @@ export function mannWhitney(x: readonly number[], y: readonly number[]) {
   const [n1, n2, n] = [x.length, y.length, x.length + y.length];
   const u = r1 - (n1 * (n1 + 1)) / 2;
   const sd = Math.sqrt(((n1 * n2) / 12) * (n + 1 - ties / (n * (n - 1))));
+  if (sd === 0) return 1;
   const z = Math.max(0, Math.abs(u - (n1 * n2) / 2) - 0.5) / sd;
   // The normal's upper tail (Abramowitz and Stegun 26.2.17).
   const t = 1 / (1 + 0.2316419 * z);

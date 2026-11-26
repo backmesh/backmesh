@@ -3,7 +3,8 @@ name: E2E
 # The inner e2e suite: per label (e2e-labels.yml),
 # asserts the cloud and region, the runner image digest, host Docker's limits
 # and binds, /dev/kvm on KVM labels, the GPU on GPU labels (nvidia-smi,
-# `docker run --gpus all` and a CUDA kernel, timed), a step's kill of every container sparing
+# `docker run --gpus all` and a CUDA kernel, timed), arm64 on arm64 labels
+# (backmesh-ubuntu-2404-arm-<n>vcpu, named in `labels`), a step's kill of every container sparing
 # the runner, and the stop member (backmesh runs 42753183250 and
 # 42753320207). Dispatch only.
 #
@@ -20,7 +21,7 @@ name: E2E
 # the test org (backmesh-dryrun), once per leg: on AWS, running the label
 # member; on Azure, in our Azure CI subscription, with the control plane
 # in centralus, running one job; and on GCP, in our GCP CI project, with the
-# control plane in us-central1, running one job. Each installs as a customer does, with a
+# control plane in us-central1, running one job and one on arm64. Each installs as a customer does, with a
 # role connection to its cloud. Each leg then uninstalls it, deletes the
 # role connection's setup that uninstall leaves, and sweeps its cloud for
 # anything left. With `from` (a release, such as v0.5.7), each leg installs
@@ -73,12 +74,14 @@ on:
         description: >-
           space-separated label=cloud:region[,region…] entries to check,
           matching the installation's BACKMESH_RUNNERS; a label naming
-          "-kvm-" also gets the /dev/kvm check, and one naming "-gpu-" the
-          GPU check
+          "-kvm-" also gets the /dev/kvm check, one naming "-gpu-" the
+          GPU check, and one naming "-arm-" the arm64 check
         required: true
         default: >-
           backmesh-ubuntu-2404-4vcpu=aws:us-east-2,us-east-1,us-west-2
           backmesh-ubuntu-2404-kvm-4vcpu=aws:us-east-2,us-east-1,us-west-2
+          backmesh-ubuntu-2404-arm-4vcpu=aws:us-east-2,us-east-1,us-west-2
+          backmesh-gcp-ubuntu-2404-arm-4vcpu=gcp:us-east4,us-central1,us-east1,us-east5,us-south1,us-west1,us-west2,us-west3,us-west4
 
 permissions: {}
 
@@ -251,6 +254,8 @@ jobs:
             control-plane-region: us-central1
             # The control plane's cloud's labels are plain.
             label: backmesh-ubuntu-2404-4vcpu
+            # And an arm64 job, on c4a (then t2a).
+            arm-label: backmesh-ubuntu-2404-arm-4vcpu
     runs-on: ubuntu-24.04
     # Holds the legs' secrets, and is the subject each cloud's OIDC trust
     # names (see the header).
@@ -463,6 +468,7 @@ jobs:
           ISSUE_TOKEN: ${{ github.token }}
           PLACEMENT: ${{ matrix.placement }}
           LABEL: ${{ matrix.label }}
+          ARM_LABEL: ${{ matrix.arm-label }}
           MATRIX: ${{ needs.plan.outputs.matrix }}
         run: |
           t=$ISSUE_TOKEN
@@ -475,9 +481,15 @@ jobs:
           plan=$(tail -n1 <<<"$plan")
           id=$(jq -er .planId <<<"$plan") || { echo "$plan"; exit 1; }
           echo "CONTROL_PLANE=$(jq -er '.controlPlane | "\(.cloud):\(.region)"' <<<"$plan")" >>"$GITHUB_ENV"
-          if [[ $CLOUD != aws ]]; then
-            MATRIX=$(jq -c --argjson plan "$plan" --arg label "$LABEL" --arg cloud "$CLOUD" '{include: [.include[0] + {label: $label, cloud: $cloud,
-              regions: [$plan.runners[] | select(.cloud == $cloud) | .regions[]], kvm: false, gpu: false}]}' <<<"$MATRIX")
+          # AWS runs `labels`' AWS ones: its install has no other cloud's.
+          if [[ $CLOUD == aws ]]; then
+            MATRIX=$(jq -c '{include: [.include[] | select(.cloud == "aws")]}' <<<"$MATRIX")
+          else
+            MATRIX=$(jq -c --argjson plan "$plan" --arg label "$LABEL" --arg arm "${ARM_LABEL:-}" --arg cloud "$CLOUD" '
+              [$plan.runners[] | select(.cloud == $cloud) | .regions[]] as $regions
+              | .include[0] as $base
+              | {include: ([$label] + (if $arm == "" then [] else [$arm] end) | map($base + {label: ., cloud: $cloud,
+                  regions: $regions, kvm: false, gpu: false, arm: (. == $arm)}))}' <<<"$MATRIX")
           fi
           echo "LABEL_MATRIX=$MATRIX" >>"$GITHUB_ENV"
           ISSUE_TOKEN=$t test/e2e/with-sign-in.sh $bm install --org "$ORG" "${placement[@]}" --yes --plan-id "$id"
@@ -519,8 +531,9 @@ jobs:
           echo "CLUSTER_ID=$id" >>"$GITHUB_ENV"
 
       # The label member, through the test org's own repository, whose
-      # runners these are: `labels` on AWS, one job on the leg's label on Azure
-      # and GCP. Its
+      # runners these are: `labels`' AWS ones on AWS, one job on the leg's
+      # label on Azure, and on GCP one on its label and one on its arm64 label.
+      # Its
       # write deploy key pushes the run's branch, which starts its labels.yml.
       - name: The label member on the test org's runners
         env:

@@ -29,6 +29,15 @@ floor. backmesh's core features are free; your clouds bill you for the VMs.
 | Azure | `westus2`     | `Standard_D4ads_v5` 0.0381, `Standard_D4as_v5` 0.0318, `Standard_D4s_v5` 0.0355                                   |
 | GCP   | `us-central1` | `n2-standard-4` 0.1165, `n2d-standard-4` 0.0899                                                                   |
 
+GCP's `backmesh-ubuntu-2404-4vcpu` tries `c4d-standard-4` first (from v0.7.2), which isn't
+priced here, as its spot price was looked up in `us-east4`, not `us-central1`.
+There, at both types' spot prices (`c4d-standard-4` $0.0967 an hour,
+`n2-standard-4` $0.057, the VMs alone), a job on `c4d` would cost about 1.05
+times one on `n2`, for about 0.6 of its VM time. That's an estimate from VM
+times measured on demand in `us-central1`, not from spot jobs ([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38), [anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)). Set against the
+`us-central1` `n2` price above instead, it would read as 0.6, but that pairs two
+regions' prices.
+
 - **The always-on VMs:** the control plane's VM and one listener VM for each
   org, with their disks and public addresses. For one org that's about $86 a
   month on AWS ($69 + $17), $111 on Azure ($79 + $32) and $74 on GCP ($59 +
@@ -69,10 +78,12 @@ shows the same figures.
   $0.027 for IOPS and throughput above gp3's baseline
   ([EBS pricing](https://aws.amazon.com/ebs/pricing/)). On GCP it's pd-ssd,
   $0.17 a GB-month in `us-central1`, about $0.023 an hour
-  ([disk pricing](https://cloud.google.com/compute/disks-image-pricing)). An
-  on-demand job on `c4d` has Hyperdisk Balanced instead, with 8,000 IOPS and
+  ([disk pricing](https://cloud.google.com/compute/disks-image-pricing)). A
+  job on `c4d` has Hyperdisk Balanced instead: on demand with 8,000 IOPS and
   1,000 MB/s provisioned, about $0.092 an hour
-  ([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38)).
+  ([anycloud#38](https://github.com/anycloud-sh/anycloud/pull/38)), and on
+  spot with 3,000 and 750, about $0.044
+  ([anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)).
 - **Runners started ahead** of predicted or cued jobs that no job takes. Each
   bills for its boot and a short idle time.
 - **Buckets.** The checkpoint bucket and the [cache](/cache/) buckets bill for
@@ -128,6 +139,41 @@ it adds nothing. Left out, as above: disks, on-demand retries, and boots,
 which are longer than the other labels': a GPU VM boots a larger image and
 pulls the runner's image after it
 ([GPU benchmark](https://github.com/backmesh/backmesh/tree/main/benchmarks/gpu-t4)).
+
+## arm64
+
+The [arm64 labels](/labels/#arm64) by the same method, at list prices:
+arithmetic, not measured.
+
+- **GitHub-hosted:** `ubuntu-24.04-arm` in a private repository, 2 vCPUs,
+  $0.005 a minute
+  ([docs.github.com](https://docs.github.com/en/actions/reference/runners/github-hosted-runners),
+  read 2026-11-24). It's free in a public repository.
+- **backmesh:** the catalog's prices on 2026-11-24 in AWS's `us-east-2`, and
+  on 2026-11-25 in GCP's `us-central1`, spot in the lowest zone. Azure has no
+  arm64 labels.
+- **GCP's `c4a` disk:** `c4a` takes no pd-ssd, so its runner's 100 GB disk is
+  Hyperdisk Balanced
+  ([anycloud#50](https://github.com/anycloud-sh/anycloud/pull/50)), which
+  bills its provisioned IOPS and throughput too: at an on-demand `c4d` job's
+  8,000 IOPS and 1,000 MB/s, about $0.092 an hour, or $0.0015 a minute, to
+  `t2a`'s pd-ssd at about $0.0004.
+
+| Label                                | Type             | Spot $/h | On-demand $/h | Spot per minute | On demand per minute |
+| ------------------------------------ | ---------------- | -------- | ------------- | --------------- | -------------------- |
+| `backmesh-ubuntu-2404-arm-2vcpu`     | `m8g.large`      | 0.0424   | 0.0898        | $0.0007         | $0.0015              |
+| `backmesh-ubuntu-2404-arm-2vcpu`     | `m7g.large`      | 0.0495   | 0.0816        | $0.0008         | $0.0014              |
+| `backmesh-ubuntu-2404-arm-4vcpu`     | `m8g.xlarge`     | 0.0534   | 0.1795        | $0.0009         | $0.0030              |
+| `backmesh-ubuntu-2404-arm-4vcpu`     | `m7g.xlarge`     | 0.0608   | 0.1632        | $0.0010         | $0.0027              |
+| `backmesh-gcp-ubuntu-2404-arm-2vcpu` | `c4a-standard-2` | 0.0536   | 0.0898        | $0.0009         | $0.0015              |
+| `backmesh-gcp-ubuntu-2404-arm-2vcpu` | `t2a-standard-2` | 0.0414   | 0.077         | $0.0007         | $0.0013              |
+| `backmesh-gcp-ubuntu-2404-arm-4vcpu` | `c4a-standard-4` | 0.1071   | 0.1796        | $0.0018         | $0.0030              |
+| `backmesh-gcp-ubuntu-2404-arm-4vcpu` | `t2a-standard-4` | 0.0828   | 0.154         | $0.0014         | $0.0026              |
+
+10,000 minutes a month of 2-vCPU arm64 jobs cost $50 on GitHub (10,000 ×
+$0.005), and on backmesh about $7 on `m8g.large` spot (10,000 × $0.0424 ÷ 60)
+and $15 on demand. The control plane is the same one the other labels use, so
+it adds nothing. Left out, as above: disks, boots and on-demand retries.
 
 ## Estimate your own
 
