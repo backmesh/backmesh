@@ -14,6 +14,7 @@ parts, then the number of vCPUs.
 | `gcp-`, `azure-` | That cloud. Without it, the control plane's cloud               | `backmesh-gcp-ubuntu-2404-4vcpu`      |
 | `ubuntu-2404`    | The job runs on Ubuntu 24.04, as GitHub's `ubuntu-24.04` does   | `backmesh-ubuntu-2404-4vcpu`          |
 | `kvm-`           | The VM has `/dev/kvm`                                           | `backmesh-ubuntu-2404-kvm-4vcpu`      |
+| `arm-`           | An arm64 VM, on AWS Graviton or GCP Axion and Ampere            | `backmesh-ubuntu-2404-arm-4vcpu`      |
 | `highmem-`       | 8 GiB of memory a vCPU instead of 4                             | `backmesh-ubuntu-2404-highmem-16vcpu` |
 | `od-`            | On-demand instead of spot, for jobs that mustn't be interrupted | `backmesh-ubuntu-2404-od-4vcpu`       |
 | `<n>vcpu`        | vCPUs, with 4 GiB of memory each                                | `backmesh-ubuntu-2404-8vcpu`          |
@@ -63,7 +64,7 @@ for `backmesh-ubuntu-2404-4vcpu` are below; the other sizes use the same familie
 | Cloud | Types for `backmesh-ubuntu-2404-4vcpu`, in order                     |
 | ----- | -------------------------------------------------------------------- |
 | AWS   | `m8a.xlarge`, `m8i.xlarge`, `m7a.xlarge`, `m7i.xlarge`, `m6a.xlarge` |
-| GCP   | `n2-standard-4`, `n2d-standard-4`                                    |
+| GCP   | `c4d-standard-4`, `n2-standard-4`, `n2d-standard-4`                  |
 | Azure | `Standard_D4ads_v5`, `Standard_D4as_v5`, `Standard_D4s_v5`           |
 
 When no type has capacity, jobs wait at GitHub and [`backmesh status`](/status/)
@@ -230,6 +231,68 @@ Low-priority vCPUs" with the other spot labels). Install and
 [`backmesh status`](/status/) print them and name the one to raise; until it's
 raised, the GPU labels' jobs wait at GitHub. See [Cost](/cost/#gpu) for their
 prices.
+
+## arm64
+
+Jobs that build or test for Linux arm64 run on `backmesh-ubuntu-2404-arm-2vcpu` to
+`backmesh-ubuntu-2404-arm-16vcpu`: spot VMs on AWS Graviton or GCP's arm64 types, at the same
+sizes and 4 GiB a vCPU. `backmesh-ubuntu-2404-arm-highmem-2vcpu` to
+`backmesh-ubuntu-2404-arm-highmem-16vcpu` have 8 GiB a vCPU, as the
+[high-memory labels](#high-memory) do. Each has an on-demand twin:
+`backmesh-ubuntu-2404-arm-od-4vcpu`, `backmesh-ubuntu-2404-arm-highmem-od-16vcpu`. On another cloud than
+the control plane's they name it: `backmesh-gcp-ubuntu-2404-arm-4vcpu`. Azure has no arm64
+labels: anycloud doesn't boot its arm64 image there yet. In a public repository they're for the
+repository's own runs: fork pull requests run only on `backmesh-ubuntu-2404-public-2vcpu` and
+`backmesh-ubuntu-2404-public-4vcpu`, which are x86-64.
+
+| Label                                     | vCPU | Memory  | AWS, in order                | GCP, in order                        |
+| ----------------------------------------- | ---- | ------- | ---------------------------- | ------------------------------------ |
+| `backmesh-ubuntu-2404-arm-2vcpu`          | 2    | 8 GiB   | `m8g.large`, `m7g.large`     | `c4a-standard-2`, `t2a-standard-2`   |
+| `backmesh-ubuntu-2404-arm-4vcpu`          | 4    | 16 GiB  | `m8g.xlarge`, `m7g.xlarge`   | `c4a-standard-4`, `t2a-standard-4`   |
+| `backmesh-ubuntu-2404-arm-8vcpu`          | 8    | 32 GiB  | `m8g.2xlarge`, `m7g.2xlarge` | `c4a-standard-8`, `t2a-standard-8`   |
+| `backmesh-ubuntu-2404-arm-16vcpu`         | 16   | 64 GiB  | `m8g.4xlarge`, `m7g.4xlarge` | `c4a-standard-16`, `t2a-standard-16` |
+| `backmesh-ubuntu-2404-arm-highmem-2vcpu`  | 2    | 16 GiB  | `r8g.large`, `r7g.large`     | `c4a-highmem-2`                      |
+| `backmesh-ubuntu-2404-arm-highmem-4vcpu`  | 4    | 32 GiB  | `r8g.xlarge`, `r7g.xlarge`   | `c4a-highmem-4`                      |
+| `backmesh-ubuntu-2404-arm-highmem-8vcpu`  | 8    | 64 GiB  | `r8g.2xlarge`, `r7g.2xlarge` | `c4a-highmem-8`                      |
+| `backmesh-ubuntu-2404-arm-highmem-16vcpu` | 16   | 128 GiB | `r8g.4xlarge`, `r7g.4xlarge` | `c4a-highmem-16`                     |
+
+AWS's `m8g` and `r8g` are Graviton4 and `m7g` and `r7g` Graviton3; GCP's
+`c4a` is Google's Axion and `t2a` Ampere Altra, which has no high-memory shape.
+Unlike the other labels' types, these aren't in every runner region: GCP's
+`t2a` is in `us-central1` and `europe-west4` only, so an arm64 label's jobs
+launch in the runner regions that offer one of its types, and a cloud whose
+regions offer none gets no arm64 labels.
+
+An arm64 vCPU is a whole core, not a hyperthread. anycloud measured backmesh's
+builds on `m8g` at 0.94 of `m8i`'s time at 4 vCPUs and 1.03 at 16, and `m8a`,
+which `backmesh-ubuntu-2404-4vcpu` tries first, about 1.3 times as fast as `m8g`
+([anycloud#36](https://github.com/anycloud-sh/anycloud/pull/36)). So use them
+for arm64 work, not for speed on x86 work. A job that builds arm64 images under
+QEMU on `backmesh-ubuntu-2404-4vcpu` (`docker/setup-qemu-action`) builds them natively here.
+
+```yaml
+runs-on: backmesh-ubuntu-2404-arm-4vcpu
+steps:
+  - run: docker build --tag app:arm64 .
+```
+
+Spot Graviton is scarcer than spot x86 at 4 vCPUs: in three samples on
+2026-11-23 and 24, a spot `m8g.xlarge` launched in 42 % of zones against
+`m8i.xlarge`'s 81 %, and `m8g.4xlarge` in 75 % against `m8i.4xlarge`'s 72 %
+([anycloud#36](https://github.com/anycloud-sh/anycloud/pull/36)). When spot
+arm64 capacity is short, an arm64 job [falls back on demand](#on-demand-fallback)
+onto arm64, never x86, and an arm64 label's spot reclaims pause only the
+arm64 labels' spot.
+
+The jobs run the [runner image](/runner-image/)'s arm64 build, with the same
+tools at the same versions, and the first-use installs fetch arm64 releases.
+setup actions such as `actions/setup-node` pick arm64 builds by themselves. An
+image without an arm64 build won't run in a `docker run` or a `container:`, as
+on GitHub's arm64 runner. AWS's count against the same Standard spot and
+on-demand vCPU quotas as the other AWS labels ([AWS](/aws/#quotas)); GCP's
+on-demand ones against their family's, `C4A_CPUS` or `T2A_CPUS`, and its spot
+ones against `PREEMPTIBLE_CPUS` where a region sets it. See
+[Cost](/cost/#arm64) for their prices.
 
 ## Large Node.js tools
 

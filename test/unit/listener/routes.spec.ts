@@ -19,7 +19,7 @@ describe('routes', () => {
 
   it('routes each label to its VM class', () => {
     const routes = parseRoutes(json);
-    expect(routes).toHaveLength(26);
+    expect(routes).toHaveLength(42);
     expect(routes[1]).toEqual({
       label: 'backmesh-ubuntu-2404-4vcpu',
       code: 'a4',
@@ -78,7 +78,22 @@ describe('routes', () => {
         'backmesh-ubuntu-2404-highmem-od-4vcpu',
       ],
       ['backmesh-ubuntu-2404-highmem-od-4vcpu', 'bi', undefined],
+      // An arm64 label's is the arm64 one: its jobs may need arm64.
+      [
+        'backmesh-ubuntu-2404-arm-4vcpu',
+        'f4',
+        'backmesh-ubuntu-2404-arm-od-4vcpu',
+      ],
+      ['backmesh-ubuntu-2404-arm-od-4vcpu', 'p4', undefined],
+      // An arm64 high-memory label's is the arm64 high-memory one.
+      [
+        'backmesh-ubuntu-2404-arm-highmem-4vcpu',
+        'fi',
+        'backmesh-ubuntu-2404-arm-highmem-od-4vcpu',
+      ],
+      ['backmesh-ubuntu-2404-arm-highmem-od-4vcpu', 'pi', undefined],
     ]);
+    expect(parseRoutes(json).find((r) => r.code === 'p4')?.arm).toBe(true);
     // A spot class whose on-demand twin is gone keeps no on-demand label.
     const spotOnly = JSON.stringify(classes.filter((c) => c.spot));
     expect(parseRoutes(spotOnly).some((r) => r.onDemand)).toBe(false);

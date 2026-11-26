@@ -25,6 +25,9 @@ export const FEATURES = {
   // `api token rotate --service` (anycloud phase 2a): each org's listener
   // VM authenticates with one.
   'service-tokens': '0.1.79',
+  // An arm64 VM type boots anycloud's arm64 image, on AWS and GCP
+  // (anycloud#47, #50): backmesh plans no arm64 class before it.
+  arm64: '0.1.84',
 } satisfies Record<string, string | undefined>;
 
 export type Feature = keyof typeof FEATURES;
