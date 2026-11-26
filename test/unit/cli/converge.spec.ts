@@ -124,6 +124,41 @@ describe('converge', () => {
     ).toBe(false);
   });
 
+  it('creates the arm64 classes on a listener without them, replacing nothing', () => {
+    // A v0.7.0 or v0.7.1 listener, or one v0.6.1 named, has no arm64 route:
+    // their codes are new, so there's no scale set to replace or log.
+    const before = running.filter((r) => !r.arm);
+    const arm = both.filter((c) => c.arm).map((c) => c.label);
+    expect(arm).toContain('backmesh-ubuntu-2404-arm-4vcpu');
+    const live = new Set(before.map((r) => r.label));
+    const ids = new Map(before.map((r, i) => [r.label, i + 1]));
+    for (const image of [V0_7_0_LISTENER, 'other']) {
+      const written = parseRoutes(
+        routesJson(both, before, live, ids, image),
+      ).filter((r) => r.arm);
+      expect(written.map((r) => r.label)).toEqual(arm);
+      expect(written.some((r) => r.replaceScaleSetId || r.retiring)).toBe(
+        false,
+      );
+    }
+    const old = before.map((r) => ({
+      ...r,
+      label: r.label.replace('ubuntu-2404-', '').replace('vcpu', ''),
+    }));
+    const renamed = parseRoutes(
+      routesJson(
+        both,
+        old,
+        new Set(old.map((r) => r.label)),
+        new Map(old.map((r, i) => [r.label, i + 1])),
+      ),
+    );
+    expect(renamed.filter((r) => r.arm).some((r) => r.replaceScaleSetId)).toBe(
+      false,
+    );
+    expect(runnerChanges(before, both).labelsAdded).toEqual(arm);
+  });
+
   it("refuses a renamed label whose old scale set the listener doesn't list", () => {
     const old = running.map((r) => ({
       ...r,

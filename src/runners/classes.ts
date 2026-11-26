@@ -66,7 +66,8 @@ export const VM_TYPES: Record<
 };
 
 // The code's first character: the cloud, whether the class is spot, and
-// whether it's a KVM, a public or a GPU class.
+// whether it's a KVM, a public, a GPU or an arm64 class. Azure has no arm64
+// classes (`ARM_TYPES`).
 const CLOUD_CODE: Record<
   Cloud,
   [
@@ -77,19 +78,21 @@ const CLOUD_CODE: Record<
     publicSpot: string,
     gpuSpot: string,
     gpuOnDemand: string,
+    armSpot?: string,
+    armOnDemand?: string,
   ]
 > = {
-  aws: ['a', 'b', 'k', 'l', 'c', 'd', 'e'],
-  gcp: ['g', 'h', 'm', 'n', 'i', 'j', 'o'],
+  aws: ['a', 'b', 'k', 'l', 'c', 'd', 'e', 'f', 'p'],
+  gcp: ['g', 'h', 'm', 'n', 'i', 'j', 'o', 'q', 'r'],
   azure: ['z', 'y', 'v', 'w', 'x', 't', 'u'],
 };
-const SPOT_CODES = [0, 2, 4, 5];
+const SPOT_CODES = [0, 2, 4, 5, 7];
 const GPU_CODES = [5, 6];
 /**
  * A high-memory class's second character: its vCPUs, as the general
  * class's base-36 digit is, under a first character shared with the
  * general class of its cloud and spot-ness. Few first characters are left
- * (36, less the 21 above), so a memory variant takes none of them, and an
+ * (36, less the 25 above), so a memory variant takes none of them, and an
  * arm64 high-memory class can pair these with the arm64 letters. No base-36
  * vCPU digit is one of these, since 17 to 20 vCPUs is no class's size.
  */
@@ -123,6 +126,35 @@ export const HIGHMEM_TYPES: Record<Cloud, (vcpus: number) => string[]> = {
 export const HIGHMEM_GIB_PER_VCPU = 8;
 
 /**
+ * The arm64 classes' types, in launch order, at the general classes' 4 GiB
+ * a vCPU. AWS's are Graviton, `m8g` (Graviton4) then `m7g` (Graviton3)
+ * (owner, 2026-11-24): anycloud#36 measured `m8g` at 0.94 of `m8i`'s build
+ * time at xlarge and 1.03 at 4xlarge, at 0.85 of its on-demand price; its
+ * spot took 42% of zones at xlarge and 75% at 4xlarge. GCP's are Axion's
+ * `c4a`, then Ampere's `t2a` (anycloud#50), which only a few regions offer,
+ * so a class's regions are the ones offering either. Azure's `Dpsv5` and
+ * `Epsv5` are in its catalog, but anycloud boots only AWS's and GCP's
+ * arm64 types on the arm64 image (anycloud#47, #50), so Azure has none.
+ * AWS's count against the general classes' vCPU quotas (`quota.ts`).
+ */
+export const ARM_TYPES: Record<Cloud, (vcpus: number) => string[]> = {
+  aws: (n) => ['m8g', 'm7g'].map((f) => `${f}.${AWS_SIZE[n]}`),
+  gcp: (n) => [`c4a-standard-${n}`, `t2a-standard-${n}`],
+  azure: () => [],
+};
+
+/**
+ * The arm64 high-memory classes' types, at the high-memory classes' 8 GiB a
+ * vCPU: the memory-optimized twins of `ARM_TYPES`, AWS's `r8g` then `r7g`
+ * and GCP's `c4a-highmem` (`t2a` has no high-memory shape).
+ */
+export const ARM_HIGHMEM_TYPES: Record<Cloud, (vcpus: number) => string[]> = {
+  aws: (n) => ['r8g', 'r7g'].map((f) => `${f}.${AWS_SIZE[n]}`),
+  gcp: (n) => [`c4a-highmem-${n}`],
+  azure: () => [],
+};
+
+/**
  * The GPU classes' types, in launch order, as GitHub's GPU runner: one
  * NVIDIA T4 and 4 vCPUs (owner, 2026-11-18). AWS's `g4dn.xlarge` has 16 GiB
  * of memory to GitHub's 28, at 70 % of `g4dn.2xlarge`'s price, which follows
@@ -150,7 +182,11 @@ export const PUBLIC_VCPUS = [2, 4] as const;
 /** The vCPUs they may hold at once. */
 export const PUBLIC_VCPU_CAP = 32;
 
-/** The cloud, spot-ness and vCPUs a runner class's code names. */
+/**
+ * The cloud, spot-ness and vCPUs a runner class's code names. It doesn't
+ * say whether a class is arm64: quota counts an arm64 runner's vCPUs as a
+ * CPU runner's, which AWS's general vCPU quotas also cover (`ARM_TYPES`).
+ */
 export function codeClass(
   code: string,
 ): { cloud: Cloud; spot: boolean; vcpus: number; gpu: boolean } | undefined {
@@ -209,6 +245,8 @@ export interface RunnerClass extends CloudTarget {
   gpu?: typeof GPU.model;
   /** `backmesh-ubuntu-2404-highmem-<n>vcpu`: 8 GiB a vCPU (`HIGHMEM_TYPES`). */
   highmem?: true;
+  /** `backmesh-ubuntu-2404-arm-<n>vcpu`: arm64 VMs, which pull the runner image's arm64 build. */
+  arm?: true;
   /**
    * `--runner-region`: its runners try `regions[0]` alone first, for its
    * cache, and the other regions only when the cloud refuses them there.
@@ -252,26 +290,43 @@ export const highmemLabel = (
 ) =>
   `backmesh-${prefixed ? `${cloud}-` : ''}${OS}-highmem-${onDemand ? 'od-' : ''}${vcpus}vcpu`;
 
+/**
+ * An arm64 class's label, such as `backmesh-ubuntu-2404-arm-od-4vcpu`,
+ * `backmesh-gcp-ubuntu-2404-arm-4vcpu` or
+ * `backmesh-ubuntu-2404-arm-highmem-16vcpu`.
+ */
+export const armLabel = (
+  cloud: Cloud,
+  prefixed: boolean,
+  onDemand: boolean,
+  vcpus: number,
+  highmem = false,
+) =>
+  `backmesh-${prefixed ? `${cloud}-` : ''}${OS}-arm-${highmem ? 'highmem-' : ''}${onDemand ? 'od-' : ''}${vcpus}vcpu`;
+
 /** A public class's label, such as `backmesh-ubuntu-2404-public-4vcpu`. */
 export const publicLabel = (vcpus: number) =>
   `backmesh-${OS}-public-${vcpus}vcpu`;
 
 /**
  * Where a spot class's reclaims count for the breaker, such as "aws spot":
- * a high-memory family's spot capacity is its own, as KVM's and GPU's are.
+ * a high-memory or arm64 family's spot capacity is its own, as KVM's and
+ * GPU's are.
  */
 export const spotCapacity = ({
   cloud,
   kvm,
   gpu,
   highmem,
+  arm,
 }: {
   cloud: Cloud;
   kvm: boolean;
   gpu?: string;
   highmem?: boolean;
+  arm?: boolean;
 }) =>
-  `${cloud}${kvm ? ' KVM' : ''}${gpu ? ' GPU' : ''}${highmem ? ' high-memory' : ''} spot`;
+  `${cloud}${kvm ? ' KVM' : ''}${gpu ? ' GPU' : ''}${arm ? ' arm' : ''}${highmem ? ' high-memory' : ''} spot`;
 
 /** Why `vmType`, offered in `details`, can't be a class's VM; undefined when it can. */
 function shapeProblem(
@@ -316,6 +371,8 @@ export interface ClassPlan {
   noKvm: CloudTarget[];
   /** The targets whose regions have no GPU class. */
   noGpu: CloudTarget[];
+  /** The targets whose regions have no arm64 class. */
+  noArm: CloudTarget[];
 }
 
 /**
@@ -337,8 +394,17 @@ export function planClasses(
   home: Cloud | undefined,
   // `install --public-repos`: the home cloud's `backmesh-ubuntu-2404-public-<n>vcpu` too.
   publicRepos = false,
+  // Whether the pinned anycloud boots arm64 types on its arm64 image
+  // (`takesArm`): without it, no arm64 class.
+  arm = true,
 ): ClassPlan {
-  const plan: ClassPlan = { classes: [], problems: [], noKvm: [], noGpu: [] };
+  const plan: ClassPlan = {
+    classes: [],
+    problems: [],
+    noKvm: [],
+    noGpu: [],
+    noArm: [],
+  };
   for (const target of targets) {
     const byRegion = [...(catalog.get(target.cloud) ?? [])];
     const fits = (
@@ -499,7 +565,58 @@ export function planClasses(
         }),
       ),
     );
-    plan.classes.push(...classes, ...gpu, ...highmem);
+    // The arm64 classes, general and high-memory: spot and on demand of
+    // each size, in the regions that offer one of its types. Unlike the
+    // other classes', their types aren't in every runner region (GCP's
+    // `t2a` is in few, and `c4a` not in all), so a class launches only
+    // where one is, and a cloud without any gets no arm64 labels and
+    // blocks nothing, as GPU's. GCP's need a catalog that lists `c4a`:
+    // it came in the same publish as the catalog's arch column, which
+    // anycloud boots the arm64 image by, so an older one would boot `t2a`
+    // on the amd64 image.
+    const letters = CLOUD_CODE[target.cloud];
+    const archKnown =
+      target.cloud !== 'gcp' ||
+      byRegion.some(([, details]) =>
+        details.some((d) => d.vmType.toLowerCase().startsWith('c4a-')),
+      );
+    const armClasses = [false, true].flatMap((himem) =>
+      [true, false].flatMap((spot) =>
+        CLASS_VCPUS.flatMap((vcpus): RunnerClass[] => {
+          const letter = letters[spot ? 7 : 8];
+          const vmTypes = (himem ? ARM_HIGHMEM_TYPES : ARM_TYPES)[target.cloud](
+            vcpus,
+          );
+          const gib = himem ? HIGHMEM_GIB_PER_VCPU : GIB_PER_VCPU;
+          const regions = byRegion.flatMap(([region, details]) =>
+            vmTypes.some((t) => fits(details, t, vcpus, gib)) ? [region] : [],
+          );
+          if (!arm || !archKnown || !letter || !regions.length) return [];
+          return [
+            {
+              ...target,
+              label: armLabel(
+                target.cloud,
+                target.cloud !== home,
+                !spot,
+                vcpus,
+                himem,
+              ),
+              code: `${letter}${himem ? HIGHMEM_SIZE[vcpus] : vcpus.toString(36)}`,
+              vcpus,
+              spot,
+              kvm: false,
+              vmTypes,
+              regions,
+              arm: true,
+              ...(himem && { highmem: true as const }),
+            },
+          ];
+        }),
+      ),
+    );
+    if (arm && !armClasses.length) plan.noArm.push(target);
+    plan.classes.push(...classes, ...gpu, ...highmem, ...armClasses);
     if (publicRepos && target.cloud === home) {
       plan.classes.push(
         ...classes.flatMap((c) =>

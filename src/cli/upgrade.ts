@@ -75,6 +75,7 @@ import {
   classesOf,
   keyLine,
   listedAccount,
+  noArmLine,
   noGpuLine,
   noKvmLine,
   keptPreferred,
@@ -88,6 +89,7 @@ import {
   runnerClouds,
   signInRequired,
   SIGNED_IN,
+  takesArm,
   takesRegions,
 } from './install.js';
 import { parseRoutes } from '../listener/routes.js';
@@ -457,6 +459,7 @@ async function upgradeOnce(
       home,
       isPublic,
       preferred,
+      takesArm(release.anycloud, deps.features),
     );
     preferredLines(preferred, (cloud) => [
       ...(plan.catalog.get(cloud)?.keys() ?? []),
@@ -475,6 +478,7 @@ async function upgradeOnce(
     for (const [targets, line] of [
       [plan.noKvm, noKvmLine],
       [plan.noGpu, noGpuLine],
+      [plan.noArm, noArmLine],
     ] as const) {
       for (const target of targets) {
         print(

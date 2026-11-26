@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   codeClass,
   planClasses,
+  spotCapacity,
   type CloudTarget,
 } from '../../../src/runners/classes.js';
 import { CATALOG, catalogs } from './fixtures.js';
@@ -26,7 +27,7 @@ const catalog = catalogs();
 
 describe('runner classes', () => {
   it('gives each size a spot, on-demand and KVM class of 4 GiB VM types', () => {
-    const { classes, problems, noKvm, noGpu } = planClasses(
+    const { classes, problems, noKvm, noGpu, noArm } = planClasses(
       [AWS],
       catalog,
       'aws',
@@ -34,6 +35,7 @@ describe('runner classes', () => {
     expect(problems).toEqual([]);
     expect(noKvm).toEqual([]);
     expect(noGpu).toEqual([]);
+    expect(noArm).toEqual([]);
     expect(classes.map((c) => `${c.label} ${c.code}`)).toEqual([
       ...[
         'backmesh-ubuntu-2404-2vcpu a2',
@@ -80,6 +82,38 @@ describe('runner classes', () => {
         'backmesh-ubuntu-2404-highmem-od-4vcpu bi',
         'backmesh-ubuntu-2404-highmem-od-8vcpu bj',
         'backmesh-ubuntu-2404-highmem-od-16vcpu bk',
+      ],
+      ...[
+        'backmesh-ubuntu-2404-arm-2vcpu f2',
+        'backmesh-ubuntu-2404-arm-4vcpu f4',
+      ],
+      ...[
+        'backmesh-ubuntu-2404-arm-8vcpu f8',
+        'backmesh-ubuntu-2404-arm-16vcpu fg',
+      ],
+      ...[
+        'backmesh-ubuntu-2404-arm-od-2vcpu p2',
+        'backmesh-ubuntu-2404-arm-od-4vcpu p4',
+      ],
+      ...[
+        'backmesh-ubuntu-2404-arm-od-8vcpu p8',
+        'backmesh-ubuntu-2404-arm-od-16vcpu pg',
+      ],
+      ...[
+        'backmesh-ubuntu-2404-arm-highmem-2vcpu fh',
+        'backmesh-ubuntu-2404-arm-highmem-4vcpu fi',
+      ],
+      ...[
+        'backmesh-ubuntu-2404-arm-highmem-8vcpu fj',
+        'backmesh-ubuntu-2404-arm-highmem-16vcpu fk',
+      ],
+      ...[
+        'backmesh-ubuntu-2404-arm-highmem-od-2vcpu ph',
+        'backmesh-ubuntu-2404-arm-highmem-od-4vcpu pi',
+      ],
+      ...[
+        'backmesh-ubuntu-2404-arm-highmem-od-8vcpu pj',
+        'backmesh-ubuntu-2404-arm-highmem-od-16vcpu pk',
       ],
     ]);
     expect(classes[1]).toEqual({
@@ -309,7 +343,7 @@ describe('runner classes', () => {
       'gcp',
     );
     expect(problems).toEqual([]);
-    const highmem = classes.filter((c) => c.highmem);
+    const highmem = classes.filter((c) => c.highmem && !c.arm);
     expect(
       highmem
         .filter((c) => c.vcpus === 16)
@@ -521,6 +555,165 @@ describe('runner classes', () => {
     const plan = planClasses([AZURE], twoGpus, 'azure');
     expect(plan.classes.some((c) => c.gpu)).toBe(false);
     expect(plan.noGpu).toEqual([AZURE]);
+    expect(plan.problems).toEqual([]);
+  });
+
+  it('gives AWS and GCP arm64 classes, general and high-memory, on spot and on demand', () => {
+    const { classes, noArm, problems } = planClasses(
+      [AWS, AZURE, GCP],
+      catalog,
+      'gcp',
+    );
+    expect(problems).toEqual([]);
+    const arm = classes.filter((c) => c.arm);
+    expect(
+      arm
+        .filter((c) => c.vcpus === 4)
+        .map(({ label, code, spot, vmTypes }) => [label, code, spot, vmTypes]),
+    ).toEqual([
+      [
+        'backmesh-aws-ubuntu-2404-arm-4vcpu',
+        'f4',
+        true,
+        ['m8g.xlarge', 'm7g.xlarge'],
+      ],
+      [
+        'backmesh-aws-ubuntu-2404-arm-od-4vcpu',
+        'p4',
+        false,
+        ['m8g.xlarge', 'm7g.xlarge'],
+      ],
+      [
+        'backmesh-aws-ubuntu-2404-arm-highmem-4vcpu',
+        'fi',
+        true,
+        ['r8g.xlarge', 'r7g.xlarge'],
+      ],
+      [
+        'backmesh-aws-ubuntu-2404-arm-highmem-od-4vcpu',
+        'pi',
+        false,
+        ['r8g.xlarge', 'r7g.xlarge'],
+      ],
+    ]);
+    expect(arm[1]).toEqual({
+      ...AWS,
+      label: 'backmesh-aws-ubuntu-2404-arm-4vcpu',
+      code: 'f4',
+      vcpus: 4,
+      spot: true,
+      kvm: false,
+      vmTypes: ['m8g.xlarge', 'm7g.xlarge'],
+      regions: ['us-east-2'],
+      arm: true,
+    });
+    expect(arm.find((c) => c.code === 'fi')).toMatchObject({
+      highmem: true,
+      arm: true,
+    });
+    // anycloud boots the arm64 image on AWS and GCP only, and the
+    // fixture's GCP catalog has t2a but no c4a, as one from before the
+    // catalog's arch column: t2a would boot the amd64 image, so GCP gets
+    // none (c4a's below).
+    expect(noArm).toEqual([AZURE, GCP]);
+    // An anycloud without arm64 boots gets no arm64 class, and no line.
+    const older = planClasses([AWS, GCP], catalog, 'gcp', false, false);
+    expect(older.classes.some((c) => c.arm)).toBe(false);
+    expect(older.noArm).toEqual([]);
+    // Every code is unique, and another listener's arm64 runner holds its
+    // cloud's quota at its size.
+    const codes = classes.map((c) => c.code);
+    expect(new Set(codes).size).toBe(codes.length);
+    expect(codeClass('fg')).toEqual({
+      cloud: 'aws',
+      spot: true,
+      vcpus: 16,
+      gpu: false,
+    });
+    expect(codeClass('rk')).toEqual({
+      cloud: 'gcp',
+      spot: false,
+      vcpus: 16,
+      gpu: false,
+    });
+    // arm64 spot capacity is its own: reclaims there pause only the arm64
+    // labels' spot, onto their on-demand twins.
+    expect(spotCapacity(arm[0]!)).toBe('aws arm spot');
+    expect(spotCapacity(arm.find((c) => c.code === 'fi')!)).toBe(
+      'aws arm high-memory spot',
+    );
+    expect(spotCapacity(classes[1]!)).toBe('aws spot');
+    // --public-repos never makes an arm64 label public.
+    expect(
+      planClasses([AWS], catalog, 'aws', true)
+        .classes.filter((c) => c.public)
+        .map((c) => c.label),
+    ).toEqual([
+      'backmesh-ubuntu-2404-public-2vcpu',
+      'backmesh-ubuntu-2404-public-4vcpu',
+    ]);
+  });
+
+  it("gives GCP's arm64 classes the regions that offer c4a or t2a, and its high-memory ones c4a-highmem's", () => {
+    const c4a = (shape: string, gib: number) =>
+      [2, 4, 8, 16].map((n) => ({
+        vmType: `c4a-${shape}-${n}`,
+        vCPUs: n,
+        memoryGiB: n * gib,
+        accelerators: [],
+        capabilities: { nestedVirtualization: false },
+        regions: [{ region: 'europe-west4-a', spotPricePerHour: null }],
+      }));
+    const t2a = (t: { vmType: string }) => t.vmType.startsWith('t2a-');
+    const regions = new Map([
+      // c4a and t2a, as europe-west4; c4a alone; t2a alone; neither.
+      [
+        'europe-west4',
+        [...CATALOG.gcp, ...c4a('standard', 4), ...c4a('highmem', 8)],
+      ],
+      [
+        'europe-west1',
+        [
+          ...CATALOG.gcp.filter((t) => !t2a(t)),
+          ...c4a('standard', 4),
+          ...c4a('highmem', 8),
+        ],
+      ],
+      ['us-central1', CATALOG.gcp],
+      ['europe-west3', CATALOG.gcp.filter((t) => !t2a(t))],
+    ]);
+    const { classes } = planClasses([GCP], new Map([['gcp', regions]]), 'gcp');
+    const of = (label: string) => classes.find((c) => c.label === label);
+    expect(of('backmesh-ubuntu-2404-arm-4vcpu')?.regions).toEqual([
+      'europe-west4',
+      'europe-west1',
+      'us-central1',
+    ]);
+    expect(of('backmesh-ubuntu-2404-arm-highmem-od-16vcpu')).toMatchObject({
+      code: 'rk',
+      vmTypes: ['c4a-highmem-16'],
+      regions: ['europe-west4', 'europe-west1'],
+    });
+  });
+
+  it('keeps an arm64 class to the regions that offer Graviton, and drops it, unblocked, without any', () => {
+    const graviton = (t: { vmType: string }) => /^[mr][78]g\./.test(t.vmType);
+    const regions = new Map([
+      ['us-east-2', CATALOG.aws],
+      ['us-west-2', CATALOG.aws.filter((t) => !graviton(t))],
+    ]);
+    const { classes } = planClasses([AWS], new Map([['aws', regions]]), 'aws');
+    expect(
+      classes.find((c) => c.label === 'backmesh-ubuntu-2404-arm-4vcpu')
+        ?.regions,
+    ).toEqual(['us-east-2']);
+    const plan = planClasses(
+      [AWS],
+      catalogs({ aws: CATALOG.aws.filter((t) => !graviton(t)) }),
+      'aws',
+    );
+    expect(plan.classes.some((c) => c.arm)).toBe(false);
+    expect(plan.noArm).toEqual([AWS]);
     expect(plan.problems).toEqual([]);
   });
 

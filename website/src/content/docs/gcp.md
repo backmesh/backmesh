@@ -50,6 +50,12 @@ The [high-memory labels](/labels/#high-memory) use `n2-highmem-<n>` then
 `backmesh-ubuntu-2404-highmem-16vcpu` is 16 vCPUs and 128 GiB. They count
 against the same `N2_CPUS`, `N2D_CPUS` and `PREEMPTIBLE_CPUS` quotas.
 
+The [arm64 labels](/labels/#arm64) use Google's Axion, `c4a-standard-<n>`,
+then Ampere's `t2a-standard-<n>`, at the same sizes, and the arm64
+high-memory ones `c4a-highmem-<n>`; `t2a` has no high-memory shape. Only
+`us-central1` and `europe-west4` among the runner regions offer `t2a`, and an
+arm64 label's jobs launch only in the regions that offer one of its types.
+
 ## Regions
 
 Runners use a fixed list of US regions, or with `--runner-geo eu` of EU ones
@@ -84,7 +90,8 @@ Install can't read GCP's quotas, so it names the ones to raise instead. The one
 that bites first is `CPUS_ALL_REGIONS`, 32 vCPUs by default across all regions:
 8 `backmesh-ubuntu-2404-4vcpu` jobs at once. Raise it before big bursts. Each runner region
 also has `N2D_CPUS` and `N2_CPUS`, and `PREEMPTIBLE_CPUS` for spot or `CPUS`,
-`C4D_CPUS` and `C3D_CPUS` for on demand. Each on-demand `c4d` runner's disk
+`C4D_CPUS` and `C3D_CPUS` for on demand, and the arm64 labels' `C4A_CPUS`
+and `T2A_CPUS` on demand. Each on-demand `c4d` runner's disk
 also counts 100 GB, 8,000 IOPS and 1,000 MB/s against the region's
 [Hyperdisk Balanced quotas](https://cloud.google.com/compute/docs/disks/hyperdisks)
 for capacity, IOPS and throughput, which install doesn't name. Runners past a quota wait, and [`backmesh status`](/status/) warns

@@ -1,19 +1,24 @@
 name: Image
 
 # Builds one of backmesh's images; runner-image.yml and listener-image.yml call
-# it. Pull requests build it and smoke-check it: the image, run with no
-# configuration, must exit with `expect-status` and print `expect-output`,
-# and pass `check`, when given. Pushes to main and
-# release tags also publish it to GHCR, run the check on the pushed digest and
-# sign it with cosign, keyless: the signature binds the digest to this
-# workflow's GitHub OIDC identity, so no signing key exists. Pull requests
-# never reach the publish job or its permissions.
+# it. Pull requests build it for each of `platforms` and smoke-check it: the
+# image, run with no configuration, must exit with `expect-status` and print
+# `expect-output`, and pass `check`, when given. Pushes to main and release
+# tags also publish it to GHCR: each platform's image by digest, smoke-checked
+# there, then one tag for an index of them all, signed with cosign, keyless:
+# the signature binds the index's digest to this workflow's GitHub OIDC
+# identity, so no signing key exists. Pull requests never reach the publish
+# jobs or their permissions.
 #
-# Its jobs run on backmesh's own runners, except under
+# Each platform builds natively, on a runner of its architecture: no
+# emulation. amd64's jobs run on backmesh's own runners, except under
 # release.yml, the only workflow a tag starts: a release stays on
 # GitHub-hosted runners, the recovery path when backmesh's are down. A fork's
-# pull request builds on GitHub's too, and skips the host-socket check, which
-# needs a runner VM's paths.
+# pull request builds on GitHub's too. arm64's run on the
+# BACKMESH_ARM_RUNS_ON variable's label, once set to a backmesh arm64 label,
+# and otherwise on GitHub's ubuntu-24.04-arm, free for a public repository;
+# a release and a fork's pull request always do. Only a backmesh runner runs
+# the host-socket check, which needs a runner VM's paths.
 on:
   workflow_call:
     inputs:
@@ -43,10 +48,14 @@ on:
         description: A script that checks the built image, given its tag
         type: string
         default: ''
+      platforms:
+        description: The platforms to build, as a JSON list
+        type: string
+        default: '["linux/amd64"]'
     outputs:
       image:
         description: The published image, by digest
-        value: ${{ jobs.publish.outputs.image }}
+        value: ${{ jobs.merge.outputs.image }}
 
 permissions:
   contents: read
@@ -59,7 +68,11 @@ env:
 jobs:
   build:
     if: github.event_name == 'pull_request'
-    runs-on: ${{ github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.BACKMESH_RUNS_ON || 'backmesh-ubuntu-2404-4vcpu' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(inputs.platforms) }}
+    runs-on: ${{ matrix.platform == 'linux/arm64' && (github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04-arm' || vars.BACKMESH_ARM_RUNS_ON || 'ubuntu-24.04-arm') || github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.BACKMESH_RUNS_ON || 'backmesh-ubuntu-2404-4vcpu' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -67,7 +80,7 @@ jobs:
         with:
           context: ${{ inputs.context }}
           file: ${{ inputs.file }}
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           load: true
           tags: ${{ env.IMAGE }}:check
       - name: Smoke check
@@ -102,19 +115,15 @@ jobs:
     if: >-
       github.event_name == 'push' &&
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
-    runs-on: ${{ startsWith(github.ref, 'refs/tags/') && 'ubuntu-24.04' || vars.BACKMESH_RUNS_ON || 'backmesh-ubuntu-2404-4vcpu' }}
+    strategy:
+      matrix:
+        platform: ${{ fromJSON(inputs.platforms) }}
+    runs-on: ${{ matrix.platform == 'linux/arm64' && (startsWith(github.ref, 'refs/tags/') && 'ubuntu-24.04-arm' || vars.BACKMESH_ARM_RUNS_ON || 'ubuntu-24.04-arm') || startsWith(github.ref, 'refs/tags/') && 'ubuntu-24.04' || vars.BACKMESH_RUNS_ON || 'backmesh-ubuntu-2404-4vcpu' }}
     permissions:
       contents: read
       packages: write
-      id-token: write # cosign's keyless signing certificate
-    outputs:
-      image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # cosign-installer (below) runs envsubst, which GitHub's image has and
-      # backmesh's runner image doesn't. Installed before the push, so a
-      # failed install pushes nothing. The runner user has passwordless sudo.
-      - run: command -v envsubst || { sudo apt-get update -q && sudo apt-get install -yq --no-install-recommends gettext-base; }
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
@@ -123,7 +132,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       # One tag per commit or release. GHCR tags can be overwritten, so a
       # release names its image by digest and never reuses a tag: a
-      # rerun of a release whose image is already out fails here.
+      # rerun of a release whose image is already out fails here, before any
+      # push.
       - name: Tag
         id: tag
         run: |
@@ -136,20 +146,20 @@ jobs:
           else
             echo "tag=sha-$GITHUB_SHA" >>"$GITHUB_OUTPUT"
           fi
+      # The platform's image, by digest only: merge tags the index.
       - name: Build and push
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ inputs.context }}
           file: ${{ inputs.file }}
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           # zstd layers unpack faster than gzip: a runner VM's cold pull of
           # the runner image takes about 2.3 s less (anycloud's image-pull
           # spike). force-compression recompresses the base image's gzip
           # layers too. Docker 23+ and containerd 1.5+ pull zstd.
-          outputs: type=image,push=true,oci-mediatypes=true,compression=zstd,compression-level=3,force-compression=true
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true,oci-mediatypes=true,compression=zstd,compression-level=3,force-compression=true
           provenance: false
-          tags: ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
           build-args: IMAGE_VERSION=${{ steps.tag.outputs.tag }}
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
@@ -162,10 +172,59 @@ jobs:
           out=$(docker run --rm "$IMAGE@$DIGEST" 2>&1) || status=$?
           printf '%s\n' "$out"
           [[ $status == "$EXPECT_STATUS" && $out == *"$EXPECT_OUTPUT"* ]]
+          mkdir "$RUNNER_TEMP/digests" && touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: digest-${{ inputs.name }}-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # The platforms' images under one tag, as an index, signed.
+  merge:
+    needs: [publish]
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ${{ startsWith(github.ref, 'refs/tags/') && 'ubuntu-24.04' || vars.BACKMESH_RUNS_ON || 'backmesh-ubuntu-2404-4vcpu' }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # cosign's keyless signing certificate
+    outputs:
+      image: ${{ env.IMAGE }}@${{ steps.merge.outputs.digest }}
+    steps:
+      # cosign-installer (below) runs envsubst, which GitHub's image has and
+      # backmesh's runner image doesn't. Installed before the tag, so a
+      # failed install tags nothing. The runner user has passwordless sudo.
+      - run: command -v envsubst || { sudo apt-get update -q && sudo apt-get install -yq --no-install-recommends gettext-base; }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: digest-${{ inputs.name }}-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Merge
+        id: merge
+        env:
+          TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('sha-{0}', github.sha) }}
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          sources=()
+          for digest in *; do sources+=("$IMAGE@sha256:$digest"); done
+          docker buildx imagetools create --tag "$IMAGE:$TAG" "${sources[@]}"
+          digest=$(docker buildx imagetools inspect "$IMAGE:$TAG" --format '{{json .Manifest}}' | jq -r .digest)
+          docker buildx imagetools inspect "$IMAGE@$digest"
+          echo "digest=$digest" >>"$GITHUB_OUTPUT"
       - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
       - name: Sign and verify
         env:
-          DIGEST: ${{ steps.build.outputs.digest }}
+          DIGEST: ${{ steps.merge.outputs.digest }}
           # The certificate names this file, whichever workflow called it.
           IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/image.yml@${{ github.ref }}
         run: |
