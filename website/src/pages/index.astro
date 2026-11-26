@@ -9,7 +9,7 @@
 // TODO(owner): add customer logos once users agree to be named.
 import '../styles/fonts.css';
 import '../styles/tokens.css';
-import { SUMMARY } from '../about';
+import { SUMMARY, VM_HOURS } from '../about';
 import * as captures from '../captures';
 import AgentPrompt from '../components/AgentPrompt.astro';
 import AppKey from '../components/AppKey.astro';
@@ -321,7 +321,11 @@ const jsonLd = {
             cloud credits apply.
           </p>
           <AgentPrompt />
-          <p class="free">Free and open source (Apache-2.0), no credit card.</p>
+          <p class="free">
+            Free and open source (Apache-2.0).
+            Production ready: {VM_HOURS.toLocaleString('en-US')}+ VM hours and
+            counting.
+          </p>
           <div class="ctas">
             <a class="more" href="/install/">Install manually</a>
             <a class="more" href="#cost">See the costs</a>
