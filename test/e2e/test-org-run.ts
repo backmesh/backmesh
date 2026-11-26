@@ -5,7 +5,8 @@
 // pushes back to that branch. A deploy key can push and fetch but can't read
 // the repository's runs, hence the result on the branch. The branch is
 // deleted afterwards, whatever happened; a failed delete only warns, so it
-// never hides the run's own result.
+// never hides the run's own result. A burst (burst.ts) pushes its burst.yml
+// too, to burst/<nonce>, whose push labels.yml skips.
 
 export interface TestOrgGit {
   push(branch: string, files: Record<string, string>): Promise<void>;
@@ -20,35 +21,49 @@ export interface TestOrgRun {
   nonce: string;
   timeoutMs: number;
   now?: () => number;
+  // The branch's prefix, `run` by default, and files besides run.json.
+  prefix?: string;
+  files?: Record<string, string>;
 }
 
-/** Resolves with the label run's URL once it succeeds. */
+export interface TestOrgResult {
+  conclusion: string;
+  url: string;
+}
+
+/** Resolves with the run's result.json once it succeeds. */
 export async function runOnTestOrg(
   git: TestOrgGit,
   sleep: (ms: number) => Promise<void>,
-  { matrix, ref, nonce, timeoutMs, now = Date.now }: TestOrgRun,
-): Promise<string> {
-  const branch = `run/${nonce}`;
+  {
+    matrix,
+    ref,
+    nonce,
+    timeoutMs,
+    now = Date.now,
+    prefix = 'run',
+    files = {},
+  }: TestOrgRun,
+): Promise<TestOrgResult> {
+  const branch = `${prefix}/${nonce}`;
   try {
     const run = { matrix: JSON.parse(matrix) as unknown, ref, nonce };
     await git.push(branch, {
       'run.json': `${JSON.stringify(run, null, 2)}\n`,
+      ...files,
     });
     const deadline = now() + timeoutMs;
     for (;;) {
       const result = await git.read(branch);
       if (result !== null) {
-        const { conclusion, url } = JSON.parse(result) as {
-          conclusion: string;
-          url: string;
-        };
-        if (conclusion !== 'success')
-          throw new Error(`${url} ended ${conclusion}`);
-        return url;
+        const parsed = JSON.parse(result) as TestOrgResult;
+        if (parsed.conclusion !== 'success')
+          throw new Error(`${parsed.url} ended ${parsed.conclusion}`);
+        return parsed;
       }
       if (now() >= deadline) {
         throw new Error(
-          `labels.yml wrote no result to ${branch} within ${timeoutMs / 60_000} minutes`,
+          `The run wrote no result to ${branch} within ${timeoutMs / 60_000} minutes`,
         );
       }
       await sleep(15_000);

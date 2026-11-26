@@ -82,6 +82,14 @@ on:
           backmesh-ubuntu-2404-kvm-4vcpu=aws:us-east-2,us-east-1,us-west-2
           backmesh-ubuntu-2404-arm-4vcpu=aws:us-east-2,us-east-1,us-west-2
           backmesh-gcp-ubuntu-2404-arm-4vcpu=gcp:us-east4,us-central1,us-east1,us-east5,us-south1,us-west1,us-west2,us-west3,us-west4
+      burst:
+        description: >-
+          with `version`, a burst of this many jobs at once across each leg's
+          labels after its label member, to load the control plane, with its
+          runner-start figures and the control plane VM's in the summary and
+          the burst-<cloud> artifact (test/e2e/burst.ts); 0 runs none
+        type: number
+        default: 0
 
 permissions: {}
 
@@ -557,6 +565,110 @@ jobs:
           pid=$!
           trap 'kill -INT $pid; wait $pid' INT TERM
           wait $pid
+
+      # The burst, on the label member's labels (test/e2e/burst.ts), while
+      # anycloud api status is read every 15 s: an answer that fails or
+      # takes over 5 s is the API not serving.
+      - name: The burst on the test org's runners
+        id: burst
+        if: ${{ inputs.burst > 0 }}
+        timeout-minutes: 130
+        env:
+          DEPLOY_KEY: ${{ secrets.E2E_TEST_ORG_DEPLOY_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          TEST_ORG_REPO: ${{ inputs.org }}/e2e
+          MATRIX: ${{ env.LABEL_MATRIX }}
+          REF: ${{ github.sha }}
+          BURST: ${{ inputs.burst }}
+        run: |
+          dir=$RUNNER_TEMP/burst-$CLOUD
+          mkdir -p "$dir"
+          echo "BURST_STARTED=$(date -u +%FT%TZ)" >>"$GITHUB_ENV"
+          key=$RUNNER_TEMP/test-org-key
+          install -m 600 /dev/null "$key"
+          printf '%s\n' "$DEPLOY_KEY" >"$key"
+          anycloud=~/.backmesh/bin/$VERSION_ANYCLOUD/anycloud
+          while :; do
+            t=$(date -u +%FT%TZ)
+            if out=$(timeout 5 "$anycloud" api status --json 2>&1); then
+              echo "$t ok"
+            else
+              echo "$t failed $(tr '\n' ' ' <<<"$out" | cut -c1-300)"
+            fi
+            sleep 15
+          done >"$dir/api-status.log" &
+          probe=$!
+          trap 'kill $probe; rm -f "$key"' EXIT
+          # As the label member's, a cancel deletes the branch.
+          GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes" BURST_OUT=$dir/result.json \
+            node test/e2e/run-test-org-labels.ts &
+          pid=$!
+          trap 'kill -INT $pid; wait $pid' INT TERM
+          wait $pid
+          echo "anycloud api status: $(grep -c ' failed' "$dir/api-status.log") of $(wc -l <"$dir/api-status.log") reads failed" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # The control plane VM (anycloud's anycloud-cluster-<id>) over the
+      # burst, from the cloud's metrics once they've caught up: AWS's CPU
+      # and its credits; GCP's memory (the balloon driver's) and CPU; Azure's
+      # memory, CPU and B-series credits, and through run-command its pods'
+      # restarts and last terminations, OOM kills, and cgroup peak memory
+      # since boot. A record only: it fails nothing.
+      - name: The control plane VM over the burst
+        if: ${{ always() && steps.burst.outcome != 'skipped' && env.BURST_STARTED && env.CLUSTER_ID }}
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          dir=$RUNNER_TEMP/burst-$CLOUD
+          vm=anycloud-cluster-$CLUSTER_ID
+          sleep 240
+          start=$(date -u -d "$BURST_STARTED 10 minutes ago" +%FT%TZ)
+          end=$(date -u +%FT%TZ)
+          case $CLOUD in
+            aws)
+              id=$(aws ec2 describe-instances --region "$CONTROL_PLANE_REGION" --filters "Name=tag:Name,Values=$vm" \
+                --query 'Reservations[].Instances[].InstanceId' --output text)
+              for m in CPUUtilization CPUCreditBalance CPUSurplusCreditBalance; do
+                aws cloudwatch get-metric-statistics --region "$CONTROL_PLANE_REGION" --namespace AWS/EC2 --metric-name "$m" \
+                  --dimensions "Name=InstanceId,Value=$id" --start-time "$start" --end-time "$end" --period 300 \
+                  --statistics Minimum Maximum --output json >"$dir/aws-$m.json"
+                jq -r --arg m "$m" '"\($m): min \([.Datapoints[].Minimum] | min), max \([.Datapoints[].Maximum] | max)"' "$dir/aws-$m.json"
+              done
+              ;;
+            gcp)
+              project=$(gcloud config get-value project)
+              id=$(gcloud compute instances list --filter="name=$vm" --format='value(id)')
+              token=$(gcloud auth print-access-token)
+              for m in memory/balloon/ram_used memory/balloon/ram_size cpu/utilization; do
+                curl -fsSG -H "Authorization: Bearer $token" "https://monitoring.googleapis.com/v3/projects/$project/timeSeries" \
+                  --data-urlencode "filter=metric.type=\"compute.googleapis.com/instance/$m\" AND resource.labels.instance_id=\"$id\"" \
+                  --data-urlencode "interval.startTime=$start" --data-urlencode "interval.endTime=$end" >"$dir/gcp-${m//\//-}.json" \
+                  || { echo "$m: unreadable"; continue; }
+                jq -r --arg m "$m" '"\($m): max \([.timeSeries[]?.points[].value | .int64Value // .doubleValue | tonumber] | max)"' "$dir/gcp-${m//\//-}.json"
+              done
+              ;;
+            azure)
+              id=$(az vm list --query "[?name == '$vm'].id" --output tsv)
+              for m in 'Available Memory Bytes' 'Percentage CPU' 'CPU Credits Remaining'; do
+                az monitor metrics list --resource "$id" --metric "$m" --start-time "$start" --end-time "$end" \
+                  --interval PT1M --aggregation Minimum Maximum --output json >"$dir/azure-${m// /-}.json" || continue
+                jq -r --arg m "$m" '"\($m): min \([.value[].timeseries[].data[].minimum // empty] | min), max \([.value[].timeseries[].data[].maximum // empty] | max)"' "$dir/azure-${m// /-}.json"
+              done
+              # run-command keeps its output's last 4 KiB only.
+              az vm run-command invoke --ids "$id" --command-id RunShellScript --output json \
+                --scripts @test/e2e/control-plane-vm.sh >"$dir/azure-run-command.json"
+              jq -r '.value[0].message' "$dir/azure-run-command.json"
+              ;;
+          esac | tee "$dir/vm.txt"
+          { echo '```'; cat "$dir/vm.txt"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the burst's figures
+        if: ${{ always() && steps.burst.outcome != 'skipped' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: burst-${{ matrix.cloud }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/burst-${{ matrix.cloud }}/
+          if-no-files-found: warn
 
       # Always, after anything that may have made something, cancelled too:
       # everything but the App, and the checkpoint bucket with the rest. Its
