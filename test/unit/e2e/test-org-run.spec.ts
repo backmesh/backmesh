@@ -47,10 +47,7 @@ describe('runOnTestOrg', () => {
       conclusion: 'success',
       url: URL,
     });
-    await expect(run(git)).resolves.toEqual({
-      conclusion: 'success',
-      url: URL,
-    });
+    await expect(run(git)).resolves.toBe(URL);
     expect(pushed).toEqual([
       {
         branch: 'run/n1',
@@ -73,7 +70,7 @@ describe('runOnTestOrg', () => {
   it('fails when no result arrives in time, and still deletes the branch', async () => {
     const { git, deleted } = fakeGit();
     await expect(run(git, 60_000)).rejects.toThrow(
-      'The run wrote no result to run/n1 within 1 minutes',
+      'labels.yml wrote no result to run/n1 within 1 minutes',
     );
     expect(deleted).toEqual(['run/n1']);
   });

@@ -12,14 +12,6 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const REMOTE = 'git@github.com:backmesh-dryrun/e2e.git';
-const BURST_JOB = {
-  name: 'burst 0 backmesh-ubuntu-2404-4vcpu',
-  runner_name: 'r',
-  conclusion: 'success',
-  created_at: '2026-11-26T00:00:00Z',
-  started_at: '2026-11-26T00:00:30Z',
-  marker: '2026-11-26T00:00:40Z',
-};
 const URL = 'https://github.com/backmesh-dryrun/e2e/actions/runs/7';
 
 const git = (cwd: string, ...args: string[]) => {
@@ -33,10 +25,9 @@ const git = (cwd: string, ...args: string[]) => {
 };
 
 // A bare stand-in for the test org's e2e repository, its default branch
-// holding `labels` as labels.yml. Its post-receive hook plays labels.yml, or
-// burst.yml: it records the tree of each run/* or burst/* push and, when
-// `answer`, adds result.json on top, with one job for a burst. With
-// `slowPush`, a run/* push marks `pushing` and takes 2 s.
+// holding `labels` as labels.yml. Its post-receive hook plays labels.yml: it
+// records the tree of each run/* push and, when `answer`, adds result.json on
+// top. With `slowPush`, a run/* push marks `pushing` and takes 2 s.
 function testOrgRepo(
   answer: boolean,
   {
@@ -59,11 +50,11 @@ function testOrgRepo(
     hook,
     `#!/bin/bash
 while read -r old new ref; do
-  [[ $ref == refs/heads/@(run|burst)/* && $new != 0000000000000000000000000000000000000000 ]] || continue
+  [[ $ref == refs/heads/run/* && $new != 0000000000000000000000000000000000000000 ]] || continue
   git cat-file -e "$new:result.json" 2>/dev/null && continue
   git ls-tree -r --name-only "$new" >${dir}/tree
   ${answer ? '' : 'continue'}
-  blob=$(echo '{"conclusion":"success","url":"${URL}","jobs":[${JSON.stringify(BURST_JOB)}]}' | git hash-object -w --stdin)
+  blob=$(echo '{"conclusion":"success","url":"${URL}"}' | git hash-object -w --stdin)
   tree=$( (git ls-tree "$new"; printf '100644 blob %s\\tresult.json\\n' "$blob") | git mktree)
   commit=$(git -c user.name=t -c user.email=t@t commit-tree "$tree" -p "$new" -m result)
   git update-ref "$ref" "$commit" "$new"
@@ -87,13 +78,7 @@ done
   }
   const pushing = () => existsSync(join(dir, 'pushing'));
   const branches = () =>
-    git(
-      bare,
-      'for-each-ref',
-      '--format=%(refname)',
-      'refs/heads/run/',
-      'refs/heads/burst/',
-    );
+    git(bare, 'for-each-ref', '--format=%(refname)', 'refs/heads/run/');
   const tree = () =>
     existsSync(join(dir, 'tree'))
       ? readFileSync(join(dir, 'tree'), 'utf8')
@@ -102,11 +87,10 @@ done
 }
 
 // The script, its remote rewritten to the bare repository.
-const start = (bare: string, env: Record<string, string> = {}) =>
+const start = (bare: string) =>
   spawn('node', ['test/e2e/run-test-org-labels.ts'], {
     env: {
       ...process.env,
-      ...env,
       TEST_ORG_REPO: 'backmesh-dryrun/e2e',
       MATRIX: '{"include":[{"label":"backmesh-ubuntu-2404-4vcpu"}]}',
       REF: 'a'.repeat(40),
@@ -134,24 +118,6 @@ describe('run-test-org-labels.ts', () => {
     expect(repo.tree().split('\n')).toEqual(
       expect.arrayContaining(['.github/workflows/labels.yml', 'run.json']),
     );
-    expect(repo.branches()).toBe('');
-  }, 30_000);
-
-  it('with BURST, pushes burst.yml to a burst/ branch and writes its result to BURST_OUT', async () => {
-    const repo = testOrgRepo(true);
-    const out = join(mkdtempSync(join(tmpdir(), 'burst-')), 'result.json');
-    const run = await exit(start(repo.bare, { BURST: '1', BURST_OUT: out }));
-    expect(run.code, run.out).toBe(0);
-    expect(repo.tree().split('\n')).toEqual(
-      expect.arrayContaining([
-        '.github/workflows/labels.yml',
-        '.github/workflows/burst.yml',
-      ]),
-    );
-    expect(JSON.parse(readFileSync(out, 'utf8'))).toMatchObject({
-      jobs: [BURST_JOB],
-    });
-    expect(run.out).toContain('| All | 1 | 0 | 30 / 30 | 40 / 40 / 40 |');
     expect(repo.branches()).toBe('');
   }, 30_000);
 
