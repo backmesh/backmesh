@@ -59,7 +59,7 @@ harness. We haven't benchmarked RunsOn.
 |                     | [backmesh](https://github.com/backmesh/backmesh)                                                                                                | [RunsOn](https://runs-on.com/)                                                                                                      |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | License             | Apache-2.0; the cache action MIT                                                                                                                | Server and agent commercial; the repo's CloudFormation assets MIT                                                                   |
-| Price               | Free for all use. Your cloud bills you; its always-on VMs are about $86 a month on AWS for one org ([cost](/cost/), [calculator](/calculator/)) | Free for non-commercial use; €300 to €3,600 a year for commercial use, and AWS bills you ([pricing](https://runs-on.com/pricing/))  |
+| Price               | Free for all use. Your cloud bills you; its always-on VMs are about $56 a month on AWS for one org ([cost](/cost/), [calculator](/calculator/)) | Free for non-commercial use; €300 to €3,600 a year for commercial use, and AWS bills you ([pricing](https://runs-on.com/pricing/))  |
 | Clouds              | AWS, GCP, Azure, several from one install                                                                                                       | AWS                                                                                                                                 |
 | Operating systems   | Linux x86-64, and arm64 on AWS and GCP; NVIDIA T4 GPUs on AWS and Azure                                                                         | Linux x64 and arm64, Windows, GPU                                                                                                   |
 | A fresh VM per job  | Yes                                                                                                                                             | Yes                                                                                                                                 |
@@ -74,7 +74,7 @@ harness. We haven't benchmarked RunsOn.
 ## How each one works
 
 **backmesh.** `backmesh install` creates a control plane VM and, for each org, a
-listener VM (t3.large and t3.small on AWS) in your account. The listener long-polls
+listener VM (t3.medium and t3.small on AWS) in your account. The listener long-polls
 GitHub for queued jobs, so nothing needs an inbound port or a webhook. For
 each job, backmesh starts a VM in the cheapest region with capacity and
 deletes it when the job ends. Labels pick one of four fixed

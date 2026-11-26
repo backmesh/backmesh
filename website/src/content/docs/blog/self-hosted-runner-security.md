@@ -245,7 +245,7 @@ comparison.
 ## How backmesh handles it
 
 backmesh's [security model](/security/) puts everything it runs in your own
-accounts: a control plane VM (t3.large on AWS), one listener VM per org
+accounts: a control plane VM (t3.medium on AWS), one listener VM per org
 (t3.small on AWS) that long-polls GitHub, so no inbound port or webhook is
 needed, and a spot or on-demand VM for each job, deleted when the job ends.
 Install connects each cloud with a role from your own cloud CLI session, so no
@@ -344,7 +344,7 @@ macOS or Windows runners. Each job waits about 40 s for its VM to boot, about 10
 [benchmarks](/benchmarks/) carry the latest median wait. A spot VM can be reclaimed, which fails the job; when
 reclaims were a run's only failures, backmesh reruns them, preferring an
 on-demand runner ([labels](/labels/#on-demand)). The control plane and listener
-VMs run all the time, about $86 a month on AWS, $74 on GCP and $111 on Azure
+VMs run all the time, about $56 a month on AWS, $50 on GCP and $68 on Azure
 for one org ([cost](/cost/)).
 
 ## What risk remains

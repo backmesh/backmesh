@@ -39,7 +39,7 @@ figures come from its [cost page](/cost/).
 | Who bills the compute | Blacksmith, per minute                                                                                                                                                                       | Depot, per minute, on a plan                                                                                                                                                   | Your cloud; backmesh is free, RunsOn adds a yearly license for commercial use                                                          |
 | Plan fee              | None listed; Enterprise on request                                                                                                                                                           | $20 a month (Developer), $200 (Startup), custom (Business)                                                                                                                     | backmesh none; RunsOn €300 to €3,600 a year ([pricing](https://runs-on.com/pricing/))                                                  |
 | Included minutes      | 3,000 2-vCPU x64 minutes a month per org                                                                                                                                                     | 2,000 (Developer), 20,000 (Startup)                                                                                                                                            | None; you pay your cloud from the first minute                                                                                         |
-| Fixed cost            | None                                                                                                                                                                                         | The plan fee                                                                                                                                                                   | Always-on VMs that run the setup; for backmesh about $74 to $111 a month for one org ([cost](/cost/))                                  |
+| Fixed cost            | None                                                                                                                                                                                         | The plan fee                                                                                                                                                                   | Always-on VMs that run the setup; for backmesh about $50 to $68 a month for one org ([cost](/cost/))                                   |
 | Operating systems     | Linux x64 and arm64, Windows x64 (listed on their pricing page; their docs still call it a public beta), macOS M4 ([instance types](https://docs.blacksmith.sh/blacksmith-runners/overview)) | Linux x64 and arm64, Windows, macOS ([runner types](https://depot.dev/docs/github-actions/runner-types))                                                                       | backmesh: Linux x86-64 and arm64 (arm64 on AWS and GCP), T4 GPUs on AWS and Azure. RunsOn: Linux x64 and arm64, Windows, GPU, AWS only |
 | Dependency cache      | `actions/cache` goes to Blacksmith's co-located cache with no change; 25 GB free per repo ([cache](https://docs.blacksmith.sh/blacksmith-caching/dependencies-actions))                      | `actions/cache` goes to Depot Cache with no change ([cache](https://depot.dev/docs/cache/integrations/github-actions))                                                         | backmesh: `backmesh/cache` and automatic `setup-*` and npm, Yarn and pnpm caches in a bucket in your account ([cache](/cache/))        |
 | Docker layer cache    | Sticky disks, $0.50 per GB a month ([Docker builds](https://docs.blacksmith.sh/blacksmith-caching/docker-builds))                                                                            | Persistent layer cache per project for container builds, $0.20 per GB a month past the plan's allowance ([container builds](https://depot.dev/docs/container-builds/overview)) | backmesh: none, each job starts on a new VM. RunsOn: an ECR layer cache                                                                |
@@ -95,7 +95,7 @@ column.
 | GitHub-hosted | 150,000 × $0.012, before included usage                                                                           | $1,800           |
 | Blacksmith    | 150,000 × $0.008, less 3,000 free 2-vCPU minutes, which are 1,500 4-vCPU minutes ($12)                            | $1,188           |
 | Depot         | Startup plan $200 plus 150,000 × $0.012, less whatever share of the 20,000 included minutes 4-vCPU jobs draw down | $1,760 to $2,000 |
-| backmesh      | Spot VMs plus one org's always-on VMs, by cloud                                                                   | $191 to $365     |
+| backmesh      | Spot VMs plus one org's always-on VMs, by cloud                                                                   | $148 to $341     |
 
 Blacksmith's docs count free minutes as 2-vCPU x64 minutes: a 2-vCPU Arm
 minute uses 0.625 of them, a 2-vCPU Windows minute 2 and a 6-vCPU macOS
@@ -107,13 +107,13 @@ Depot's docs say larger runners use multipliers against included minutes
 multiplier, so the Depot row is a range: $1,760 if the included minutes
 counted one for one, $2,000 if they covered none. Storage for
 caches is extra on both. backmesh's range is the [cost page](/cost/)'s:
-Azure's $191 to GCP's $365, with the always-on VMs included and disks and
+Azure's $148 to GCP's $341, with the always-on VMs included and disks and
 boots left out.
 
 At small volumes the order flips. One org's always-on VMs on backmesh cost
-about $74 to $111 a month whether jobs run or not. Blacksmith's free tier
-covers 3,000 2-vCPU minutes, so a team that runs 20,000 2-vCPU minutes a month pays
-Blacksmith $68 (17,000 × $0.004), less than the lowest of those always-on
+about $50 to $68 a month whether jobs run or not. Blacksmith's free tier
+covers 3,000 2-vCPU minutes, so a team that runs 15,000 2-vCPU minutes a month pays
+Blacksmith $48 (12,000 × $0.004), less than the lowest of those always-on
 costs. Use the
 [calculator](/calculator/) with your own minutes.
 
@@ -185,7 +185,7 @@ month ([pricing](https://runs-on.com/pricing/)). For a side-by-side, see
 
 Both carry a fixed cost for what manages the runners, as every self-hosted
 setup in your own account does. On backmesh it's the control plane VM and one
-listener VM per org, about $86 a month on AWS, $74 on GCP and $111 on Azure
+listener VM per org, about $56 a month on AWS, $50 on GCP and $68 on Azure
 for one org ([cost](/cost/)).
 
 ## The tradeoffs

@@ -326,15 +326,15 @@ costs from backmesh's [cost inputs](/cost/) (2026-11-13). Jobs: 1,500 × 3 × 5 
 
 | Cloud | Spot $/h      | 99,000 min of compute | 27,000 boots | Always-on VMs | Month     |
 | ----- | ------------- | --------------------- | ------------ | ------------- | --------- |
-| AWS   | 0.0497–0.07   | $82–$116              | $11–$16      | $86           | $179–$217 |
-| Azure | 0.0318–0.0381 | $52–$63               | $14–$20      | $111          | $178–$194 |
-| GCP   | 0.0899–0.1165 | $148–$192             | $40–$61      | $74           | $263–$327 |
+| AWS   | 0.0497–0.07   | $82–$116              | $11–$16      | $56           | $149–$187 |
+| Azure | 0.0318–0.0381 | $52–$63               | $14–$20      | $68           | $135–$151 |
+| GCP   | 0.0899–0.1165 | $148–$192             | $40–$61      | $50           | $239–$303 |
 
-For example, AWS's low end is $86 + 99,000 × $0.0497 ÷ 60 + 27,000 × 30 s ×
-$0.0497 ÷ 3,600 = $179.19. These figures leave out disks, about $0.038 an
+For example, AWS's low end is $56 + 99,000 × $0.0497 ÷ 60 + 27,000 × 30 s ×
+$0.0497 ÷ 3,600 = $149.19. These figures leave out disks, about $0.038 an
 hour per runner on AWS, and runners started ahead that no job takes. In this
 example the workflow changes cut the bill from $2,160 to $1,188, and the
-runner change cut the rest to about $178–$327.
+runner change cut the rest to about $135–$303.
 
 To run your own numbers, use the [cost calculator](/calculator/). More ways
 to cut minutes that apply with or without agents are in

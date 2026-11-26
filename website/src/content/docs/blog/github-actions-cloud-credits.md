@@ -13,7 +13,7 @@ head:
   - tag: script
     attrs:
       type: application/ld+json
-    content: '{"@context":"https://schema.org","@graph":[{"@type":"BlogPosting","headline":"How to pay for GitHub Actions with your AWS, GCP or Azure credits","datePublished":"2026-11-18","dateModified":"2026-11-24","author":{"@type":"Organization","name":"backmesh","url":"https://backmesh.com/"},"publisher":{"@id":"https://backmesh.com/#organization"},"mainEntityOfPage":"https://backmesh.com/blog/github-actions-cloud-credits/"},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Can I use AWS credits for GitHub Actions?","acceptedAnswer":{"@type":"Answer","text":"Not for GitHub-hosted runners. GitHub''s supported payment methods are invoice, credit card, PayPal, ACH and an Azure subscription, and GitHub Enterprise has not been sold through AWS Marketplace since 2021-05-12. AWS credits can pay for EC2 instances that run your jobs as self-hosted runners."}},{"@type":"Question","name":"Can I use Google Cloud credits for GitHub Actions?","acceptedAnswer":{"@type":"Answer","text":"Not for GitHub-hosted runners, since GitHub has no Google Cloud payment option. Google for Startups credits apply to first-party Google Cloud products billed pay-as-you-go, which includes the Compute Engine VMs that self-hosted runners use."}},{"@type":"Question","name":"Can Microsoft for Startups credits pay for GitHub Actions?","acceptedAnswer":{"@type":"Answer","text":"Yes, per Microsoft''s startup docs, once you connect your Azure sponsorship subscription to GitHub as a payment method. GitHub then bills eligible usage-based services, including Actions, against the credits. The credits can also pay for Azure VMs that run self-hosted runners."}},{"@type":"Question","name":"Do startup credits cover spot or preemptible VMs?","acceptedAnswer":{"@type":"Answer","text":"As of 2026-11-18, AWS''s promotional credit exclusions don''t name EC2 or Spot Instances, Google''s credits cover first-party pay-as-you-go products such as Compute Engine, and Azure lists the Sponsored offer (0036P) as supporting Spot VMs. Check the terms of your own award."}},{"@type":"Question","name":"Does GitHub spend count toward an Azure MACC?","acceptedAnswer":{"@type":"Answer","text":"Yes, when it is billed through a connected Azure subscription. GitHub''s docs say the GitHub products on your Azure invoice are MACC-eligible. Usage that Azure credits cover does not count toward a MACC."}},{"@type":"Question","name":"Does GitHub spend count toward an AWS EDP or private pricing commitment?","acceptedAnswer":{"@type":"Answer","text":"GitHub has no AWS billing route, so GitHub-hosted minutes can''t count. EC2 instances running self-hosted runners are ordinary AWS usage on your AWS bill. Whether a given service counts is set in your private agreement."}},{"@type":"Question","name":"How long would cloud credits last for CI?","acceptedAnswer":{"@type":"Answer","text":"By backmesh''s arithmetic with spot prices from 2026-11-13, 150,000 minutes a month of 4-vCPU jobs cost about $206 to $365 a month at the high end of each cloud, always-on VMs included. $5,000 lasts about 14 to 24 months at that rate, against under 3 months on GitHub-hosted 4-core runners at $1,800 a month."}},{"@type":"Question","name":"Do I need to change my workflows?","acceptedAnswer":{"@type":"Answer","text":"Only the runs-on line. With backmesh, runs-on: ubuntu-latest becomes runs-on: backmesh-ubuntu-2404-4vcpu for a 4-vCPU spot VM. backmesh runs Linux x86-64 jobs, and arm64 ones on AWS and GCP, in private repositories unless you turn on public repositories with --public-repos."}},{"@type":"Question","name":"Does GitHub charge for self-hosted runners?","acceptedAnswer":{"@type":"Answer","text":"Not as of 2026-11-18. GitHub announced a $0.002 per minute charge for self-hosted runners in private repositories on 2025-12-16 and postponed it the next day, with no new date."}}]}]}'
+    content: '{"@context":"https://schema.org","@graph":[{"@type":"BlogPosting","headline":"How to pay for GitHub Actions with your AWS, GCP or Azure credits","datePublished":"2026-11-18","dateModified":"2026-11-24","author":{"@type":"Organization","name":"backmesh","url":"https://backmesh.com/"},"publisher":{"@id":"https://backmesh.com/#organization"},"mainEntityOfPage":"https://backmesh.com/blog/github-actions-cloud-credits/"},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Can I use AWS credits for GitHub Actions?","acceptedAnswer":{"@type":"Answer","text":"Not for GitHub-hosted runners. GitHub''s supported payment methods are invoice, credit card, PayPal, ACH and an Azure subscription, and GitHub Enterprise has not been sold through AWS Marketplace since 2021-05-12. AWS credits can pay for EC2 instances that run your jobs as self-hosted runners."}},{"@type":"Question","name":"Can I use Google Cloud credits for GitHub Actions?","acceptedAnswer":{"@type":"Answer","text":"Not for GitHub-hosted runners, since GitHub has no Google Cloud payment option. Google for Startups credits apply to first-party Google Cloud products billed pay-as-you-go, which includes the Compute Engine VMs that self-hosted runners use."}},{"@type":"Question","name":"Can Microsoft for Startups credits pay for GitHub Actions?","acceptedAnswer":{"@type":"Answer","text":"Yes, per Microsoft''s startup docs, once you connect your Azure sponsorship subscription to GitHub as a payment method. GitHub then bills eligible usage-based services, including Actions, against the credits. The credits can also pay for Azure VMs that run self-hosted runners."}},{"@type":"Question","name":"Do startup credits cover spot or preemptible VMs?","acceptedAnswer":{"@type":"Answer","text":"As of 2026-11-18, AWS''s promotional credit exclusions don''t name EC2 or Spot Instances, Google''s credits cover first-party pay-as-you-go products such as Compute Engine, and Azure lists the Sponsored offer (0036P) as supporting Spot VMs. Check the terms of your own award."}},{"@type":"Question","name":"Does GitHub spend count toward an Azure MACC?","acceptedAnswer":{"@type":"Answer","text":"Yes, when it is billed through a connected Azure subscription. GitHub''s docs say the GitHub products on your Azure invoice are MACC-eligible. Usage that Azure credits cover does not count toward a MACC."}},{"@type":"Question","name":"Does GitHub spend count toward an AWS EDP or private pricing commitment?","acceptedAnswer":{"@type":"Answer","text":"GitHub has no AWS billing route, so GitHub-hosted minutes can''t count. EC2 instances running self-hosted runners are ordinary AWS usage on your AWS bill. Whether a given service counts is set in your private agreement."}},{"@type":"Question","name":"How long would cloud credits last for CI?","acceptedAnswer":{"@type":"Answer","text":"By backmesh''s arithmetic with spot prices from 2026-11-13, 150,000 minutes a month of 4-vCPU jobs cost about $163 to $341 a month at the high end of each cloud, always-on VMs included. $5,000 lasts about 15 to 31 months at that rate, against under 3 months on GitHub-hosted 4-core runners at $1,800 a month."}},{"@type":"Question","name":"Do I need to change my workflows?","acceptedAnswer":{"@type":"Answer","text":"Only the runs-on line. With backmesh, runs-on: ubuntu-latest becomes runs-on: backmesh-ubuntu-2404-4vcpu for a 4-vCPU spot VM. backmesh runs Linux x86-64 jobs, and arm64 ones on AWS and GCP, in private repositories unless you turn on public repositories with --public-repos."}},{"@type":"Question","name":"Does GitHub charge for self-hosted runners?","acceptedAnswer":{"@type":"Answer","text":"Not as of 2026-11-18. GitHub announced a $0.002 per minute charge for self-hosted runners in private repositories on 2025-12-16 and postponed it the next day, with no new date."}}]}]}'
 ---
 
 You can't pay GitHub with AWS or Google Cloud credits. GitHub bills Actions
@@ -159,22 +159,22 @@ GitHub's Linux 4-core runner costs $0.012 a minute
 backmesh's [cost page](/cost/) prices a 4-vCPU, 16 GiB spot VM in one region
 per cloud, from its catalog on 2026-11-13: AWS `us-east-2` $0.0497 to $0.07
 an hour, Azure `westus2` $0.0318 to $0.0381, GCP `us-central1` $0.0899 to
-$0.1165. Its control plane and one org's listener VM add about $86 a month on AWS,
-$111 on Azure and $74 on GCP.
+$0.1165. Its control plane and one org's listener VM add about $56 a month on AWS,
+$68 on Azure and $50 on GCP.
 
 At those prices, a month of 4-vCPU jobs costs:
 
 | Minutes a month | GitHub-hosted 4-core | AWS spot  | Azure spot | GCP spot    |
 | --------------- | -------------------- | --------- | ---------- | ----------- |
-| 20,000          | $240                 | $103–$109 | $122–$124  | $104–$113   |
-| 150,000         | $1,800               | $210–$261 | $191–$206  | $299–$365   |
-| 500,000         | $6,000               | $500–$669 | $376–$429  | $823–$1,045 |
+| 20,000          | $240                 | $73–$79   | $79–$81    | $80–$89     |
+| 150,000         | $1,800               | $180–$231 | $148–$163  | $275–$341   |
+| 500,000         | $6,000               | $470–$639 | $333–$386  | $799–$1,021 |
 
 The 150,000-minute row matches backmesh's published figures. The 20,000 and
 500,000 rows are our own arithmetic with the same inputs. The spot figures
 leave out disks, VM boots and reruns, so they're a floor. At 20,000 minutes
 the always-on VMs are most of the bill. By the same arithmetic, below roughly
-7,000 to 9,800 minutes a month of 4-core jobs, depending on the cloud,
+4,800 to 6,000 minutes a month of 4-core jobs, depending on the cloud,
 GitHub-hosted runners cost less.
 
 How long a credit balance lasts for CI alone, using the high end of each
@@ -182,13 +182,13 @@ range (our arithmetic, not a quote from any program):
 
 | Balance  | GitHub-hosted, 150k min | AWS, 150k min | Azure, 150k min | GCP, 150k min | GitHub-hosted, 500k min | Azure, 500k min |
 | -------- | ----------------------- | ------------- | --------------- | ------------- | ----------------------- | --------------- |
-| $1,000   | 0.6 months              | 3.8 months    | 4.8 months      | 2.7 months    | 0.2 months              | 2.3 months      |
-| $5,000   | 2.8 months              | 19 months     | 24 months       | 14 months     | 0.8 months              | 12 months       |
-| $25,000  | 14 months               | 96 months     | 121 months      | 68 months     | 4.2 months              | 58 months       |
-| $100,000 | 56 months               | 383 months    | 485 months      | 274 months    | 17 months               | 233 months      |
+| $1,000   | 0.6 months              | 4.3 months    | 6.1 months      | 2.9 months    | 0.2 months              | 2.6 months      |
+| $5,000   | 2.8 months              | 22 months     | 31 months       | 15 months     | 0.8 months              | 13 months       |
+| $25,000  | 14 months               | 108 months    | 153 months      | 73 months     | 4.2 months              | 65 months       |
+| $100,000 | 56 months               | 433 months    | 613 months      | 293 months    | 17 months               | 259 months      |
 
 Two things follow. On a Microsoft for Startups balance, Azure spot VMs make
-the same credits last about 9 to 14 times longer than paying GitHub through
+the same credits last about 11 to 16 times longer than paying GitHub through
 the linked subscription. And for large balances, the credit runs out on its
 expiry date long before the balance would. A $100,000 award that expires in
 two years can't be spent on CI alone at these volumes. CI is a small share of
@@ -202,11 +202,11 @@ To run your own minutes and sizes, use the [cost calculator](/calculator/).
 Any self-hosted runner that registers with your GitHub org and runs in your
 cloud account puts CI on your cloud bill. Three free, open-source options:
 
-| Option                                                                                           | Where it runs          | What you operate                                                            |
-| ------------------------------------------------------------------------------------------------ | ---------------------- | --------------------------------------------------------------------------- |
-| [Actions Runner Controller](https://github.com/actions/actions-runner-controller)                | Any Kubernetes cluster | The cluster and its node pools                                              |
-| [terraform-aws-github-runner](https://github.com/github-aws-runners/terraform-aws-github-runner) | AWS                    | Terraform, Lambda functions and queues                                      |
-| [backmesh](https://github.com/backmesh/backmesh)                                                 | AWS, GCP and Azure     | A control plane VM and a listener VM per org (t3.large and t3.small on AWS) |
+| Option                                                                                           | Where it runs          | What you operate                                                             |
+| ------------------------------------------------------------------------------------------------ | ---------------------- | ---------------------------------------------------------------------------- |
+| [Actions Runner Controller](https://github.com/actions/actions-runner-controller)                | Any Kubernetes cluster | The cluster and its node pools                                               |
+| [terraform-aws-github-runner](https://github.com/github-aws-runners/terraform-aws-github-runner) | AWS                    | Terraform, Lambda functions and queues                                       |
+| [backmesh](https://github.com/backmesh/backmesh)                                                 | AWS, GCP and Azure     | A control plane VM and a listener VM per org (t3.medium and t3.small on AWS) |
 
 Commercial runner managers that run machines in your own cloud account
 include RunsOn and WarpBuild BYOC. Check each one's supported clouds and
@@ -303,8 +303,8 @@ instances running self-hosted runners are ordinary AWS usage. What counts is
 set in your agreement.
 
 **How long would credits last for CI?** By our arithmetic, 150,000 minutes a
-month of 4-vCPU jobs cost about $206 to $365 a month at the high end of each
-cloud, always-on VMs included. $5,000 lasts about 14 to 24 months at that
+month of 4-vCPU jobs cost about $163 to $341 a month at the high end of each
+cloud, always-on VMs included. $5,000 lasts about 15 to 31 months at that
 rate, against under 3 months on GitHub-hosted 4-core runners at $1,800 a
 month.
 

@@ -13,7 +13,7 @@ head:
   - tag: script
     attrs:
       type: application/ld+json
-    content: '{"@context":"https://schema.org","@graph":[{"@type":"BlogPosting","headline":"GitHub-hosted vs self-hosted runners: what each costs in 2026","datePublished":"2026-11-26","dateModified":"2026-11-26","author":{"@type":"Organization","name":"backmesh","url":"https://backmesh.com/"},"publisher":{"@id":"https://backmesh.com/#organization"},"mainEntityOfPage":"https://backmesh.com/blog/github-hosted-vs-self-hosted-runner-cost/"},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Are self-hosted GitHub Actions runners cheaper than GitHub-hosted runners?","acceptedAnswer":{"@type":"Answer","text":"Per minute, yes, for Linux jobs. A 4-vCPU spot VM cost about $0.0005 to $0.0019 a minute on AWS, GCP or Azure on 2026-11-13, against $0.012 for GitHub''s 4-core runner on 2026-11-26. Every self-hosted setup adds a fixed monthly cost, so self-hosting pays off only above a few thousand minutes a month. For backmesh with one org that''s about 7,000 to 9,800 4-vCPU minutes, depending on the cloud."}},{"@type":"Question","name":"How much does a GitHub-hosted runner cost per minute in 2026?","acceptedAnswer":{"@type":"Answer","text":"In private repositories, Linux x64 costs $0.002 a minute for 1 core, $0.006 for 2 cores, $0.012 for 4, $0.022 for 8, $0.042 for 16, $0.082 for 32 and $0.162 for 64, per GitHub''s runner pricing page on 2026-11-26. GitHub rounds each job up to the nearest whole minute."}},{"@type":"Question","name":"Does GitHub charge for self-hosted runners?","acceptedAnswer":{"@type":"Answer","text":"No, as of 2026-11-26. GitHub announced a $0.002 per minute charge for self-hosted runners in private repositories on 2025-12-16 and postponed it on 2025-12-17, with no new date. Its billing docs list self-hosted runner usage as free."}},{"@type":"Question","name":"What fixed costs does a self-hosted runner setup have?","acceptedAnswer":{"@type":"Answer","text":"Each one has some. ARC needs a Kubernetes cluster, $0.10 an hour on EKS, about $73 a month. terraform-aws-github-runner uses API Gateway, SQS and Lambda, billed per request. RunsOn puts its control plane at from about $7 a month plus a yearly license for commercial use. WarpBuild BYOC puts runners behind NAT gateways only when static IPs are on, one per availability zone on AWS at $0.045 an hour each; without static IPs, runners sit in public subnets with no always-on cost. backmesh runs a control plane VM and one listener VM per org, always on: about $86 a month on AWS, $74 on GCP and $111 on Azure for one org, and each further org adds a listener VM."}},{"@type":"Question","name":"How many minutes a month before self-hosting pays off?","acceptedAnswer":{"@type":"Answer","text":"It depends on the fixed cost. By our arithmetic from backmesh''s cost page, its always-on VMs for one org pay for themselves at about 7,000 to 9,800 minutes a month of 4-vCPU jobs, depending on the cloud. A setup with a larger fixed cost needs more minutes."}},{"@type":"Question","name":"What hidden costs does self-hosting add?","acceptedAnswer":{"@type":"Answer","text":"VM boot time, spot reclaims, on-demand reruns and fallbacks, disks, egress for cache and artifact traffic, and the hours someone spends running it. On backmesh each job waits for its VM to boot and bills for the boot, and each job starts with no Docker layer cache."}},{"@type":"Question","name":"What happens when a spot VM is reclaimed during a job?","acceptedAnswer":{"@type":"Answer","text":"The job fails. AWS gives a two-minute notice before it reclaims a spot instance. When reclaims were a run''s only failures, backmesh reruns its failed jobs once the run finishes, preferring an on-demand runner, at most twice. When a cloud has no spot capacity for a label, its jobs fall back to on-demand VMs by default."}},{"@type":"Question","name":"Is backmesh faster than ubuntu-latest?","acceptedAnswer":{"@type":"Answer","text":"In backmesh''s build benchmarks, five pinned open-source projects built on backmesh-ubuntu-2404-4vcpu spot VMs on AWS and on ubuntu-latest, both with 4 vCPUs. Most builds ran faster on backmesh and every one cost less. Each backmesh job also waits for its VM to boot. The benchmarks page at backmesh.com/benchmarks/ has the latest medians for time, wait and cost."}},{"@type":"Question","name":"What can''t backmesh run?","acceptedAnswer":{"@type":"Answer","text":"backmesh runs Linux x86-64 and arm64 jobs (arm64 on AWS and GCP). It has no macOS or Windows runners, and its GPU runners are NVIDIA T4s on AWS and Azure. Only private repositories can use it by default; public repositories can with --public-repos, and pull requests from forks then run only on two public spot labels. Keep macOS and Windows jobs on GitHub-hosted runners."}}]}]}'
+    content: '{"@context":"https://schema.org","@graph":[{"@type":"BlogPosting","headline":"GitHub-hosted vs self-hosted runners: what each costs in 2026","datePublished":"2026-11-26","dateModified":"2026-11-26","author":{"@type":"Organization","name":"backmesh","url":"https://backmesh.com/"},"publisher":{"@id":"https://backmesh.com/#organization"},"mainEntityOfPage":"https://backmesh.com/blog/github-hosted-vs-self-hosted-runner-cost/"},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Are self-hosted GitHub Actions runners cheaper than GitHub-hosted runners?","acceptedAnswer":{"@type":"Answer","text":"Per minute, yes, for Linux jobs. A 4-vCPU spot VM cost about $0.0005 to $0.0019 a minute on AWS, GCP or Azure on 2026-11-13, against $0.012 for GitHub''s 4-core runner on 2026-11-26. Every self-hosted setup adds a fixed monthly cost, so self-hosting pays off only above a few thousand minutes a month. For backmesh with one org that''s about 4,800 to 6,000 4-vCPU minutes, depending on the cloud."}},{"@type":"Question","name":"How much does a GitHub-hosted runner cost per minute in 2026?","acceptedAnswer":{"@type":"Answer","text":"In private repositories, Linux x64 costs $0.002 a minute for 1 core, $0.006 for 2 cores, $0.012 for 4, $0.022 for 8, $0.042 for 16, $0.082 for 32 and $0.162 for 64, per GitHub''s runner pricing page on 2026-11-26. GitHub rounds each job up to the nearest whole minute."}},{"@type":"Question","name":"Does GitHub charge for self-hosted runners?","acceptedAnswer":{"@type":"Answer","text":"No, as of 2026-11-26. GitHub announced a $0.002 per minute charge for self-hosted runners in private repositories on 2025-12-16 and postponed it on 2025-12-17, with no new date. Its billing docs list self-hosted runner usage as free."}},{"@type":"Question","name":"What fixed costs does a self-hosted runner setup have?","acceptedAnswer":{"@type":"Answer","text":"Each one has some. ARC needs a Kubernetes cluster, $0.10 an hour on EKS, about $73 a month. terraform-aws-github-runner uses API Gateway, SQS and Lambda, billed per request. RunsOn puts its control plane at from about $7 a month plus a yearly license for commercial use. WarpBuild BYOC puts runners behind NAT gateways only when static IPs are on, one per availability zone on AWS at $0.045 an hour each; without static IPs, runners sit in public subnets with no always-on cost. backmesh runs a control plane VM and one listener VM per org, always on: about $56 a month on AWS, $50 on GCP and $68 on Azure for one org, and each further org adds a listener VM."}},{"@type":"Question","name":"How many minutes a month before self-hosting pays off?","acceptedAnswer":{"@type":"Answer","text":"It depends on the fixed cost. By our arithmetic from backmesh''s cost page, its always-on VMs for one org pay for themselves at about 4,800 to 6,000 minutes a month of 4-vCPU jobs, depending on the cloud. A setup with a larger fixed cost needs more minutes."}},{"@type":"Question","name":"What hidden costs does self-hosting add?","acceptedAnswer":{"@type":"Answer","text":"VM boot time, spot reclaims, on-demand reruns and fallbacks, disks, egress for cache and artifact traffic, and the hours someone spends running it. On backmesh each job waits for its VM to boot and bills for the boot, and each job starts with no Docker layer cache."}},{"@type":"Question","name":"What happens when a spot VM is reclaimed during a job?","acceptedAnswer":{"@type":"Answer","text":"The job fails. AWS gives a two-minute notice before it reclaims a spot instance. When reclaims were a run''s only failures, backmesh reruns its failed jobs once the run finishes, preferring an on-demand runner, at most twice. When a cloud has no spot capacity for a label, its jobs fall back to on-demand VMs by default."}},{"@type":"Question","name":"Is backmesh faster than ubuntu-latest?","acceptedAnswer":{"@type":"Answer","text":"In backmesh''s build benchmarks, five pinned open-source projects built on backmesh-ubuntu-2404-4vcpu spot VMs on AWS and on ubuntu-latest, both with 4 vCPUs. Most builds ran faster on backmesh and every one cost less. Each backmesh job also waits for its VM to boot. The benchmarks page at backmesh.com/benchmarks/ has the latest medians for time, wait and cost."}},{"@type":"Question","name":"What can''t backmesh run?","acceptedAnswer":{"@type":"Answer","text":"backmesh runs Linux x86-64 and arm64 jobs (arm64 on AWS and GCP). It has no macOS or Windows runners, and its GPU runners are NVIDIA T4s on AWS and Azure. Only private repositories can use it by default; public repositories can with --public-repos, and pull requests from forks then run only on two public spot labels. Keep macOS and Windows jobs on GitHub-hosted runners."}}]}]}'
 ---
 
 A GitHub-hosted 4-core Linux runner costs $0.012 a minute in a private
@@ -23,8 +23,8 @@ charges nothing for self-hosted minutes as of 2026-11-26. Every self-hosted
 setup also has a fixed monthly cost for whatever starts the runners: a
 Kubernetes cluster, Lambda functions, NAT gateways or a few always-on VMs. At
 150,000 minutes a month of 4-vCPU jobs, that's $1,800 on GitHub-hosted runners
-and about $191 to $365 on backmesh, its always-on VMs for one org included.
-Below about 7,000 to 9,800 4-vCPU minutes a month, backmesh's fixed cost eats
+and about $148 to $341 on backmesh, its always-on VMs for one org included.
+Below about 4,800 to 6,000 4-vCPU minutes a month, backmesh's fixed cost eats
 the saving, and a
 setup with a larger fixed cost needs more minutes.
 
@@ -45,7 +45,7 @@ not jobs run:
 | [terraform-aws-github-runner](https://github.com/github-aws-runners/terraform-aws-github-runner)                    | Your EC2 spot prices                                                           | Per-request Lambda, API Gateway and SQS charges, plus a NAT gateway if runners sit in private subnets          | You                   |
 | [RunsOn](https://runs-on.com/pricing/)                                                                              | $0.0012 spot, as listed on runs-on.com/pricing on 2026-11-26 (a 7-day average) | A €300 to €3,600 yearly license for commercial use, and a control plane RunsOn puts at "from about $7 a month" | You                   |
 | [WarpBuild BYOC](https://www.warpbuild.com/pricing)                                                                 | $0.002 WarpBuild fee plus your VM                                              | With static IPs, NAT gateways (one per AZ in its AWS quotas), $0.045 an hour each on AWS; without them, none   | You                   |
-| [backmesh](https://github.com/backmesh/backmesh)                                                                    | $0.0005 to $0.0019 spot ([cost](/cost/))                                       | A control plane VM and a listener VM per org: for one org about $86 on AWS, $74 on GCP, $111 on Azure          | You                   |
+| [backmesh](https://github.com/backmesh/backmesh)                                                                    | $0.0005 to $0.0019 spot ([cost](/cost/))                                       | A control plane VM and a listener VM per org: for one org about $56 on AWS, $50 on GCP, $68 on Azure           | You                   |
 | Managed services: [Namespace](https://namespace.so/pricing), [WarpBuild](https://www.warpbuild.com/pricing) managed | $0.008 for 4 vCPU and 16 GB                                                    | None                                                                                                           | The vendor            |
 
 Each row comes from these pages.
@@ -179,7 +179,7 @@ install in place of a pipeline you build. Your cloud bills you for the VMs.
 
 backmesh is free under Apache-2.0. `backmesh install` creates two kinds of
 always-on VM: the control plane's VM and one listener VM for each org. For
-one org they cost about $86 a month on AWS, $74 on GCP and $111 on Azure with
+one org they cost about $56 a month on AWS, $50 on GCP and $68 on Azure with
 their disks and public addresses, and each further org adds its listener VM
 ([cost](/cost/)). Each job gets its own spot VM, deleted when the job ends. A
 4-vCPU `backmesh-ubuntu-2404-4vcpu` VM cost $0.0497 to $0.07 an hour on AWS
@@ -231,22 +231,22 @@ one org's always-on VMs included, at the 2026-11-13 spot prices on the
 
 | Minutes a month | GitHub-hosted 4-core | backmesh on AWS | backmesh, all three clouds | Fee if it returns, $0.002 |
 | --------------- | -------------------- | --------------- | -------------------------- | ------------------------- |
-| 10,000          | $120                 | $94–$98         | $89–$117                   | $20                       |
-| 50,000          | $600                 | $127–$144       | $127–$171                  | $100                      |
-| 150,000         | $1,800               | $210–$261       | $191–$365                  | $300                      |
-| 500,000         | $6,000               | $500–$669       | $376–$1,045                | $1,000                    |
+| 10,000          | $120                 | $64–$68         | $64–$74                    | $20                       |
+| 50,000          | $600                 | $97–$114        | $95–$147                   | $100                      |
+| 150,000         | $1,800               | $180–$231       | $148–$341                  | $300                      |
+| 500,000         | $6,000               | $470–$639       | $333–$1,021                | $1,000                    |
 
 At 10,000 minutes the saving is small, and on Azure the control plane alone
-is $111. At 150,000 minutes backmesh costs 80% to 89% less than GitHub-hosted
+is $68. At 150,000 minutes backmesh costs 81% to 92% less than GitHub-hosted
 4-core runners. The backmesh figures leave out boots, disks, on-demand
 reruns and on-demand fallbacks, covered in the next section, so they're a
 floor.
 
 The break-even for backmesh's fixed cost is our arithmetic too. Each 4-vCPU
 minute moved from $0.012 to spot saves $0.010 to $0.0115, so one org's
-always-on VMs pay for themselves at about 7,000 to 9,800 minutes a month,
-depending on the cloud: about 7,700 to 7,900 on AWS, 7,000 to 7,400 on GCP
-and 9,700 to 9,800 on Azure. The same logic applies to every
+always-on VMs pay for themselves at about 4,800 to 6,000 minutes a month,
+depending on the cloud: about 5,000 to 5,200 on AWS, 4,800 to 5,000 on GCP
+and 5,900 to 6,000 on Azure. The same logic applies to every
 self-hosted option: the bigger its fixed cost, the more minutes it needs
 before it beats GitHub.
 
@@ -322,7 +322,7 @@ table above.
 
 | Your situation                                                  | Cheapest fit                                                                                                                       |
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Under about 7,000 4-vCPU minutes a month                        | GitHub-hosted runners and your plan's included usage                                                                               |
+| Under about 4,800 4-vCPU minutes a month                        | GitHub-hosted runners and your plan's included usage                                                                               |
 | macOS jobs                                                      | GitHub-hosted runners                                                                                                              |
 | You already run Kubernetes                                      | ARC on your cluster, since the cluster fee is already paid                                                                         |
 | AWS only, and you want Windows or Arm                           | [terraform-aws-github-runner](https://github.com/github-aws-runners/terraform-aws-github-runner) or [RunsOn](https://runs-on.com/) |
@@ -338,7 +338,7 @@ see [how to cut your GitHub Actions bill](/blog/how-to-reduce-github-actions-cos
 
 ### Are self-hosted GitHub Actions runners cheaper than GitHub-hosted runners?
 
-Per minute, yes, for Linux jobs. A 4-vCPU spot VM cost about $0.0005 to $0.0019 a minute on AWS, GCP or Azure on 2026-11-13, against $0.012 for GitHub's 4-core runner on 2026-11-26. Every self-hosted setup adds a fixed monthly cost, so self-hosting pays off only above a few thousand minutes a month. For backmesh with one org that's about 7,000 to 9,800 4-vCPU minutes, depending on the cloud.
+Per minute, yes, for Linux jobs. A 4-vCPU spot VM cost about $0.0005 to $0.0019 a minute on AWS, GCP or Azure on 2026-11-13, against $0.012 for GitHub's 4-core runner on 2026-11-26. Every self-hosted setup adds a fixed monthly cost, so self-hosting pays off only above a few thousand minutes a month. For backmesh with one org that's about 4,800 to 6,000 4-vCPU minutes, depending on the cloud.
 
 ### How much does a GitHub-hosted runner cost per minute in 2026?
 
@@ -350,11 +350,11 @@ No, as of 2026-11-26. GitHub announced a $0.002 per minute charge for self-hoste
 
 ### What fixed costs does a self-hosted runner setup have?
 
-Each one has some. ARC needs a Kubernetes cluster, $0.10 an hour on EKS, about $73 a month. terraform-aws-github-runner uses API Gateway, SQS and Lambda, billed per request. RunsOn puts its control plane at from about $7 a month plus a yearly license for commercial use. WarpBuild BYOC puts runners behind NAT gateways only when static IPs are on, one per availability zone on AWS at $0.045 an hour each; without static IPs, runners sit in public subnets with no always-on cost. backmesh runs a control plane VM and one listener VM per org, always on: about $86 a month on AWS, $74 on GCP and $111 on Azure for one org, and each further org adds a listener VM.
+Each one has some. ARC needs a Kubernetes cluster, $0.10 an hour on EKS, about $73 a month. terraform-aws-github-runner uses API Gateway, SQS and Lambda, billed per request. RunsOn puts its control plane at from about $7 a month plus a yearly license for commercial use. WarpBuild BYOC puts runners behind NAT gateways only when static IPs are on, one per availability zone on AWS at $0.045 an hour each; without static IPs, runners sit in public subnets with no always-on cost. backmesh runs a control plane VM and one listener VM per org, always on: about $56 a month on AWS, $50 on GCP and $68 on Azure for one org, and each further org adds a listener VM.
 
 ### How many minutes a month before self-hosting pays off?
 
-It depends on the fixed cost. By our arithmetic from backmesh's cost page, its always-on VMs for one org pay for themselves at about 7,000 to 9,800 minutes a month of 4-vCPU jobs, depending on the cloud. A setup with a larger fixed cost needs more minutes.
+It depends on the fixed cost. By our arithmetic from backmesh's cost page, its always-on VMs for one org pay for themselves at about 4,800 to 6,000 minutes a month of 4-vCPU jobs, depending on the cloud. A setup with a larger fixed cost needs more minutes.
 
 ### What hidden costs does self-hosting add?
 

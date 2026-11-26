@@ -143,9 +143,9 @@ Two things follow from a flat per-minute fee:
   the compute inside them.
 
 For a concrete case, backmesh's [cost comparison](/cost/) puts 150,000 minutes
-a month of 4-vCPU jobs on spot VMs at about $191–$365 including its control
+a month of 4-vCPU jobs on spot VMs at about $148–$341 including its control
 plane, at spot prices on 2026-11-13. With the fee, that would be about
-$491–$665, against $1,800 on GitHub's 4-core runners. The gap narrows by $300
+$448–$641, against $1,800 on GitHub's 4-core runners. The gap narrows by $300
 and stays large. On 2-core runners the same arithmetic leaves less room: the
 fee alone would be a third of the GitHub-hosted price.
 
@@ -189,7 +189,7 @@ surprise.
 3. **Count your fixed costs.** Self-hosting has a fixed part: a Kubernetes
    cluster for ARC, Lambda and queues for the Terraform module, or a control
    plane such as backmesh's control plane VM and listener VM per org
-   (t3.large and t3.small on AWS), about $74–$111 a month for one org. Add it to
+   (t3.medium and t3.small on AWS), about $50–$68 a month for one org. Add it to
    the per-minute numbers.
 4. **Cut minutes you don't need.** The fee counts minutes, so minutes saved
    are fee saved. Two changes cost nothing:
