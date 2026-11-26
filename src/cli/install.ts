@@ -132,7 +132,6 @@ import {
   controlPlaneOf,
   type Listener,
 } from './installation.js';
-import { lowerManagementDisk } from './control-disks.js';
 
 export const CLUSTER = 'backmesh';
 
@@ -1826,18 +1825,6 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
     url = created.url;
     // The listener goes with a new control plane.
     if (!plan.controlPlane.exists) place = { ...place, region: created.region };
-    // The management VM's disk at gp3's baseline until anycloud's template
-    // makes it so (control-disks.ts). A resumed `api create` lowers it
-    // too.
-    if (controlPlane.cloud === 'aws') {
-      await lowerManagementDisk(
-        clusterIdOf(url),
-        created.region,
-        now.find((target) => target.cloud === 'aws')?.account,
-        deps.command,
-        ui.print,
-      );
-    }
   }
   await deps.run(['api', 'use', url]);
   // `api create` may have resumed a control plane on another release,
