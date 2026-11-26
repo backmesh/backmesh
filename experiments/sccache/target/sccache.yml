@@ -48,6 +48,7 @@ jobs:
           echo $! >"$RUNNER_TEMP/proxy.pid"
           # sccache fails the build when its storage check can't reach the proxy.
           for _ in $(seq 50); do curl -s -o /dev/null http://127.0.0.1:4230/ && break; sleep 0.2; done
+          curl -s -o /dev/null http://127.0.0.1:4230/ || { cat "$RUNNER_TEMP/proxy.log"; echo "::error::the proxy isn't listening"; exit 1; }
           echo "RUSTC_WRAPPER=$RUNNER_TEMP/$f/sccache" >>"$GITHUB_ENV"
           (cd project && rustup show active-toolchain || rustup toolchain install)
 
@@ -89,8 +90,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          kill "$(cat "$RUNNER_TEMP/proxy.pid")" && sleep 2
-          cat "$RUNNER_TEMP/proxy.log"
+          kill "$(cat "$RUNNER_TEMP/proxy.pid")" && sleep 2 || true
+          cat "$RUNNER_TEMP/proxy.log" || true
           stats() { jq -c '.stats | {requests: .compile_requests, hits: ([.cache_hits.counts[]] | add // 0),
             misses: ([.cache_misses.counts[]] | add // 0), writes: .cache_writes, writeErrors: .cache_write_errors,
             readErrors: .cache_read_errors, notCacheable: .requests_not_cacheable}' "$RUNNER_TEMP/$1.json" 2>/dev/null || echo null; }
