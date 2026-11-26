@@ -97,15 +97,16 @@ Private repositories, per minute, from
 
 | Runner              | Before 2026-01-01 | Now    | Change |
 | ------------------- | ----------------- | ------ | ------ |
-| Linux 1-core (slim) | n/a               | $0.002 | new    |
+| Linux 1-core (slim) | $0.002            | $0.002 | none   |
 | Linux 2-core x64    | $0.008            | $0.006 | -25%   |
-| Linux 2-core arm64  | n/a               | $0.005 | new    |
+| Linux 2-core arm64  | $0.005            | $0.005 | none   |
 | Linux 4-core x64    | $0.016            | $0.012 | -25%   |
 | Linux 8-core x64    | $0.032            | $0.022 | -31%   |
 | Linux 16-core x64   | $0.064            | $0.042 | -34%   |
 | Linux 32-core x64   | $0.128            | $0.082 | -36%   |
 | Linux 64-core x64   | $0.256            | $0.162 | -37%   |
 | Windows 2-core      | $0.016            | $0.010 | -38%   |
+| macOS 3 or 4-core   | $0.080            | $0.062 | -23%   |
 | macOS 12-core       | $0.120            | $0.077 | -36%   |
 
 Other changes to what Actions costs, in order:

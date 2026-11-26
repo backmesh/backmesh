@@ -69,7 +69,7 @@ harness. We haven't benchmarked RunsOn.
 | Spot                | Default; fails over to other types and regions, reruns reclaimed jobs on demand                                                                 | Default, with on-demand fallback and a circuit breaker ([spot](https://runs-on.com/configuration/spot-instances/))                  |
 | Isolation           | Runners have no cloud identity; each job gets a 15-minute cache token for its own repository ([security](/security/))                           | No inbound rules; per-repository cache isolation is opt-in ([security](https://runs-on.com/docs/control-plane/security/))           |
 | Install             | `backmesh install --org <org>` through your `aws`, `gcloud` or `az` CLI                                                                         | A CloudFormation or Terraform stack; it creates a private GitHub App ([install](https://runs-on.com/installation/flex/))            |
-| Public repositories | Not yet                                                                                                                                         | Supported, in a separate environment                                                                                                |
+| Public repositories | With `--public-repos` ([public repositories](/public-repos/))                                                                                   | Supported, in a separate environment                                                                                                |
 
 ## How each one works
 
