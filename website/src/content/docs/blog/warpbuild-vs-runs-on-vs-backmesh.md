@@ -281,9 +281,9 @@ All three run on spot by default (WarpBuild on BYOC only; its
 ## Which to pick
 
 Pick WarpBuild BYOC if you need Windows runners, arm64 on Azure, a Docker layer
-cache, static IPs, or custom VM images, or if you don't need static IPs, run
-under 37,000 to 55,500 minutes a month, depending on the cloud, and want no
-always-on VMs of your own.
+cache, static IPs, or custom VM images. Without static IPs it has no NAT to pay
+for, and its fee costs less than backmesh's always-on VMs under 37,000 to 55,500
+minutes a month, depending on the cloud, and needs no always-on VMs of your own.
 It's also the pick if you want macOS on hosted runners from the same vendor.
 
 Pick RunsOn if you're on AWS only and want the lowest fixed cost, Windows,
@@ -296,7 +296,7 @@ At 150,000 minutes a month, backmesh's whole bill ($191 to $365) is about the
 size of WarpBuild BYOC's fee alone ($300), before WarpBuild's compute. backmesh is a new project.
 It runs Linux x86-64 and arm64 jobs (arm64 on AWS and GCP), in private
 repositories unless you turn on [public repositories](/public-repos/), each job
-waits about 40 s for its VM to boot, about 15 s when cued, it works with github.com only, with
+waits about 40 s for its VM to boot, about 10 s when cued, it works with github.com only, with
 no GitHub Enterprise Server support yet, and it has no Docker layer cache.
 
 For free tools on Kubernetes and AWS, see

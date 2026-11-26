@@ -251,11 +251,11 @@ Pick backmesh if your jobs are Linux x86-64 or arm64 and you run enough minutes 
 spot prices outweigh the always-on VMs, if your runners belong on GCP, Azure or
 several clouds, or if you want an Apache-2.0 tool with no license fee. Its
 4-vCPU label has 16 GiB of memory, as GitHub's 4-core runner does. It doesn't
-run Windows or macOS, its arm64 labels are on AWS and GCP, its GPU labels are
-NVIDIA T4 on AWS and Azure only, it runs private repositories unless you turn
-on [public repositories](/public-repos/), a job waits about 40 s for its VM to boot, about 15 s when
-cued, and it works with github.com only, with no GitHub Enterprise Server
-support yet.
+run Windows or macOS, its arm64 labels are on AWS and GCP, and its GPU labels
+are NVIDIA T4 on AWS and Azure only. It runs private repositories unless you
+turn on [public repositories](/public-repos/), a job waits about 40 s for its
+VM to boot, about 10 s when cued, and it works with github.com only, with no
+GitHub Enterprise Server support yet.
 
 All three take jobs by `runs-on` label, so they can run side by side: Windows
 jobs on CodeBuild, Linux jobs on spot VMs, and the rest on GitHub-hosted

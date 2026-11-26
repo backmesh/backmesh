@@ -307,7 +307,7 @@ job on its own spot VM in your AWS, GCP or Azure account. On its
 $191 to $365 at spot prices on 2026-11-13, against $1,800 on GitHub's 4-core
 runner, with the always-on VMs (about $74 to $111 a month for one org)
 included. It runs Linux x86-64 and arm64 jobs (arm64 on AWS and GCP), with no macOS or
-Windows runners. Each job waits about 40 s for its VM to boot, about 15 s when cued, a spot reclaim fails the job
+Windows runners. Each job waits about 40 s for its VM to boot, about 10 s when cued, a spot reclaim fails the job
 (backmesh reruns such jobs, preferring on demand), and each job starts with an
 empty Docker layer cache. For GPU jobs on AWS and Azure, see
 [GPU pricing](/blog/github-actions-gpu-pricing/).

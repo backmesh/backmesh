@@ -215,7 +215,7 @@ for one org ([cost](/cost/)).
 - Code, secrets, caches and logs stay in your account. backmesh's
   [security model](/security/) lists what does reach it.
 - The always-on VMs cost money every month, jobs or not.
-- Each job waits about 40 s for its VM to boot, about 15 s when cued. The [benchmarks](/benchmarks/) have
+- Each job waits about 40 s for its VM to boot, about 10 s when cued. The [benchmarks](/benchmarks/) have
   backmesh's latest measured wait on AWS. backmesh starts runners ahead of a
   run's later jobs, and `backmesh cue` lets a coding agent start them before
   it pushes.

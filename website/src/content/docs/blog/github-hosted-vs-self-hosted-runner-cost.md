@@ -308,7 +308,7 @@ VMs. Every run is linked on the [benchmarks page](/benchmarks/#runs).
 ## backmesh's limits
 
 backmesh runs Linux x86-64 and arm64 jobs (arm64 on AWS and GCP). It has no
-macOS or Windows runners. Each job waits about 40 s for its VM to boot, about 15 s when cued. Its GPU labels, `backmesh-ubuntu-2404-gpu-t4` and its on-demand
+macOS or Windows runners. Each job waits about 40 s for its VM to boot, about 10 s when cued. Its GPU labels, `backmesh-ubuntu-2404-gpu-t4` and its on-demand
 twin, run an NVIDIA T4 on AWS and Azure ([labels](/labels/#gpu)). By default
 only an org's private repositories can use its runners. `--public-repos` lets
 public repositories use them too, and pull requests from forks then run only
