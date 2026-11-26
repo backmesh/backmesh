@@ -56,7 +56,7 @@ Install works through your signed-in `aws` CLI, and creates:
   on another cloud, unless `AWS_REGION` is set. The role trusts only your control plane, so no AWS keys are stored.
 - **Cache buckets**, through that connection: one per runner region,
   `bm-cache-<id>-<region>`, for the [cache](/cache/).
-- **The control plane**, when AWS is its cloud: a `t3.large` VM, with its disk
+- **The control plane**, when AWS is its cloud: a `t3.medium` VM, with its disk
   and public address, and a checkpoint bucket for its backups; and each org's
   listener on its own `t3.small` VM, with its disk and public address.
 
@@ -106,7 +106,7 @@ demand, `m8g` costs 0.85 of `m8i` an hour.
 
 Other sizes scale with their vCPUs. Each job also pays for its VM's boot and its
 100 GB gp3 disk at 4,000 IOPS and 500 MiB/s, about $0.038 an hour. The
-control plane and one org's listener VM cost about $86 a month. At
+control plane and one org's listener VM cost about $56 a month. At
 those prices, 150,000 minutes a month of `backmesh-ubuntu-2404-4vcpu` jobs cost at least
-$210–$261 with one org's always-on VMs, before disks, boots and runners started ahead
+$180–$231 with one org's always-on VMs, before disks, boots and runners started ahead
 of jobs; see [the costs](/#cost). Spot prices change by the hour.

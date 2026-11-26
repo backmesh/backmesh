@@ -26,7 +26,7 @@ export interface AlwaysOnRegion {
   sizes: string[];
 }
 
-// Each always-on size's vCPUs: t3.large and t3.small, e2-standard-2 and
+// Each always-on size's vCPUs: t3.medium and t3.small, e2-medium and
 // e2-small, and every Azure size install takes (`MANAGEMENT_VMS`,
 // `LISTENER_VM_TYPES`).
 export const ALWAYS_ON_VCPUS = 2;

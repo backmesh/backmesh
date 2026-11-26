@@ -87,7 +87,7 @@ the Compute, IAM, IAM Credentials and Security Token Service APIs, and creates:
   control plane, so no service account keys are stored.
 - **Cache buckets**, through that connection: one per runner region,
   `bm-cache-<id>-<region>`, for the [cache](/cache/).
-- **The control plane**, when GCP is its cloud: an `e2-standard-2` VM, with its
+- **The control plane**, when GCP is its cloud: an `e2-medium` VM, with its
   disk and public address, and a checkpoint bucket for its backups; and each
   org's listener on its own `e2-small` VM, with its disk and public address.
 
@@ -133,7 +133,7 @@ pd-ssd, Hyperdisk Balanced: on demand with 8,000 IOPS and 1,000 MB/s
 provisioned, about $0.092 an hour, and on spot with 3,000 and 750, about
 $0.044. `c4d-standard-4`'s catalog spot price in `us-east4`, where its spot
 launches were measured, is $0.0967 an hour for the VM alone
-([anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)). The control plane and one org's listener VM cost about $74 a
+([anycloud#43](https://github.com/anycloud-sh/anycloud/pull/43)). The control plane and one org's listener VM cost about $50 a
 month. At those prices, 150,000 minutes a month of `backmesh-ubuntu-2404-4vcpu` jobs cost at
-least $299–$365 with one org's always-on VMs, before disks, boots and runners started ahead of jobs; see [the
+least $275–$341 with one org's always-on VMs, before disks, boots and runners started ahead of jobs; see [the
 costs](/#cost). Spot prices change by the hour.

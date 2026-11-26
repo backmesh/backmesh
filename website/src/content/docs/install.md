@@ -46,9 +46,9 @@ names those orgs and the command to run instead.
 
 With nothing else, the control plane and runners go on the cloud your CLI is
 signed in to, near GitHub's US East. The control plane is an always-on VM
-(t3.large on AWS) in your account, and each org's listener, which starts runners
+(t3.medium on AWS) in your account, and each org's listener, which starts runners
 for your jobs, a small one (t3.small on AWS) of its own: together about
-$74–$111 a month for one org, up to $151 on Azure when a region doesn't offer
+$50–$68 a month for one org, up to $151 on Azure when a region doesn't offer
 your subscription the first sizes, and $15–$72 more for each further org.
 To choose, see [Control plane and runners](#control-plane-and-runners). To see
 the plan first:

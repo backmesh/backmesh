@@ -50,7 +50,7 @@ const clouds = [
     // No m6i.
     spot: Object.values(AWS_SPOT_XLARGE),
     bootS: 18.3,
-    controlPlane: 86,
+    controlPlane: 56,
   },
   {
     cloud: 'Azure',
@@ -58,7 +58,7 @@ const clouds = [
     // ads_v5, as_v5, s_v5.
     spot: [0.0381, 0.0318, 0.0355],
     bootS: 30.7,
-    controlPlane: 111,
+    controlPlane: 68,
   },
   {
     cloud: 'GCP',
@@ -66,7 +66,7 @@ const clouds = [
     // n2, n2d.
     spot: [0.1165, 0.0899],
     bootS: 36.1,
-    controlPlane: 74,
+    controlPlane: 50,
   },
 ];
 

@@ -1,12 +1,12 @@
 ---
 title: GitHub Actions runner cost on backmesh
-description: How backmesh's cost figures are computed. 150,000 minutes a month of 4-vCPU Linux jobs cost $1,800 on GitHub-hosted runners and from about $191–$365 on backmesh at spot prices, with every input and its date.
+description: How backmesh's cost figures are computed. 150,000 minutes a month of 4-vCPU Linux jobs cost $1,800 on GitHub-hosted runners and from about $148–$341 on backmesh at spot prices, with every input and its date.
 sidebar:
   label: Cost
 ---
 
 150,000 minutes a month of 4-vCPU Linux jobs cost $1,800 on GitHub-hosted
-runners at list price, and about $191–$365 on backmesh at spot prices on
+runners at list price, and about $148–$341 on backmesh at spot prices on
 2026-11-13, depending on the cloud and the VM type a job gets. backmesh's
 figure includes one org's always-on VMs and leaves out disks and VM boots, so it's a
 floor. backmesh's core features are free; your clouds bill you for the VMs.
@@ -55,14 +55,14 @@ cheapest and at the most expensive type's spot price, $/h ÷ 60 a minute.
 
 | Cloud | Spot $/h      | Per 1,000 minutes | 150,000 minutes | Always-on VMs | Month     |
 | ----- | ------------- | ----------------- | --------------- | ------------- | --------- |
-| AWS   | 0.0497–0.07   | $0.83–$1.17       | $124–$175       | $86           | $210–$261 |
-| Azure | 0.0318–0.0381 | $0.53–$0.64       | $80–$95         | $111          | $191–$206 |
-| GCP   | 0.0899–0.1165 | $1.50–$1.94       | $225–$291       | $74           | $299–$365 |
+| AWS   | 0.0497–0.07   | $0.83–$1.17       | $124–$175       | $56           | $180–$231 |
+| Azure | 0.0318–0.0381 | $0.53–$0.64       | $80–$95         | $68           | $148–$163 |
+| GCP   | 0.0899–0.1165 | $1.50–$1.94       | $225–$291       | $50           | $275–$341 |
 
-The headline range runs from the lowest month, Azure's $191, to the highest,
-GCP's $365 — unchanged by the 2026-11-13 reorder, since neither Azure's cheapest type
+The headline range runs from the lowest month, Azure's $148, to the highest,
+GCP's $341 — unchanged by the 2026-11-13 reorder, since neither Azure's cheapest type
 (`as_v5`) nor GCP's priciest (`n2`) moved. For example, Azure's low end is
-$111 + 150,000 × $0.0318 ÷ 60 = $190.50. The [landing page's chart](/#cost)
+$68 + 150,000 × $0.0318 ÷ 60 = $147.50. The [landing page's chart](/#cost)
 shows the same figures.
 
 ## What's left out

@@ -52,7 +52,7 @@ create in the region:
 
 | VM            | vCPU | Sizes, in order                                                                                                                                                        |
 | ------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Control plane | 2    | `Standard_D2s_v5`, `Standard_D2as_v5`, `Standard_D2s_v4`: 8 GiB                                                                                                        |
+| Control plane | 2    | `Standard_B2als_v2`, `Standard_B2s`: 4 GiB; `Standard_D2s_v5`, `Standard_D2as_v5`, `Standard_D2s_v4`: 8 GiB                                                            |
 | Listener      | 2    | `Standard_B2s`, `Standard_B2als_v2`, `Standard_B2ls_v2`: 4 GiB; `Standard_B2as_v2`, `Standard_B2s_v2`, `Standard_D2as_v5`, `Standard_D2s_v5`, `Standard_D2s_v4`: 8 GiB |
 
 Before any sign-in, the plan reads `az vm list-skus` for those sizes, and
@@ -83,7 +83,7 @@ creates:
   trusts only your control plane, so no Azure keys are stored.
 - **Cache buckets**, through that connection: one per runner region,
   `bm-cache-<id>-<region>`, for the [cache](/cache/).
-- **The control plane**, when Azure is its cloud: a `Standard_D2s_v5` VM, or
+- **The control plane**, when Azure is its cloud: a `Standard_B2als_v2` VM, or
   the size above its region offers, with its disk and public address, and a
   checkpoint bucket for its backups; and each org's listener on its own
   `Standard_B2s` VM, or the size above its region offers, with its disk and
@@ -124,15 +124,16 @@ These are catalog prices in `westus2`, spot in the lowest zone, for a
 | `Standard_D4s_v5`   | 0.0355   | 0.192         |
 
 Other sizes scale with their vCPUs. Each job also pays for its VM's boot and its
-100 GB disk. The always-on VMs cost about $111 a month: $79 for the control
+100 GB disk. The always-on VMs cost about $68 a month: $36 for the control
 plane's VM and $32 for each org's listener VM, with their disks and addresses,
-at their first sizes. Another size costs, in `westus2` on 2026-11-21: $72 for
-`Standard_D2as_v5` and $79 for `Standard_D2s_v4`; for the listener, $29 for
+at their first sizes. Another size costs, in `westus2` on 2026-11-21: $39 for
+`Standard_B2s`, $79 for `Standard_D2s_v5`, $72 for `Standard_D2as_v5` and $79
+for `Standard_D2s_v4`; for the listener, $29 for
 `Standard_B2als_v2`, $32 for `Standard_B2ls_v2`, $57 for `Standard_B2as_v2`,
 $63 for `Standard_B2s_v2`, $65 for `Standard_D2as_v5` and $72 for
 `Standard_D2s_v5` or `Standard_D2s_v4`. The plan prints the sizes and prices
 it picks.
 At those prices, 150,000 minutes a month of `backmesh-ubuntu-2404-4vcpu` jobs cost at least
-$191–$206 with one org's always-on VMs, before disks, boots and runners started ahead of
+$148–$163 with one org's always-on VMs, before disks, boots and runners started ahead of
 jobs; see [the
 costs](/#cost). Spot prices change by the hour.

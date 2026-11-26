@@ -503,7 +503,7 @@ describe('install', () => {
       ),
     ).toEqual([
       // Through the user's cloud CLI, with no local API, after the quotas.
-      'api create backmesh --cloud aws --region us-east-2 --vm-type t3.large --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud aws --region us-east-2 --vm-type t3.medium --sign-in-apps 5622376 --json',
       `api use ${HOSTED}`,
       // The role's trust names the hosted API, so it comes after create.
       `credentials new ${BM.aws} --provider aws --role --apply --json`,
@@ -573,7 +573,7 @@ describe('install', () => {
       expect.arrayContaining([
         'aws us-east-2: no VM while idle; while its job runs, a backmesh-ubuntu-2404-4vcpu VM costs about $0.05–0.07 an hour on spot and $0.17–0.24 on demand, plus its disk, and the other sizes scale with their vCPUs',
         'aws us-east-2 quota: 640 spot vCPUs (160 backmesh-ubuntu-2404-4vcpu jobs at once), 128 on-demand vCPUs (32 backmesh-ubuntu-2404-4vcpu jobs at once)',
-        "Always on: the control plane's VM (t3.large) on aws us-east-2, about $69 a month with its disk and address.",
+        "Always on: the control plane's VM (t3.medium) on aws us-east-2, about $39 a month with its disk and address.",
         "Always on: acme's listener VM (t3.small) on aws us-east-2, about $17 a month with its disk and address.",
         ON_DEMAND_FALLBACK_LINE,
       ]),
@@ -607,7 +607,7 @@ describe('install', () => {
     expect(
       calls.filter((c) => /^(api create|credentials new|vm )/.test(c)),
     ).toEqual([
-      'api create backmesh --cloud aws --region us-east-2 --vm-type t3.large --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud aws --region us-east-2 --vm-type t3.medium --sign-in-apps 5622376 --json',
       `credentials new ${BM.aws} --provider aws --profile default --account-id 123456789012 --generate`,
       expect.stringMatching(/^vm .* --secret backmesh-acme --wait$/),
     ]);
@@ -2134,8 +2134,8 @@ describe('install', () => {
         ],
         controlPlane: {
           cloud: 'aws',
-          managementVm: 't3.large',
-          monthlyUsd: 69,
+          managementVm: 't3.medium',
+          monthlyUsd: 39,
           exists: false,
           sharedWith: [],
         },
@@ -2155,7 +2155,7 @@ describe('install', () => {
           ...plan.rates,
           ...plan.quotas,
           expect.stringMatching(
-            /^Always on: the control plane's VM \(t3\.large\)/,
+            /^Always on: the control plane's VM \(t3\.medium\)/,
           ),
           expect.stringMatching(/^Always on: acme's listener VM \(t3\.small\)/),
         ]),
@@ -2535,7 +2535,7 @@ describe('install', () => {
     // AWS, each in its one fixed anchor region (regions are never asked
     // for, owner, 2026-11-13).
     expect(calls).toContain(
-      'api create backmesh --cloud gcp --region us-east1 --vm-type e2-standard-2 --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud gcp --region us-east1 --vm-type e2-medium --sign-in-apps 5622376 --json',
     );
     const routes = parseRoutes(
       JSON.parse(
@@ -2784,23 +2784,23 @@ const LISTENER_SIZES = [
   'Standard_D2s_v5',
   'Standard_D2s_v4',
 ];
-// Install's one read: the control plane's sizes, then the listener's
-// others.
-const SKU_QUERY = `[?${[
+const CONTROL_SIZES = [
+  'Standard_B2als_v2',
+  'Standard_B2s',
   'Standard_D2s_v5',
   'Standard_D2as_v5',
   'Standard_D2s_v4',
-  ...LISTENER_SIZES.slice(0, 5),
+];
+// Install's one read: the control plane's sizes, then the listener's
+// others.
+const SKU_QUERY = `[?${[
+  ...CONTROL_SIZES,
+  ...LISTENER_SIZES.filter((s) => !CONTROL_SIZES.includes(s)),
 ]
   .map((s) => `name=='${s}'`)
   .join(
     ' || ',
   )}].{name:name,family:family,locations:locations,restrictions:restrictions}`;
-const CONTROL_SIZES = [
-  'Standard_D2s_v5',
-  'Standard_D2as_v5',
-  'Standard_D2s_v4',
-];
 // Each of `sizes` refused in `regions`.
 const refusedAll = (sizes: readonly string[], regions: readonly string[]) =>
   Object.fromEntries(sizes.map((size) => [size, [...regions]]));
@@ -2849,7 +2849,7 @@ describe("install's always-on VM sizes on Azure", () => {
   const eastus = { ...options, controlPlane: 'azure:eastus' };
   // Azure's capacity refusal, as `api create --json` relays it.
   const CAPACITY = (region: string) =>
-    `{"error":{"code":"UNEXPECTED","message":"az deployment group create failed: (SkuNotAvailable) The requested VM size for resource 'Following SKUs have failed for Capacity Restrictions: Standard_D2s_v5' is currently not available in location '${region}'. Please try another size or deploy to a different location or zones. See https://aka.ms/azureskunotavailable for details."}}\n`;
+    `{"error":{"code":"UNEXPECTED","message":"az deployment group create failed: (SkuNotAvailable) The requested VM size for resource 'Following SKUs have failed for Capacity Restrictions: Standard_B2als_v2' is currently not available in location '${region}'. Please try another size or deploy to a different location or zones. See https://aka.ms/azureskunotavailable for details."}}\n`;
   // A create that fails in `region` with `stdout`, Azure's capacity refusal
   // by default, after the progress `api create` prints on stderr for a
   // new cluster or a resumed one.
@@ -2886,7 +2886,7 @@ describe("install's always-on VM sizes on Azure", () => {
       `az vm list-skus --all --resource-type virtualMachines --query ${SKU_QUERY} --output json`,
     ]);
     expect(lines.filter((l) => l.startsWith("Azure won't create"))).toEqual([
-      "Azure won't create the control plane's VM in eastus for this subscription in any of its sizes: Standard_D2s_v5 (NotAvailableForSubscription), Standard_D2as_v5 (NotAvailableForSubscription), Standard_D2s_v4 (NotAvailableForSubscription).",
+      "Azure won't create the control plane's VM in eastus for this subscription in any of its sizes: Standard_B2als_v2 (NotAvailableForSubscription), Standard_B2s (NotAvailableForSubscription), Standard_D2s_v5 (NotAvailableForSubscription), Standard_D2as_v5 (NotAvailableForSubscription), Standard_D2s_v4 (NotAvailableForSubscription).",
       "Azure won't create acme's listener VM in eastus for this subscription in any of its sizes: Standard_B2s (NotAvailableForSubscription), Standard_B2als_v2 (NotAvailableForSubscription), Standard_B2ls_v2 (NotAvailableForSubscription), Standard_B2as_v2 (NotAvailableForSubscription), Standard_B2s_v2 (NotAvailableForSubscription), Standard_D2as_v5 (NotAvailableForSubscription), Standard_D2s_v5 (NotAvailableForSubscription), Standard_D2s_v4 (NotAvailableForSubscription).",
     ]);
     expect(plan).toMatchObject({
@@ -2913,7 +2913,7 @@ describe("install's always-on VM sizes on Azure", () => {
     );
     expect(error).toBeInstanceOf(UsageError);
     expect((error as Error).message).toMatch(
-      /control plane's VM in eastus .*: Standard_D2s_v5 \(NotAvailableForSubscription\)[\s\S]*No Azure region install tries/,
+      /control plane's VM in eastus .*: Standard_B2als_v2 \(NotAvailableForSubscription\)[\s\S]*No Azure region install tries/,
     );
     expect(worker.calls).toEqual([]);
   });
@@ -2925,7 +2925,7 @@ describe("install's always-on VM sizes on Azure", () => {
     });
     const { plan, run } = await planned(eastus, deps);
     expect(plan).toMatchObject({
-      controlPlane: { region: 'eastus', managementVm: 'Standard_D2s_v5' },
+      controlPlane: { region: 'eastus', managementVm: 'Standard_B2als_v2' },
       listener: {
         region: 'eastus',
         vmType: 'Standard_B2als_v2',
@@ -2934,7 +2934,7 @@ describe("install's always-on VM sizes on Azure", () => {
     });
     expect(plan.alwaysOnRegions?.[0]).toEqual({
       region: 'eastus',
-      managementVm: 'Standard_D2s_v5',
+      managementVm: 'Standard_B2als_v2',
       listenerVm: 'Standard_B2als_v2',
     });
     expect(lines).toContain(
@@ -2942,28 +2942,28 @@ describe("install's always-on VM sizes on Azure", () => {
     );
     await run();
     expect(steps(calls)).toEqual([
-      'api create backmesh --cloud azure --region eastus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud azure --region eastus --vm-type Standard_B2als_v2 --sign-in-apps 5622376 --json',
       expect.stringContaining(
         '--region eastus --vm-type Standard_B2als_v2 --secret backmesh-acme --wait',
       ),
     ]);
   });
 
-  it("takes the control plane's next size where Azure refuses Standard_D2s_v5", async () => {
+  it("takes the control plane's next size where Azure refuses Standard_B2als_v2", async () => {
     const { deps, lines } = azure({
-      Standard_D2s_v5: RUNNER_REGIONS.us.azure,
+      Standard_B2als_v2: RUNNER_REGIONS.us.azure,
     });
     const { plan } = await planned(eastus, deps);
     expect(plan).toMatchObject({
       controlPlane: {
         region: 'centralus',
-        managementVm: 'Standard_D2as_v5',
-        monthlyUsd: 72,
+        managementVm: 'Standard_B2s',
+        monthlyUsd: 39,
       },
       listener: { region: 'centralus', vmType: 'Standard_B2s' },
     });
     expect(lines).toContain(
-      "Always on: the control plane's VM (Standard_D2as_v5) on azure centralus, about $72 a month with its disk and address.",
+      "Always on: the control plane's VM (Standard_B2s) on azure centralus, about $39 a month with its disk and address.",
     );
   });
 
@@ -2976,12 +2976,12 @@ describe("install's always-on VM sizes on Azure", () => {
     expect(plan.alwaysOnRegions?.slice(0, 2)).toEqual([
       {
         region: 'centralus',
-        managementVm: 'Standard_D2s_v5',
+        managementVm: 'Standard_B2als_v2',
         listenerVm: 'Standard_B2s',
       },
       {
         region: 'northcentralus',
-        managementVm: 'Standard_D2s_v5',
+        managementVm: 'Standard_B2als_v2',
         listenerVm: 'Standard_B2als_v2',
       },
     ]);
@@ -2995,13 +2995,14 @@ describe("install's always-on VM sizes on Azure", () => {
   });
 
   it("takes each VM's next offered size where its family has no quota, reading each region's usage once", async () => {
-    // A new subscription: no DSv5 quota in centralus, and the B-series one
-    // used up.
+    // A new subscription: no Basv2 or DSv5 quota in centralus, and the
+    // B-series one used up.
     const { deps, commands } = azure(
       {},
       {
         families: {
           centralus: {
+            standardBasv2Family: [0, 0],
             standardDSv5Family: [0, 0],
             standardBSFamily: [10, 9],
           },
@@ -3015,7 +3016,7 @@ describe("install's always-on VM sizes on Azure", () => {
     expect(plan.alwaysOnRegions?.[0]).toEqual({
       region: 'centralus',
       managementVm: 'Standard_D2as_v5',
-      listenerVm: 'Standard_B2als_v2',
+      listenerVm: 'Standard_B2ls_v2',
     });
     const reads = commands.filter((c) => c.startsWith('az vm list-usage'));
     expect(reads).toHaveLength(new Set(reads).size);
@@ -3031,7 +3032,7 @@ describe("install's always-on VM sizes on Azure", () => {
       deps,
     );
     expect(lines).toContain(
-      "Azure's cores quota in centralus has 3 vCPUs free (limit 5), under the 4 for the control plane's VM (Standard_D2s_v5) and acme's listener VM (Standard_B2s).",
+      "Azure's cores quota in centralus has 3 vCPUs free (limit 5), under the 4 for the control plane's VM (Standard_B2als_v2) and acme's listener VM (Standard_B2s).",
     );
     expect(plan.controlPlane.region).not.toBe('centralus');
   });
@@ -3062,6 +3063,8 @@ describe("install's always-on VM sizes on Azure", () => {
           RUNNER_REGIONS.us.azure.map((r) => [
             r,
             {
+              standardBasv2Family: [0, 0],
+              standardBSFamily: [0, 0],
               standardDSv5Family: [0, 0],
               standardDASv5Family: [0, 0],
               standardDSv4Family: [0, 0],
@@ -3076,7 +3079,7 @@ describe("install's always-on VM sizes on Azure", () => {
     ).catch((e: unknown) => e)) as Error;
     expect(error).toBeInstanceOf(UsageError);
     expect(error.message).toMatch(
-      /standardDSv5Family quota in centralus has 0 vCPUs free[\s\S]*with quota for it\..* Or raise Azure's standardDSv5Family vCPU quota in one of those regions\.$/,
+      /standardBasv2Family quota in centralus has 0 vCPUs free[\s\S]*with quota for it\..* Or raise Azure's standardBasv2Family vCPU quota in one of those regions\.$/,
     );
     expect(worker.calls).toEqual([]);
   });
@@ -3118,9 +3121,9 @@ describe("install's always-on VM sizes on Azure", () => {
     await (await planned(eastus, deps)).run();
     const id = 'backmesh-1763553600000-x7k2p9';
     expect(steps(calls)).toEqual([
-      'api create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud azure --region centralus --vm-type Standard_B2als_v2 --sign-in-apps 5622376 --json',
       `api delete ${id} --cloud azure --region centralus --delete-vms --delete-buckets --confirm ${id} --json`,
-      'api create backmesh --cloud azure --region northcentralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud azure --region northcentralus --vm-type Standard_B2als_v2 --sign-in-apps 5622376 --json',
       expect.stringContaining(
         '--region northcentralus --vm-type Standard_B2s --secret backmesh-acme --wait',
       ),
@@ -3142,7 +3145,7 @@ describe("install's always-on VM sizes on Azure", () => {
       'SkuNotAvailable',
     );
     expect(steps(calls)).toEqual([
-      'api create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud azure --region centralus --vm-type Standard_B2als_v2 --sign-in-apps 5622376 --json',
     ]);
   });
 
@@ -3159,7 +3162,7 @@ describe("install's always-on VM sizes on Azure", () => {
       'API_NOT_READY',
     );
     expect(steps(calls)).toEqual([
-      'api create backmesh --cloud azure --region centralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud azure --region centralus --vm-type Standard_B2als_v2 --sign-in-apps 5622376 --json',
     ]);
   });
 
@@ -3193,7 +3196,7 @@ describe("install's always-on VM sizes on Azure", () => {
     );
     await run();
     expect(steps(calls)[0]).toBe(
-      'api create backmesh --cloud azure --region northcentralus --vm-type Standard_D2s_v5 --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud azure --region northcentralus --vm-type Standard_B2als_v2 --sign-in-apps 5622376 --json',
     );
   });
 
@@ -3389,7 +3392,7 @@ describe("install's always-on VM sizes on Azure", () => {
     ).catch((e: unknown) => e)) as Error;
     expect(error).toBeInstanceOf(UsageError);
     expect(error.message).toBe(
-      `AWS allows 2 on-demand vCPUs in us-east-2, under the 4 for the control plane's VM (t3.large) and acme's listener VM (t3.small): raise EC2 "Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances" (L-1216C47A) in us-east-2.`,
+      `AWS allows 2 on-demand vCPUs in us-east-2, under the 4 for the control plane's VM (t3.medium) and acme's listener VM (t3.small): raise EC2 "Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances" (L-1216C47A) in us-east-2.`,
     );
     expect(worker.calls).toEqual([]);
   });
@@ -3417,7 +3420,7 @@ describe("install's always-on VM sizes on Azure", () => {
         calls.push(args.join(' '));
         throw new StepFailed(
           args,
-          '{"error":{"code":"UNEXPECTED","message":"CREATE_FAILED: We currently do not have sufficient t3.large capacity in the Availability Zone you requested (us-east-2a). (InsufficientInstanceCapacity)"}}\n',
+          '{"error":{"code":"UNEXPECTED","message":"CREATE_FAILED: We currently do not have sufficient t3.medium capacity in the Availability Zone you requested (us-east-2a). (InsufficientInstanceCapacity)"}}\n',
           '   [12:00:01 PM] Creating cluster backmesh (ID: backmesh-1763553600000-x7k2p9)\n',
           { cause: new Error('exit 1') },
         );
@@ -3428,7 +3431,7 @@ describe("install's always-on VM sizes on Azure", () => {
       'InsufficientInstanceCapacity',
     );
     expect(steps(calls)).toEqual([
-      'api create backmesh --cloud aws --region us-east-2 --vm-type t3.large --sign-in-apps 5622376 --json',
+      'api create backmesh --cloud aws --region us-east-2 --vm-type t3.medium --sign-in-apps 5622376 --json',
     ]);
   });
 });

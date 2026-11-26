@@ -53,7 +53,7 @@ restrict OAuth apps.
 
 ## How it works
 
-Install creates a control plane in your account, about $74–$111 a month for one
+Install creates a control plane in your account, about $50–$68 a month for one
 org. Its listener long-polls GitHub for queued jobs, with no inbound port or
 webhook, and starts each job on its own spot VM in the cheapest region with
 capacity, deleted when the job ends. Your code, secrets, caches and logs stay in

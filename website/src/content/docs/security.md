@@ -7,7 +7,7 @@ description: What runs where, what reaches backmesh, the GitHub App's permission
 
 Everything backmesh runs is in your own accounts:
 
-- **backmesh's control plane**, an always-on VM (t3.large on AWS) in the first
+- **backmesh's control plane**, an always-on VM (t3.medium on AWS) in the first
   cloud you install, with a checkpoint bucket for its backups.
 - **The listener**, which scales runners, alone on a small always-on VM of its
   own (t3.small on AWS) for each org. It long-polls GitHub, so nothing needs an

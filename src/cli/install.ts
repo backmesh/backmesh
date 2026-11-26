@@ -257,23 +257,30 @@ export function noArmLine({ cloud }: CloudTarget, regions: readonly string[]) {
   return `${where(cloud, regions)} ${regions.length > 1 ? 'offer' : 'offers'} no ${families.join(' or ')}, so ${cloud} gets no arm64 labels.`;
 }
 
-// The management VM: AWS's is backmesh's sizing; GCP's the nearest size
-// _(inference)_. Azure's first is the size anycloud qualifies the
-// management VM on; a region that doesn't offer it the subscription
-// (`vm-sizes.ts`) takes the same 2 vCPUs and 8 GiB on AMD, or a generation
-// back.
+// The management VM: 2 vCPUs and 4 GiB, for K3s and the API (2 GiB at most)
+// through a burst of jobs (e2e.yml's `burst`, #PR). On Azure, a region that
+// doesn't offer the subscription the first size (`vm-sizes.ts`) takes the
+// next: Intel's, then the 8 GiB sizes from before.
 const MANAGEMENT_VMS: Record<Cloud, readonly string[]> = {
-  aws: ['t3.large'],
-  gcp: ['e2-standard-2'],
-  azure: ['Standard_D2s_v5', 'Standard_D2as_v5', 'Standard_D2s_v4'],
+  aws: ['t3.medium'],
+  gcp: ['e2-medium'],
+  azure: [
+    'Standard_B2als_v2',
+    'Standard_B2s',
+    'Standard_D2s_v5',
+    'Standard_D2as_v5',
+    'Standard_D2s_v4',
+  ],
 };
 // It, its disk and public address, $/month, Azure's at westus2's
 // pay-as-you-go Linux price (Retail Prices API, 2026-11-21): with each org's
 // listener VM (`LISTENER_VM_MONTHLY_USD`), the installation's whole floor,
 // since runners have no VM while idle.
 const MANAGEMENT_MONTHLY_USD: Record<string, number> = {
-  't3.large': 69,
-  'e2-standard-2': 59,
+  't3.medium': 39,
+  'e2-medium': 35,
+  Standard_B2als_v2: 36,
+  Standard_B2s: 39,
   Standard_D2s_v5: 79,
   Standard_D2as_v5: 72,
   Standard_D2s_v4: 79,
