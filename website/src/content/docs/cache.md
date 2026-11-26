@@ -142,6 +142,10 @@ so `backmesh/cache` can't stand in for it. To keep Cargo's downloads and
     restore-keys: cargo-${{ runner.os }}-${{ runner.arch }}-
 ```
 
+Cache the directories under `~/.cargo`, as above, not `~/.cargo` or
+`~/.rustup` itself: on backmesh's runners those two are links to Rust's homes,
+so a cache of either would hold only the link.
+
 ## Container jobs
 
 The cache works in a job that runs in a `container:`. The image needs GNU `tar`,
