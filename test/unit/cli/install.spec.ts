@@ -18,6 +18,7 @@ import {
   noArmLine,
   parseControlPlane,
   parseRunners,
+  takesArm,
   ON_DEMAND_FALLBACK_LINE,
   PUBLIC_REPOS_LINE,
   type InstallDeps,
@@ -2269,6 +2270,18 @@ describe('install', () => {
         'us-west-2',
       ]);
       expect(wide.planId).not.toBe(narrow.planId);
+    });
+
+    it('plans arm64 classes only on an anycloud that boots arm64, 0.1.84 on', async () => {
+      expect(takesArm('0.1.83')).toBe(false);
+      expect(takesArm('0.1.84')).toBe(true);
+      const arm = async (features: FeatureTable) =>
+        (await planned(setUp({ features }).deps)).classes
+          .map((c) => c.label)
+          .filter((label) => label.includes('-arm-'));
+      expect(await arm(RELEASED)).toContain('backmesh-ubuntu-2404-arm-4vcpu');
+      // A pin from before the version that has arm64.
+      expect(await arm({ ...RELEASED, arm64: '999.0.0' })).toEqual([]);
     });
 
     it("never runs runners in the control plane's own region when that region isn't a RUNNER_REGIONS candidate", async () => {
