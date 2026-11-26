@@ -547,6 +547,11 @@ describe("e2e.yml's Worker and Azure checks", () => {
           cloud: 'aws',
           regions: ['us-east-2'],
         },
+        {
+          label: 'backmesh-gcp-ubuntu-2404-arm-4vcpu',
+          cloud: 'gcp',
+          regions: ['us-east4'],
+        },
       ],
     };
     const args = join(dir, 'args');
@@ -558,6 +563,7 @@ describe("e2e.yml's Worker and Azure checks", () => {
         CLOUD: cloud,
         PLACEMENT: leg.placement!,
         LABEL: leg.label ?? '',
+        ARM_LABEL: leg['arm-label'] ?? '',
         CONTROL_PLANE_REGION: leg['control-plane-region'] ?? '',
         MATRIX: JSON.stringify(matrix),
         GITHUB_ENV: env,
@@ -580,7 +586,7 @@ describe("e2e.yml's Worker and Azure checks", () => {
 
   // Our Azure CI subscription has 3 spot vCPUs per region until its quota
   // is raised: the Azure leg's one job runs on backmesh-ubuntu-2404-2vcpu, AWS's on `labels`.
-  it("runs the Azure leg's one job on its leg's label, and AWS's labels unchanged", () => {
+  it("runs the Azure leg's one job on its leg's label, and AWS's own labels only", () => {
     const azure = labelMatrix('azure');
     expect(azure.got.include).toEqual([
       expect.objectContaining({
@@ -590,11 +596,11 @@ describe("e2e.yml's Worker and Azure checks", () => {
       }),
     ]);
     const aws = labelMatrix('aws');
-    expect(aws.got).toEqual(aws.matrix);
+    expect(aws.got.include).toEqual([aws.matrix.include[0]]);
   });
 
   // GCP's control plane makes it the home cloud, whose labels are plain.
-  it("runs the GCP leg's one job on backmesh-ubuntu-2404-4vcpu in the plan's GCP regions", () => {
+  it("runs the GCP leg's jobs on backmesh-ubuntu-2404-4vcpu and its arm64 twin in the plan's GCP regions", () => {
     expect(labelMatrix('gcp').got.include).toEqual([
       expect.objectContaining({
         label: 'backmesh-ubuntu-2404-4vcpu',
@@ -602,6 +608,13 @@ describe("e2e.yml's Worker and Azure checks", () => {
         regions: ['us-central1', 'us-east1'],
         kvm: false,
         gpu: false,
+        arm: false,
+      }),
+      expect.objectContaining({
+        label: 'backmesh-ubuntu-2404-arm-4vcpu',
+        cloud: 'gcp',
+        regions: ['us-central1', 'us-east1'],
+        arm: true,
       }),
     ]);
   });
