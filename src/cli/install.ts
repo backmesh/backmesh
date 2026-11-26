@@ -258,7 +258,7 @@ export function noArmLine({ cloud }: CloudTarget, regions: readonly string[]) {
 }
 
 // The management VM: 2 vCPUs and 4 GiB, for K3s and the API (2 GiB at most)
-// through a burst of jobs (e2e.yml's `burst`, #PR). On Azure, a region that
+// through a burst of jobs (e2e.yml's `burst`, #179). On Azure, a region that
 // doesn't offer the subscription the first size (`vm-sizes.ts`) takes the
 // next: Intel's, then the 8 GiB sizes from before.
 const MANAGEMENT_VMS: Record<Cloud, readonly string[]> = {
