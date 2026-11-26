@@ -50,6 +50,7 @@ signed in to, near GitHub's US East. The control plane is an always-on VM
 for your jobs, a small one (t3.small on AWS) of its own: together about
 $50–$68 a month for one org, up to $151 on Azure when a region doesn't offer
 your subscription the first sizes, and $15–$72 more for each further org.
+An existing control plane keeps its size on upgrade.
 To choose, see [Control plane and runners](#control-plane-and-runners). To see
 the plan first:
 

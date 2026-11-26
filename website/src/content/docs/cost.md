@@ -39,10 +39,10 @@ times measured on demand in `us-central1`, not from spot jobs ([anycloud#38](htt
 regions' prices.
 
 - **The always-on VMs:** the control plane's VM and one listener VM for each
-  org, with their disks and public addresses. For one org that's about $86 a
-  month on AWS ($69 + $17), $111 on Azure ($79 + $32) and $74 on GCP ($59 +
+  org, with their disks and public addresses. For one org that's about $56 a
+  month on AWS ($39 + $17), $68 on Azure ($36 + $32) and $50 on GCP ($35 +
   $15); each further org adds its listener VM. On Azure, a region that doesn't
-  offer your subscription the first sizes takes others, from $101 to $151 for
+  offer your subscription the first sizes takes others, from $65 to $151 for
   one org ([Azure](/azure/)). An idle installation pays only this, since
   runners have no VM while idle.
 

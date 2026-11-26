@@ -65,8 +65,8 @@ not measured.
 AWS tries `g4dn.2xlarge`, the same T4 with 8 vCPUs, when no `g4dn.xlarge` is
 free.
 
-Left out: each VM's disk, its boot, and backmesh's control plane, about $86 a
-month on AWS and $111 on Azure, which the GPU labels share with the CPU ones.
+Left out: each VM's disk, its boot, and backmesh's control plane, about $56 a
+month on AWS and $68 on Azure, which the GPU labels share with the CPU ones.
 [Cost](/cost/#gpu) has the method;
 [GitHub Actions GPU pricing explained](/blog/github-actions-gpu-pricing/)
 works through a month.

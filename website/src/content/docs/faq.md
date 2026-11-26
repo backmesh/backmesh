@@ -178,8 +178,8 @@ Install prints what they cost before it creates anything.
 
 **Before any job runs:** runners have no VM while idle, so an idle installation
 pays only for its always-on VMs, the control plane's and one listener VM per
-org, with their disks and public addresses: for one org about $86 a month on
-AWS, $74 on GCP and $111 on Azure, or up to $151 on Azure when a region doesn't
+org, with their disks and public addresses: for one org about $56 a month on
+AWS, $50 on GCP and $68 on Azure, or up to $151 on Azure when a region doesn't
 offer your subscription the first sizes. Each job's VM
 bills from its boot until the job ends, so every job also pays for its boot.
 A runner
