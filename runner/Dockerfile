@@ -152,7 +152,7 @@ RUN echo 'Acquire::IndexTargets::deb::CNF { MetaKey "$(COMPONENT)/cnf/Commands-$
     && echo 'runner ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/runner \
     && chmod 0440 /etc/sudoers.d/runner \
     && install -d -o runner -g runner /opt/actions-runner-dist \
-        /opt/pipx /opt/pipx_bin /opt/corepack \
+        /opt/pipx /opt/pipx_bin /opt/corepack /home/runner/.cargo /home/runner/.rustup \
     && rm -rf /etc/apt/apt.conf.d/50backmesh-commands /var/lib/apt/lists/* /tmp/toolset.lock /tmp/first-use-packages.txt
 
 # Node and npm with corepack's yarn and pnpm. npm's global directories are the
