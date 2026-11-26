@@ -1,0 +1,103 @@
+# The sccache spike's per-cloud check (experiments/sccache/README.md):
+# clouds.ts pushes this, with the label and branch, to a branch of the test
+# org's e2e repository from each e2e.yml leg, with the proxy's bundle as
+# proxy.mjs. One job: a cold nushell build through the proxy, then, once
+# the listener has renewed the job's token, a write and read with the new
+# one, then the same build again from the bucket. The job writes its row
+# to the results branch, where clouds.ts reads it over git.
+name: sccache
+
+on:
+  push:
+    branches: [__BRANCH__]
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  sccache:
+    runs-on: __LABEL__
+    timeout-minutes: 90
+    permissions:
+      contents: write # the row, to the results branch
+    env:
+      SCCACHE_WEBDAV_ENDPOINT: http://127.0.0.1:4226
+      SCCACHE_IDLE_TIMEOUT: '0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: nushell/nushell
+          ref: 0.116.1
+          path: project
+          persist-credentials: false
+
+      - name: Start sccache
+        run: |
+          v=v0.20.1 sum=c9f6c5a3ae84d9da0956b28c357a365827bda33f3383647fc0b67484c74a5ea9
+          f=sccache-$v-x86_64-unknown-linux-musl
+          curl -sSfL -o "$RUNNER_TEMP/$f.tar.gz" "https://github.com/mozilla/sccache/releases/download/$v/$f.tar.gz"
+          echo "$sum $RUNNER_TEMP/$f.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$f.tar.gz" -C "$RUNNER_TEMP" "$f/sccache"
+          nohup node proxy.mjs 4226 "$RUNNER_TEMP/proxy.json" >"$RUNNER_TEMP/proxy.log" 2>&1 &
+          echo $! >"$RUNNER_TEMP/proxy.pid"
+          echo "RUSTC_WRAPPER=$RUNNER_TEMP/$f/sccache" >>"$GITHUB_ENV"
+          (cd project && rustup show active-toolchain || rustup toolchain install)
+
+      - name: Cold build
+        working-directory: project
+        run: |
+          start=$(date +%s)
+          cargo build --release --locked
+          echo "cold=$(($(date +%s) - start))" >>"$RUNNER_TEMP/times"
+          "$RUSTC_WRAPPER" --show-stats --stats-format=json >"$RUNNER_TEMP/cold.json"
+
+      # The listener renews the token every 10 minutes from the job's start.
+      # Past the build, wait for a token the proxy hasn't used, then write
+      # and read through it.
+      - name: A write and read with a renewed token
+        run: |
+          file=/run/anycloud-secrets/_bm-cache-$RUNNER_NAME/BACKMESH_CACHE
+          [[ -f $file ]] || file=$RUNNER_TEMP/.backmesh-cache
+          cred() { jq -c '.tokens | map(.credentials)' "$file" | sha256sum; }
+          first=$(cred)
+          for _ in $(seq 72); do [[ $(cred) != "$first" ]] && break; sleep 10; done
+          [[ $(cred) != "$first" ]] || echo "::warning::no renewal within 12 minutes"
+          probe=$(head -c 4096 /dev/urandom | base64 -w0)
+          curl -sSf -X PUT --data-binary "$probe" http://127.0.0.1:4226/probe/$GITHUB_RUN_ID
+          [[ $(curl -sSf http://127.0.0.1:4226/probe/$GITHUB_RUN_ID) == "$probe" ]]
+
+      - name: Warm build
+        working-directory: project
+        run: |
+          cargo clean
+          "$RUSTC_WRAPPER" --zero-stats
+          start=$(date +%s)
+          cargo build --release --locked
+          echo "warm=$(($(date +%s) - start))" >>"$RUNNER_TEMP/times"
+          "$RUSTC_WRAPPER" --show-stats --stats-format=json >"$RUNNER_TEMP/warm.json"
+
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          kill "$(cat "$RUNNER_TEMP/proxy.pid")" && sleep 2
+          cat "$RUNNER_TEMP/proxy.log"
+          stats() { jq -c '.stats | {requests: .compile_requests, hits: ([.cache_hits.counts[]] | add // 0),
+            misses: ([.cache_misses.counts[]] | add // 0), writes: .cache_writes, writeErrors: .cache_write_errors,
+            readErrors: .cache_read_errors, notCacheable: .requests_not_cacheable}' "$RUNNER_TEMP/$1.json" 2>/dev/null || echo null; }
+          jq -n --arg sha "$GITHUB_SHA" --arg times "$(cat "$RUNNER_TEMP/times" 2>/dev/null)" \
+            --argjson proxy "$(cat "$RUNNER_TEMP/proxy.json" 2>/dev/null || echo null)" \
+            --argjson cold "$(stats cold)" --argjson warm "$(stats warm)" \
+            --arg region "$(jq -r '.bucket' "/run/anycloud-secrets/_bm-cache-$RUNNER_NAME/BACKMESH_CACHE" 2>/dev/null)" \
+            --arg conclusion "${{ job.status }}" \
+            '{sha: $sha, conclusion: $conclusion, bucket: $region, seconds: ($times | split("\n") | map(select(. != "") | split("=") | {(.[0]): (.[1] | tonumber)}) | add),
+              cold: $cold, warm: $warm, proxy: $proxy}' | tee "$RUNNER_TEMP/row.json"
+          gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/results/$GITHUB_SHA.json" -f message="sccache $GITHUB_SHA" \
+            -f branch=results -f content="$(base64 -w0 "$RUNNER_TEMP/row.json")" >/dev/null
