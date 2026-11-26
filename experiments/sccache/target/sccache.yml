@@ -24,7 +24,7 @@ jobs:
     permissions:
       contents: write # the row, to the results branch
     env:
-      SCCACHE_WEBDAV_ENDPOINT: http://127.0.0.1:4226
+      SCCACHE_WEBDAV_ENDPOINT: http://127.0.0.1:4230
       SCCACHE_IDLE_TIMEOUT: '0'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -44,7 +44,7 @@ jobs:
           curl -sSfL -o "$RUNNER_TEMP/$f.tar.gz" "https://github.com/mozilla/sccache/releases/download/$v/$f.tar.gz"
           echo "$sum $RUNNER_TEMP/$f.tar.gz" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/$f.tar.gz" -C "$RUNNER_TEMP" "$f/sccache"
-          nohup node proxy.mjs 4226 "$RUNNER_TEMP/proxy.json" >"$RUNNER_TEMP/proxy.log" 2>&1 &
+          nohup node proxy.mjs 4230 "$RUNNER_TEMP/proxy.json" >"$RUNNER_TEMP/proxy.log" 2>&1 &
           echo $! >"$RUNNER_TEMP/proxy.pid"
           echo "RUSTC_WRAPPER=$RUNNER_TEMP/$f/sccache" >>"$GITHUB_ENV"
           (cd project && rustup show active-toolchain || rustup toolchain install)
@@ -69,8 +69,8 @@ jobs:
           for _ in $(seq 72); do [[ $(cred) != "$first" ]] && break; sleep 10; done
           [[ $(cred) != "$first" ]] || echo "::warning::no renewal within 12 minutes"
           probe=$(head -c 4096 /dev/urandom | base64 -w0)
-          curl -sSf -X PUT --data-binary "$probe" http://127.0.0.1:4226/probe/$GITHUB_RUN_ID
-          [[ $(curl -sSf http://127.0.0.1:4226/probe/$GITHUB_RUN_ID) == "$probe" ]]
+          curl -sSf -X PUT --data-binary "$probe" http://127.0.0.1:4230/probe/$GITHUB_RUN_ID
+          [[ $(curl -sSf http://127.0.0.1:4230/probe/$GITHUB_RUN_ID) == "$probe" ]]
 
       - name: Warm build
         working-directory: project

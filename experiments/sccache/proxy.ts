@@ -15,8 +15,9 @@ import { createServer, type IncomingMessage } from 'node:http';
 import type { ReadyFile } from '../../src/cache/format.js';
 import { openStore, read, tokenPaths } from '../../src/cache/store.js';
 
-const [port = '4226', statsFile = 'sccache-proxy.json'] = process.argv.slice(2);
+const [port = '4230', statsFile = 'sccache-proxy.json'] = process.argv.slice(2);
 const DIR = 'sccache/';
+// Not 4226: that's sccache's own server's port.
 
 const stats = {
   started: Date.now(),

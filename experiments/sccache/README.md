@@ -11,7 +11,7 @@ here, not in the runner image's `auto-cache.mjs`.
 bun build experiments/sccache/proxy.ts --target node --format esm --minify-syntax --outfile experiments/sccache/dist/proxy.mjs
 ```
 
-serves `SCCACHE_WEBDAV_ENDPOINT=http://127.0.0.1:4226` over `openStore`
+serves `SCCACHE_WEBDAV_ENDPOINT=http://127.0.0.1:4230` over `openStore`
 (`src/cache/store.ts`). Each request reads the token file again, so a renewed
 token is used as soon as it lands. A GET reads `sccache/<path>` under the own,
 then the base, then the default ref's prefix, and a PUT writes under own only.

@@ -180,7 +180,7 @@ function openStore(tokens, fetch = globalThis.fetch, signal) {
 }
 
 // experiments/sccache/proxy.ts
-var [port = "4226", statsFile = "sccache-proxy.json"] = process.argv.slice(2), DIR = "sccache/", stats = {
+var [port = "4230", statsFile = "sccache-proxy.json"] = process.argv.slice(2), DIR = "sccache/", stats = {
   started: Date.now(),
   cloud: "",
   gets: 0,
