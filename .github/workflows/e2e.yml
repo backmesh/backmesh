@@ -82,6 +82,14 @@ on:
           backmesh-ubuntu-2404-kvm-4vcpu=aws:us-east-2,us-east-1,us-west-2
           backmesh-ubuntu-2404-arm-4vcpu=aws:us-east-2,us-east-1,us-west-2
           backmesh-gcp-ubuntu-2404-arm-4vcpu=gcp:us-east4,us-central1,us-east1,us-east5,us-south1,us-west1,us-west2,us-west3,us-west4
+      burst:
+        description: >-
+          with `version`, a burst of this many jobs at once on each leg's
+          first label after its label member, to load the control plane: its runner-start figures and the control plane VM's in the
+          summary and the burst-<cloud> artifact
+          (benchmarks/control-plane-burst); 0 runs none, at most 99
+        type: number
+        default: 0
 
 permissions: {}
 
@@ -557,6 +565,86 @@ jobs:
           pid=$!
           trap 'kill -INT $pid; wait $pid' INT TERM
           wait $pid
+
+      # The burst (benchmarks/control-plane-burst), on the leg's first
+      # label, while anycloud api status is read every 15 s: an answer that
+      # fails or takes over 5 s is the API not serving.
+      - name: The burst on the test org's runners
+        id: burst
+        if: ${{ inputs.burst > 0 }}
+        timeout-minutes: 130
+        env:
+          DEPLOY_KEY: ${{ secrets.E2E_TEST_ORG_DEPLOY_KEY }}
+          TARGET_REPO: ${{ inputs.org }}/e2e
+          JOBS: ${{ inputs.burst }}
+        run: |
+          export OUTPUT_DIR=$RUNNER_TEMP/burst-$CLOUD LABEL=$(jq -r '.include[0].label' <<<"$LABEL_MATRIX")
+          mkdir -p "$OUTPUT_DIR"
+          echo "BURST_STARTED=$(date -u +%FT%TZ)" >>"$GITHUB_ENV"
+          key=$RUNNER_TEMP/burst-key
+          install -m 600 /dev/null "$key"
+          printf '%s\n' "$DEPLOY_KEY" >"$key"
+          anycloud=~/.backmesh/bin/$VERSION_ANYCLOUD/anycloud
+          while :; do
+            if out=$(timeout 5 "$anycloud" api status --json 2>&1); then echo "$(date -u +%T) ok"
+            else echo "$(date -u +%T) failed $(tr '\n' ' ' <<<"$out" | cut -c1-300)"; fi
+            sleep 15
+          done >"$OUTPUT_DIR/api-status.log" &
+          probe=$!
+          trap 'kill $probe; rm -f "$key"' EXIT
+          # A cancel cancels the burst's run and deletes its branch.
+          GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes" node benchmarks/control-plane-burst/run.ts &
+          pid=$!
+          trap 'kill -INT $pid; wait $pid' INT TERM
+          wait $pid
+          echo "anycloud api status: $(grep -c ' failed' "$OUTPUT_DIR/api-status.log") of $(wc -l <"$OUTPUT_DIR/api-status.log") reads failed" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # The control plane's VM over the burst, once its cloud's metrics have
+      # caught up: on AWS, its CPU and credits (the VM of anycloud's
+      # documented stack anycloud-<id>); on GCP, memory (the balloon
+      # driver's) and CPU of the VMs the sweep finds. A record only.
+      - name: The control plane VM over the burst
+        if: ${{ always() && steps.burst.outcome != 'skipped' && env.BURST_STARTED && env.CLUSTER_ID && (matrix.cloud == 'aws' || matrix.cloud == 'gcp') }}
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          dir=$RUNNER_TEMP/burst-$CLOUD
+          eval "$(node test/e2e/sweep-names.ts)"
+          sleep 240
+          start=$(date -u -d "$BURST_STARTED 10 minutes ago" +%FT%TZ) end=$(date -u +%FT%TZ)
+          if [[ $CLOUD == aws ]]; then
+            id=$(aws cloudformation describe-stack-resources --region "$CONTROL_PLANE_REGION" --stack-name "$STACK" \
+              --query "StackResources[?ResourceType=='AWS::EC2::Instance'].PhysicalResourceId" --output text)
+            for m in CPUUtilization CPUCreditBalance; do
+              aws cloudwatch get-metric-statistics --region "$CONTROL_PLANE_REGION" --namespace AWS/EC2 --metric-name "$m" \
+                --dimensions "Name=InstanceId,Value=$id" --start-time "$start" --end-time "$end" --period 300 \
+                --statistics Minimum Maximum --output json >"$dir/$m.json"
+              jq -r --arg m "$m" '"\($m): min \([.Datapoints[].Minimum] | min), max \([.Datapoints[].Maximum] | max)"' "$dir/$m.json"
+            done
+          else
+            project=$(gcloud config get-value project)
+            token=$(gcloud auth print-access-token)
+            gcloud compute instances list --filter="name=anycloud-cluster-$CLUSTER_ID OR labels.anycloud_cluster=$CLUSTER_ID" \
+              --format='value(id,name,machineType.basename())' | while read -r id name type; do
+              for m in memory/balloon/ram_used memory/balloon/ram_size cpu/utilization; do
+                curl -fsSG -H "Authorization: Bearer $token" "https://monitoring.googleapis.com/v3/projects/$project/timeSeries" \
+                  --data-urlencode "filter=metric.type=\"compute.googleapis.com/instance/$m\" AND resource.labels.instance_id=\"$id\"" \
+                  --data-urlencode "interval.startTime=$start" --data-urlencode "interval.endTime=$end" >"$dir/$name-${m//\//-}.json"
+                jq -r --arg m "$name ($type) $m" '"\($m): max \([.timeSeries[]?.points[].value | .int64Value // .doubleValue | tonumber] | max)"' \
+                  "$dir/$name-${m//\//-}.json"
+              done
+            done
+          fi | tee "$dir/vm.txt"
+          { echo '```'; cat "$dir/vm.txt"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the burst's figures
+        if: ${{ always() && steps.burst.outcome != 'skipped' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: burst-${{ matrix.cloud }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/burst-${{ matrix.cloud }}/
+          if-no-files-found: warn
 
       # Always, after anything that may have made something, cancelled too:
       # everything but the App, and the checkpoint bucket with the rest. Its
