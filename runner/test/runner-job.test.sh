@@ -203,6 +203,8 @@ case_shares_the_mounted_paths_and_a_home_under_workspace() {
   check 'the runner runs with HOME under /workspace' \
     'grep -qx "HOME=$root/workspace/home" "$scratch/runner-env"'
   check 'HOME starts from /etc/skel' '[[ $(cat "$root"/workspace/home/.profile) == profile ]]'
+  check "HOME's ~/.cargo and ~/.rustup are Rust's homes" \
+    '[[ $(readlink "$root"/workspace/home/.cargo) == "$root/home/runner/.cargo" && $(readlink "$root"/workspace/home/.rustup) == "$root/home/runner/.rustup" ]]'
   check "the user's passwd home is HOME, for ssh" \
     'grep -qx "usermod -d $root/workspace/home $(id -un)" "$calls"'
   check 'the marks stay where the hooks read them' '[[ -s $root/home/runner/.backmesh-job-marks ]]'

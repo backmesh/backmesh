@@ -116,6 +116,21 @@ wd "/$id" -X DELETE >/dev/null
 echo 'after first use: passed'
 EOF
 
+# With HOME moved, as the runner moves it, ~/.cargo is cargo's: what a cache
+# restores under ~/.cargo/registry before the first use is in CARGO_HOME, and
+# so is Swatinem/rust-cache's os.homedir()/.cargo.
+docker run --rm -i --entrypoint sh "$image" \
+  -c 'cat >/tmp/step.sh && exec bash --noprofile --norc -e -o pipefail /tmp/step.sh' <<'EOF' || fail "HOME's .cargo"
+sudo -n install -d -o runner -g runner /workspace
+. /usr/local/bin/runner-job
+share_paths
+mkdir -p ~/.cargo/registry && touch ~/.cargo/registry/restored
+cargo --version >/dev/null 2>&1
+[[ -e /home/runner/.cargo/registry/restored && -x ~/.cargo/bin/cargo ]]
+[[ $(readlink -f "$(node -p 'require("node:os").homedir()')/.cargo") == /home/runner/.cargo ]]
+echo '~/.cargo with HOME moved: passed'
+EOF
+
 # The preinstalled build tools, from a caller that isn't bash, at GitHub's
 # image's versions: mvn finds java's first-use install, and bazel, which is
 # Bazelisk, runs the Bazel it's asked for.

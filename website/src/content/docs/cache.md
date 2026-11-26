@@ -121,6 +121,27 @@ the runners. `backmesh upgrade` creates the buckets for new regions, and
   branch's, then `backmesh/cache`'s, oldest first. A key that never changes is
   saved again after its weekly miss.
 
+## Rust
+
+`Swatinem/rust-cache` works on backmesh's runners without a change, but it
+keeps its cache in GitHub's cache, not in your bucket: it calls GitHub's cache
+service through the `@actions/cache` library, not the `actions/cache` action,
+so `backmesh/cache` can't stand in for it. To keep Cargo's downloads and
+`target` next to the runners, cache the same directories with
+`backmesh/cache` instead:
+
+```yaml
+- uses: backmesh/cache@v1
+  with:
+    path: |
+      ~/.cargo/registry/index/
+      ~/.cargo/registry/cache/
+      ~/.cargo/git/db/
+      target/
+    key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/Cargo.lock') }}
+    restore-keys: cargo-${{ runner.os }}-${{ runner.arch }}-
+```
+
 ## Container jobs
 
 The cache works in a job that runs in a `container:`. The image needs GNU `tar`,

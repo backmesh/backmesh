@@ -233,6 +233,13 @@ share_paths() {
   # The tool cache, which /opt/hostedtoolcache links to, the runner user's.
   mkdir -p "$HOME" "$root/workspace/hostedtoolcache"
   if [[ ! -e $HOME/.profile ]]; then cp -a "$root/etc/skel/." "$HOME/" 2>/dev/null || true; fi
+  # Rust's homes (pinned.sh), as ~/.cargo and ~/.rustup, where GitHub's image
+  # has them, so a step's or a cache's `~/.cargo` is cargo's. The image makes
+  # both, so the links never dangle.
+  local home
+  for home in .cargo .rustup; do
+    [[ -e $HOME/$home || -L $HOME/$home ]] || ln -s "$root/home/runner/$home" "$HOME/$home"
+  done
   # OpenSSH reads `~` from the passwd entry, not HOME: point it there too,
   # so a key a step writes to ~/.ssh is the one ssh, git and scp read.
   sudo -n usermod -d "$HOME" "$(id -un)" 2>/dev/null || true
