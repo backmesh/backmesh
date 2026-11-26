@@ -7,12 +7,22 @@ authors: backmesh
 tags:
   - Guides
 excerpt: A key in frontend code, an unauthenticated proxy, and an authenticated proxy without per-user limits or permissions. What each one exposes, and the three safeguards a backend for the OpenAI API needs.
+head:
+  - tag: title
+    content: '3 OpenAI API integration mistakes that leak your key or user data | backmesh'
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: '{"@context":"https://schema.org","@type":"BlogPosting","headline":"3 common mistakes when integrating the OpenAI API with your web or mobile app","datePublished":"2025-02-13","dateModified":"2026-11-26","author":{"@type":"Organization","name":"backmesh","url":"https://backmesh.com/"},"publisher":{"@id":"https://backmesh.com/#organization"},"mainEntityOfPage":"https://backmesh.com/blog/openai-api-mistakes/"}'
 ---
 
-A key concern when building a web or mobile application that uses OpenAI’s
-language models is protecting your private API key. If you want to keep
-complexity low and release features quickly, setting up a fully fledged backend
-just to safeguard an API key can be time consuming. In this article, you’ll
+_We wrote this post in 2025, when backmesh was a backend for LLM APIs.
+backmesh now [runs GitHub Actions runners](/) in your own cloud._
+
+A leaked OpenAI API key lets anyone run up your bill, and a web or mobile app
+that calls OpenAI’s language models has to keep its key private. If you want to
+keep complexity low and release features quickly, setting up a fully fledged
+backend just to safeguard an API key can be time consuming. In this article, you’ll
 learn how to avoid the most common security mistakes when integrating the
 OpenAI API into a client-side app. Overlooking these pitfalls can leave the
 door open to OpenAI API misuse, which can:
@@ -37,6 +47,10 @@ const client = new OpenAI({
 
 const completion = await client.chat.completions.create({...});
 ```
+
+OpenAI now recommends the
+[Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses)
+for new apps; Chat Completions, used here, is still supported.
 
 Anyone can inspect your code (even if it is minified or obfuscated somehow),
 extract your key, and abuse it. Don't let
@@ -70,14 +84,14 @@ Alongside the cloud function OpenAI API proxy it is calling:
 ```typescript title="cloud/function.ts"
 import route from 'yourcloud';
 
-route.post('/', async (req, res) => {
+route.all('/', async (req, res) => {
   const opair = await fetch(`https://api.openai.com/${req.path}`, {
-    method: 'POST',
+    method: req.method,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${env.OPENAI_SECRET_KEY}`,
     },
-    body: req.body.clone(),
+    body: req.method === 'GET' ? undefined : req.body.clone(),
   });
   return res.send(opair);
 });
@@ -95,9 +109,10 @@ quite common and still much better than the setups laid out thus far. However,
 it is _still_ unsafe. Let's take the following frontend code:
 
 ```javascript title="client/openai.ts"
-import supabase from 'supabase-js';
+import { createClient } from '@supabase/supabase-js';
 
-const jwt = supabase.auth.session().access_token;
+const supabase = createClient(...);
+const jwt = (await supabase.auth.getSession()).data.session?.access_token;
 
 const opair = await fetch(
   'https://functionroute.yourcloud.com/v1/chat/completions',
@@ -120,7 +135,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(...);
 
-route.post('/', async (req, res) => {
+route.all('/', async (req, res) => {
   try {
     // 1. Get the token from the Authorization header
     const authHeader = req.headers['authorization'] || '';
@@ -141,12 +156,12 @@ route.post('/', async (req, res) => {
 
     // 3. The token is valid
     const opair = await fetch(`https://api.openai.com/${req.path}`, {
-      method: 'POST',
+      method: req.method,
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${env.OPENAI_SECRET_KEY}`,
       },
-      body: req.body.clone(),
+      body: req.method === 'GET' ? undefined : req.body.clone(),
     });
     return res.send(opair);
   } catch (error) {
@@ -181,9 +196,10 @@ provides some safety. However, there are two problems with it:
    that uploaded them:
 
 ```javascript title="vulnerability.ts"
-import supabase from 'supabase-js';
+import { createClient } from '@supabase/supabase-js';
 
-const jwt = supabase.auth.session().access_token;
+const supabase = createClient(...);
+const jwt = (await supabase.auth.getSession()).data.session?.access_token;
 
 const opair = await fetch('https://functionroute.yourcloud.com/v1/files', {
   method: 'GET',
