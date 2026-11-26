@@ -2,10 +2,11 @@
 # Docker's CLI from the pinned Docker CLI image with pinned buildx and compose
 # (jobs use the VM's Docker through its socket), the apt packages
 # GitHub's Ubuntu 24.04 image installs (parity/toolset.lock), Node with
-# corepack, and a few CLIs. Languages come from actions/setup-* into the tool
-# cache; any other command in Ubuntu's archive installs on first use
-# (first-use.bash). From anycloud's docker/github-actions-runner/Dockerfile and
-# pool/Dockerfile. It's built for linux/amd64 and linux/arm64 (image.yml):
+# corepack, rustup with Rust's stable toolchain, and a few CLIs. Other
+# languages come from actions/setup-* into the tool cache; any other command
+# in Ubuntu's archive installs on first use (first-use.bash). From
+# anycloud's docker/github-actions-runner/Dockerfile and pool/Dockerfile.
+# It's built for linux/amd64 and linux/arm64 (image.yml):
 # each download is the target's, checked against its own SHA-256 below.
 ARG DOCKER_CLI_IMAGE=mirror.gcr.io/library/docker:28.0.4-cli@sha256:2bccc79fc5fed23d876bf244fa5fbe78c54bf6b6145a9483604306fd797237d5
 ARG UBUNTU_IMAGE=mirror.gcr.io/library/ubuntu:24.04@sha256:d78ab76437b1afc5f01e223d6bf0172763f404bb166441328845adbef44518cb
@@ -80,15 +81,10 @@ ARG GCLOUD_VERSION=593.0.0
 ARG GCLOUD_SHA256_AMD64=42c32b7553c712f71fcf6f124546c0519437f53755f47f9bd0c957998cd6b826
 ARG GCLOUD_SHA256_ARM64=f40acaca49c9774bca035c96dcf7350a13c09007e906cb4832e91dc36ce11497
 ARG AWS_VERSION=2.40.4
-# Rust, PowerShell, Go, Java and Chrome, installed on first use the same way
+# PowerShell, Go, Java and Chrome, installed on first use the same way
 # (pinned.sh), at the versions of GitHub's image's release ubuntu24/20261122.23:
-# rustup's rustup-init and Rust's stable toolchain, PowerShell's
-# release, go.dev's archive, Temurin's JDK (GitHub's README shows
+# PowerShell's release, go.dev's archive, Temurin's JDK (GitHub's README shows
 # 17.0.21.1+2 as 17.0.21+2), and Chrome for Testing's Chrome and ChromeDriver.
-ARG RUSTUP_VERSION=1.29.3
-ARG RUSTUP_SHA256_AMD64=b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55
-ARG RUSTUP_SHA256_ARM64=9f608c142e0e38a78957d0661ba1dfaf0b6fb37184cfaa4b9a0aa57af6184282
-ARG RUST_VERSION=1.100.0
 ARG PWSH_VERSION=7.6.10
 ARG PWSH_SHA256_AMD64=e261cabc91c78a9afe8d1e5f24731ab0d38204735ab2ec94b0af55102652e10d
 ARG PWSH_SHA256_ARM64=439432cdecf4418413b9a8f547e3ab4d9b40e8e4258913ec3d15fc92c67a9235
@@ -109,10 +105,11 @@ ARG PNPM_VERSION=12.18.0
 
 # PIPX_*: where GitHub's image puts pipx's apps, on PATH, which ends in
 # /usr/games as GitHub's does, for packages such as cowsay, and has the
-# runner's ~/.cargo/bin, as GitHub's has, so `cargo install` puts its
-# binaries on PATH. It comes after /usr/local/bin's first-use shims, unlike
-# GitHub's, so `cargo` is the shim even when a cache restored rustup's
-# proxies without a toolchain. JAVA_HOME and JAVA_HOME_17_X64, and
+# runner's ~/.cargo/bin where GitHub's has it, so `cargo install` puts its
+# binaries on PATH. CARGO_HOME and RUSTUP_HOME: GitHub's image leaves them to
+# rustup's defaults, ~/.cargo and ~/.rustup, but the runner moves HOME
+# (runner-job.sh), so they name the runner user's homes, where the image
+# installs Rust. JAVA_HOME and JAVA_HOME_17_X64, and
 # CHROMEWEBDRIVER, as GitHub's image sets them (on arm64 too, at the arm64
 # JDK): each has the image's shims until the first use installs Temurin 17 or
 # ChromeDriver there. COREPACK_*:
@@ -133,7 +130,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     CHROMEWEBDRIVER=/usr/local/share/chromedriver-linux64 \
     COREPACK_HOME=/opt/corepack \
     COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
-    PATH=/opt/pipx_bin:/usr/local/sbin:/usr/local/bin:/home/runner/.cargo/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games
+    CARGO_HOME=/home/runner/.cargo \
+    RUSTUP_HOME=/home/runner/.rustup \
+    PATH=/opt/pipx_bin:/home/runner/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -178,7 +177,7 @@ RUN echo 'Acquire::IndexTargets::deb::CNF { MetaKey "$(COMPONENT)/cnf/Commands-$
     && echo 'runner ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/runner \
     && chmod 0440 /etc/sudoers.d/runner \
     && install -d -o runner -g runner /opt/actions-runner-dist \
-        /opt/pipx /opt/pipx_bin /opt/corepack /home/runner/.cargo /home/runner/.rustup \
+        /opt/pipx /opt/pipx_bin /opt/corepack \
     && rm -rf /etc/apt/apt.conf.d/50backmesh-commands /var/lib/apt/lists/* /tmp/toolset.lock /tmp/first-use-packages.txt
 
 # Node and npm with corepack's yarn and pnpm. npm's global directories are the
@@ -261,6 +260,32 @@ RUN . <(env | sed -n "s/^\([A-Z]*_SHA256\)_${TARGETARCH^^}=/\1=/p") \
     && cmake --version && ctest --version && cpack --version && ninja --version \
     && kind version && kustomize version
 
+# rustup and Rust's stable toolchain with clippy and rustfmt, as GitHub's
+# image has them, owned by the runner user, at the versions of its release
+# ubuntu24/20261122.23; the checksums are rustup's .sha256. rustup checks the
+# toolchain against its release's manifest. It's installed under stable's
+# name, so `rustup toolchain install stable` (dtolnay/rust-toolchain@stable)
+# finds it unchanged while stable is that release, and updates it once
+# stable moves on, as on GitHub's image.
+ARG RUSTUP_VERSION=1.29.3
+ARG RUSTUP_SHA256_AMD64=b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55
+ARG RUSTUP_SHA256_ARM64=9f608c142e0e38a78957d0661ba1dfaf0b6fb37184cfaa4b9a0aa57af6184282
+ARG RUST_VERSION=1.100.0
+RUN . <(env | sed -n "s/^\([A-Z]*_SHA256\)_${TARGETARCH^^}=/\1=/p") \
+    && t=$(uname -m)-unknown-linux-gnu \
+    && curl --fail --location --retry 5 --output /tmp/rustup-init \
+        "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${t}/rustup-init" \
+    && echo "${RUSTUP_SHA256}  /tmp/rustup-init" | sha256sum --check --strict \
+    && chmod 0755 /tmp/rustup-init \
+    && /tmp/rustup-init -y --no-modify-path --profile minimal --default-toolchain "$RUST_VERSION" \
+        --component clippy,rustfmt \
+    && mv "$RUSTUP_HOME/toolchains/$RUST_VERSION-$t" "$RUSTUP_HOME/toolchains/stable-$t" \
+    && mv "$RUSTUP_HOME/update-hashes/$RUST_VERSION-$t" "$RUSTUP_HOME/update-hashes/stable-$t" \
+    && rustup default stable \
+    && chown -R runner:runner "$RUSTUP_HOME" "$CARGO_HOME" \
+    && rm /tmp/rustup-init \
+    && rustup --version && cargo --version && rustc --version && cargo clippy --version && cargo fmt --version
+
 # The real CLI, behind the image's `docker` (docker.sh), which keeps the
 # runner's own container out of the job's `docker ps` and `docker kill`.
 COPY --from=cli /usr/local/bin/docker /usr/local/libexec/backmesh/
@@ -286,7 +311,7 @@ COPY runner-job.sh /usr/local/bin/runner-job
 COPY runner-job-completed.sh runner-job-started.sh /usr/local/bin/
 COPY dist/auto-cache.mjs dist/LICENSE dist/NOTICE /usr/local/lib/backmesh/
 COPY first-use.bash /etc/backmesh/first-use.bash
-# The cloud CLIs, Rust, PowerShell, Go, Java and Chrome install on first use,
+# The cloud CLIs, PowerShell, Go, Java and Chrome install on first use,
 # from any caller (pinned.sh).
 COPY keys/ /usr/share/keyrings/backmesh/
 COPY pinned.sh /usr/local/libexec/backmesh/pinned
@@ -296,8 +321,7 @@ COPY pinned.sh /usr/local/libexec/backmesh/pinned
 # en_US.UTF-8 for tools that ask for it by name.
 COPY apt.sh /usr/local/libexec/backmesh/apt
 RUN . <(env | sed -n "s/^\([A-Z]*_SHA256\)_${TARGETARCH^^}=/\1=/p") \
-    && for cmd in az gcloud gsutil aws rustup cargo rustc rustdoc rustfmt cargo-fmt cargo-clippy clippy-driver \
-        pwsh go gofmt java javac jar keytool google-chrome google-chrome-stable chromedriver; do \
+    && for cmd in az gcloud gsutil aws pwsh go gofmt java javac jar keytool google-chrome google-chrome-stable chromedriver; do \
       ln -s /usr/local/libexec/backmesh/pinned "/usr/local/bin/$cmd"; \
     done \
     && install -d "$JAVA_HOME/bin" /opt/google/chrome "$CHROMEWEBDRIVER" \
@@ -306,8 +330,7 @@ RUN . <(env | sed -n "s/^\([A-Z]*_SHA256\)_${TARGETARCH^^}=/\1=/p") \
       ln -s /usr/local/libexec/backmesh/pinned "$cmd"; \
     done \
     && printf '%s\n' "az_version=$AZ_VERSION" "az_sha256=$AZ_SHA256" "gcloud_version=$GCLOUD_VERSION" \
-        "gcloud_sha256=$GCLOUD_SHA256" "aws_version=$AWS_VERSION" "rustup_version=$RUSTUP_VERSION" \
-        "rustup_sha256=$RUSTUP_SHA256" "rust_version=$RUST_VERSION" "pwsh_version=$PWSH_VERSION" \
+        "gcloud_sha256=$GCLOUD_SHA256" "aws_version=$AWS_VERSION" "pwsh_version=$PWSH_VERSION" \
         "pwsh_sha256=$PWSH_SHA256" "go_version=$GO_VERSION" "go_sha256=$GO_SHA256" "java_version=$JAVA_VERSION" \
         "java_sha256=$JAVA_SHA256" "chrome_version=$CHROME_VERSION" "chrome_sha256=$CHROME_SHA256" \
         "chromedriver_sha256=$CHROMEDRIVER_SHA256" >/usr/share/backmesh/pinned.env \

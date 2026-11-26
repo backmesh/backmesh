@@ -4,10 +4,10 @@ description: What's in the image every backmesh job runs in, how a missing comma
 ---
 
 Every label runs the same image: Ubuntu 24.04 with the GitHub Actions runner,
-the Docker CLI, which uses the VM's Docker, and the apt packages GitHub's
-`ubuntu-24.04` runners have, not their language toolchains, cloud CLIs or
-browsers. It's built from a public Dockerfile and signed,
-and each backmesh release names one image by its digest. The image is built
+the Docker CLI, which uses the VM's Docker, the apt packages GitHub's
+`ubuntu-24.04` runners have, and Rust, but not their other language
+toolchains, cloud CLIs or browsers. It's built from a public Dockerfile and
+signed, and each backmesh release names one image by its digest. The image is built
 for x86-64 and arm64, with the same tools at the same versions; an
 [arm64 label](/labels/#arm64)'s VM pulls the arm64 build, and the first-use
 installs fetch arm64 releases there.
@@ -24,9 +24,15 @@ installs fetch arm64 releases there.
 - The Docker CLI with Buildx and Compose, using the VM's Docker.
 - Node.js 22 with npm, and Yarn and pnpm through Corepack.
 - Python 3 with `pipx`.
+- Rust: rustup with the stable toolchain GitHub's image has, with `cargo`,
+  `rustc`, `rustdoc`, `clippy` and `rustfmt`, in `~/.cargo` and `~/.rustup` as
+  there (`CARGO_HOME` and `RUSTUP_HOME` name them). `dtolnay/rust-toolchain`
+  and `actions-rust-lang/setup-rust-toolchain` use this rustup: asking for
+  stable finds it installed, and another version or a target installs as on
+  GitHub's runners.
 - `kubectl`, `helm`, `yq` and `envsubst`.
 
-GitHub's image also preinstalls language toolchains, cloud CLIs, browsers
+GitHub's image also preinstalls other language toolchains, cloud CLIs, browsers
 and databases. backmesh's doesn't, which keeps the image small enough for every
 job to pull it on its own VM. [Coming from ubuntu-latest](/from-ubuntu-latest/)
 lists them with the setup action for each.

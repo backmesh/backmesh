@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The CLIs and toolchains GitHub's image has that install on first use: the
-# cloud CLIs, Rust, PowerShell, Go, Java and Chrome. The image links each
+# cloud CLIs, PowerShell, Go, Java and Chrome. The image links each
 # name in /usr/local/bin to this script, which installs the real one from a
 # pinned vendor release on the first call and then runs it. A shim on PATH,
 # not bash's command_not_found_handle, so a JavaScript action such as
@@ -24,8 +24,6 @@ keys=/usr/share/keyrings/backmesh
 uname=$(uname -m) deb=$(dpkg --print-architecture)
 cft=linux64 jdk=/usr/lib/jvm/temurin-17-jdk-$deb
 [[ $deb == amd64 ]] || cft=linux-$deb
-# Rust's homes: the runner user's, as on GitHub's image, whoever calls.
-export CARGO_HOME=${CARGO_HOME:-/home/runner/.cargo} RUSTUP_HOME=${RUSTUP_HOME:-/home/runner/.rustup}
 
 # Each install is one && chain: it runs left of ||, where errexit
 # is off, so a failed step, the checksum or signature check above all, must
@@ -83,32 +81,6 @@ aws_install() {
     && GNUPGHOME=$dir/gnupg gpg --batch --verify "$dir/aws.zip.sig" "$dir/aws.zip" \
     && unzip -q "$dir/aws.zip" -d "$dir" \
     && sudo -n "$dir/aws/install" --update --install-dir /usr/local/aws-cli --bin-dir /usr/local/aws-cli/bin
-}
-
-# rustup and the pinned stable toolchain with clippy and rustfmt, as GitHub's
-# image has them, owned by the runner user. rustup checks the toolchain
-# against its release's manifest, under stable's name, so `rustup toolchain
-# install stable` (dtolnay/rust-toolchain@stable) finds it unchanged while
-# stable is that release, and updates it once stable moves on, as on GitHub's
-# image. It installs into a stage of the runner's, then into the homes, which
-# a cache restore may have made already, with the proxies last; a restored
-# settings.toml that names a default keeps it.
-rust_install() {
-  local stage=/home/runner/.rust.new t=$uname-unknown-linux-gnu
-  pinned "https://static.rust-lang.org/rustup/archive/${rustup_version}/$t/rustup-init" "$rustup_sha256" \
-    && sudo -n rm -rf "$stage" \
-    && sudo -n install -d -o runner -g runner "$stage" "$RUSTUP_HOME" "$CARGO_HOME" "$CARGO_HOME/bin" \
-    && sudo -n install -o runner -m 0755 "$dir/rustup-init" "$stage/" \
-    && sudo -n -u runner env CARGO_HOME="$stage/cargo" RUSTUP_HOME="$stage/rustup" "$stage/rustup-init" -y --no-modify-path \
-      --profile minimal --default-toolchain "$rust_version" --component clippy,rustfmt \
-    && sudo -n -u runner mv "$stage/rustup/toolchains/$rust_version-$t" "$stage/rustup/toolchains/stable-$t" \
-    && sudo -n -u runner mv "$stage/rustup/update-hashes/$rust_version-$t" "$stage/rustup/update-hashes/stable-$t" \
-    && sudo -n -u runner env CARGO_HOME="$stage/cargo" RUSTUP_HOME="$stage/rustup" "$stage/cargo/bin/rustup" default stable \
-    && if grep -qs '^default_toolchain' "$RUSTUP_HOME/settings.toml"; then sudo -n -u runner rm "$stage/rustup/settings.toml"; fi \
-    && sudo -n -u runner cp -a "$stage/rustup/." "$RUSTUP_HOME/" \
-    && sed "s#$stage/cargo#$CARGO_HOME#g" "$stage/cargo/env" | sudo -n -u runner tee "$CARGO_HOME/env" >/dev/null \
-    && sudo -n -u runner mv "$stage"/cargo/bin/* "$CARGO_HOME/bin/" \
-    && sudo -n rm -rf "$stage"
 }
 
 # PowerShell's release, where Microsoft's package puts it.
@@ -170,11 +142,6 @@ case $name in
   az) real=/usr/bin/az install=(az_install) ;;
   gcloud | gsutil) real=/usr/lib/google-cloud-sdk/bin/$name install=(gcloud_install) ;;
   aws) real=/usr/local/aws-cli/v2/current/bin/aws install=(aws_install) ;;
-  # rustup's proxies, once the toolchain is in: a cache may restore
-  # $CARGO_HOME/bin without $RUSTUP_HOME.
-  rustup | cargo | rustc | rustdoc | rustfmt | cargo-fmt | cargo-clippy | clippy-driver)
-    real=$CARGO_HOME/bin/$name ready=$RUSTUP_HOME/toolchains/stable-$uname-unknown-linux-gnu/bin/rustc
-    install=(rust_install) ;;
   pwsh) real=/opt/microsoft/powershell/7/pwsh install=(pwsh_install) ;;
   go | gofmt) real=/usr/local/go/bin/$name install=(go_install) ;;
   java | javac | jar | keytool)
