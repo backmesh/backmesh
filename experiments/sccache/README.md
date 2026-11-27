@@ -74,6 +74,26 @@ the exact two-sided Mann–Whitney p is 0.008 (2 of 252).
   of a cold run). In round 1, the nushell jobs first used the token 36 and 17 s in.
   With a token, its 20 s build has little to save.
 
+### 2026-11-27, each cloud's per-job token
+
+[e2e run 45940765577](https://github.com/backmesh/backmesh/actions/runs/45940765577)
+with `sccache=true`, backmesh v0.7.2 on the test org, one job per leg (the
+`sccache-<cloud>-1` artifacts). It passed on all three clouds:
+
+| Cloud (label, bucket)   | Token    | Cold build                  | Warm build              | Tokens used (requests each) |
+| ----------------------- | -------- | --------------------------- | ----------------------- | --------------------------- |
+| AWS (4 vCPU, us-east-1) | STS keys | 280 s, 953 writes, 546 MB   | 137 s, 952 hits, 1 miss | 2 (2,876; 971)              |
+| Azure (2 vCPU, westus2) | SAS      | 1,113 s, 953 writes, 546 MB | 493 s, 952 hits, 1 miss | 3 (2,746; 130; 971)         |
+| GCP (4 vCPU, us-south1) | bearer   | 576 s, 953 writes, 546 MB   | 263 s, 952 hits, 1 miss | 2 (2,873; 971)              |
+
+There were no write or read errors and no proxy errors. On Azure the
+listener renewed the token mid-build: the cold build ran from 05:37 to about
+05:55, the second token landed at 05:47:57 and served 130 of its requests,
+and a third token served the probe and the warm build. On AWS and GCP the
+renewal came after the cold build, and the renewed token served the probe and
+the whole warm build. Each warm build read its objects back from the bucket
+after `cargo clean`.
+
 ### What else the spike found
 
 - **sccache fails the build if its storage check can't reach the
