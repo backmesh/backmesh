@@ -1,5 +1,5 @@
 // Serves the static site. It runs before the assets, so it can send
-// www.backmesh.com to the apex, /pricing to the landing page's pricing, the
+// www.backmesh.com to the apex, the old llmcomp.backmesh.com to /llmcomp/, /pricing to the landing page's pricing, the
 // old docs' index to the install guide, serve install.sh as text so a browser shows it, and retire the old site's
 // other paths: a 410 where this site has no page, so search engines drop
 // them. This site's own pages there, such as the blog, are served first.
@@ -12,6 +12,12 @@ export interface Env {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (url.hostname === 'llmcomp.backmesh.com') {
+      return Response.redirect(
+        `https://backmesh.com/llmcomp/${url.search}`,
+        301,
+      );
+    }
     if (url.hostname.startsWith('www.')) {
       url.hostname = url.hostname.slice(4);
       return Response.redirect(url.href, 301);
