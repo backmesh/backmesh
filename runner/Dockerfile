@@ -261,8 +261,9 @@ RUN . <(env | sed -n "s/^\([A-Z]*_SHA256\)_${TARGETARCH^^}=/\1=/p") \
     && kind version && kustomize version
 
 # rustup and Rust's stable toolchain with clippy and rustfmt, as GitHub's
-# image has them, owned by the runner user, at the versions of its release
-# ubuntu24/20261122.23; the checksums are rustup's .sha256. rustup checks the
+# image has them, owned by the runner user: rustup at the version of its
+# release ubuntu24/20261122.23, Rust at today's stable; the checksums are
+# rustup's .sha256. rustup checks the
 # toolchain against its release's manifest. It's installed under stable's
 # name, so `rustup toolchain install stable` (dtolnay/rust-toolchain@stable)
 # finds it unchanged while stable is that release, and updates it once
@@ -270,7 +271,7 @@ RUN . <(env | sed -n "s/^\([A-Z]*_SHA256\)_${TARGETARCH^^}=/\1=/p") \
 ARG RUSTUP_VERSION=1.29.3
 ARG RUSTUP_SHA256_AMD64=b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55
 ARG RUSTUP_SHA256_ARM64=9f608c142e0e38a78957d0661ba1dfaf0b6fb37184cfaa4b9a0aa57af6184282
-ARG RUST_VERSION=1.100.0
+ARG RUST_VERSION=1.100.1
 RUN . <(env | sed -n "s/^\([A-Z]*_SHA256\)_${TARGETARCH^^}=/\1=/p") \
     && t=$(uname -m)-unknown-linux-gnu \
     && curl --fail --location --retry 5 --output /tmp/rustup-init \
