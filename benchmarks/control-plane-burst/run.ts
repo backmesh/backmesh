@@ -35,6 +35,9 @@ const repo = env('TARGET_REPO');
 const label = env('LABEL');
 const jobs = Number(env('JOBS'));
 const out = env('OUTPUT_DIR');
+// Seconds each job sleeps after Marker, so a late cache token still lands
+// in the job and its time shows in the job's log; 0 adds no step.
+const hold = Number(process.env.HOLD ?? 0);
 // report.mjs reads one page of the run's jobs.
 if (!Number.isInteger(jobs) || jobs < 1 || jobs > 99) {
   throw new Error('JOBS takes 1 to 99 jobs: report.mjs reads 100 at most');
@@ -74,6 +77,10 @@ await writeFile(
     .replace(
       '__SHARDS__',
       JSON.stringify(Array.from({ length: jobs }, (_, i) => i + 1)),
+    )
+    .replace(
+      '        run: echo marker\n',
+      `        run: echo marker\n${hold > 0 ? `\n      - name: Hold\n        run: sleep ${hold}\n` : ''}`,
     ),
 );
 await writeFile(

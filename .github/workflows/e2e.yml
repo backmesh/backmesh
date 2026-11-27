@@ -90,6 +90,13 @@ on:
           (benchmarks/control-plane-burst); 0 runs none, at most 99
         type: number
         default: 0
+      burst-hold:
+        description: >-
+          with `burst`, seconds each burst job sleeps after its first step, so
+          a late cache token still reaches the job and its log says when; the
+          burst artifact also gets the listener's cache-token lines
+        type: number
+        default: 0
       sccache:
         description: >-
           with `version`, the sccache spike's check on each leg's first label
@@ -595,6 +602,7 @@ jobs:
           DEPLOY_KEY: ${{ secrets.E2E_TEST_ORG_DEPLOY_KEY }}
           TARGET_REPO: ${{ inputs.org }}/e2e
           JOBS: ${{ inputs.burst }}
+          HOLD: ${{ inputs.burst-hold }}
         run: |
           export OUTPUT_DIR=$RUNNER_TEMP/burst-$CLOUD LABEL=$(jq -r '.include[0].label' <<<"$LABEL_MATRIX")
           mkdir -p "$OUTPUT_DIR"
@@ -609,13 +617,21 @@ jobs:
             sleep 15
           done >"$OUTPUT_DIR/api-status.log" &
           probe=$!
-          trap 'kill $probe; rm -f "$key"' EXIT
+          # The listener's log through the burst: `backmesh logs` without
+          # --follow keeps only its last 1,000 lines.
+          backmesh logs --org "$ORG" --follow >"$OUTPUT_DIR/listener.log" 2>&1 &
+          logs=$!
+          trap 'kill $probe $logs 2>/dev/null; rm -f "$key"' EXIT
           # A cancel cancels the burst's run and deletes its branch.
           GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes" node benchmarks/control-plane-burst/run.ts &
           pid=$!
           trap 'kill -INT $pid; wait $pid' INT TERM
           wait $pid
           echo "anycloud api status: $(grep -c ' failed' "$OUTPUT_DIR/api-status.log") of $(wc -l <"$OUTPUT_DIR/api-status.log") reads failed" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+          # The cache tokens' lines, by where the listener heard of the start.
+          grep -oE '\{.*"msg":"(cache token ready|cache job mismatch|job start reads).*' "$OUTPUT_DIR/listener.log" >"$OUTPUT_DIR/cache-tokens.log" || true
+          echo "cache tokens: $(jq -rs '[.[] | select(.msg == "cache token ready") | .source // "JobStarted"] | group_by(.) | map("\(.[0]) \(length)") | join(", ")' "$OUTPUT_DIR/cache-tokens.log" 2>/dev/null)" \
             | tee -a "$GITHUB_STEP_SUMMARY"
 
       # The control plane's VM over the burst, once its cloud's metrics have
