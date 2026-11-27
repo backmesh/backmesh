@@ -55,7 +55,7 @@ import {
   quotaCheck,
   quotaCode,
   quotaToRaise,
-  highmemFamilyLine,
+  familyLines,
   readQuota,
   readQuotas,
   readServiceQuota,
@@ -152,8 +152,8 @@ export async function classesOf(
   publicRepos = false,
   // `--runner-region`: each cloud's region first, its classes `preferred`.
   preferred: Preferred = {},
-  // `takesArm`: the arm64 classes too.
-  arm = true,
+  // `takesArm`: the clouds with arm64 classes.
+  arm: readonly Cloud[] = CLOUDS,
 ) {
   const catalog = new Map<Cloud, Map<string, VmTypeDetails[]>>();
   // Each cloud's first region, which prices its rate line: the preferred
@@ -230,9 +230,16 @@ export const planRegions =
     return [target.region];
   };
 
-/** Whether `version` boots arm64 types on anycloud's arm64 image. */
-export const takesArm = (version: string, features?: FeatureTable) =>
-  !missingFeatures(version, ['arm64'], features).length;
+/** The clouds whose arm64 types `version` boots on anycloud's arm64 image. */
+export const takesArm = (
+  version: string,
+  features?: FeatureTable,
+): readonly Cloud[] =>
+  missingFeatures(version, ['arm64'], features).length
+    ? []
+    : missingFeatures(version, ['azure-arm64'], features).length
+      ? ['aws', 'gcp']
+      : CLOUDS;
 
 /** Whether `version`'s VM Jobs take a region list. */
 export const takesRegions = (version: string, features?: FeatureTable) =>
@@ -249,11 +256,18 @@ export const noGpuLine = (
     ? "gcp gets no GPU labels: anycloud can't launch a T4 VM on GCP yet."
     : `${where(cloud, regions)} ${regions.length > 1 ? 'offer' : 'offers'} no ${GPU_TYPES[cloud].join(' or ')}, so ${cloud} gets no GPU labels.`;
 
-export function noArmLine({ cloud }: CloudTarget, regions: readonly string[]) {
-  if (cloud === 'azure') {
-    return 'azure gets no arm64 labels: anycloud boots its arm64 image on AWS and GCP only.';
+export function noArmLine(
+  { cloud }: CloudTarget,
+  regions: readonly string[],
+  arm: readonly Cloud[] = CLOUDS,
+) {
+  if (!arm.includes(cloud)) {
+    return `${cloud} gets no arm64 labels: anycloud boots its arm64 image on ${arm.map((c) => c.toUpperCase()).join(' and ')} only.`;
   }
-  const families = ARM_TYPES[cloud](4).map((t) => t.split(/[.-]/)[0]);
+  // AWS's and GCP's families, such as m8g and c4a; Azure's 4-vCPU types.
+  const families = ARM_TYPES[cloud](4).map((t) =>
+    cloud === 'azure' ? t : t.split(/[.-]/)[0],
+  );
   return `${where(cloud, regions)} ${regions.length > 1 ? 'offer' : 'offers'} no ${families.join(' or ')}, so ${cloud} gets no arm64 labels.`;
 }
 
@@ -1428,7 +1442,7 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
         )}`,
       );
     }
-    quotas.push(...highmemFamilyLine(cloud, mine));
+    quotas.push(...familyLines(cloud, mine));
     // A GPU label's quota is usually 0 on a new account: shown, not asked
     // about.
     quotas.push(...startsNoRunners(cloud, limits, mine));
@@ -1634,7 +1648,11 @@ export async function install(options: InstallOptions, deps: InstallDeps) {
       noGpuLine(target, regionsOf(target.cloud)),
     ),
     noArm: classPlan.noArm.map((target) =>
-      noArmLine(target, regionsOf(target.cloud)),
+      noArmLine(
+        target,
+        regionsOf(target.cloud),
+        takesArm(ANYCLOUD_VERSION, deps.features),
+      ),
     ),
     sameOwner: sharedWith.length
       ? sameOwnerLine(options.org, sharedWith)
