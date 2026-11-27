@@ -41,8 +41,11 @@ name: E2E
 # Contributor and Storage Blob Data Contributor (anycloud's
 # seed/azure-template.json, and the roleAssignments/write right
 # seed/accounts.ts:138 checks, at v0.1.79), and the role connection's setup
-# writes a custom role definition and assigns it. The subscription is e2e's
-# alone, apart from production's. GCP's project holds production's GCP setup
+# writes a custom role definition and assigns it. The identity, its group
+# and its roles were the owner's one-time setup on 2026-11-27, with `az`:
+# Contributor and User Access Administrator at subscription scope, and a
+# federated subject of environment:e2e. The subscription is e2e's alone: no
+# production resources live there. GCP's project holds production's GCP setup
 # too, so its identity can write there: an accepted risk, kept to the e2e
 # environment's reviewers. The owner's
 # one-time setup is, in `e2e`, E2E_TEST_ORG_DEPLOY_KEY (a write deploy key
@@ -260,7 +263,7 @@ jobs:
             placement: --runners azure
             # Both control-plane sizes are offered here in our subscription.
             control-plane-region: centralus
-            # Our Azure e2e subscription has 3 spot vCPUs per region: back to 4 vCPUs once its quota is raised.
+            # Our Azure e2e subscription has 3 spot vCPUs per region: back to 4 vCPUs once the requested quota lands.
             label: backmesh-ubuntu-2404-2vcpu
           - cloud: gcp
             placement: --runners gcp
