@@ -126,9 +126,9 @@ the runners. `backmesh upgrade` creates the buckets for new regions, and
 `Swatinem/rust-cache` works on backmesh's runners without a change, but it
 keeps its cache in GitHub's cache, not in your bucket: it calls GitHub's cache
 service through the `@actions/cache` library, not the `actions/cache` action,
-so `backmesh/cache` can't stand in for it. To keep Cargo's downloads and
-`target` next to the runners, cache the same directories with
-`backmesh/cache` instead:
+so `backmesh/cache` can't stand in for it. It finds the image's Rust through
+`CARGO_HOME`. To keep Cargo's downloads and `target` next to the runners,
+cache the same directories with `backmesh/cache` instead:
 
 ```yaml
 - uses: backmesh/cache@v1

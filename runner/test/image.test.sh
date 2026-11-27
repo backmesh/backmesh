@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # The built image's first-use install, for real: a step run as the runner runs
 # one, `bash --noprofile --norc -e -o pipefail <file>`, installs hello from
-# Ubuntu's archive and runs it, and leaves a typo alone; the cloud CLIs, Rust,
-# PowerShell, Go, Java and Chrome install on first use from node; the build
-# tools run from sh; the index's corrections hold. Then the image's gaps
+# Ubuntu's archive and runs it, and leaves a typo alone; the cloud CLIs,
+# PowerShell, Go, Java and Chrome install on first use from node; Rust and the
+# build tools run from sh; the index's corrections hold. Then the image's gaps
 # against GitHub's (runner/parity/gaps.sh).
 # Run: runner/test/image.test.sh <image>
 set -Eeuo pipefail
@@ -47,7 +47,7 @@ docker run --rm --entrypoint node "$image" -e '
     console.log("gsutil: ran");
   })().catch((e) => { console.log(`::error::cloud CLI first use: ${e.message}`); process.exit(1); });'
 
-# Rust, PowerShell, Go, Java and Chrome on first use, the same way, each at
+# PowerShell, Go, Java and Chrome on first use, the same way, each at
 # its pinned version, and the commands that come with each install. Chrome
 # renders a page headless.
 # shellcheck disable=SC2016 # JavaScript
@@ -59,7 +59,6 @@ docker run --rm --entrypoint node "$image" -e '
   const run = (cmd, args) => new Promise((ok, no) => execFile(cmd, args, (e, out, err) =>
     e ? no(new Error(`${cmd}: ${e.message}${err}`)) : ok([out, err])));
   const tools = [
-    ["cargo", ["--version"], `cargo ${pins.rust_version}`, [["rustc", ["--version"]], ["rustup", ["--version"]], ["cargo", ["clippy", "--version"]], ["cargo", ["fmt", "--version"]]]],
     ["pwsh", ["-c", "$PSVersionTable.PSVersion.ToString()"], pins.pwsh_version, []],
     ["go", ["version"], `go${pins.go_version} `, [["gofmt", ["-l", "/usr/local/go/src/errors"]]]],
     ["java", ["-version"], `"${pins.java_version.replace(/\+.*/, "")}"`, [["javac", ["-version"]], ["jar", ["--version"]], ["keytool", ["-help"]]]],
@@ -76,27 +75,11 @@ docker run --rm --entrypoint node "$image" -e '
     }
   })().catch((e) => { console.log(`::error::pinned first use: ${e.message}`); process.exit(1); });'
 
-# After the first use: a cache that restored ~/.cargo/bin without ~/.rustup,
-# as caching ~/.cargo often does, gets the toolchain again; it's stable's, so
-# dtolnay/rust-toolchain@stable's install finds it unchanged; a restored
-# default other than stable stays the default; ~/.cargo/env names
-# ~/.cargo/bin. ./mvnw, a sh script, finds Temurin through JAVA_HOME.
+# After the first use: ./mvnw, a sh script, finds Temurin through JAVA_HOME.
 # ChromeDriver, from CHROMEWEBDRIVER, installs Chrome with it and runs a
 # headless session in the Chrome it finds itself.
 docker run --rm -i --entrypoint sh "$image" \
-  -c 'cat >/tmp/step.sh && exec bash --noprofile --norc -e -o pipefail /tmp/step.sh' <<'EOF' || fail "Rust after a restore, ./mvnw or a WebDriver session"
-t=stable-$(uname -m)-unknown-linux-gnu
-cargo --version >/dev/null 2>&1
-rm -rf "$HOME/.rustup"
-out=$(cargo --version 2>&1)
-[[ $out == *"backmesh: installing cargo"*"cargo 1.100.0 "* ]] || { echo "cargo after a restore of ~/.cargo/bin: $out"; exit 1; }
-# This fails once stable moves past RUST_VERSION: the signal to bump it.
-[[ $(rustup toolchain install stable --profile minimal --no-self-update 2>&1) == *"$t unchanged"* ]]
-cp -a "$HOME/.rustup/toolchains/$t" /tmp/mine
-rustup toolchain link mine /tmp/mine && rustup default mine >/dev/null 2>&1
-rm -rf "$HOME/.rustup/toolchains/$t"
-[[ $(cargo --version 2>&1) == *"backmesh: installing cargo"* && $(rustup default) == mine* ]] || { echo "the restored default: $(rustup default)"; exit 1; }
-! grep -q rust.new "$HOME/.cargo/env"
+  -c 'cat >/tmp/step.sh && exec bash --noprofile --norc -e -o pipefail /tmp/step.sh' <<'EOF' || fail "./mvnw or a WebDriver session"
 mkdir -p /tmp/mvnw/.mvn/wrapper && cd /tmp/mvnw
 curl -fsSL -o mvnw https://raw.githubusercontent.com/apache/maven-wrapper/maven-wrapper-3.3.2/maven-wrapper-distribution/src/resources/only-mvnw
 echo 'd552912fe186f0aeefae6a7d14c6c6639a1c3f9de96469a5ce0d18109ec21fde  mvnw' | sha256sum --check --strict --quiet
@@ -117,19 +100,30 @@ wd "/$id" -X DELETE >/dev/null
 echo 'after first use: passed'
 EOF
 
-# With HOME moved, as the runner moves it, ~/.cargo is cargo's: what a cache
-# restores under ~/.cargo/registry before the first use is in CARGO_HOME, and
-# so is Swatinem/rust-cache's os.homedir()/.cargo.
-docker run --rm -i --entrypoint sh "$image" \
-  -c 'cat >/tmp/step.sh && exec bash --noprofile --norc -e -o pipefail /tmp/step.sh' <<'EOF' || fail "HOME's .cargo"
+# Rust, preinstalled, from a step with HOME moved as the runner moves it:
+# rustup, cargo, rustc, rustdoc, clippy and rustfmt at RUST_VERSION, with no
+# first-use line, as stable, so dtolnay/rust-toolchain@stable's install finds
+# it unchanged; ~/.cargo is CARGO_HOME, so a cache of ~/.cargo/registry is
+# cargo's, and so is Swatinem/rust-cache's os.homedir()/.cargo; and a crate
+# builds, lints and formats.
+rust_version=$(sed -n 's/^ARG RUST_VERSION=//p' "$here/../Dockerfile")
+docker run --rm -i -e rust_version="$rust_version" --entrypoint sh "$image" \
+  -c 'cat >/tmp/step.sh && exec bash --noprofile --norc -e -o pipefail /tmp/step.sh' <<'EOF' || fail "preinstalled Rust"
 sudo -n install -d -o runner -g runner /workspace
 . /usr/local/bin/runner-job
 share_paths
-mkdir -p ~/.cargo/registry && touch ~/.cargo/registry/restored
-cargo --version >/dev/null 2>&1
-[[ -e /home/runner/.cargo/registry/restored && -x ~/.cargo/bin/cargo ]]
-[[ $(readlink -f "$(node -p 'require("node:os").homedir()')/.cargo") == /home/runner/.cargo ]]
-echo '~/.cargo with HOME moved: passed'
+[[ $HOME == /workspace/home && $(readlink -f ~/.cargo) == "$CARGO_HOME" && $(readlink -f ~/.rustup) == "$RUSTUP_HOME" ]]
+[[ $(readlink -f "$(node -p 'require("node:os").homedir()')/.cargo") == "$CARGO_HOME" ]]
+t=stable-$(uname -m)-unknown-linux-gnu
+out=$({ rustup --version; cargo --version; rustc --version; rustdoc --version; cargo clippy --version; cargo fmt --version; } 2>&1)
+[[ $out != *backmesh:* && $out == *"cargo $rust_version "*"rustc $rust_version "* ]] || { echo "$out"; exit 1; }
+[[ $(rustup default) == "$t (default)" ]]
+# This fails once stable moves past RUST_VERSION: the signal to bump it.
+[[ $(rustup toolchain install stable --profile minimal --no-self-update 2>&1) == *"$t unchanged"* ]]
+cd "$(mktemp -d)" && cargo new -q --vcs none hello && cd hello
+cargo build -q && cargo clippy -q -- -D warnings && cargo fmt --check
+[[ $(./target/debug/hello) == "Hello, world!" ]]
+echo 'preinstalled Rust: passed'
 EOF
 
 # The preinstalled build tools, from a caller that isn't bash, at GitHub's
