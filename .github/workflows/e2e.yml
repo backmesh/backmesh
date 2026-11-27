@@ -285,7 +285,8 @@ jobs:
     # Holds the legs' secrets, and is the subject each cloud's OIDC trust
     # names (see the header).
     environment: e2e
-    timeout-minutes: 240
+    # The spike checks' steps can take up to 105 min more.
+    timeout-minutes: ${{ (inputs.sccache || inputs.dockercache) && 300 || 240 }}
     permissions:
       contents: read # the release's assets
       id-token: write # the clouds' OIDC sign-ins
