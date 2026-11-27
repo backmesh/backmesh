@@ -32,6 +32,11 @@ The [high-memory labels](/labels/#high-memory) use the E-series twins,
 vCPU: `backmesh-ubuntu-2404-highmem-16vcpu` is 16 vCPUs and 128 GiB. Their
 spot VMs count against "Total Regional Low-priority vCPUs" with the others.
 
+The [arm64 labels](/labels/#arm64) use Cobalt 100's `Standard_D<n>ps_v6`, then
+Ampere's `Standard_D<n>ps_v5`, at the same sizes, and the arm64 high-memory
+ones Cobalt's `Standard_E<n>ps_v6`. A label's jobs launch only in the regions
+that offer one of its types.
+
 ## Regions
 
 Runners use a fixed list of US regions, or with `--runner-geo eu` of the EU
@@ -104,7 +109,10 @@ label gets none of that label's runners until you raise it; install and
 [`backmesh status`](/status/) name the quota. The spot GPU label,
 `backmesh-ubuntu-2404-gpu-t4`, counts against the spot vCPUs with the others; the
 on-demand one, `backmesh-ubuntu-2404-gpu-od-t4`, also counts against "Standard NCASv3_T4
-Family vCPUs", 0 on most new subscriptions; request at least 4 under
+Family vCPUs", 0 on most new subscriptions. The on-demand high-memory and
+arm64 labels also count against their family's vCPUs: "Standard EADSv5 Family
+vCPUs" and its twins, "Standard DPSv6 Family vCPUs" or "Standard DPSv5 Family
+vCPUs", and "Standard EPSv6 Family vCPUs". Request at least 4 under
 [Quotas](https://portal.azure.com/#view/Microsoft_Azure_Capacity/QuotaMenuBlade/~/myQuotas)
 in the portal. The always-on VMs count against their size's family quota too,
 such as "Standard DSv5 Family vCPUs" and "Standard BS Family vCPUs", or

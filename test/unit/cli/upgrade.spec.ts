@@ -407,6 +407,7 @@ function setUp({
       'service-tokens': '0.1.0',
       c28: undefined,
       arm64: '0.1.0',
+      'azure-arm64': '0.1.0',
     },
   };
   return {

@@ -76,8 +76,7 @@ export const VM_TYPES: Record<
 };
 
 // The code's first character: the cloud, whether the class is spot, and
-// whether it's a KVM, a public, a GPU or an arm64 class. Azure has no arm64
-// classes (`ARM_TYPES`).
+// whether it's a KVM, a public, a GPU or an arm64 class.
 const CLOUD_CODE: Record<
   Cloud,
   [
@@ -94,7 +93,7 @@ const CLOUD_CODE: Record<
 > = {
   aws: ['a', 'b', 'k', 'l', 'c', 'd', 'e', 'f', 'p'],
   gcp: ['g', 'h', 'm', 'n', 'i', 'j', 'o', 'q', 'r'],
-  azure: ['z', 'y', 'v', 'w', 'x', 't', 'u'],
+  azure: ['z', 'y', 'v', 'w', 'x', 't', 'u', 's', '0'],
 };
 const SPOT_CODES = [0, 2, 4, 5, 7];
 const GPU_CODES = [5, 6];
@@ -142,26 +141,27 @@ export const HIGHMEM_GIB_PER_VCPU = 8;
  * time at xlarge and 1.03 at 4xlarge, at 0.85 of its on-demand price; its
  * spot took 42% of zones at xlarge and 75% at 4xlarge. GCP's are Axion's
  * `c4a`, then Ampere's `t2a` (anycloud#50), which only a few regions offer,
- * so a class's regions are the ones offering either. Azure's `Dpsv5` and
- * `Epsv5` are in its catalog, but anycloud boots only AWS's and GCP's
- * arm64 types on the arm64 image (anycloud#47, #50), so Azure has none.
- * AWS's count against the general classes' vCPU quotas (`quota.ts`).
+ * so a class's regions are the ones offering either. Azure's are Cobalt
+ * 100's `Dpsv6`, then Ampere's `Dpsv5` (anycloud#64). AWS's count against
+ * the general classes' vCPU quotas, Azure's on-demand ones against their
+ * family's too (`quota.ts`).
  */
 export const ARM_TYPES: Record<Cloud, (vcpus: number) => string[]> = {
   aws: (n) => ['m8g', 'm7g'].map((f) => `${f}.${AWS_SIZE[n]}`),
   gcp: (n) => [`c4a-standard-${n}`, `t2a-standard-${n}`],
-  azure: () => [],
+  azure: (n) => [`Standard_D${n}ps_v6`, `Standard_D${n}ps_v5`],
 };
 
 /**
  * The arm64 high-memory classes' types, at the high-memory classes' 8 GiB a
- * vCPU: the memory-optimized twins of `ARM_TYPES`, AWS's `r8g` then `r7g`
- * and GCP's `c4a-highmem` (`t2a` has no high-memory shape).
+ * vCPU: the memory-optimized twins of `ARM_TYPES`: AWS's `r8g` then
+ * `r7g`, GCP's `c4a-highmem` (`t2a` has no high-memory shape) and Azure's
+ * Cobalt `Epsv6`.
  */
 export const ARM_HIGHMEM_TYPES: Record<Cloud, (vcpus: number) => string[]> = {
   aws: (n) => ['r8g', 'r7g'].map((f) => `${f}.${AWS_SIZE[n]}`),
   gcp: (n) => [`c4a-highmem-${n}`],
-  azure: () => [],
+  azure: (n) => [`Standard_E${n}ps_v6`],
 };
 
 /**
@@ -404,9 +404,9 @@ export function planClasses(
   home: Cloud | undefined,
   // `install --public-repos`: the home cloud's `backmesh-ubuntu-2404-public-<n>vcpu` too.
   publicRepos = false,
-  // Whether the pinned anycloud boots arm64 types on its arm64 image
-  // (`takesArm`): without it, no arm64 class.
-  arm = true,
+  // The clouds whose arm64 types the pinned anycloud boots on its arm64
+  // image (`takesArm`): the others get no arm64 class.
+  arm: readonly Cloud[] = CLOUDS,
 ): ClassPlan {
   const plan: ClassPlan = {
     classes: [],
@@ -601,7 +601,13 @@ export function planClasses(
           const regions = byRegion.flatMap(([region, details]) =>
             vmTypes.some((t) => fits(details, t, vcpus, gib)) ? [region] : [],
           );
-          if (!arm || !archKnown || !letter || !regions.length) return [];
+          if (
+            !arm.includes(target.cloud) ||
+            !archKnown ||
+            !letter ||
+            !regions.length
+          )
+            return [];
           return [
             {
               ...target,
@@ -625,7 +631,7 @@ export function planClasses(
         }),
       ),
     );
-    if (arm && !armClasses.length) plan.noArm.push(target);
+    if (arm.length && !armClasses.length) plan.noArm.push(target);
     plan.classes.push(...classes, ...gpu, ...highmem, ...armClasses);
     if (publicRepos && target.cloud === home) {
       plan.classes.push(

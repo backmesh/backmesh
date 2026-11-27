@@ -55,6 +55,7 @@ const RELEASED: FeatureTable = {
   'vm-job-regions': undefined,
   'service-tokens': '0.1.0',
   arm64: '0.1.0',
+  'azure-arm64': '0.1.0',
 };
 const OVERRIDE = { BACKMESH_UNSUPPORTED_CI_OVERRIDE: 'anycloud-ci' };
 const images = {
@@ -2193,8 +2194,12 @@ describe('install', () => {
     });
 
     it('plans arm64 classes only on an anycloud that boots arm64, 0.1.84 on', async () => {
-      expect(takesArm('0.1.83')).toBe(false);
-      expect(takesArm('0.1.84')).toBe(true);
+      expect(takesArm('0.1.83')).toEqual([]);
+      expect(takesArm('0.1.84')).toEqual(['aws', 'gcp']);
+      // Azure's Cobalt and Ampere from the version that has azure-arm64.
+      expect(
+        takesArm('0.1.85', { ...RELEASED, 'azure-arm64': '0.1.85' }),
+      ).toEqual(['aws', 'gcp', 'azure']);
       const arm = async (features: FeatureTable) =>
         (await planned(setUp({ features }).deps)).classes
           .map((c) => c.label)
@@ -3596,6 +3601,12 @@ describe("install's arm64 line", () => {
       'gcp us-east4 and us-east1 offer no c4a or t2a, so gcp gets no arm64 labels.',
     );
     expect(noArmLine({ ...target, cloud: 'azure' }, ['eastus'])).toBe(
+      'azure eastus offers no Standard_D4ps_v6 or Standard_D4ps_v5, so azure gets no arm64 labels.',
+    );
+    // A pinned anycloud from before azure-arm64.
+    expect(
+      noArmLine({ ...target, cloud: 'azure' }, ['eastus'], ['aws', 'gcp']),
+    ).toBe(
       'azure gets no arm64 labels: anycloud boots its arm64 image on AWS and GCP only.',
     );
   });
