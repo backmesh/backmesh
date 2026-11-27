@@ -73,5 +73,31 @@ through the cache on a new tag and a new builder each, cold, warm and after a
 small source change. The check passes when every build did, the proxy wrote
 without errors and each warm build had `CACHED` steps.
 
-The spike's pull request adds the A/B arms to `benchmarks/builds` and has the
-results and the go/no-go.
+## A/B
+
+[`bench-docker.yml`](../../benchmarks/builds/bench-docker.yml) has two builds:
+grafana/k6 v0.54.0's image, whose Dockerfile copies the whole checkout,
+`.git` included, before its `go build`, and healthchecks v5.0.3's
+`docker/Dockerfile`, which installs its apt packages and builds its Python
+wheels before it copies the source. run.ts runs them on three arms,
+`<label>/docker-off`, `docker-on` and `docker-container`, each round on a new
+branch: cold, warm (an empty commit), and changed (a comment appended to one
+source file). The arms' runs of a state are pushed together, in a random
+order.
+
+```sh
+GITHUB_TOKEN=$(gh auth token) TARGET_REPO=backmesh/benchmarks EXPERIMENT=docker-cache \
+LABELS='backmesh-ubuntu-2404-4vcpu/docker-off backmesh-ubuntu-2404-4vcpu/docker-on backmesh-ubuntu-2404-4vcpu/docker-container' \
+ROUNDS=8 BACKMESH_VERSION=0.7.2 ANYCLOUD_VERSION=0.1.84 INSTALLATION='backmesh org CI, AWS' \
+node benchmarks/builds/run.ts
+node experiments/docker-cache/analyze.ts benchmarks/builds/results/experiments/<date>-<version>-docker-cache.json
+```
+
+[`results/`](results/) has the 2026-11-27 run, 8 rounds on our CI installation
+(backmesh 0.7.2, every job on an `m8a.xlarge` in us-east-1 with Docker
+29.9.3's containerd image store), and a 1-round sanity run before it, whose
+`docker-builder` arm is the docker-container builder without a cache. Its
+`docker-on` arm is the later `docker-container`. In the 8-round run, every
+`docker-on` job failed its Report step, which read a builder log that arm
+doesn't make, after the build had passed; analyze.ts counts a job whose image
+was built. The pull request has the tables and the go/no-go.
