@@ -1,0 +1,2074 @@
+{
+  "date": "2026-11-27",
+  "backmesh": "0.7.2",
+  "anycloud": "0.1.84",
+  "installation": "backmesh org CI, AWS",
+  "repo": "backmesh/benchmarks",
+  "commit": "d80be569c7a5fa46ea24ec5bd3f5d75ae9ea4c17",
+  "labels": {
+    "backmesh-ubuntu-2404-4vcpu/docker-off": [
+      {
+        "round": 1,
+        "branch": "builds/backmesh-ubuntu-2404-4vcpu/docker-off/1795748334653",
+        "cold": {
+          "runId": 45931471488,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45931471488",
+          "jobs": {
+            "healthchecks": {
+              "id": 140284860486,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45931471488/job/140284860486",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-gpr9whj6",
+              "createdAt": "2026-11-27T02:58:59Z",
+              "startedAt": "2026-11-27T02:59:31Z",
+              "completedAt": "2026-11-27T03:00:42Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-27T02:59:31Z",
+                  "completedAt": "2026-11-27T02:59:31Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-27T02:59:31Z",
+                  "completedAt": "2026-11-27T02:59:31Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-27T02:59:31Z",
+                  "completedAt": "2026-11-27T02:59:31Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T02:59:31Z",
+                  "completedAt": "2026-11-27T02:59:32Z"
+                },
+                {
+                  "name": "Docker cache setup",
+                  "startedAt": "2026-11-27T02:59:32Z",
+                  "completedAt": "2026-11-27T02:59:32Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T02:59:32Z",
+                  "completedAt": "2026-11-27T02:59:32Z"
+                },
+                {
+                  "name": "Run if [[ -f ../change ]]; then echo \"# $(cat ../change)\" >>hc/api/views.py; fi",
+                  "startedAt": "2026-11-27T02:59:32Z",
+                  "completedAt": "2026-11-27T02:59:32Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-27T02:59:32Z",
+                  "completedAt": "2026-11-27T03:00:40Z"
+                },
+                {
+                  "name": "Report",
+                  "startedAt": "2026-11-27T03:00:40Z",
+                  "completedAt": "2026-11-27T03:00:40Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:00:40Z",
+                  "completedAt": "2026-11-27T03:00:40Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:00:40Z",
+                  "completedAt": "2026-11-27T03:00:40Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-27T03:00:40Z",
+                  "completedAt": "2026-11-27T03:00:41Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-27T03:00:41Z",
+                  "completedAt": "2026-11-27T03:00:41Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795748342401000,
+                "vm_booted": 1795748350000000,
+                "container_started": 1795748367930000,
+                "job_started": 1795748368275445,
+                "runner_listening": 1795748369994654,
+                "job_received": 1795748371871225,
+                "hook_done": 1795748371872598
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +22.9 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "docker": {
+                "version": "server 29.9.3, client 28.0.4",
+                "imageBytes": 484095582
+              }
+            },
+            "k6": {
+              "id": 140284860765,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45931471488/job/140284860765",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-zi9dppk6",
+              "createdAt": "2026-11-27T02:58:59Z",
+              "startedAt": "2026-11-27T02:59:31Z",
+              "completedAt": "2026-11-27T03:00:23Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-27T02:59:31Z",
+                  "completedAt": "2026-11-27T02:59:31Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-27T02:59:31Z",
+                  "completedAt": "2026-11-27T02:59:31Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-27T02:59:31Z",
+                  "completedAt": "2026-11-27T02:59:31Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T02:59:31Z",
+                  "completedAt": "2026-11-27T02:59:32Z"
+                },
+                {
+                  "name": "Docker cache setup",
+                  "startedAt": "2026-11-27T02:59:32Z",
+                  "completedAt": "2026-11-27T02:59:32Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T02:59:32Z",
+                  "completedAt": "2026-11-27T02:59:33Z"
+                },
+                {
+                  "name": "Run if [[ -f ../change ]]; then echo \"// $(cat ../change)\" >>main.go; fi",
+                  "startedAt": "2026-11-27T02:59:33Z",
+                  "completedAt": "2026-11-27T02:59:33Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-27T02:59:33Z",
+                  "completedAt": "2026-11-27T03:00:21Z"
+                },
+                {
+                  "name": "Report",
+                  "startedAt": "2026-11-27T03:00:21Z",
+                  "completedAt": "2026-11-27T03:00:21Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:00:21Z",
+                  "completedAt": "2026-11-27T03:00:21Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:00:21Z",
+                  "completedAt": "2026-11-27T03:00:21Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-27T03:00:21Z",
+                  "completedAt": "2026-11-27T03:00:21Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-27T03:00:21Z",
+                  "completedAt": "2026-11-27T03:00:21Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795748341748000,
+                "vm_booted": 1795748349000000,
+                "container_started": 1795748367920000,
+                "job_started": 1795748368035337,
+                "runner_listening": 1795748369916101,
+                "job_received": 1795748371699568,
+                "hook_done": 1795748371701010
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +23.1 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "docker": {
+                "version": "server 29.9.3, client 28.0.4",
+                "imageBytes": 1020396214
+              }
+            }
+          }
+        },
+        "warm": {
+          "runId": 45931885303,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45931885303",
+          "jobs": {
+            "k6": {
+              "id": 140286146650,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45931885303/job/140286146650",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-lq2iy1gq",
+              "createdAt": "2026-11-27T03:03:09Z",
+              "startedAt": "2026-11-27T03:03:41Z",
+              "completedAt": "2026-11-27T03:04:32Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-27T03:03:42Z",
+                  "completedAt": "2026-11-27T03:03:42Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-27T03:03:42Z",
+                  "completedAt": "2026-11-27T03:03:42Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-27T03:03:42Z",
+                  "completedAt": "2026-11-27T03:03:42Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:03:42Z",
+                  "completedAt": "2026-11-27T03:03:42Z"
+                },
+                {
+                  "name": "Docker cache setup",
+                  "startedAt": "2026-11-27T03:03:42Z",
+                  "completedAt": "2026-11-27T03:03:42Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:03:42Z",
+                  "completedAt": "2026-11-27T03:03:44Z"
+                },
+                {
+                  "name": "Run if [[ -f ../change ]]; then echo \"// $(cat ../change)\" >>main.go; fi",
+                  "startedAt": "2026-11-27T03:03:44Z",
+                  "completedAt": "2026-11-27T03:03:44Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-27T03:03:44Z",
+                  "completedAt": "2026-11-27T03:04:30Z"
+                },
+                {
+                  "name": "Report",
+                  "startedAt": "2026-11-27T03:04:30Z",
+                  "completedAt": "2026-11-27T03:04:30Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:04:30Z",
+                  "completedAt": "2026-11-27T03:04:31Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:04:31Z",
+                  "completedAt": "2026-11-27T03:04:31Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-27T03:04:31Z",
+                  "completedAt": "2026-11-27T03:04:31Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-27T03:04:31Z",
+                  "completedAt": "2026-11-27T03:04:31Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795748590564000,
+                "vm_booted": 1795748598000000,
+                "container_started": 1795748618470000,
+                "job_started": 1795748619150301,
+                "runner_listening": 1795748620896542,
+                "job_received": 1795748622651121,
+                "hook_done": 1795748622652510
+              },
+              "cache": ["backmesh cache: auto the cache token came at +22.8 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "docker": {
+                "version": "server 29.9.3, client 28.0.4",
+                "imageBytes": 1020393002
+              }
+            },
+            "healthchecks": {
+              "id": 140286146916,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45931885303/job/140286146916",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-dzpbcj15",
+              "createdAt": "2026-11-27T03:03:09Z",
+              "startedAt": "2026-11-27T03:03:41Z",
+              "completedAt": "2026-11-27T03:04:55Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-27T03:03:42Z",
+                  "completedAt": "2026-11-27T03:03:42Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-27T03:03:42Z",
+                  "completedAt": "2026-11-27T03:03:42Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-27T03:03:42Z",
+                  "completedAt": "2026-11-27T03:03:42Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:03:42Z",
+                  "completedAt": "2026-11-27T03:03:43Z"
+                },
+                {
+                  "name": "Docker cache setup",
+                  "startedAt": "2026-11-27T03:03:43Z",
+                  "completedAt": "2026-11-27T03:03:43Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:03:43Z",
+                  "completedAt": "2026-11-27T03:03:43Z"
+                },
+                {
+                  "name": "Run if [[ -f ../change ]]; then echo \"# $(cat ../change)\" >>hc/api/views.py; fi",
+                  "startedAt": "2026-11-27T03:03:43Z",
+                  "completedAt": "2026-11-27T03:03:43Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-27T03:03:43Z",
+                  "completedAt": "2026-11-27T03:04:53Z"
+                },
+                {
+                  "name": "Report",
+                  "startedAt": "2026-11-27T03:04:53Z",
+                  "completedAt": "2026-11-27T03:04:53Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:04:53Z",
+                  "completedAt": "2026-11-27T03:04:54Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:04:54Z",
+                  "completedAt": "2026-11-27T03:04:54Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-27T03:04:54Z",
+                  "completedAt": "2026-11-27T03:04:54Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-27T03:04:54Z",
+                  "completedAt": "2026-11-27T03:04:54Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795748592285000,
+                "vm_booted": 1795748600000000,
+                "container_started": 1795748618970000,
+                "job_started": 1795748619351903,
+                "runner_listening": 1795748621020913,
+                "job_received": 1795748622736440,
+                "hook_done": 1795748622737905
+              },
+              "cache": ["backmesh cache: auto the cache token came at +22.5 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "docker": {
+                "version": "server 29.9.3, client 28.0.4",
+                "imageBytes": 484095744
+              }
+            }
+          }
+        },
+        "changed": {
+          "runId": 45932201644,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45932201644",
+          "jobs": {
+            "k6": {
+              "id": 140287135423,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45932201644/job/140287135423",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-rses4ca7",
+              "createdAt": "2026-11-27T03:06:19Z",
+              "startedAt": "2026-11-27T03:07:09Z",
+              "completedAt": "2026-11-27T03:08:04Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-27T03:07:10Z",
+                  "completedAt": "2026-11-27T03:07:10Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-27T03:07:10Z",
+                  "completedAt": "2026-11-27T03:07:10Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-27T03:07:10Z",
+                  "completedAt": "2026-11-27T03:07:10Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:07:10Z",
+                  "completedAt": "2026-11-27T03:07:10Z"
+                },
+                {
+                  "name": "Docker cache setup",
+                  "startedAt": "2026-11-27T03:07:10Z",
+                  "completedAt": "2026-11-27T03:07:10Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:07:10Z",
+                  "completedAt": "2026-11-27T03:07:12Z"
+                },
+                {
+                  "name": "Run if [[ -f ../change ]]; then echo \"// $(cat ../change)\" >>main.go; fi",
+                  "startedAt": "2026-11-27T03:07:12Z",
+                  "completedAt": "2026-11-27T03:07:12Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-27T03:07:12Z",
+                  "completedAt": "2026-11-27T03:08:01Z"
+                },
+                {
+                  "name": "Report",
+                  "startedAt": "2026-11-27T03:08:01Z",
+                  "completedAt": "2026-11-27T03:08:01Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:08:01Z",
+                  "completedAt": "2026-11-27T03:08:01Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:08:01Z",
+                  "completedAt": "2026-11-27T03:08:02Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-27T03:08:02Z",
+                  "completedAt": "2026-11-27T03:08:02Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-27T03:08:02Z",
+                  "completedAt": "2026-11-27T03:08:02Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795748782731000,
+                "vm_booted": 1795748809000000,
+                "container_started": 1795748826190000,
+                "job_started": 1795748826655971,
+                "runner_listening": 1795748828540189,
+                "job_received": 1795748830441668,
+                "hook_done": 1795748830443297
+              },
+              "cache": ["backmesh cache: auto the cache token came at +4.1 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "docker": {
+                "version": "server 29.9.3, client 28.0.4",
+                "imageBytes": 1020393410
+              }
+            },
+            "healthchecks": {
+              "id": 140287135728,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45932201644/job/140287135728",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-jnr353zg",
+              "createdAt": "2026-11-27T03:06:19Z",
+              "startedAt": "2026-11-27T03:07:10Z",
+              "completedAt": "2026-11-27T03:08:24Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-27T03:07:10Z",
+                  "completedAt": "2026-11-27T03:07:11Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-27T03:07:11Z",
+                  "completedAt": "2026-11-27T03:07:11Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-27T03:07:11Z",
+                  "completedAt": "2026-11-27T03:07:11Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:07:11Z",
+                  "completedAt": "2026-11-27T03:07:11Z"
+                },
+                {
+                  "name": "Docker cache setup",
+                  "startedAt": "2026-11-27T03:07:11Z",
+                  "completedAt": "2026-11-27T03:07:11Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:07:11Z",
+                  "completedAt": "2026-11-27T03:07:12Z"
+                },
+                {
+                  "name": "Run if [[ -f ../change ]]; then echo \"# $(cat ../change)\" >>hc/api/views.py; fi",
+                  "startedAt": "2026-11-27T03:07:12Z",
+                  "completedAt": "2026-11-27T03:07:12Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-27T03:07:12Z",
+                  "completedAt": "2026-11-27T03:08:22Z"
+                },
+                {
+                  "name": "Report",
+                  "startedAt": "2026-11-27T03:08:22Z",
+                  "completedAt": "2026-11-27T03:08:22Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:08:22Z",
+                  "completedAt": "2026-11-27T03:08:22Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:08:22Z",
+                  "completedAt": "2026-11-27T03:08:22Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-27T03:08:22Z",
+                  "completedAt": "2026-11-27T03:08:22Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-27T03:08:22Z",
+                  "completedAt": "2026-11-27T03:08:22Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795748781418000,
+                "vm_booted": 1795748809000000,
+                "container_started": 1795748827370000,
+                "job_started": 1795748827491771,
+                "runner_listening": 1795748829246205,
+                "job_received": 1795748831118469,
+                "hook_done": 1795748831119906
+              },
+              "cache": ["backmesh cache: auto the cache token came at +3.2 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "docker": {
+                "version": "server 29.9.3, client 28.0.4",
+                "imageBytes": 484095255
+              }
+            }
+          }
+        }
+      }
+    ],
+    "backmesh-ubuntu-2404-4vcpu/docker-builder": [
+      {
+        "round": 1,
+        "branch": "builds/backmesh-ubuntu-2404-4vcpu/docker-builder/1795748334654",
+        "cold": {
+          "runId": 45931473382,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45931473382",
+          "jobs": {
+            "healthchecks": {
+              "id": 140284866731,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45931473382/job/140284866731",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-t3gvb6u0",
+              "createdAt": "2026-11-27T02:59:01Z",
+              "startedAt": "2026-11-27T02:59:34Z",
+              "completedAt": "2026-11-27T03:00:55Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-27T02:59:34Z",
+                  "completedAt": "2026-11-27T02:59:35Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-27T02:59:35Z",
+                  "completedAt": "2026-11-27T02:59:35Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-27T02:59:35Z",
+                  "completedAt": "2026-11-27T02:59:35Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T02:59:35Z",
+                  "completedAt": "2026-11-27T02:59:35Z"
+                },
+                {
+                  "name": "Docker cache setup",
+                  "startedAt": "2026-11-27T02:59:35Z",
+                  "completedAt": "2026-11-27T02:59:40Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T02:59:40Z",
+                  "completedAt": "2026-11-27T02:59:40Z"
+                },
+                {
+                  "name": "Run if [[ -f ../change ]]; then echo \"# $(cat ../change)\" >>hc/api/views.py; fi",
+                  "startedAt": "2026-11-27T02:59:40Z",
+                  "completedAt": "2026-11-27T02:59:40Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-27T02:59:40Z",
+                  "completedAt": "2026-11-27T03:00:52Z"
+                },
+                {
+                  "name": "Report",
+                  "startedAt": "2026-11-27T03:00:52Z",
+                  "completedAt": "2026-11-27T03:00:53Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:00:53Z",
+                  "completedAt": "2026-11-27T03:00:54Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:00:54Z",
+                  "completedAt": "2026-11-27T03:00:54Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-27T03:00:54Z",
+                  "completedAt": "2026-11-27T03:00:54Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-27T03:00:54Z",
+                  "completedAt": "2026-11-27T03:00:54Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795748340811000,
+                "vm_booted": 1795748349000000,
+                "container_started": 1795748370980000,
+                "job_started": 1795748371370179,
+                "runner_listening": 1795748373279123,
+                "job_received": 1795748375115254,
+                "hook_done": 1795748375116683
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +19.5 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "docker": {
+                "version": "server 29.9.3, client 28.0.4",
+                "setupMs": 4653,
+                "ready": true,
+                "imageBytes": 484095026,
+                "proxy": {
+                  "started": 1795748375447,
+                  "cloud": "",
+                  "tokenWaitMs": 1,
+                  "reads": 0,
+                  "hits": 0,
+                  "misses": 0,
+                  "bytesRead": 0,
+                  "writes": 0,
+                  "bytesWritten": 0,
+                  "dropped": 0,
+                  "incomplete": 0,
+                  "errors": [],
+                  "tokens": []
+                }
+              }
+            },
+            "k6": {
+              "id": 140284866974,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45931473382/job/140284866974",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-5eq48r08",
+              "createdAt": "2026-11-27T02:59:01Z",
+              "startedAt": "2026-11-27T03:00:25Z",
+              "completedAt": "2026-11-27T03:01:24Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-27T03:00:26Z",
+                  "completedAt": "2026-11-27T03:00:26Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-27T03:00:26Z",
+                  "completedAt": "2026-11-27T03:00:26Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-27T03:00:26Z",
+                  "completedAt": "2026-11-27T03:00:26Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:00:26Z",
+                  "completedAt": "2026-11-27T03:00:26Z"
+                },
+                {
+                  "name": "Docker cache setup",
+                  "startedAt": "2026-11-27T03:00:26Z",
+                  "completedAt": "2026-11-27T03:00:31Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:00:31Z",
+                  "completedAt": "2026-11-27T03:00:32Z"
+                },
+                {
+                  "name": "Run if [[ -f ../change ]]; then echo \"// $(cat ../change)\" >>main.go; fi",
+                  "startedAt": "2026-11-27T03:00:32Z",
+                  "completedAt": "2026-11-27T03:00:32Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-27T03:00:32Z",
+                  "completedAt": "2026-11-27T03:01:21Z"
+                },
+                {
+                  "name": "Report",
+                  "startedAt": "2026-11-27T03:01:21Z",
+                  "completedAt": "2026-11-27T03:01:22Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:01:22Z",
+                  "completedAt": "2026-11-27T03:01:22Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:01:22Z",
+                  "completedAt": "2026-11-27T03:01:23Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-27T03:01:23Z",
+                  "completedAt": "2026-11-27T03:01:23Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-27T03:01:23Z",
+                  "completedAt": "2026-11-27T03:01:23Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795748343002000,
+                "vm_booted": 1795748351000000,
+                "container_started": 1795748422650000,
+                "job_started": 1795748422877758,
+                "runner_listening": 1795748424670141,
+                "job_received": 1795748426561801,
+                "hook_done": 1795748426563269
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +17.6 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "docker": {
+                "version": "server 29.9.3, client 28.0.4",
+                "setupMs": 4091,
+                "ready": true,
+                "imageBytes": 1020392143,
+                "proxy": {
+                  "started": 1795748426929,
+                  "cloud": "",
+                  "tokenWaitMs": 2,
+                  "reads": 0,
+                  "hits": 0,
+                  "misses": 0,
+                  "bytesRead": 0,
+                  "writes": 0,
+                  "bytesWritten": 0,
+                  "dropped": 0,
+                  "incomplete": 0,
+                  "errors": [],
+                  "tokens": []
+                }
+              }
+            }
+          }
+        },
+        "warm": {
+          "runId": 45931888200,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45931888200",
+          "jobs": {
+            "healthchecks": {
+              "id": 140286155802,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45931888200/job/140286155802",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-i10ygc0r",
+              "createdAt": "2026-11-27T03:03:11Z",
+              "startedAt": "2026-11-27T03:03:42Z",
+              "completedAt": "2026-11-27T03:05:07Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-27T03:03:53Z",
+                  "completedAt": "2026-11-27T03:03:54Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-27T03:03:54Z",
+                  "completedAt": "2026-11-27T03:03:54Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-27T03:03:54Z",
+                  "completedAt": "2026-11-27T03:03:54Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:03:54Z",
+                  "completedAt": "2026-11-27T03:03:54Z"
+                },
+                {
+                  "name": "Docker cache setup",
+                  "startedAt": "2026-11-27T03:03:54Z",
+                  "completedAt": "2026-11-27T03:03:59Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:03:59Z",
+                  "completedAt": "2026-11-27T03:03:59Z"
+                },
+                {
+                  "name": "Run if [[ -f ../change ]]; then echo \"# $(cat ../change)\" >>hc/api/views.py; fi",
+                  "startedAt": "2026-11-27T03:03:59Z",
+                  "completedAt": "2026-11-27T03:03:59Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-27T03:03:59Z",
+                  "completedAt": "2026-11-27T03:05:05Z"
+                },
+                {
+                  "name": "Report",
+                  "startedAt": "2026-11-27T03:05:05Z",
+                  "completedAt": "2026-11-27T03:05:06Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:05:06Z",
+                  "completedAt": "2026-11-27T03:05:06Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:05:06Z",
+                  "completedAt": "2026-11-27T03:05:06Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-27T03:05:06Z",
+                  "completedAt": "2026-11-27T03:05:06Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-27T03:05:06Z",
+                  "completedAt": "2026-11-27T03:05:06Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795748592871000,
+                "vm_booted": 1795748601000000,
+                "container_started": 1795748619000000,
+                "job_started": 1795748619396897,
+                "runner_listening": 1795748621263597,
+                "job_received": 1795748634197232,
+                "hook_done": 1795748634198612
+              },
+              "cache": ["backmesh cache: auto the cache token came at +11.3 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "docker": {
+                "version": "server 29.9.3, client 28.0.4",
+                "setupMs": 4437,
+                "ready": true,
+                "imageBytes": 484095346,
+                "proxy": {
+                  "started": 1795748634513,
+                  "cloud": "",
+                  "tokenWaitMs": 2,
+                  "reads": 0,
+                  "hits": 0,
+                  "misses": 0,
+                  "bytesRead": 0,
+                  "writes": 0,
+                  "bytesWritten": 0,
+                  "dropped": 0,
+                  "incomplete": 0,
+                  "errors": [],
+                  "tokens": []
+                }
+              }
+            },
+            "k6": {
+              "id": 140286156106,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45931888200/job/140286156106",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-h0w04m97",
+              "createdAt": "2026-11-27T03:03:11Z",
+              "startedAt": "2026-11-27T03:03:45Z",
+              "completedAt": "2026-11-27T03:04:42Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-27T03:03:45Z",
+                  "completedAt": "2026-11-27T03:03:46Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-27T03:03:46Z",
+                  "completedAt": "2026-11-27T03:03:46Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-27T03:03:46Z",
+                  "completedAt": "2026-11-27T03:03:46Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:03:46Z",
+                  "completedAt": "2026-11-27T03:03:46Z"
+                },
+                {
+                  "name": "Docker cache setup",
+                  "startedAt": "2026-11-27T03:03:46Z",
+                  "completedAt": "2026-11-27T03:03:51Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:03:51Z",
+                  "completedAt": "2026-11-27T03:03:52Z"
+                },
+                {
+                  "name": "Run if [[ -f ../change ]]; then echo \"// $(cat ../change)\" >>main.go; fi",
+                  "startedAt": "2026-11-27T03:03:52Z",
+                  "completedAt": "2026-11-27T03:03:52Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-27T03:03:52Z",
+                  "completedAt": "2026-11-27T03:04:40Z"
+                },
+                {
+                  "name": "Report",
+                  "startedAt": "2026-11-27T03:04:40Z",
+                  "completedAt": "2026-11-27T03:04:41Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:04:41Z",
+                  "completedAt": "2026-11-27T03:04:41Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:04:41Z",
+                  "completedAt": "2026-11-27T03:04:41Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-27T03:04:41Z",
+                  "completedAt": "2026-11-27T03:04:41Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-27T03:04:41Z",
+                  "completedAt": "2026-11-27T03:04:41Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795748589518000,
+                "vm_booted": 1795748597000000,
+                "container_started": 1795748622440000,
+                "job_started": 1795748622559421,
+                "runner_listening": 1795748624339643,
+                "job_received": 1795748626193780,
+                "hook_done": 1795748626195270
+              },
+              "cache": ["backmesh cache: auto the cache token came at +19.3 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "docker": {
+                "version": "server 29.9.3, client 28.0.4",
+                "setupMs": 4289,
+                "ready": true,
+                "imageBytes": 1020392230,
+                "proxy": {
+                  "started": 1795748626549,
+                  "cloud": "",
+                  "tokenWaitMs": 2,
+                  "reads": 0,
+                  "hits": 0,
+                  "misses": 0,
+                  "bytesRead": 0,
+                  "writes": 0,
+                  "bytesWritten": 0,
+                  "dropped": 0,
+                  "incomplete": 0,
+                  "errors": [],
+                  "tokens": []
+                }
+              }
+            }
+          }
+        },
+        "changed": {
+          "runId": 45932203890,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45932203890",
+          "jobs": {
+            "k6": {
+              "id": 140287142206,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45932203890/job/140287142206",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-4n4ysk9v",
+              "createdAt": "2026-11-27T03:06:20Z",
+              "startedAt": "2026-11-27T03:07:10Z",
+              "completedAt": "2026-11-27T03:08:08Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-27T03:07:11Z",
+                  "completedAt": "2026-11-27T03:07:11Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-27T03:07:11Z",
+                  "completedAt": "2026-11-27T03:07:11Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-27T03:07:11Z",
+                  "completedAt": "2026-11-27T03:07:11Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:07:11Z",
+                  "completedAt": "2026-11-27T03:07:11Z"
+                },
+                {
+                  "name": "Docker cache setup",
+                  "startedAt": "2026-11-27T03:07:11Z",
+                  "completedAt": "2026-11-27T03:07:15Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:07:15Z",
+                  "completedAt": "2026-11-27T03:07:17Z"
+                },
+                {
+                  "name": "Run if [[ -f ../change ]]; then echo \"// $(cat ../change)\" >>main.go; fi",
+                  "startedAt": "2026-11-27T03:07:17Z",
+                  "completedAt": "2026-11-27T03:07:17Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-27T03:07:17Z",
+                  "completedAt": "2026-11-27T03:08:05Z"
+                },
+                {
+                  "name": "Report",
+                  "startedAt": "2026-11-27T03:08:05Z",
+                  "completedAt": "2026-11-27T03:08:06Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:08:06Z",
+                  "completedAt": "2026-11-27T03:08:06Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:08:06Z",
+                  "completedAt": "2026-11-27T03:08:06Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-27T03:08:06Z",
+                  "completedAt": "2026-11-27T03:08:06Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-27T03:08:06Z",
+                  "completedAt": "2026-11-27T03:08:06Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795748782792000,
+                "vm_booted": 1795748809000000,
+                "container_started": 1795748827200000,
+                "job_started": 1795748827873508,
+                "runner_listening": 1795748829634602,
+                "job_received": 1795748831530868,
+                "hook_done": 1795748831532230
+              },
+              "cache": ["backmesh cache: auto the cache token came at +2.8 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "docker": {
+                "version": "server 29.9.3, client 28.0.4",
+                "setupMs": 3903,
+                "ready": true,
+                "imageBytes": 1020393858,
+                "proxy": {
+                  "started": 1795748831862,
+                  "cloud": "",
+                  "tokenWaitMs": 2,
+                  "reads": 0,
+                  "hits": 0,
+                  "misses": 0,
+                  "bytesRead": 0,
+                  "writes": 0,
+                  "bytesWritten": 0,
+                  "dropped": 0,
+                  "incomplete": 0,
+                  "errors": [],
+                  "tokens": []
+                }
+              }
+            },
+            "healthchecks": {
+              "id": 140287142602,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45932203890/job/140287142602",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-rt7dl70n",
+              "createdAt": "2026-11-27T03:06:21Z",
+              "startedAt": "2026-11-27T03:07:21Z",
+              "completedAt": "2026-11-27T03:08:39Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-27T03:07:21Z",
+                  "completedAt": "2026-11-27T03:07:21Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-27T03:07:21Z",
+                  "completedAt": "2026-11-27T03:07:22Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-27T03:07:22Z",
+                  "completedAt": "2026-11-27T03:07:22Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:07:22Z",
+                  "completedAt": "2026-11-27T03:07:22Z"
+                },
+                {
+                  "name": "Docker cache setup",
+                  "startedAt": "2026-11-27T03:07:22Z",
+                  "completedAt": "2026-11-27T03:07:26Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:07:26Z",
+                  "completedAt": "2026-11-27T03:07:27Z"
+                },
+                {
+                  "name": "Run if [[ -f ../change ]]; then echo \"# $(cat ../change)\" >>hc/api/views.py; fi",
+                  "startedAt": "2026-11-27T03:07:27Z",
+                  "completedAt": "2026-11-27T03:07:27Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-27T03:07:27Z",
+                  "completedAt": "2026-11-27T03:08:36Z"
+                },
+                {
+                  "name": "Report",
+                  "startedAt": "2026-11-27T03:08:36Z",
+                  "completedAt": "2026-11-27T03:08:37Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:08:37Z",
+                  "completedAt": "2026-11-27T03:08:37Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:08:37Z",
+                  "completedAt": "2026-11-27T03:08:37Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-27T03:08:37Z",
+                  "completedAt": "2026-11-27T03:08:37Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-27T03:08:37Z",
+                  "completedAt": "2026-11-27T03:08:37Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795748780503000,
+                "vm_booted": 1795748809000000,
+                "container_started": 1795748837810000,
+                "job_started": 1795748838401703,
+                "runner_listening": 1795748840190036,
+                "job_received": 1795748842005274,
+                "hook_done": 1795748842006631
+              },
+              "cache": ["backmesh cache: auto the cache token came at +10.8 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "docker": {
+                "version": "server 29.9.3, client 28.0.4",
+                "setupMs": 4140,
+                "ready": true,
+                "imageBytes": 484094663,
+                "proxy": {
+                  "started": 1795748842322,
+                  "cloud": "",
+                  "tokenWaitMs": 1,
+                  "reads": 0,
+                  "hits": 0,
+                  "misses": 0,
+                  "bytesRead": 0,
+                  "writes": 0,
+                  "bytesWritten": 0,
+                  "dropped": 0,
+                  "incomplete": 0,
+                  "errors": [],
+                  "tokens": []
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "backmesh-ubuntu-2404-4vcpu/docker-on": [
+      {
+        "round": 1,
+        "branch": "builds/backmesh-ubuntu-2404-4vcpu/docker-on/1795748334655",
+        "cold": {
+          "runId": 45931469393,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45931469393",
+          "jobs": {
+            "k6": {
+              "id": 140284853777,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45931469393/job/140284853777",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-6e0o79s3",
+              "createdAt": "2026-11-27T02:58:58Z",
+              "startedAt": "2026-11-27T02:59:29Z",
+              "completedAt": "2026-11-27T03:01:00Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-27T02:59:30Z",
+                  "completedAt": "2026-11-27T02:59:30Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-27T02:59:30Z",
+                  "completedAt": "2026-11-27T02:59:30Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-27T02:59:30Z",
+                  "completedAt": "2026-11-27T02:59:30Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T02:59:30Z",
+                  "completedAt": "2026-11-27T02:59:30Z"
+                },
+                {
+                  "name": "Docker cache setup",
+                  "startedAt": "2026-11-27T02:59:30Z",
+                  "completedAt": "2026-11-27T02:59:35Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T02:59:35Z",
+                  "completedAt": "2026-11-27T02:59:36Z"
+                },
+                {
+                  "name": "Run if [[ -f ../change ]]; then echo \"// $(cat ../change)\" >>main.go; fi",
+                  "startedAt": "2026-11-27T02:59:36Z",
+                  "completedAt": "2026-11-27T02:59:36Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-27T02:59:36Z",
+                  "completedAt": "2026-11-27T03:00:57Z"
+                },
+                {
+                  "name": "Report",
+                  "startedAt": "2026-11-27T03:00:57Z",
+                  "completedAt": "2026-11-27T03:00:58Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:00:58Z",
+                  "completedAt": "2026-11-27T03:00:58Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:00:58Z",
+                  "completedAt": "2026-11-27T03:00:58Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-27T03:00:58Z",
+                  "completedAt": "2026-11-27T03:00:58Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-27T03:00:58Z",
+                  "completedAt": "2026-11-27T03:00:58Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795748340165000,
+                "vm_booted": 1795748349000000,
+                "container_started": 1795748366570000,
+                "job_started": 1795748366773748,
+                "runner_listening": 1795748368581493,
+                "job_received": 1795748370553602,
+                "hook_done": 1795748370554982
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +24.1 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "docker": {
+                "version": "server 29.9.3, client 28.0.4",
+                "setupMs": 4222,
+                "ready": true,
+                "imageBytes": 1020392124,
+                "proxy": {
+                  "started": 1795748370909,
+                  "cloud": "aws",
+                  "tokenWaitMs": 17548,
+                  "reads": 16,
+                  "hits": 0,
+                  "misses": 16,
+                  "bytesRead": 0,
+                  "writes": 16,
+                  "bytesWritten": 542275801,
+                  "dropped": 0,
+                  "incomplete": 0,
+                  "errors": [],
+                  "tokens": [
+                    {
+                      "at": 1795748395156,
+                      "id": "a4cc88ccfec1",
+                      "expiresAt": 1795749294000,
+                      "ok": 34
+                    }
+                  ]
+                }
+              }
+            },
+            "healthchecks": {
+              "id": 140284854054,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45931469393/job/140284854054",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-cqts2bg5",
+              "createdAt": "2026-11-27T02:58:58Z",
+              "startedAt": "2026-11-27T02:59:30Z",
+              "completedAt": "2026-11-27T03:01:21Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-27T02:59:30Z",
+                  "completedAt": "2026-11-27T02:59:30Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-27T02:59:30Z",
+                  "completedAt": "2026-11-27T02:59:30Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-27T02:59:30Z",
+                  "completedAt": "2026-11-27T02:59:30Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T02:59:30Z",
+                  "completedAt": "2026-11-27T02:59:31Z"
+                },
+                {
+                  "name": "Docker cache setup",
+                  "startedAt": "2026-11-27T02:59:31Z",
+                  "completedAt": "2026-11-27T02:59:36Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T02:59:36Z",
+                  "completedAt": "2026-11-27T02:59:37Z"
+                },
+                {
+                  "name": "Run if [[ -f ../change ]]; then echo \"# $(cat ../change)\" >>hc/api/views.py; fi",
+                  "startedAt": "2026-11-27T02:59:37Z",
+                  "completedAt": "2026-11-27T02:59:37Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-27T02:59:37Z",
+                  "completedAt": "2026-11-27T03:01:18Z"
+                },
+                {
+                  "name": "Report",
+                  "startedAt": "2026-11-27T03:01:18Z",
+                  "completedAt": "2026-11-27T03:01:19Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:01:19Z",
+                  "completedAt": "2026-11-27T03:01:19Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:01:19Z",
+                  "completedAt": "2026-11-27T03:01:19Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-27T03:01:19Z",
+                  "completedAt": "2026-11-27T03:01:19Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-27T03:01:19Z",
+                  "completedAt": "2026-11-27T03:01:19Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795748339482000,
+                "vm_booted": 1795748349000000,
+                "container_started": 1795748366830000,
+                "job_started": 1795748367329018,
+                "runner_listening": 1795748369145230,
+                "job_received": 1795748370934827,
+                "hook_done": 1795748370936233
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +23.7 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "docker": {
+                "version": "server 29.9.3, client 28.0.4",
+                "setupMs": 4834,
+                "ready": true,
+                "imageBytes": 484096053,
+                "proxy": {
+                  "started": 1795748371291,
+                  "cloud": "aws",
+                  "tokenWaitMs": 17543,
+                  "reads": 22,
+                  "hits": 0,
+                  "misses": 22,
+                  "bytesRead": 0,
+                  "writes": 22,
+                  "bytesWritten": 351588344,
+                  "dropped": 0,
+                  "incomplete": 0,
+                  "errors": [],
+                  "tokens": [
+                    {
+                      "at": 1795748395129,
+                      "id": "6ce6eef11649",
+                      "expiresAt": 1795749294000,
+                      "ok": 46
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "warm": {
+          "runId": 45931883699,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45931883699",
+          "jobs": {
+            "k6": {
+              "id": 140286141317,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45931883699/job/140286141317",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-4tevxkzy",
+              "createdAt": "2026-11-27T03:03:08Z",
+              "startedAt": "2026-11-27T03:03:38Z",
+              "completedAt": "2026-11-27T03:04:50Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-27T03:03:39Z",
+                  "completedAt": "2026-11-27T03:03:39Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-27T03:03:39Z",
+                  "completedAt": "2026-11-27T03:03:39Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-27T03:03:39Z",
+                  "completedAt": "2026-11-27T03:03:39Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:03:39Z",
+                  "completedAt": "2026-11-27T03:03:40Z"
+                },
+                {
+                  "name": "Docker cache setup",
+                  "startedAt": "2026-11-27T03:03:40Z",
+                  "completedAt": "2026-11-27T03:03:44Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:03:44Z",
+                  "completedAt": "2026-11-27T03:03:46Z"
+                },
+                {
+                  "name": "Run if [[ -f ../change ]]; then echo \"// $(cat ../change)\" >>main.go; fi",
+                  "startedAt": "2026-11-27T03:03:46Z",
+                  "completedAt": "2026-11-27T03:03:46Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-27T03:03:46Z",
+                  "completedAt": "2026-11-27T03:04:48Z"
+                },
+                {
+                  "name": "Report",
+                  "startedAt": "2026-11-27T03:04:48Z",
+                  "completedAt": "2026-11-27T03:04:49Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:04:49Z",
+                  "completedAt": "2026-11-27T03:04:49Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:04:49Z",
+                  "completedAt": "2026-11-27T03:04:49Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-27T03:04:49Z",
+                  "completedAt": "2026-11-27T03:04:49Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-27T03:04:49Z",
+                  "completedAt": "2026-11-27T03:04:49Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795748589481000,
+                "vm_booted": 1795748597000000,
+                "container_started": 1795748616090000,
+                "job_started": 1795748616206890,
+                "runner_listening": 1795748617993856,
+                "job_received": 1795748619781633,
+                "hook_done": 1795748619783070
+              },
+              "cache": ["backmesh cache: auto the cache token came at +25.5 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 6,
+              "docker": {
+                "version": "server 29.9.3, client 28.0.4",
+                "setupMs": 4543,
+                "ready": true,
+                "imageBytes": 1020396220,
+                "proxy": {
+                  "started": 1795748620128,
+                  "cloud": "aws",
+                  "tokenWaitMs": 18544,
+                  "reads": 28,
+                  "hits": 24,
+                  "misses": 4,
+                  "bytesRead": 372386315,
+                  "writes": 6,
+                  "bytesWritten": 169905414,
+                  "dropped": 0,
+                  "incomplete": 0,
+                  "errors": [],
+                  "tokens": [
+                    {
+                      "at": 1795748645551,
+                      "id": "7853b2b30261",
+                      "expiresAt": 1795749544000,
+                      "ok": 34
+                    }
+                  ]
+                }
+              }
+            },
+            "healthchecks": {
+              "id": 140286141502,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45931883699/job/140286141502",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-p2764xes",
+              "createdAt": "2026-11-27T03:03:08Z",
+              "startedAt": "2026-11-27T03:03:39Z",
+              "completedAt": "2026-11-27T03:04:18Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-27T03:03:40Z",
+                  "completedAt": "2026-11-27T03:03:40Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-27T03:03:40Z",
+                  "completedAt": "2026-11-27T03:03:40Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-27T03:03:40Z",
+                  "completedAt": "2026-11-27T03:03:40Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:03:40Z",
+                  "completedAt": "2026-11-27T03:03:40Z"
+                },
+                {
+                  "name": "Docker cache setup",
+                  "startedAt": "2026-11-27T03:03:40Z",
+                  "completedAt": "2026-11-27T03:03:45Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:03:45Z",
+                  "completedAt": "2026-11-27T03:03:45Z"
+                },
+                {
+                  "name": "Run if [[ -f ../change ]]; then echo \"# $(cat ../change)\" >>hc/api/views.py; fi",
+                  "startedAt": "2026-11-27T03:03:45Z",
+                  "completedAt": "2026-11-27T03:03:45Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-27T03:03:45Z",
+                  "completedAt": "2026-11-27T03:04:15Z"
+                },
+                {
+                  "name": "Report",
+                  "startedAt": "2026-11-27T03:04:15Z",
+                  "completedAt": "2026-11-27T03:04:16Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:04:16Z",
+                  "completedAt": "2026-11-27T03:04:16Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:04:16Z",
+                  "completedAt": "2026-11-27T03:04:16Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-27T03:04:16Z",
+                  "completedAt": "2026-11-27T03:04:16Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-27T03:04:16Z",
+                  "completedAt": "2026-11-27T03:04:16Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795748591161000,
+                "vm_booted": 1795748599000000,
+                "container_started": 1795748617060000,
+                "job_started": 1795748617110544,
+                "runner_listening": 1795748618715143,
+                "job_received": 1795748620485212,
+                "hook_done": 1795748620486556
+              },
+              "cache": ["backmesh cache: auto the cache token came at +25.1 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 13,
+              "docker": {
+                "version": "server 29.9.3, client 28.0.4",
+                "setupMs": 4116,
+                "ready": true,
+                "imageBytes": 484100149,
+                "proxy": {
+                  "started": 1795748620838,
+                  "cloud": "aws",
+                  "tokenWaitMs": 19550,
+                  "reads": 41,
+                  "hits": 38,
+                  "misses": 3,
+                  "bytesRead": 340671587,
+                  "writes": 5,
+                  "bytesWritten": 10943139,
+                  "dropped": 0,
+                  "incomplete": 0,
+                  "errors": [],
+                  "tokens": [
+                    {
+                      "at": 1795748645878,
+                      "id": "2e28f18da38d",
+                      "expiresAt": 1795749544000,
+                      "ok": 46
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "changed": {
+          "runId": 45932198681,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45932198681",
+          "jobs": {
+            "k6": {
+              "id": 140287126242,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45932198681/job/140287126242",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-050mc7f3",
+              "createdAt": "2026-11-27T03:06:17Z",
+              "startedAt": "2026-11-27T03:07:08Z",
+              "completedAt": "2026-11-27T03:08:20Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-27T03:07:08Z",
+                  "completedAt": "2026-11-27T03:07:08Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-27T03:07:08Z",
+                  "completedAt": "2026-11-27T03:07:08Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-27T03:07:08Z",
+                  "completedAt": "2026-11-27T03:07:08Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:07:08Z",
+                  "completedAt": "2026-11-27T03:07:08Z"
+                },
+                {
+                  "name": "Docker cache setup",
+                  "startedAt": "2026-11-27T03:07:08Z",
+                  "completedAt": "2026-11-27T03:07:13Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:07:13Z",
+                  "completedAt": "2026-11-27T03:07:15Z"
+                },
+                {
+                  "name": "Run if [[ -f ../change ]]; then echo \"// $(cat ../change)\" >>main.go; fi",
+                  "startedAt": "2026-11-27T03:07:15Z",
+                  "completedAt": "2026-11-27T03:07:15Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-27T03:07:15Z",
+                  "completedAt": "2026-11-27T03:08:17Z"
+                },
+                {
+                  "name": "Report",
+                  "startedAt": "2026-11-27T03:08:17Z",
+                  "completedAt": "2026-11-27T03:08:18Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:08:18Z",
+                  "completedAt": "2026-11-27T03:08:18Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:08:18Z",
+                  "completedAt": "2026-11-27T03:08:18Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-27T03:08:18Z",
+                  "completedAt": "2026-11-27T03:08:18Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-27T03:08:18Z",
+                  "completedAt": "2026-11-27T03:08:18Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795748781344000,
+                "vm_booted": 1795748808000000,
+                "container_started": 1795748824550000,
+                "job_started": 1795748824679146,
+                "runner_listening": 1795748826557909,
+                "job_received": 1795748828600928,
+                "hook_done": 1795748828602495
+              },
+              "cache": ["backmesh cache: auto the cache token came at +6.0 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 1,
+              "docker": {
+                "version": "server 29.9.3, client 28.0.4",
+                "setupMs": 4791,
+                "ready": true,
+                "imageBytes": 1020394637,
+                "proxy": {
+                  "started": 1795748828961,
+                  "cloud": "aws",
+                  "tokenWaitMs": 22,
+                  "reads": 26,
+                  "hits": 20,
+                  "misses": 6,
+                  "bytesRead": 81630307,
+                  "writes": 8,
+                  "bytesWritten": 460647439,
+                  "dropped": 0,
+                  "incomplete": 0,
+                  "errors": [],
+                  "tokens": [
+                    {
+                      "at": 1795748836294,
+                      "id": "70323958f731",
+                      "expiresAt": 1795749733000,
+                      "ok": 34
+                    }
+                  ]
+                }
+              }
+            },
+            "healthchecks": {
+              "id": 140287126513,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45932198681/job/140287126513",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-mlsmwdlq",
+              "createdAt": "2026-11-27T03:06:17Z",
+              "startedAt": "2026-11-27T03:07:09Z",
+              "completedAt": "2026-11-27T03:07:31Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-27T03:07:09Z",
+                  "completedAt": "2026-11-27T03:07:09Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-27T03:07:09Z",
+                  "completedAt": "2026-11-27T03:07:09Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-27T03:07:09Z",
+                  "completedAt": "2026-11-27T03:07:09Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:07:09Z",
+                  "completedAt": "2026-11-27T03:07:10Z"
+                },
+                {
+                  "name": "Docker cache setup",
+                  "startedAt": "2026-11-27T03:07:10Z",
+                  "completedAt": "2026-11-27T03:07:14Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:07:14Z",
+                  "completedAt": "2026-11-27T03:07:15Z"
+                },
+                {
+                  "name": "Run if [[ -f ../change ]]; then echo \"# $(cat ../change)\" >>hc/api/views.py; fi",
+                  "startedAt": "2026-11-27T03:07:15Z",
+                  "completedAt": "2026-11-27T03:07:15Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-27T03:07:15Z",
+                  "completedAt": "2026-11-27T03:07:28Z"
+                },
+                {
+                  "name": "Report",
+                  "startedAt": "2026-11-27T03:07:28Z",
+                  "completedAt": "2026-11-27T03:07:29Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:07:29Z",
+                  "completedAt": "2026-11-27T03:07:29Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-27T03:07:29Z",
+                  "completedAt": "2026-11-27T03:07:29Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-27T03:07:29Z",
+                  "completedAt": "2026-11-27T03:07:29Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-27T03:07:29Z",
+                  "completedAt": "2026-11-27T03:07:29Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795748779371000,
+                "vm_booted": 1795748809000000,
+                "container_started": 1795748825770000,
+                "job_started": 1795748826397610,
+                "runner_listening": 1795748828103762,
+                "job_received": 1795748829900194,
+                "hook_done": 1795748829901922
+              },
+              "cache": ["backmesh cache: auto the cache token came at +4.5 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 7,
+              "docker": {
+                "version": "server 29.9.3, client 28.0.4",
+                "setupMs": 4130,
+                "ready": true,
+                "imageBytes": 484096011,
+                "proxy": {
+                  "started": 1795748830222,
+                  "cloud": "aws",
+                  "tokenWaitMs": 23,
+                  "reads": 35,
+                  "hits": 26,
+                  "misses": 9,
+                  "bytesRead": 328532207,
+                  "writes": 11,
+                  "bytesWritten": 23083580,
+                  "dropped": 0,
+                  "incomplete": 0,
+                  "errors": [],
+                  "tokens": [
+                    {
+                      "at": 1795748835969,
+                      "id": "ad8a07925a6d",
+                      "expiresAt": 1795749733000,
+                      "ok": 46
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,71 @@
+name: builds
+on:
+  push:
+    branches: ['builds/**']
+permissions:
+  contents: read
+# The Docker layer cache spike's arms (experiments/docker-cache): run.ts
+# writes this file to each round's branch with the label for runs-on and the
+# arm's mode, and experiments/docker-cache's setup.sh, shim and proxy bundle
+# to docker-cache/. `off` is today's `docker build`; `on` adds the registry
+# cache in the bucket on the VM's Docker; `container` does that on a
+# docker-container builder, as a VM's Docker without the containerd image
+# store would need. A commit with a `change` file is the round's run after a
+# small source change.
+defaults:
+  run:
+    working-directory: project
+env:
+  BACKMESH_DOCKER_CACHE: __MODE__
+jobs:
+  k6:
+    runs-on: __LABEL__
+    steps:
+      - &marks
+        name: Marks
+        working-directory: .
+        run: |
+          cat "${BACKMESH_JOB_MARKS:-/dev/null}"; echo "nproc $(nproc)"
+          echo "cpu $(lscpu | sed -n 's/^Model name: *//p')"
+          docker version --format 'docker server {{.Server.Version}}, client {{.Client.Version}}'
+          docker info --format 'docker store {{.Driver}} {{range .DriverStatus}}{{index . 1}} {{end}}'
+          imds=http://169.254.169.254/latest
+          [[ -n ${BACKMESH_JOB_MARKS:-} ]] || exit 0
+          t=$(curl -sfm 2 -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' $imds/api/token) || exit 0
+          echo "region aws $(curl -sfm 2 -H "X-aws-ec2-metadata-token: $t" $imds/meta-data/placement/region)"
+          echo "vm $(curl -sfm 2 -H "X-aws-ec2-metadata-token: $t" $imds/meta-data/instance-type)"
+      - uses: actions/checkout@v5
+      - &setup
+        name: Docker cache setup
+        if: env.BACKMESH_DOCKER_CACHE != 'off'
+        working-directory: .
+        run: docker-cache/setup.sh "$RUNNER_TEMP/docker-cache"
+      - uses: actions/checkout@v5
+        with: { repository: grafana/k6, ref: v0.54.0, path: project }
+      - run: if [[ -f ../change ]]; then echo "// $(cat ../change)" >>main.go; fi
+      - name: Build
+        run: docker build -t bench .
+      - &report
+        name: Report
+        if: always()
+        working-directory: .
+        run: |
+          echo "image-bytes $(docker image inspect bench --format '{{.Size}}' 2>/dev/null)"
+          w=$RUNNER_TEMP/docker-cache
+          [[ -f $w/proxy.pid ]] || exit 0
+          kill "$(cat "$w/proxy.pid")" && sleep 1
+          echo "docker-cache-proxy $(jq -c . "$w/proxy.json")"
+          cat "$w/proxy.log" "$w/builder.log" 2>/dev/null || true
+  healthchecks:
+    runs-on: __LABEL__
+    steps:
+      - *marks
+      - uses: actions/checkout@v5
+      - *setup
+      - uses: actions/checkout@v5
+        with:
+          { repository: healthchecks/healthchecks, ref: v5.0.3, path: project }
+      - run: if [[ -f ../change ]]; then echo "# $(cat ../change)" >>hc/api/views.py; fi
+      - name: Build
+        run: docker build -f docker/Dockerfile -t bench .
+      - *report

@@ -37,6 +37,18 @@ export interface Job {
   // (experiments/sccache).
   sccache?: Record<string, number>;
   proxy?: Record<string, unknown>;
+  // bench-docker.yml's jobs (experiments/docker-cache): the setup's time and
+  // whether it finished, the built image's size, the VM's Docker and its
+  // image store, and the
+  // proxy's counts.
+  docker?: {
+    setupMs?: number;
+    ready?: boolean;
+    imageBytes?: number;
+    version?: string;
+    store?: string;
+    proxy?: Record<string, unknown>;
+  };
   // On backmesh's AWS runners: `aws <region>` and the VM type.
   region: string | null;
   vm: string | null;
@@ -59,7 +71,7 @@ export interface Results {
   commit: string;
   labels: Record<
     string,
-    { round: number; branch: string; cold: Run; warm: Run }[]
+    { round: number; branch: string; cold: Run; warm: Run; changed?: Run }[]
   >;
 }
 
