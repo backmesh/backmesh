@@ -674,7 +674,8 @@ describe("e2e.yml's Azure sweep", () => {
 
   // Without the control plane's ID: the anycloud groups az lists now,
   // against those listed before the install; `role` answers az's reads of
-  // the role connection's setup.
+  // the role connection's setup, its definition for the first `reads`
+  // (all, without), then none.
   const run = (
     before: string,
     now: string,
@@ -683,25 +684,34 @@ describe("e2e.yml's Azure sweep", () => {
   ) => {
     const dir = mkdtempSync(join(tmpdir(), 'sweep-'));
     writeFileSync(join(dir, 'groups-before'), before);
-    return runStep(sweep.run!, {
-      env: {
-        RUNNER_TEMP: dir,
-        CLUSTER_ID: '',
-        AZURE_SUBSCRIPTION_ID: 's-1',
-        ROLE_GUARD: guard,
-      },
-      commands: {
-        az: `case "$1 $2" in
+    return {
+      dir,
+      ...runStep(sweep.run!, {
+        env: {
+          RUNNER_TEMP: dir,
+          CLUSTER_ID: '',
+          AZURE_SUBSCRIPTION_ID: 's-1',
+          ROLE_GUARD: guard,
+        },
+        commands: {
+          az: `case "$1 $2" in
   "group list") printf '%s' '${now}' ;;
   "group exists") echo ${role.group ?? 'false'} ;;
   "deployment sub") printf '%s' '${role.deployment ?? ''}' ;;
   "role definition") [[ " $* " == *" --name Anycloud role connection s-1 --scope /subscriptions/s-1 "* ]] || exit 7
-    printf '%s' '${role.definition ?? ''}' ;;
+    echo >>"$RUNNER_TEMP/reads"
+    if (( $(wc -l <"$RUNNER_TEMP/reads") <= ${role.reads ?? 99} )); then printf '%s' '${role.definition ?? ''}'; fi ;;
   *) exit 8 ;;
 esac`,
-      },
-    });
+          sleep: `[[ $1 == 15 ]] || exit 7; echo >>"$RUNNER_TEMP/slept"`,
+        },
+      }),
+    };
   };
+  const lines = (dir: string, name: string) =>
+    existsSync(join(dir, name))
+      ? readFileSync(join(dir, name), 'utf8').split('\n').length - 1
+      : 0;
 
   it('passes when nothing new exists, empty lists included', () => {
     for (const [before, now] of [
@@ -747,6 +757,23 @@ esac`,
       '::error title=Left in Azure::deployment:anycloud-role',
       '::error title=Left in Azure::resource-group:anycloud-role',
       '::error title=Left in Azure::role-definition:d-1',
+    ]);
+  });
+
+  it('waits out the lag of a deleted role definition, and reads no more once it has gone', () => {
+    const out = run('', '', { definition: 'd-1\n', reads: '3' });
+    expect(out.status, out.stdout).toBe(0);
+    expect([lines(out.dir, 'reads'), lines(out.dir, 'slept')]).toEqual([4, 3]);
+  });
+
+  it('fails naming a role definition still there after 20 reads, 15 s apart', () => {
+    const out = run('', '', { definition: 'd-1\n' });
+    expect(out.status).toBe(1);
+    expect(out.stdout.match(/^::error.*$/gm)).toEqual([
+      '::error title=Left in Azure::role-definition:d-1',
+    ]);
+    expect([lines(out.dir, 'reads'), lines(out.dir, 'slept')]).toEqual([
+      20, 19,
     ]);
   });
 });
