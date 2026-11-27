@@ -40,6 +40,10 @@ nushell 0.116.1 `cargo build --release --locked`, with sccache as rustc's
 wrapper through the spike's proxy for a `<label>/sccache` arm, and without for
 a `<label>/rust` arm. Its jobs print sccache's counts and the proxy's.
 
+[`bench-docker.yml`](bench-docker.yml) is the Docker layer cache spike's
+A/B, with `<label>/docker-off`, `docker-on` and `docker-container` arms: see
+[experiments/docker-cache](../../experiments/docker-cache/README.md#ab).
+
 ## Running it
 
 [`run.ts`](run.ts) runs rounds in a repository in an org with a backmesh

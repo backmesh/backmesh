@@ -1,0 +1,131 @@
+{
+  "sha": "210a0d0c1875ba403f892a3d24368ebc5b2dd321",
+  "conclusion": "success",
+  "bucket": "bm-cache-t2jon-northcentralus",
+  "builds": [
+    {
+      "round": 1,
+      "arm": "on",
+      "state": "cold",
+      "code": 0,
+      "ms": 175494,
+      "cached": 0
+    },
+    {
+      "round": 1,
+      "arm": "on",
+      "state": "warm",
+      "code": 0,
+      "ms": 13573,
+      "cached": 15
+    },
+    {
+      "round": 1,
+      "arm": "on",
+      "state": "changed",
+      "code": 0,
+      "ms": 38782,
+      "cached": 7
+    },
+    {
+      "round": 1,
+      "arm": "off",
+      "state": "cold",
+      "code": 0,
+      "ms": 119602,
+      "cached": 0
+    },
+    {
+      "round": 2,
+      "arm": "off",
+      "state": "cold",
+      "code": 0,
+      "ms": 121611,
+      "cached": 0
+    },
+    {
+      "round": 2,
+      "arm": "on",
+      "state": "cold",
+      "code": 0,
+      "ms": 142933,
+      "cached": 0
+    },
+    {
+      "round": 2,
+      "arm": "on",
+      "state": "warm",
+      "code": 0,
+      "ms": 13446,
+      "cached": 15
+    },
+    {
+      "round": 2,
+      "arm": "on",
+      "state": "changed",
+      "code": 0,
+      "ms": 30936,
+      "cached": 7
+    },
+    {
+      "round": 3,
+      "arm": "on",
+      "state": "cold",
+      "code": 0,
+      "ms": 141515,
+      "cached": 0
+    },
+    {
+      "round": 3,
+      "arm": "on",
+      "state": "warm",
+      "code": 0,
+      "ms": 13812,
+      "cached": 15
+    },
+    {
+      "round": 3,
+      "arm": "on",
+      "state": "changed",
+      "code": 0,
+      "ms": 30448,
+      "cached": 7
+    },
+    {
+      "round": 3,
+      "arm": "off",
+      "state": "cold",
+      "code": 0,
+      "ms": 116328,
+      "cached": 0
+    }
+  ],
+  "proxy": {
+    "started": 1795759693886,
+    "cloud": "azure",
+    "tokenWaitMs": 32741,
+    "reads": 285,
+    "hits": 200,
+    "misses": 85,
+    "bytesRead": 1321633606,
+    "writes": 97,
+    "bytesWritten": 1036959663,
+    "dropped": 0,
+    "incomplete": 0,
+    "errors": [],
+    "tokens": [
+      {
+        "at": 1795759862818,
+        "id": "7f2f4d43b1bf",
+        "expiresAt": 1795760632000,
+        "ok": 226
+      },
+      {
+        "at": 1795760365195,
+        "id": "01e022bd7e24",
+        "expiresAt": 1795761251000,
+        "ok": 160
+      }
+    ]
+  }
+}
