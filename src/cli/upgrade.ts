@@ -95,7 +95,7 @@ import {
 import { parseRoutes } from '../listener/routes.js';
 import { ensureCacheBuckets, withAllowedRegions } from './cache-buckets.js';
 import {
-  highmemFamilyLine,
+  familyLines,
   readQuotas,
   readQuotaStatus,
   startsNoRunners,
@@ -452,6 +452,7 @@ async function upgradeOnce(
       !!running.runners &&
       parseRoutes(running.runners).some((r) => r.public && !r.retiring);
     const isPublic = publicRepos ?? wasPublic;
+    const arm = takesArm(release.anycloud, deps.features);
     const plan = await classesOf(
       targets,
       catalogs,
@@ -459,7 +460,7 @@ async function upgradeOnce(
       home,
       isPublic,
       preferred,
-      takesArm(release.anycloud, deps.features),
+      arm,
     );
     preferredLines(preferred, (cloud) => [
       ...(plan.catalog.get(cloud)?.keys() ?? []),
@@ -482,7 +483,11 @@ async function upgradeOnce(
     ] as const) {
       for (const target of targets) {
         print(
-          line(target, [...(plan.catalog.get(target.cloud)?.keys() ?? [])]),
+          line(
+            target,
+            [...(plan.catalog.get(target.cloud)?.keys() ?? [])],
+            arm,
+          ),
         );
       }
     }
@@ -559,7 +564,7 @@ async function upgradeOnce(
   for (const { org, changes, classes } of consent) {
     changeLines(org, changes, classes).forEach((line) => print(line));
     const added = classes.filter((c) => changes.labelsAdded.includes(c.label));
-    highmemFamilyLine(
+    familyLines(
       'azure',
       added.filter((c) => c.cloud === 'azure'),
     ).forEach((line) => print(`${org}: ${line}`));

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  highmemFamilyLine,
+  familyLines,
   formatGpuQuota,
   formatQuota,
   quotaCheck,
@@ -229,8 +229,8 @@ describe('GPU quota', () => {
   });
 });
 
-describe('high-memory family quota', () => {
-  it("warns of Azure's E-series family quota for its on-demand high-memory labels only", () => {
+describe('family quota', () => {
+  it("warns of Azure's family quotas for its on-demand high-memory and arm64 labels only", () => {
     const classes = [
       {
         label: 'backmesh-azure-ubuntu-2404-highmem-8vcpu',
@@ -243,12 +243,25 @@ describe('high-memory family quota', () => {
         highmem: true as const,
       },
       { label: 'backmesh-azure-ubuntu-2404-od-8vcpu', spot: false },
+      {
+        label: 'backmesh-azure-ubuntu-2404-arm-od-4vcpu',
+        spot: false,
+        arm: true as const,
+      },
+      {
+        label: 'backmesh-azure-ubuntu-2404-arm-highmem-od-4vcpu',
+        spot: false,
+        arm: true as const,
+        highmem: true as const,
+      },
     ];
-    expect(highmemFamilyLine('azure', classes)).toEqual([
+    expect(familyLines('azure', classes)).toEqual([
       'azure\'s on-demand high-memory runners (backmesh-azure-ubuntu-2404-highmem-od-8vcpu) also need their E-series family\'s vCPU quota in a region, not only its regional vCPUs: raise one of "Standard EADSv5 Family vCPUs", "Standard EASv5 Family vCPUs", "Standard ESv5 Family vCPUs" to the vCPUs they should run at once.',
+      'azure\'s on-demand arm64 runners (backmesh-azure-ubuntu-2404-arm-od-4vcpu) also need their Cobalt or Ampere family\'s vCPU quota in a region, not only its regional vCPUs: raise one of "Standard DPSv6 Family vCPUs", "Standard DPSv5 Family vCPUs" to the vCPUs they should run at once.',
+      'azure\'s on-demand arm64 high-memory runners (backmesh-azure-ubuntu-2404-arm-highmem-od-4vcpu) also need their Cobalt family\'s vCPU quota in a region, not only its regional vCPUs: raise "Standard EPSv6 Family vCPUs" to the vCPUs they should run at once.',
     ]);
-    expect(highmemFamilyLine('aws', classes)).toEqual([]);
-    expect(highmemFamilyLine('azure', classes.slice(2))).toEqual([]);
+    expect(familyLines('aws', classes)).toEqual([]);
+    expect(familyLines('azure', classes.slice(2, 3))).toEqual([]);
   });
 });
 

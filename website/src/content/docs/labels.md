@@ -235,13 +235,12 @@ prices.
 ## arm64
 
 Jobs that build or test for Linux arm64 run on `backmesh-ubuntu-2404-arm-2vcpu` to
-`backmesh-ubuntu-2404-arm-16vcpu`: spot VMs on AWS Graviton or GCP's arm64 types, at the same
+`backmesh-ubuntu-2404-arm-16vcpu`: spot VMs on AWS Graviton, GCP Axion or Azure Cobalt, at the same
 sizes and 4 GiB a vCPU. `backmesh-ubuntu-2404-arm-highmem-2vcpu` to
 `backmesh-ubuntu-2404-arm-highmem-16vcpu` have 8 GiB a vCPU, as the
 [high-memory labels](#high-memory) do. Each has an on-demand twin:
 `backmesh-ubuntu-2404-arm-od-4vcpu`, `backmesh-ubuntu-2404-arm-highmem-od-16vcpu`. On another cloud than
-the control plane's they name it: `backmesh-gcp-ubuntu-2404-arm-4vcpu`. Azure has no arm64
-labels: anycloud doesn't boot its arm64 image there yet. In a public repository they're for the
+the control plane's they name it: `backmesh-gcp-ubuntu-2404-arm-4vcpu`. In a public repository they're for the
 repository's own runs: fork pull requests run only on `backmesh-ubuntu-2404-public-2vcpu` and
 `backmesh-ubuntu-2404-public-4vcpu`, which are x86-64.
 

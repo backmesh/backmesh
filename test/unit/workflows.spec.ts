@@ -585,14 +585,22 @@ describe("e2e.yml's Worker and Azure checks", () => {
   };
 
   // Our Azure e2e subscription has 3 spot vCPUs per region until the
-  // requested quota lands: the Azure leg's one job runs on backmesh-ubuntu-2404-2vcpu, AWS's on `labels`.
-  it("runs the Azure leg's one job on its leg's label, and AWS's own labels only", () => {
+  // requested quota lands: the Azure leg's job runs on backmesh-ubuntu-2404-2vcpu
+  // and its arm64 one on demand, AWS's on `labels`.
+  it("runs the Azure leg's jobs on its leg's label and its on-demand arm64 label, and AWS's own labels only", () => {
     const azure = labelMatrix('azure');
     expect(azure.got.include).toEqual([
       expect.objectContaining({
         label: 'backmesh-ubuntu-2404-2vcpu',
         cloud: 'azure',
         regions: ['eastus'],
+        arm: false,
+      }),
+      expect.objectContaining({
+        label: 'backmesh-ubuntu-2404-arm-od-2vcpu',
+        cloud: 'azure',
+        regions: ['eastus'],
+        arm: true,
       }),
     ]);
     const aws = labelMatrix('aws');
