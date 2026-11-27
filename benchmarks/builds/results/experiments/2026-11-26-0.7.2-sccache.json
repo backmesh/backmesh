@@ -1,0 +1,4322 @@
+{
+  "date": "2026-11-26",
+  "backmesh": "0.7.2",
+  "anycloud": "0.1.84",
+  "installation": "backmesh org CI, AWS",
+  "repo": "backmesh/benchmarks",
+  "commit": "513cd59c15cae6e9ca5ccd979d5c54600a9cef30",
+  "labels": {
+    "backmesh-ubuntu-2404-4vcpu/sccache": [
+      {
+        "round": 1,
+        "branch": "builds/backmesh-ubuntu-2404-4vcpu/sccache/1795730131648",
+        "cold": {
+          "runId": 45901419691,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45901419691",
+          "jobs": {
+            "nushell": {
+              "id": 140187835498,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45901419691/job/140187835498",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-69neacz9",
+              "createdAt": "2026-11-26T21:55:41Z",
+              "startedAt": "2026-11-26T21:56:11Z",
+              "completedAt": "2026-11-26T22:01:24Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T21:56:12Z",
+                  "completedAt": "2026-11-26T21:56:31Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T21:56:31Z",
+                  "completedAt": "2026-11-26T21:56:31Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T21:56:31Z",
+                  "completedAt": "2026-11-26T21:56:31Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T21:56:31Z",
+                  "completedAt": "2026-11-26T21:56:32Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T21:56:32Z",
+                  "completedAt": "2026-11-26T21:56:33Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T21:56:33Z",
+                  "completedAt": "2026-11-26T21:56:47Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T21:56:47Z",
+                  "completedAt": "2026-11-26T21:56:47Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T21:56:47Z",
+                  "completedAt": "2026-11-26T22:01:21Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:01:21Z",
+                  "completedAt": "2026-11-26T22:01:23Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:01:23Z",
+                  "completedAt": "2026-11-26T22:01:23Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:01:23Z",
+                  "completedAt": "2026-11-26T22:01:23Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:01:23Z",
+                  "completedAt": "2026-11-26T22:01:23Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:01:23Z",
+                  "completedAt": "2026-11-26T22:01:23Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795730142567000,
+                "vm_booted": 1795730150000000,
+                "container_started": 1795730168080000,
+                "job_started": 1795730168697786,
+                "runner_listening": 1795730170640602,
+                "job_received": 1795730191764326,
+                "hook_done": 1795730191765664
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +2.8 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 1099,
+                "hits": 0,
+                "misses": 953,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 953,
+                "not-cacheable": 132
+              },
+              "proxy": {
+                "started": 1795730207581,
+                "cloud": "aws",
+                "gets": 962,
+                "hits": 0,
+                "misses": 962,
+                "bytesRead": 0,
+                "puts": 954,
+                "bytesWritten": 544454032,
+                "dropped": 0,
+                "errors": [],
+                "tokens": [
+                  {
+                    "at": 1795730207807,
+                    "id": "34755e25eff1",
+                    "expiresAt": 1795731093000,
+                    "ok": 2878
+                  }
+                ]
+              }
+            },
+            "ripgrep": {
+              "id": 140187835681,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45901419691/job/140187835681",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-e8syeifu",
+              "createdAt": "2026-11-26T21:55:41Z",
+              "startedAt": "2026-11-26T21:56:12Z",
+              "completedAt": "2026-11-26T21:56:38Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T21:56:12Z",
+                  "completedAt": "2026-11-26T21:56:12Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T21:56:12Z",
+                  "completedAt": "2026-11-26T21:56:12Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T21:56:12Z",
+                  "completedAt": "2026-11-26T21:56:12Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T21:56:12Z",
+                  "completedAt": "2026-11-26T21:56:13Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T21:56:13Z",
+                  "completedAt": "2026-11-26T21:56:13Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T21:56:13Z",
+                  "completedAt": "2026-11-26T21:56:14Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T21:56:14Z",
+                  "completedAt": "2026-11-26T21:56:34Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T21:56:34Z",
+                  "completedAt": "2026-11-26T21:56:36Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T21:56:36Z",
+                  "completedAt": "2026-11-26T21:56:36Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T21:56:36Z",
+                  "completedAt": "2026-11-26T21:56:36Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T21:56:36Z",
+                  "completedAt": "2026-11-26T21:56:36Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T21:56:36Z",
+                  "completedAt": "2026-11-26T21:56:36Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795730142518000,
+                "vm_booted": 1795730150000000,
+                "container_started": 1795730169120000,
+                "job_started": 1795730169236013,
+                "runner_listening": 1795730170996007,
+                "job_received": 1795730172950750,
+                "hook_done": 1795730172952226
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +21.6 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 44,
+                "hits": 0,
+                "misses": 32,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 32,
+                "not-cacheable": 10
+              },
+              "proxy": {
+                "started": 1795730174100,
+                "cloud": "",
+                "gets": 35,
+                "hits": 0,
+                "misses": 35,
+                "bytesRead": 0,
+                "puts": 0,
+                "bytesWritten": 0,
+                "dropped": 33,
+                "errors": [],
+                "tokens": []
+              }
+            }
+          }
+        },
+        "warm": {
+          "runId": 45902186542,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45902186542",
+          "jobs": {
+            "nushell": {
+              "id": 140190366840,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45902186542/job/140190366840",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-t84dc4hm",
+              "createdAt": "2026-11-26T22:02:46Z",
+              "startedAt": "2026-11-26T22:03:33Z",
+              "completedAt": "2026-11-26T22:06:19Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:03:34Z",
+                  "completedAt": "2026-11-26T22:03:34Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:03:34Z",
+                  "completedAt": "2026-11-26T22:03:34Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:03:34Z",
+                  "completedAt": "2026-11-26T22:03:34Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:03:34Z",
+                  "completedAt": "2026-11-26T22:03:34Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:03:34Z",
+                  "completedAt": "2026-11-26T22:03:36Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T22:03:36Z",
+                  "completedAt": "2026-11-26T22:03:50Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:03:50Z",
+                  "completedAt": "2026-11-26T22:03:50Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:03:50Z",
+                  "completedAt": "2026-11-26T22:06:15Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:06:15Z",
+                  "completedAt": "2026-11-26T22:06:17Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:06:17Z",
+                  "completedAt": "2026-11-26T22:06:17Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:06:17Z",
+                  "completedAt": "2026-11-26T22:06:17Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:06:17Z",
+                  "completedAt": "2026-11-26T22:06:17Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:06:17Z",
+                  "completedAt": "2026-11-26T22:06:17Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795730567174000,
+                "vm_booted": 1795730575000000,
+                "container_started": 1795730591730000,
+                "job_started": 1795730591866869,
+                "runner_listening": 1795730612845340,
+                "job_received": 1795730614707436,
+                "hook_done": 1795730614708833
+              },
+              "cache": ["backmesh cache: auto the cache token came at +4.1 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 1099,
+                "hits": 952,
+                "misses": 1,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 1,
+                "not-cacheable": 132
+              },
+              "proxy": {
+                "started": 1795730630689,
+                "cloud": "aws",
+                "gets": 962,
+                "hits": 953,
+                "misses": 9,
+                "bytesRead": 542917444,
+                "puts": 2,
+                "bytesWritten": 1536620,
+                "dropped": 0,
+                "errors": [],
+                "tokens": [
+                  {
+                    "at": 1795730630910,
+                    "id": "19f6258d8f3c",
+                    "expiresAt": 1795731518000,
+                    "ok": 973
+                  }
+                ]
+              }
+            },
+            "ripgrep": {
+              "id": 140190367128,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45902186542/job/140190367128",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-ap1mekdk",
+              "createdAt": "2026-11-26T22:02:46Z",
+              "startedAt": "2026-11-26T22:03:44Z",
+              "completedAt": "2026-11-26T22:04:10Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:03:44Z",
+                  "completedAt": "2026-11-26T22:03:45Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:03:45Z",
+                  "completedAt": "2026-11-26T22:03:45Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:03:45Z",
+                  "completedAt": "2026-11-26T22:03:45Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:03:45Z",
+                  "completedAt": "2026-11-26T22:03:45Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:03:45Z",
+                  "completedAt": "2026-11-26T22:03:45Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:03:45Z",
+                  "completedAt": "2026-11-26T22:03:46Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:03:46Z",
+                  "completedAt": "2026-11-26T22:04:06Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:04:06Z",
+                  "completedAt": "2026-11-26T22:04:08Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:04:08Z",
+                  "completedAt": "2026-11-26T22:04:08Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:04:08Z",
+                  "completedAt": "2026-11-26T22:04:08Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:04:08Z",
+                  "completedAt": "2026-11-26T22:04:08Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:04:08Z",
+                  "completedAt": "2026-11-26T22:04:08Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795730567338000,
+                "vm_booted": 1795730575000000,
+                "container_started": 1795730621350000,
+                "job_started": 1795730621455758,
+                "runner_listening": 1795730623284895,
+                "job_received": 1795730625146696,
+                "hook_done": 1795730625148081
+              },
+              "cache": [],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 44,
+                "hits": 0,
+                "misses": 32,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 32,
+                "not-cacheable": 10
+              },
+              "proxy": {
+                "started": 1795730626137,
+                "cloud": "",
+                "gets": 35,
+                "hits": 0,
+                "misses": 35,
+                "bytesRead": 0,
+                "puts": 0,
+                "bytesWritten": 0,
+                "dropped": 33,
+                "errors": [],
+                "tokens": []
+              }
+            }
+          }
+        }
+      },
+      {
+        "round": 2,
+        "branch": "builds/backmesh-ubuntu-2404-4vcpu/sccache/1795730810860",
+        "cold": {
+          "runId": 45902648755,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45902648755",
+          "jobs": {
+            "ripgrep": {
+              "id": 140191867278,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45902648755/job/140191867278",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-1ma4hfau",
+              "createdAt": "2026-11-26T22:06:54Z",
+              "startedAt": "2026-11-26T22:07:24Z",
+              "completedAt": "2026-11-26T22:07:52Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:07:24Z",
+                  "completedAt": "2026-11-26T22:07:24Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:07:24Z",
+                  "completedAt": "2026-11-26T22:07:24Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:07:24Z",
+                  "completedAt": "2026-11-26T22:07:24Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:07:24Z",
+                  "completedAt": "2026-11-26T22:07:25Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:07:25Z",
+                  "completedAt": "2026-11-26T22:07:25Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:07:25Z",
+                  "completedAt": "2026-11-26T22:07:26Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:07:26Z",
+                  "completedAt": "2026-11-26T22:07:49Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:07:49Z",
+                  "completedAt": "2026-11-26T22:07:51Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:07:51Z",
+                  "completedAt": "2026-11-26T22:07:51Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:07:51Z",
+                  "completedAt": "2026-11-26T22:07:51Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:07:51Z",
+                  "completedAt": "2026-11-26T22:07:51Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:07:51Z",
+                  "completedAt": "2026-11-26T22:07:51Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795730816768000,
+                "vm_booted": 1795730824000000,
+                "container_started": 1795730840790000,
+                "job_started": 1795730840903501,
+                "runner_listening": 1795730842856256,
+                "job_received": 1795730844908445,
+                "hook_done": 1795730844910458
+              },
+              "cache": [],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 44,
+                "hits": 0,
+                "misses": 32,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 32,
+                "not-cacheable": 10
+              },
+              "proxy": {
+                "started": 1795730846081,
+                "cloud": "",
+                "gets": 35,
+                "hits": 0,
+                "misses": 35,
+                "bytesRead": 0,
+                "puts": 0,
+                "bytesWritten": 0,
+                "dropped": 33,
+                "errors": [],
+                "tokens": []
+              }
+            },
+            "nushell": {
+              "id": 140191867649,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45902648755/job/140191867649",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-6zww2hq0",
+              "createdAt": "2026-11-26T22:06:54Z",
+              "startedAt": "2026-11-26T22:07:25Z",
+              "completedAt": "2026-11-26T22:12:34Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:07:26Z",
+                  "completedAt": "2026-11-26T22:07:26Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:07:26Z",
+                  "completedAt": "2026-11-26T22:07:26Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:07:26Z",
+                  "completedAt": "2026-11-26T22:07:26Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:07:26Z",
+                  "completedAt": "2026-11-26T22:07:26Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:07:26Z",
+                  "completedAt": "2026-11-26T22:07:28Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T22:07:28Z",
+                  "completedAt": "2026-11-26T22:07:42Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:07:42Z",
+                  "completedAt": "2026-11-26T22:07:43Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:07:43Z",
+                  "completedAt": "2026-11-26T22:12:30Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:12:30Z",
+                  "completedAt": "2026-11-26T22:12:32Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:12:32Z",
+                  "completedAt": "2026-11-26T22:12:32Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:12:32Z",
+                  "completedAt": "2026-11-26T22:12:32Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:12:32Z",
+                  "completedAt": "2026-11-26T22:12:32Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:12:32Z",
+                  "completedAt": "2026-11-26T22:12:32Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795730815943000,
+                "vm_booted": 1795730824000000,
+                "container_started": 1795730842570000,
+                "job_started": 1795730842677813,
+                "runner_listening": 1795730844496510,
+                "job_received": 1795730846530995,
+                "hook_done": 1795730846532559
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +27.6 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 1099,
+                "hits": 0,
+                "misses": 953,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 953,
+                "not-cacheable": 132
+              },
+              "proxy": {
+                "started": 1795730863136,
+                "cloud": "aws",
+                "gets": 962,
+                "hits": 0,
+                "misses": 962,
+                "bytesRead": 0,
+                "puts": 887,
+                "bytesWritten": 489724189,
+                "dropped": 67,
+                "errors": [],
+                "tokens": [
+                  {
+                    "at": 1795730874393,
+                    "id": "9899c6798a34",
+                    "expiresAt": 1795731773000,
+                    "ok": 2663
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "warm": {
+          "runId": 45903437810,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45903437810",
+          "jobs": {
+            "ripgrep": {
+              "id": 140194443477,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45903437810/job/140194443477",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-crz4us0r",
+              "createdAt": "2026-11-26T22:13:59Z",
+              "startedAt": "2026-11-26T22:14:29Z",
+              "completedAt": "2026-11-26T22:14:56Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:14:29Z",
+                  "completedAt": "2026-11-26T22:14:30Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:14:30Z",
+                  "completedAt": "2026-11-26T22:14:30Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:14:30Z",
+                  "completedAt": "2026-11-26T22:14:30Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:14:30Z",
+                  "completedAt": "2026-11-26T22:14:30Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:14:30Z",
+                  "completedAt": "2026-11-26T22:14:31Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:14:31Z",
+                  "completedAt": "2026-11-26T22:14:31Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:14:31Z",
+                  "completedAt": "2026-11-26T22:14:53Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:14:53Z",
+                  "completedAt": "2026-11-26T22:14:55Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:14:55Z",
+                  "completedAt": "2026-11-26T22:14:55Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:14:55Z",
+                  "completedAt": "2026-11-26T22:14:55Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:14:55Z",
+                  "completedAt": "2026-11-26T22:14:55Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:14:55Z",
+                  "completedAt": "2026-11-26T22:14:55Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795731240906000,
+                "vm_booted": 1795731249000000,
+                "container_started": 1795731266070000,
+                "job_started": 1795731266516961,
+                "runner_listening": 1795731268379853,
+                "job_received": 1795731270240182,
+                "hook_done": 1795731270241690
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +22.2 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 44,
+                "hits": 0,
+                "misses": 32,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 32,
+                "not-cacheable": 10
+              },
+              "proxy": {
+                "started": 1795731271300,
+                "cloud": "",
+                "gets": 35,
+                "hits": 0,
+                "misses": 35,
+                "bytesRead": 0,
+                "puts": 0,
+                "bytesWritten": 0,
+                "dropped": 33,
+                "errors": [],
+                "tokens": []
+              }
+            },
+            "nushell": {
+              "id": 140194443802,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45903437810/job/140194443802",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-atonbp7p",
+              "createdAt": "2026-11-26T22:13:59Z",
+              "startedAt": "2026-11-26T22:14:46Z",
+              "completedAt": "2026-11-26T22:17:31Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:14:47Z",
+                  "completedAt": "2026-11-26T22:14:47Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:14:47Z",
+                  "completedAt": "2026-11-26T22:14:47Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:14:47Z",
+                  "completedAt": "2026-11-26T22:14:47Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:14:47Z",
+                  "completedAt": "2026-11-26T22:14:47Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:14:47Z",
+                  "completedAt": "2026-11-26T22:14:49Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T22:14:49Z",
+                  "completedAt": "2026-11-26T22:15:03Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:15:03Z",
+                  "completedAt": "2026-11-26T22:15:03Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:15:03Z",
+                  "completedAt": "2026-11-26T22:17:28Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:17:28Z",
+                  "completedAt": "2026-11-26T22:17:30Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:17:30Z",
+                  "completedAt": "2026-11-26T22:17:30Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:17:30Z",
+                  "completedAt": "2026-11-26T22:17:30Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:17:30Z",
+                  "completedAt": "2026-11-26T22:17:30Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:17:30Z",
+                  "completedAt": "2026-11-26T22:17:30Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795731240605000,
+                "vm_booted": 1795731249000000,
+                "container_started": 1795731267760000,
+                "job_started": 1795731268424673,
+                "runner_listening": 1795731270276552,
+                "job_received": 1795731287492725,
+                "hook_done": 1795731287494131
+              },
+              "cache": ["backmesh cache: auto the cache token came at +5.0 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 1099,
+                "hits": 886,
+                "misses": 67,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 67,
+                "not-cacheable": 132
+              },
+              "proxy": {
+                "started": 1795731303424,
+                "cloud": "aws",
+                "gets": 962,
+                "hits": 886,
+                "misses": 76,
+                "bytesRead": 488187102,
+                "puts": 68,
+                "bytesWritten": 56267497,
+                "dropped": 0,
+                "errors": [],
+                "tokens": [
+                  {
+                    "at": 1795731303658,
+                    "id": "28e0838d6bf6",
+                    "expiresAt": 1795732191000,
+                    "ok": 1106
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "round": 3,
+        "branch": "builds/backmesh-ubuntu-2404-4vcpu/sccache/1795731484456",
+        "cold": {
+          "runId": 45903893788,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45903893788",
+          "jobs": {
+            "ripgrep": {
+              "id": 140195929928,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45903893788/job/140195929928",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-baywgkci",
+              "createdAt": "2026-11-26T22:18:07Z",
+              "startedAt": "2026-11-26T22:18:38Z",
+              "completedAt": "2026-11-26T22:19:04Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:18:38Z",
+                  "completedAt": "2026-11-26T22:18:39Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:18:39Z",
+                  "completedAt": "2026-11-26T22:18:39Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:18:39Z",
+                  "completedAt": "2026-11-26T22:18:39Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:18:39Z",
+                  "completedAt": "2026-11-26T22:18:39Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:18:39Z",
+                  "completedAt": "2026-11-26T22:18:40Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:18:40Z",
+                  "completedAt": "2026-11-26T22:18:40Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:18:40Z",
+                  "completedAt": "2026-11-26T22:19:01Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:19:01Z",
+                  "completedAt": "2026-11-26T22:19:03Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:19:03Z",
+                  "completedAt": "2026-11-26T22:19:03Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:19:03Z",
+                  "completedAt": "2026-11-26T22:19:03Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:19:03Z",
+                  "completedAt": "2026-11-26T22:19:03Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:19:03Z",
+                  "completedAt": "2026-11-26T22:19:03Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795731489319000,
+                "vm_booted": 1795731499000000,
+                "container_started": 1795731515420000,
+                "job_started": 1795731515833992,
+                "runner_listening": 1795731517355476,
+                "job_received": 1795731519269782,
+                "hook_done": 1795731519271160
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +21.9 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 44,
+                "hits": 0,
+                "misses": 32,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 32,
+                "not-cacheable": 10
+              },
+              "proxy": {
+                "started": 1795731520386,
+                "cloud": "",
+                "gets": 35,
+                "hits": 0,
+                "misses": 35,
+                "bytesRead": 0,
+                "puts": 0,
+                "bytesWritten": 0,
+                "dropped": 33,
+                "errors": [],
+                "tokens": []
+              }
+            },
+            "nushell": {
+              "id": 140195930300,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45903893788/job/140195930300",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-3kpnncs0",
+              "createdAt": "2026-11-26T22:18:07Z",
+              "startedAt": "2026-11-26T22:18:39Z",
+              "completedAt": "2026-11-26T22:23:48Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:18:39Z",
+                  "completedAt": "2026-11-26T22:18:40Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:18:40Z",
+                  "completedAt": "2026-11-26T22:18:40Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:18:40Z",
+                  "completedAt": "2026-11-26T22:18:40Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:18:40Z",
+                  "completedAt": "2026-11-26T22:18:40Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:18:40Z",
+                  "completedAt": "2026-11-26T22:18:41Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T22:18:41Z",
+                  "completedAt": "2026-11-26T22:18:56Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:18:56Z",
+                  "completedAt": "2026-11-26T22:18:56Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:18:56Z",
+                  "completedAt": "2026-11-26T22:23:44Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:23:44Z",
+                  "completedAt": "2026-11-26T22:23:46Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:23:46Z",
+                  "completedAt": "2026-11-26T22:23:46Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:23:46Z",
+                  "completedAt": "2026-11-26T22:23:46Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:23:46Z",
+                  "completedAt": "2026-11-26T22:23:46Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:23:46Z",
+                  "completedAt": "2026-11-26T22:23:46Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795731490232000,
+                "vm_booted": 1795731499000000,
+                "container_started": 1795731516330000,
+                "job_started": 1795731516610434,
+                "runner_listening": 1795731518336413,
+                "job_received": 1795731520313117,
+                "hook_done": 1795731520314474
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +20.8 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 1099,
+                "hits": 0,
+                "misses": 953,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 953,
+                "not-cacheable": 132
+              },
+              "proxy": {
+                "started": 1795731536603,
+                "cloud": "aws",
+                "gets": 962,
+                "hits": 0,
+                "misses": 962,
+                "bytesRead": 0,
+                "puts": 937,
+                "bytesWritten": 535102996,
+                "dropped": 17,
+                "errors": [],
+                "tokens": [
+                  {
+                    "at": 1795731541222,
+                    "id": "dc6dfaaac073",
+                    "expiresAt": 1795732440000,
+                    "ok": 2817
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "warm": {
+          "runId": 45904672856,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45904672856",
+          "jobs": {
+            "nushell": {
+              "id": 140198434387,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45904672856/job/140198434387",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-gjiwlavu",
+              "createdAt": "2026-11-26T22:25:13Z",
+              "startedAt": "2026-11-26T22:25:43Z",
+              "completedAt": "2026-11-26T22:28:26Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:25:43Z",
+                  "completedAt": "2026-11-26T22:25:44Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:25:44Z",
+                  "completedAt": "2026-11-26T22:25:44Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:25:44Z",
+                  "completedAt": "2026-11-26T22:25:44Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:25:44Z",
+                  "completedAt": "2026-11-26T22:25:44Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:25:44Z",
+                  "completedAt": "2026-11-26T22:25:45Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T22:25:45Z",
+                  "completedAt": "2026-11-26T22:26:00Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:26:00Z",
+                  "completedAt": "2026-11-26T22:26:00Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:26:00Z",
+                  "completedAt": "2026-11-26T22:28:23Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:28:23Z",
+                  "completedAt": "2026-11-26T22:28:25Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:28:25Z",
+                  "completedAt": "2026-11-26T22:28:25Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:28:25Z",
+                  "completedAt": "2026-11-26T22:28:25Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:28:25Z",
+                  "completedAt": "2026-11-26T22:28:25Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:28:25Z",
+                  "completedAt": "2026-11-26T22:28:25Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795731914572000,
+                "vm_booted": 1795731923000000,
+                "container_started": 1795731940220000,
+                "job_started": 1795731940320012,
+                "runner_listening": 1795731942029740,
+                "job_received": 1795731944085023,
+                "hook_done": 1795731944086608
+              },
+              "cache": ["backmesh cache: auto the cache token came at +22.0 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 1099,
+                "hits": 932,
+                "misses": 21,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 21,
+                "not-cacheable": 132
+              },
+              "proxy": {
+                "started": 1795731960729,
+                "cloud": "aws",
+                "gets": 962,
+                "hits": 932,
+                "misses": 30,
+                "bytesRead": 520503986,
+                "puts": 5,
+                "bytesWritten": 14599630,
+                "dropped": 17,
+                "errors": [],
+                "tokens": [
+                  {
+                    "at": 1795731966497,
+                    "id": "2aac4061f84f",
+                    "expiresAt": 1795732865000,
+                    "ok": 951
+                  }
+                ]
+              }
+            },
+            "ripgrep": {
+              "id": 140198434643,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45904672856/job/140198434643",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-ssjwt6my",
+              "createdAt": "2026-11-26T22:25:13Z",
+              "startedAt": "2026-11-26T22:25:43Z",
+              "completedAt": "2026-11-26T22:26:10Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:25:44Z",
+                  "completedAt": "2026-11-26T22:25:44Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:25:44Z",
+                  "completedAt": "2026-11-26T22:25:44Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:25:44Z",
+                  "completedAt": "2026-11-26T22:25:44Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:25:44Z",
+                  "completedAt": "2026-11-26T22:25:44Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:25:44Z",
+                  "completedAt": "2026-11-26T22:25:45Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:25:45Z",
+                  "completedAt": "2026-11-26T22:25:45Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:25:45Z",
+                  "completedAt": "2026-11-26T22:26:06Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:26:06Z",
+                  "completedAt": "2026-11-26T22:26:08Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:26:08Z",
+                  "completedAt": "2026-11-26T22:26:09Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:26:09Z",
+                  "completedAt": "2026-11-26T22:26:09Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:26:09Z",
+                  "completedAt": "2026-11-26T22:26:09Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:26:09Z",
+                  "completedAt": "2026-11-26T22:26:09Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795731914601000,
+                "vm_booted": 1795731923000000,
+                "container_started": 1795731940710000,
+                "job_started": 1795731941201689,
+                "runner_listening": 1795731942968444,
+                "job_received": 1795731944705227,
+                "hook_done": 1795731944707037
+              },
+              "cache": ["backmesh cache: auto the cache token came at +21.4 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 44,
+                "hits": 0,
+                "misses": 32,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 32,
+                "not-cacheable": 10
+              },
+              "proxy": {
+                "started": 1795731945799,
+                "cloud": "",
+                "gets": 35,
+                "hits": 0,
+                "misses": 35,
+                "bytesRead": 0,
+                "puts": 0,
+                "bytesWritten": 0,
+                "dropped": 33,
+                "errors": [],
+                "tokens": []
+              }
+            }
+          }
+        }
+      },
+      {
+        "round": 4,
+        "branch": "builds/backmesh-ubuntu-2404-4vcpu/sccache/1795732127611",
+        "cold": {
+          "runId": 45905044354,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45905044354",
+          "jobs": {
+            "ripgrep": {
+              "id": 140199677082,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45905044354/job/140199677082",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-f977sz5k",
+              "createdAt": "2026-11-26T22:28:51Z",
+              "startedAt": "2026-11-26T22:29:20Z",
+              "completedAt": "2026-11-26T22:29:46Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:29:21Z",
+                  "completedAt": "2026-11-26T22:29:21Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:29:21Z",
+                  "completedAt": "2026-11-26T22:29:21Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:29:21Z",
+                  "completedAt": "2026-11-26T22:29:21Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:29:21Z",
+                  "completedAt": "2026-11-26T22:29:21Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:29:21Z",
+                  "completedAt": "2026-11-26T22:29:22Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:29:22Z",
+                  "completedAt": "2026-11-26T22:29:22Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:29:22Z",
+                  "completedAt": "2026-11-26T22:29:42Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:29:42Z",
+                  "completedAt": "2026-11-26T22:29:44Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:29:44Z",
+                  "completedAt": "2026-11-26T22:29:44Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:29:44Z",
+                  "completedAt": "2026-11-26T22:29:44Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:29:44Z",
+                  "completedAt": "2026-11-26T22:29:44Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:29:44Z",
+                  "completedAt": "2026-11-26T22:29:44Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795732133233000,
+                "vm_booted": 1795732141000000,
+                "container_started": 1795732158160000,
+                "job_started": 1795732158295408,
+                "runner_listening": 1795732159928041,
+                "job_received": 1795732161674685,
+                "hook_done": 1795732161676066
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +22.9 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 44,
+                "hits": 0,
+                "misses": 32,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 32,
+                "not-cacheable": 10
+              },
+              "proxy": {
+                "started": 1795732162656,
+                "cloud": "",
+                "gets": 35,
+                "hits": 0,
+                "misses": 35,
+                "bytesRead": 0,
+                "puts": 0,
+                "bytesWritten": 0,
+                "dropped": 33,
+                "errors": [],
+                "tokens": []
+              }
+            },
+            "nushell": {
+              "id": 140199677317,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45905044354/job/140199677317",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-baw2dxjz",
+              "createdAt": "2026-11-26T22:28:51Z",
+              "startedAt": "2026-11-26T22:29:21Z",
+              "completedAt": "2026-11-26T22:34:23Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:29:22Z",
+                  "completedAt": "2026-11-26T22:29:22Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:29:22Z",
+                  "completedAt": "2026-11-26T22:29:22Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:29:22Z",
+                  "completedAt": "2026-11-26T22:29:22Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:29:22Z",
+                  "completedAt": "2026-11-26T22:29:22Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:29:22Z",
+                  "completedAt": "2026-11-26T22:29:23Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T22:29:23Z",
+                  "completedAt": "2026-11-26T22:29:38Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:29:38Z",
+                  "completedAt": "2026-11-26T22:29:38Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:29:38Z",
+                  "completedAt": "2026-11-26T22:34:19Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:34:19Z",
+                  "completedAt": "2026-11-26T22:34:21Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:34:21Z",
+                  "completedAt": "2026-11-26T22:34:21Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:34:21Z",
+                  "completedAt": "2026-11-26T22:34:21Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:34:21Z",
+                  "completedAt": "2026-11-26T22:34:22Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:34:22Z",
+                  "completedAt": "2026-11-26T22:34:22Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795732132231000,
+                "vm_booted": 1795732141000000,
+                "container_started": 1795732158430000,
+                "job_started": 1795732158756367,
+                "runner_listening": 1795732160572590,
+                "job_received": 1795732162376348,
+                "hook_done": 1795732162377740
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +22.3 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 1099,
+                "hits": 0,
+                "misses": 953,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 953,
+                "not-cacheable": 132
+              },
+              "proxy": {
+                "started": 1795732178578,
+                "cloud": "aws",
+                "gets": 962,
+                "hits": 0,
+                "misses": 962,
+                "bytesRead": 0,
+                "puts": 930,
+                "bytesWritten": 520610818,
+                "dropped": 24,
+                "errors": [],
+                "tokens": [
+                  {
+                    "at": 1795732184928,
+                    "id": "3094838c0a02",
+                    "expiresAt": 1795733084000,
+                    "ok": 2800
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "warm": {
+          "runId": 45905812505,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45905812505",
+          "jobs": {
+            "ripgrep": {
+              "id": 140202129329,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45905812505/job/140202129329",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-6qzi3bmm",
+              "createdAt": "2026-11-26T22:35:56Z",
+              "startedAt": "2026-11-26T22:36:26Z",
+              "completedAt": "2026-11-26T22:36:51Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:36:27Z",
+                  "completedAt": "2026-11-26T22:36:27Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:36:27Z",
+                  "completedAt": "2026-11-26T22:36:27Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:36:27Z",
+                  "completedAt": "2026-11-26T22:36:27Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:36:27Z",
+                  "completedAt": "2026-11-26T22:36:27Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:36:27Z",
+                  "completedAt": "2026-11-26T22:36:28Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:36:28Z",
+                  "completedAt": "2026-11-26T22:36:28Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:36:28Z",
+                  "completedAt": "2026-11-26T22:36:48Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:36:48Z",
+                  "completedAt": "2026-11-26T22:36:50Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:36:50Z",
+                  "completedAt": "2026-11-26T22:36:50Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:36:50Z",
+                  "completedAt": "2026-11-26T22:36:50Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:36:50Z",
+                  "completedAt": "2026-11-26T22:36:50Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:36:50Z",
+                  "completedAt": "2026-11-26T22:36:50Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795732557586000,
+                "vm_booted": 1795732566000000,
+                "container_started": 1795732583270000,
+                "job_started": 1795732583799635,
+                "runner_listening": 1795732585526006,
+                "job_received": 1795732587415051,
+                "hook_done": 1795732587416461
+              },
+              "cache": ["backmesh cache: auto the cache token came at +22.1 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 44,
+                "hits": 0,
+                "misses": 32,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 32,
+                "not-cacheable": 10
+              },
+              "proxy": {
+                "started": 1795732588362,
+                "cloud": "",
+                "gets": 35,
+                "hits": 0,
+                "misses": 35,
+                "bytesRead": 0,
+                "puts": 0,
+                "bytesWritten": 0,
+                "dropped": 33,
+                "errors": [],
+                "tokens": []
+              }
+            },
+            "nushell": {
+              "id": 140202129635,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45905812505/job/140202129635",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-xyp8i6y6",
+              "createdAt": "2026-11-26T22:35:56Z",
+              "startedAt": "2026-11-26T22:36:28Z",
+              "completedAt": "2026-11-26T22:39:18Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:36:28Z",
+                  "completedAt": "2026-11-26T22:36:29Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:36:29Z",
+                  "completedAt": "2026-11-26T22:36:29Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:36:29Z",
+                  "completedAt": "2026-11-26T22:36:29Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:36:29Z",
+                  "completedAt": "2026-11-26T22:36:29Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:36:29Z",
+                  "completedAt": "2026-11-26T22:36:30Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T22:36:30Z",
+                  "completedAt": "2026-11-26T22:36:44Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:36:44Z",
+                  "completedAt": "2026-11-26T22:36:45Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:36:45Z",
+                  "completedAt": "2026-11-26T22:39:14Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:39:14Z",
+                  "completedAt": "2026-11-26T22:39:16Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:39:16Z",
+                  "completedAt": "2026-11-26T22:39:16Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:39:16Z",
+                  "completedAt": "2026-11-26T22:39:16Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:39:16Z",
+                  "completedAt": "2026-11-26T22:39:16Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:39:16Z",
+                  "completedAt": "2026-11-26T22:39:16Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795732557568000,
+                "vm_booted": 1795732567000000,
+                "container_started": 1795732584620000,
+                "job_started": 1795732585554634,
+                "runner_listening": 1795732587290809,
+                "job_received": 1795732589103251,
+                "hook_done": 1795732589104610
+              },
+              "cache": ["backmesh cache: auto the cache token came at +20.3 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 1099,
+                "hits": 929,
+                "misses": 24,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 24,
+                "not-cacheable": 132
+              },
+              "proxy": {
+                "started": 1795732605230,
+                "cloud": "aws",
+                "gets": 962,
+                "hits": 929,
+                "misses": 33,
+                "bytesRead": 519074226,
+                "puts": 17,
+                "bytesWritten": 23698901,
+                "dropped": 8,
+                "errors": [],
+                "tokens": [
+                  {
+                    "at": 1795732609544,
+                    "id": "70c04ffa3517",
+                    "expiresAt": 1795733508000,
+                    "ok": 988
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "round": 5,
+        "branch": "builds/backmesh-ubuntu-2404-4vcpu/sccache/1795732770426",
+        "cold": {
+          "runId": 45906184967,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45906184967",
+          "jobs": {
+            "nushell": {
+              "id": 140203355978,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45906184967/job/140203355978",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-80r2r6ot",
+              "createdAt": "2026-11-26T22:39:34Z",
+              "startedAt": "2026-11-26T22:40:06Z",
+              "completedAt": "2026-11-26T22:45:24Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:40:06Z",
+                  "completedAt": "2026-11-26T22:40:07Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:40:07Z",
+                  "completedAt": "2026-11-26T22:40:07Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:40:07Z",
+                  "completedAt": "2026-11-26T22:40:07Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:40:07Z",
+                  "completedAt": "2026-11-26T22:40:07Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:40:07Z",
+                  "completedAt": "2026-11-26T22:40:08Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T22:40:08Z",
+                  "completedAt": "2026-11-26T22:40:36Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:40:36Z",
+                  "completedAt": "2026-11-26T22:40:37Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:40:37Z",
+                  "completedAt": "2026-11-26T22:45:20Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:45:20Z",
+                  "completedAt": "2026-11-26T22:45:22Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:45:22Z",
+                  "completedAt": "2026-11-26T22:45:22Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:45:22Z",
+                  "completedAt": "2026-11-26T22:45:22Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:45:22Z",
+                  "completedAt": "2026-11-26T22:45:22Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:45:22Z",
+                  "completedAt": "2026-11-26T22:45:22Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795732775264000,
+                "vm_booted": 1795732784000000,
+                "container_started": 1795732802650000,
+                "job_started": 1795732803405337,
+                "runner_listening": 1795732805276650,
+                "job_received": 1795732807134936,
+                "hook_done": 1795732807136441
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +20.1 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 1099,
+                "hits": 0,
+                "misses": 953,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 953,
+                "not-cacheable": 132
+              },
+              "proxy": {
+                "started": 1795732837084,
+                "cloud": "aws",
+                "gets": 962,
+                "hits": 0,
+                "misses": 962,
+                "bytesRead": 0,
+                "puts": 954,
+                "bytesWritten": 544454627,
+                "dropped": 0,
+                "errors": [],
+                "tokens": [
+                  {
+                    "at": 1795732837320,
+                    "id": "dbd2a3fc1101",
+                    "expiresAt": 1795733726000,
+                    "ok": 2878
+                  }
+                ]
+              }
+            },
+            "ripgrep": {
+              "id": 140203356265,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45906184967/job/140203356265",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-xj0zetea",
+              "createdAt": "2026-11-26T22:39:34Z",
+              "startedAt": "2026-11-26T22:40:12Z",
+              "completedAt": "2026-11-26T22:40:38Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:40:13Z",
+                  "completedAt": "2026-11-26T22:40:13Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:40:13Z",
+                  "completedAt": "2026-11-26T22:40:13Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:40:13Z",
+                  "completedAt": "2026-11-26T22:40:13Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:40:13Z",
+                  "completedAt": "2026-11-26T22:40:13Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:40:13Z",
+                  "completedAt": "2026-11-26T22:40:14Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:40:14Z",
+                  "completedAt": "2026-11-26T22:40:14Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:40:14Z",
+                  "completedAt": "2026-11-26T22:40:35Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:40:35Z",
+                  "completedAt": "2026-11-26T22:40:37Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:40:37Z",
+                  "completedAt": "2026-11-26T22:40:37Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:40:37Z",
+                  "completedAt": "2026-11-26T22:40:37Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:40:37Z",
+                  "completedAt": "2026-11-26T22:40:37Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:40:37Z",
+                  "completedAt": "2026-11-26T22:40:37Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795732775531000,
+                "vm_booted": 1795732784000000,
+                "container_started": 1795732809520000,
+                "job_started": 1795732809959456,
+                "runner_listening": 1795732811664144,
+                "job_received": 1795732813508607,
+                "hook_done": 1795732813510070
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +13.7 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 44,
+                "hits": 0,
+                "misses": 32,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 32,
+                "not-cacheable": 10
+              },
+              "proxy": {
+                "started": 1795732814607,
+                "cloud": "aws",
+                "gets": 35,
+                "hits": 0,
+                "misses": 35,
+                "bytesRead": 0,
+                "puts": 9,
+                "bytesWritten": 11844754,
+                "dropped": 24,
+                "errors": [],
+                "tokens": [
+                  {
+                    "at": 1795732827482,
+                    "id": "493038bd76e5",
+                    "expiresAt": 1795733726000,
+                    "ok": 23
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "warm": {
+          "runId": 45906910750,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45906910750",
+          "jobs": {
+            "nushell": {
+              "id": 140205721464,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45906910750/job/140205721464",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-cvcwvjri",
+              "createdAt": "2026-11-26T22:46:38Z",
+              "startedAt": "2026-11-26T22:47:09Z",
+              "completedAt": "2026-11-26T22:50:05Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:47:09Z",
+                  "completedAt": "2026-11-26T22:47:09Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:47:09Z",
+                  "completedAt": "2026-11-26T22:47:09Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:47:09Z",
+                  "completedAt": "2026-11-26T22:47:09Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:47:09Z",
+                  "completedAt": "2026-11-26T22:47:10Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:47:10Z",
+                  "completedAt": "2026-11-26T22:47:11Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T22:47:11Z",
+                  "completedAt": "2026-11-26T22:47:40Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:47:40Z",
+                  "completedAt": "2026-11-26T22:47:41Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:47:41Z",
+                  "completedAt": "2026-11-26T22:50:01Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:50:01Z",
+                  "completedAt": "2026-11-26T22:50:03Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:50:03Z",
+                  "completedAt": "2026-11-26T22:50:03Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:50:03Z",
+                  "completedAt": "2026-11-26T22:50:04Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:50:04Z",
+                  "completedAt": "2026-11-26T22:50:04Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:50:04Z",
+                  "completedAt": "2026-11-26T22:50:04Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795733200848000,
+                "vm_booted": 1795733208000000,
+                "container_started": 1795733226010000,
+                "job_started": 1795733226125127,
+                "runner_listening": 1795733227980910,
+                "job_received": 1795733229926734,
+                "hook_done": 1795733229928593
+              },
+              "cache": ["backmesh cache: auto the cache token came at +22.1 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 1099,
+                "hits": 952,
+                "misses": 1,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 1,
+                "not-cacheable": 132
+              },
+              "proxy": {
+                "started": 1795733261025,
+                "cloud": "aws",
+                "gets": 962,
+                "hits": 953,
+                "misses": 9,
+                "bytesRead": 542917449,
+                "puts": 2,
+                "bytesWritten": 1536597,
+                "dropped": 0,
+                "errors": [],
+                "tokens": [
+                  {
+                    "at": 1795733261255,
+                    "id": "459daa52eb8a",
+                    "expiresAt": 1795734151000,
+                    "ok": 973
+                  }
+                ]
+              }
+            },
+            "ripgrep": {
+              "id": 140205721899,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45906910750/job/140205721899",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-nbslibab",
+              "createdAt": "2026-11-26T22:46:38Z",
+              "startedAt": "2026-11-26T22:47:09Z",
+              "completedAt": "2026-11-26T22:47:35Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:47:10Z",
+                  "completedAt": "2026-11-26T22:47:10Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:47:10Z",
+                  "completedAt": "2026-11-26T22:47:10Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:47:10Z",
+                  "completedAt": "2026-11-26T22:47:10Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:47:10Z",
+                  "completedAt": "2026-11-26T22:47:10Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:47:10Z",
+                  "completedAt": "2026-11-26T22:47:11Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:47:11Z",
+                  "completedAt": "2026-11-26T22:47:11Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:47:11Z",
+                  "completedAt": "2026-11-26T22:47:32Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:47:32Z",
+                  "completedAt": "2026-11-26T22:47:34Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:47:34Z",
+                  "completedAt": "2026-11-26T22:47:34Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:47:34Z",
+                  "completedAt": "2026-11-26T22:47:34Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:47:34Z",
+                  "completedAt": "2026-11-26T22:47:34Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:47:34Z",
+                  "completedAt": "2026-11-26T22:47:34Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795733200045000,
+                "vm_booted": 1795733209000000,
+                "container_started": 1795733226770000,
+                "job_started": 1795733226931040,
+                "runner_listening": 1795733228785096,
+                "job_received": 1795733230646487,
+                "hook_done": 1795733230647871
+              },
+              "cache": ["backmesh cache: auto the cache token came at +21.4 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0,
+              "sccache": {
+                "requests": 44,
+                "hits": 0,
+                "misses": 32,
+                "errors": 0,
+                "write-errors": 0,
+                "writes": 32,
+                "not-cacheable": 10
+              },
+              "proxy": {
+                "started": 1795733231729,
+                "cloud": "",
+                "gets": 35,
+                "hits": 0,
+                "misses": 35,
+                "bytesRead": 0,
+                "puts": 0,
+                "bytesWritten": 0,
+                "dropped": 33,
+                "errors": [],
+                "tokens": []
+              }
+            }
+          }
+        }
+      }
+    ],
+    "backmesh-ubuntu-2404-4vcpu/rust": [
+      {
+        "round": 1,
+        "branch": "builds/backmesh-ubuntu-2404-4vcpu/rust/1795730131652",
+        "cold": {
+          "runId": 45901418749,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45901418749",
+          "jobs": {
+            "nushell": {
+              "id": 140187831911,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45901418749/job/140187831911",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-d53i74vv",
+              "createdAt": "2026-11-26T21:55:40Z",
+              "startedAt": "2026-11-26T21:56:11Z",
+              "completedAt": "2026-11-26T22:00:07Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T21:56:11Z",
+                  "completedAt": "2026-11-26T21:56:12Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T21:56:12Z",
+                  "completedAt": "2026-11-26T21:56:12Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T21:56:12Z",
+                  "completedAt": "2026-11-26T21:56:12Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T21:56:12Z",
+                  "completedAt": "2026-11-26T21:56:12Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T21:56:12Z",
+                  "completedAt": "2026-11-26T21:56:13Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T21:56:13Z",
+                  "completedAt": "2026-11-26T21:56:28Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T21:56:28Z",
+                  "completedAt": "2026-11-26T21:56:28Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T21:56:28Z",
+                  "completedAt": "2026-11-26T22:00:06Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:00:06Z",
+                  "completedAt": "2026-11-26T22:00:06Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:00:06Z",
+                  "completedAt": "2026-11-26T22:00:06Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:00:06Z",
+                  "completedAt": "2026-11-26T22:00:06Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:00:06Z",
+                  "completedAt": "2026-11-26T22:00:06Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:00:06Z",
+                  "completedAt": "2026-11-26T22:00:06Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795730141740000,
+                "vm_booted": 1795730150000000,
+                "container_started": 1795730168230000,
+                "job_started": 1795730168355650,
+                "runner_listening": 1795730170129638,
+                "job_received": 1795730172067137,
+                "hook_done": 1795730172068651
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +22.4 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "ripgrep": {
+              "id": 140187832211,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45901418749/job/140187832211",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-amlv87su",
+              "createdAt": "2026-11-26T21:55:40Z",
+              "startedAt": "2026-11-26T21:56:11Z",
+              "completedAt": "2026-11-26T21:56:34Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T21:56:11Z",
+                  "completedAt": "2026-11-26T21:56:12Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T21:56:12Z",
+                  "completedAt": "2026-11-26T21:56:12Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T21:56:12Z",
+                  "completedAt": "2026-11-26T21:56:12Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T21:56:12Z",
+                  "completedAt": "2026-11-26T21:56:12Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T21:56:12Z",
+                  "completedAt": "2026-11-26T21:56:13Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T21:56:13Z",
+                  "completedAt": "2026-11-26T21:56:13Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T21:56:13Z",
+                  "completedAt": "2026-11-26T21:56:33Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T21:56:33Z",
+                  "completedAt": "2026-11-26T21:56:33Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T21:56:33Z",
+                  "completedAt": "2026-11-26T21:56:33Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T21:56:33Z",
+                  "completedAt": "2026-11-26T21:56:33Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T21:56:33Z",
+                  "completedAt": "2026-11-26T21:56:33Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T21:56:33Z",
+                  "completedAt": "2026-11-26T21:56:33Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795730141805000,
+                "vm_booted": 1795730150000000,
+                "container_started": 1795730168450000,
+                "job_started": 1795730168571643,
+                "runner_listening": 1795730170460995,
+                "job_received": 1795730172292855,
+                "hook_done": 1795730172294251
+              },
+              "cache": [],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        },
+        "warm": {
+          "runId": 45902020901,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45902020901",
+          "jobs": {
+            "nushell": {
+              "id": 140189817445,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45902020901/job/140189817445",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-v00meq08",
+              "createdAt": "2026-11-26T22:01:15Z",
+              "startedAt": "2026-11-26T22:01:46Z",
+              "completedAt": "2026-11-26T22:05:44Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:01:46Z",
+                  "completedAt": "2026-11-26T22:01:46Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:01:46Z",
+                  "completedAt": "2026-11-26T22:01:47Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:01:47Z",
+                  "completedAt": "2026-11-26T22:01:47Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:01:47Z",
+                  "completedAt": "2026-11-26T22:01:47Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:01:47Z",
+                  "completedAt": "2026-11-26T22:01:48Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T22:01:48Z",
+                  "completedAt": "2026-11-26T22:02:02Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:02:02Z",
+                  "completedAt": "2026-11-26T22:02:02Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:02:02Z",
+                  "completedAt": "2026-11-26T22:05:42Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:05:42Z",
+                  "completedAt": "2026-11-26T22:05:42Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:05:42Z",
+                  "completedAt": "2026-11-26T22:05:42Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:05:42Z",
+                  "completedAt": "2026-11-26T22:05:42Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:05:42Z",
+                  "completedAt": "2026-11-26T22:05:42Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:05:42Z",
+                  "completedAt": "2026-11-26T22:05:42Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795730477910000,
+                "vm_booted": 1795730486000000,
+                "container_started": 1795730503070000,
+                "job_started": 1795730503494177,
+                "runner_listening": 1795730505270541,
+                "job_received": 1795730507008409,
+                "hook_done": 1795730507009773
+              },
+              "cache": ["backmesh cache: auto the cache token came at +29.4 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "ripgrep": {
+              "id": 140189817806,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45902020901/job/140189817806",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-jqrrvp43",
+              "createdAt": "2026-11-26T22:01:15Z",
+              "startedAt": "2026-11-26T22:01:51Z",
+              "completedAt": "2026-11-26T22:02:14Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:01:51Z",
+                  "completedAt": "2026-11-26T22:01:52Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:01:52Z",
+                  "completedAt": "2026-11-26T22:01:52Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:01:52Z",
+                  "completedAt": "2026-11-26T22:01:52Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:01:52Z",
+                  "completedAt": "2026-11-26T22:01:52Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:01:52Z",
+                  "completedAt": "2026-11-26T22:01:52Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:01:52Z",
+                  "completedAt": "2026-11-26T22:01:52Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:01:52Z",
+                  "completedAt": "2026-11-26T22:02:13Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:02:13Z",
+                  "completedAt": "2026-11-26T22:02:13Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:02:13Z",
+                  "completedAt": "2026-11-26T22:02:13Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:02:13Z",
+                  "completedAt": "2026-11-26T22:02:13Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:02:13Z",
+                  "completedAt": "2026-11-26T22:02:13Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:02:13Z",
+                  "completedAt": "2026-11-26T22:02:13Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795730476873000,
+                "vm_booted": 1795730486000000,
+                "container_started": 1795730507550000,
+                "job_started": 1795730508085525,
+                "runner_listening": 1795730510108370,
+                "job_received": 1795730512034907,
+                "hook_done": 1795730512036383
+              },
+              "cache": [],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        }
+      },
+      {
+        "round": 2,
+        "branch": "builds/backmesh-ubuntu-2404-4vcpu/rust/1795730750259",
+        "cold": {
+          "runId": 45902535265,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45902535265",
+          "jobs": {
+            "nushell": {
+              "id": 140191499048,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45902535265/job/140191499048",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-sp424nyd",
+              "createdAt": "2026-11-26T22:05:53Z",
+              "startedAt": "2026-11-26T22:06:24Z",
+              "completedAt": "2026-11-26T22:10:22Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:06:24Z",
+                  "completedAt": "2026-11-26T22:06:24Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:06:24Z",
+                  "completedAt": "2026-11-26T22:06:24Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:06:24Z",
+                  "completedAt": "2026-11-26T22:06:24Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:06:24Z",
+                  "completedAt": "2026-11-26T22:06:25Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:06:25Z",
+                  "completedAt": "2026-11-26T22:06:26Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T22:06:26Z",
+                  "completedAt": "2026-11-26T22:06:40Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:06:40Z",
+                  "completedAt": "2026-11-26T22:06:40Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:06:40Z",
+                  "completedAt": "2026-11-26T22:10:20Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:10:20Z",
+                  "completedAt": "2026-11-26T22:10:20Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:10:20Z",
+                  "completedAt": "2026-11-26T22:10:20Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:10:20Z",
+                  "completedAt": "2026-11-26T22:10:20Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:10:20Z",
+                  "completedAt": "2026-11-26T22:10:20Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:10:20Z",
+                  "completedAt": "2026-11-26T22:10:20Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795730755977000,
+                "vm_booted": 1795730763000000,
+                "container_started": 1795730780860000,
+                "job_started": 1795730780970150,
+                "runner_listening": 1795730782865644,
+                "job_received": 1795730784760108,
+                "hook_done": 1795730784761655
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +32.2 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "ripgrep": {
+              "id": 140191499461,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45902535265/job/140191499461",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-i3ceqhsw",
+              "createdAt": "2026-11-26T22:05:53Z",
+              "startedAt": "2026-11-26T22:06:52Z",
+              "completedAt": "2026-11-26T22:07:14Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:06:52Z",
+                  "completedAt": "2026-11-26T22:06:53Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:06:53Z",
+                  "completedAt": "2026-11-26T22:06:53Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:06:53Z",
+                  "completedAt": "2026-11-26T22:06:53Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:06:53Z",
+                  "completedAt": "2026-11-26T22:06:53Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:06:53Z",
+                  "completedAt": "2026-11-26T22:06:54Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:06:54Z",
+                  "completedAt": "2026-11-26T22:06:54Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:06:54Z",
+                  "completedAt": "2026-11-26T22:07:13Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:07:13Z",
+                  "completedAt": "2026-11-26T22:07:13Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:07:13Z",
+                  "completedAt": "2026-11-26T22:07:13Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:07:13Z",
+                  "completedAt": "2026-11-26T22:07:13Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:07:13Z",
+                  "completedAt": "2026-11-26T22:07:13Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:07:13Z",
+                  "completedAt": "2026-11-26T22:07:13Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795730754966000,
+                "vm_booted": 1795730763000000,
+                "container_started": 1795730809480000,
+                "job_started": 1795730809590390,
+                "runner_listening": 1795730811388744,
+                "job_received": 1795730813303333,
+                "hook_done": 1795730813304664
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +3.5 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        },
+        "warm": {
+          "runId": 45903156176,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45903156176",
+          "jobs": {
+            "nushell": {
+              "id": 140193516548,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45903156176/job/140193516548",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-kdv0bwc0",
+              "createdAt": "2026-11-26T22:11:28Z",
+              "startedAt": "2026-11-26T22:11:55Z",
+              "completedAt": "2026-11-26T22:16:04Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:11:56Z",
+                  "completedAt": "2026-11-26T22:11:56Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:11:56Z",
+                  "completedAt": "2026-11-26T22:11:56Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:11:56Z",
+                  "completedAt": "2026-11-26T22:11:56Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:11:56Z",
+                  "completedAt": "2026-11-26T22:11:57Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:11:57Z",
+                  "completedAt": "2026-11-26T22:11:58Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T22:11:58Z",
+                  "completedAt": "2026-11-26T22:12:12Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:12:12Z",
+                  "completedAt": "2026-11-26T22:12:12Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:12:12Z",
+                  "completedAt": "2026-11-26T22:16:02Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:16:02Z",
+                  "completedAt": "2026-11-26T22:16:02Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:16:02Z",
+                  "completedAt": "2026-11-26T22:16:02Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:16:02Z",
+                  "completedAt": "2026-11-26T22:16:02Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:16:02Z",
+                  "completedAt": "2026-11-26T22:16:02Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:16:02Z",
+                  "completedAt": "2026-11-26T22:16:02Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795731089212000,
+                "vm_booted": 1795731097000000,
+                "container_started": 1795731112910000,
+                "job_started": 1795731113220763,
+                "runner_listening": 1795731114864357,
+                "job_received": 1795731116737262,
+                "hook_done": 1795731116738663
+              },
+              "cache": ["backmesh cache: auto the cache token came at +14.3 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "ripgrep": {
+              "id": 140193516785,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45903156176/job/140193516785",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-28w3grjv",
+              "createdAt": "2026-11-26T22:11:28Z",
+              "startedAt": "2026-11-26T22:11:56Z",
+              "completedAt": "2026-11-26T22:12:18Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:11:56Z",
+                  "completedAt": "2026-11-26T22:11:57Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:11:57Z",
+                  "completedAt": "2026-11-26T22:11:57Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:11:57Z",
+                  "completedAt": "2026-11-26T22:11:57Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:11:57Z",
+                  "completedAt": "2026-11-26T22:11:57Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:11:57Z",
+                  "completedAt": "2026-11-26T22:11:57Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:11:57Z",
+                  "completedAt": "2026-11-26T22:11:57Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:11:57Z",
+                  "completedAt": "2026-11-26T22:12:17Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:12:17Z",
+                  "completedAt": "2026-11-26T22:12:17Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:12:17Z",
+                  "completedAt": "2026-11-26T22:12:17Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:12:17Z",
+                  "completedAt": "2026-11-26T22:12:17Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:12:17Z",
+                  "completedAt": "2026-11-26T22:12:17Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:12:17Z",
+                  "completedAt": "2026-11-26T22:12:17Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795731088977000,
+                "vm_booted": 1795731097000000,
+                "container_started": 1795731113090000,
+                "job_started": 1795731113207662,
+                "runner_listening": 1795731114957183,
+                "job_received": 1795731117077102,
+                "hook_done": 1795731117078567
+              },
+              "cache": ["backmesh cache: auto the cache token came at +13.9 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        }
+      },
+      {
+        "round": 3,
+        "branch": "builds/backmesh-ubuntu-2404-4vcpu/rust/1795731393203",
+        "cold": {
+          "runId": 45903729197,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45903729197",
+          "jobs": {
+            "nushell": {
+              "id": 140195396448,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45903729197/job/140195396448",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-64nmbnz9",
+              "createdAt": "2026-11-26T22:16:36Z",
+              "startedAt": "2026-11-26T22:17:07Z",
+              "completedAt": "2026-11-26T22:21:04Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:17:07Z",
+                  "completedAt": "2026-11-26T22:17:08Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:17:08Z",
+                  "completedAt": "2026-11-26T22:17:08Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:17:08Z",
+                  "completedAt": "2026-11-26T22:17:08Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:17:08Z",
+                  "completedAt": "2026-11-26T22:17:08Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:17:08Z",
+                  "completedAt": "2026-11-26T22:17:09Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T22:17:09Z",
+                  "completedAt": "2026-11-26T22:17:23Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:17:23Z",
+                  "completedAt": "2026-11-26T22:17:23Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:17:23Z",
+                  "completedAt": "2026-11-26T22:21:02Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:21:02Z",
+                  "completedAt": "2026-11-26T22:21:02Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:21:02Z",
+                  "completedAt": "2026-11-26T22:21:02Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:21:02Z",
+                  "completedAt": "2026-11-26T22:21:02Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:21:02Z",
+                  "completedAt": "2026-11-26T22:21:02Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:21:02Z",
+                  "completedAt": "2026-11-26T22:21:02Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795731398090000,
+                "vm_booted": 1795731407000000,
+                "container_started": 1795731424480000,
+                "job_started": 1795731424543507,
+                "runner_listening": 1795731426326669,
+                "job_received": 1795731428181746,
+                "hook_done": 1795731428183186
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +21.4 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "ripgrep": {
+              "id": 140195396643,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45903729197/job/140195396643",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-robokfdl",
+              "createdAt": "2026-11-26T22:16:36Z",
+              "startedAt": "2026-11-26T22:17:21Z",
+              "completedAt": "2026-11-26T22:17:44Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:17:22Z",
+                  "completedAt": "2026-11-26T22:17:22Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:17:22Z",
+                  "completedAt": "2026-11-26T22:17:22Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:17:22Z",
+                  "completedAt": "2026-11-26T22:17:22Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:17:22Z",
+                  "completedAt": "2026-11-26T22:17:22Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:17:22Z",
+                  "completedAt": "2026-11-26T22:17:23Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:17:23Z",
+                  "completedAt": "2026-11-26T22:17:23Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:17:23Z",
+                  "completedAt": "2026-11-26T22:17:43Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:17:43Z",
+                  "completedAt": "2026-11-26T22:17:43Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:17:43Z",
+                  "completedAt": "2026-11-26T22:17:43Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:17:43Z",
+                  "completedAt": "2026-11-26T22:17:43Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:17:43Z",
+                  "completedAt": "2026-11-26T22:17:43Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:17:43Z",
+                  "completedAt": "2026-11-26T22:17:43Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795731397977000,
+                "vm_booted": 1795731407000000,
+                "container_started": 1795731423430000,
+                "job_started": 1795731423583532,
+                "runner_listening": 1795731440623716,
+                "job_received": 1795731442455907,
+                "hook_done": 1795731442457387
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +7.2 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        },
+        "warm": {
+          "runId": 45904336632,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45904336632",
+          "jobs": {
+            "nushell": {
+              "id": 140197353566,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45904336632/job/140197353566",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-3ijh98ss",
+              "createdAt": "2026-11-26T22:22:11Z",
+              "startedAt": "2026-11-26T22:22:40Z",
+              "completedAt": "2026-11-26T22:26:50Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:22:40Z",
+                  "completedAt": "2026-11-26T22:22:40Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:22:40Z",
+                  "completedAt": "2026-11-26T22:22:40Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:22:40Z",
+                  "completedAt": "2026-11-26T22:22:40Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:22:40Z",
+                  "completedAt": "2026-11-26T22:22:40Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:22:40Z",
+                  "completedAt": "2026-11-26T22:22:42Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T22:22:42Z",
+                  "completedAt": "2026-11-26T22:22:57Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:22:57Z",
+                  "completedAt": "2026-11-26T22:22:57Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:22:57Z",
+                  "completedAt": "2026-11-26T22:26:49Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:26:49Z",
+                  "completedAt": "2026-11-26T22:26:49Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:26:49Z",
+                  "completedAt": "2026-11-26T22:26:49Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:26:49Z",
+                  "completedAt": "2026-11-26T22:26:49Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:26:49Z",
+                  "completedAt": "2026-11-26T22:26:49Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:26:49Z",
+                  "completedAt": "2026-11-26T22:26:49Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795731732182000,
+                "vm_booted": 1795731740000000,
+                "container_started": 1795731756640000,
+                "job_started": 1795731756753182,
+                "runner_listening": 1795731758547079,
+                "job_received": 1795731760413547,
+                "hook_done": 1795731760415048
+              },
+              "cache": ["backmesh cache: auto the cache token came at +23.6 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "ripgrep": {
+              "id": 140197353913,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45904336632/job/140197353913",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-vilc4l9z",
+              "createdAt": "2026-11-26T22:22:11Z",
+              "startedAt": "2026-11-26T22:22:40Z",
+              "completedAt": "2026-11-26T22:23:01Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:22:40Z",
+                  "completedAt": "2026-11-26T22:22:40Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:22:40Z",
+                  "completedAt": "2026-11-26T22:22:40Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:22:40Z",
+                  "completedAt": "2026-11-26T22:22:40Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:22:40Z",
+                  "completedAt": "2026-11-26T22:22:40Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:22:40Z",
+                  "completedAt": "2026-11-26T22:22:41Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:22:41Z",
+                  "completedAt": "2026-11-26T22:22:41Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:22:41Z",
+                  "completedAt": "2026-11-26T22:23:00Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:23:00Z",
+                  "completedAt": "2026-11-26T22:23:00Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:23:00Z",
+                  "completedAt": "2026-11-26T22:23:00Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:23:00Z",
+                  "completedAt": "2026-11-26T22:23:00Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:23:00Z",
+                  "completedAt": "2026-11-26T22:23:00Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:23:00Z",
+                  "completedAt": "2026-11-26T22:23:00Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795731732571000,
+                "vm_booted": 1795731740000000,
+                "container_started": 1795731756560000,
+                "job_started": 1795731756684415,
+                "runner_listening": 1795731758565497,
+                "job_received": 1795731760599493,
+                "hook_done": 1795731760600936
+              },
+              "cache": [],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        }
+      },
+      {
+        "round": 4,
+        "branch": "builds/backmesh-ubuntu-2404-4vcpu/rust/1795732036075",
+        "cold": {
+          "runId": 45904891887,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45904891887",
+          "jobs": {
+            "nushell": {
+              "id": 140199162874,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45904891887/job/140199162874",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-u43t3iu8",
+              "createdAt": "2026-11-26T22:27:19Z",
+              "startedAt": "2026-11-26T22:27:49Z",
+              "completedAt": "2026-11-26T22:31:46Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:27:49Z",
+                  "completedAt": "2026-11-26T22:27:50Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:27:50Z",
+                  "completedAt": "2026-11-26T22:27:50Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:27:50Z",
+                  "completedAt": "2026-11-26T22:27:50Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:27:50Z",
+                  "completedAt": "2026-11-26T22:27:50Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:27:50Z",
+                  "completedAt": "2026-11-26T22:27:51Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T22:27:51Z",
+                  "completedAt": "2026-11-26T22:28:05Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:28:05Z",
+                  "completedAt": "2026-11-26T22:28:05Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:28:05Z",
+                  "completedAt": "2026-11-26T22:31:45Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:31:45Z",
+                  "completedAt": "2026-11-26T22:31:45Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:31:45Z",
+                  "completedAt": "2026-11-26T22:31:45Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:31:45Z",
+                  "completedAt": "2026-11-26T22:31:45Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:31:45Z",
+                  "completedAt": "2026-11-26T22:31:45Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:31:45Z",
+                  "completedAt": "2026-11-26T22:31:45Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795732040533000,
+                "vm_booted": 1795732049000000,
+                "container_started": 1795732066220000,
+                "job_started": 1795732066385830,
+                "runner_listening": 1795732068132053,
+                "job_received": 1795732070146911,
+                "hook_done": 1795732070148417
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +22.5 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "ripgrep": {
+              "id": 140199163303,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45904891887/job/140199163303",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-yy6xr81p",
+              "createdAt": "2026-11-26T22:27:19Z",
+              "startedAt": "2026-11-26T22:27:49Z",
+              "completedAt": "2026-11-26T22:28:12Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:27:50Z",
+                  "completedAt": "2026-11-26T22:27:50Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:27:50Z",
+                  "completedAt": "2026-11-26T22:27:50Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:27:50Z",
+                  "completedAt": "2026-11-26T22:27:50Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:27:50Z",
+                  "completedAt": "2026-11-26T22:27:50Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:27:50Z",
+                  "completedAt": "2026-11-26T22:27:51Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:27:51Z",
+                  "completedAt": "2026-11-26T22:27:51Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:27:51Z",
+                  "completedAt": "2026-11-26T22:28:10Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:28:10Z",
+                  "completedAt": "2026-11-26T22:28:10Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:28:10Z",
+                  "completedAt": "2026-11-26T22:28:10Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:28:10Z",
+                  "completedAt": "2026-11-26T22:28:10Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:28:10Z",
+                  "completedAt": "2026-11-26T22:28:10Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:28:10Z",
+                  "completedAt": "2026-11-26T22:28:10Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795732041581000,
+                "vm_booted": 1795732049000000,
+                "container_started": 1795732066270000,
+                "job_started": 1795732066813967,
+                "runner_listening": 1795732068718419,
+                "job_received": 1795732070608154,
+                "hook_done": 1795732070609530
+              },
+              "cache": [],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        },
+        "warm": {
+          "runId": 45905482834,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45905482834",
+          "jobs": {
+            "nushell": {
+              "id": 140201073695,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45905482834/job/140201073695",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-gj1bti1j",
+              "createdAt": "2026-11-26T22:32:53Z",
+              "startedAt": "2026-11-26T22:33:23Z",
+              "completedAt": "2026-11-26T22:37:23Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:33:24Z",
+                  "completedAt": "2026-11-26T22:33:24Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:33:24Z",
+                  "completedAt": "2026-11-26T22:33:24Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:33:24Z",
+                  "completedAt": "2026-11-26T22:33:24Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:33:24Z",
+                  "completedAt": "2026-11-26T22:33:24Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:33:24Z",
+                  "completedAt": "2026-11-26T22:33:26Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T22:33:26Z",
+                  "completedAt": "2026-11-26T22:33:40Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:33:40Z",
+                  "completedAt": "2026-11-26T22:33:40Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:33:40Z",
+                  "completedAt": "2026-11-26T22:37:21Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:37:21Z",
+                  "completedAt": "2026-11-26T22:37:21Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:37:21Z",
+                  "completedAt": "2026-11-26T22:37:21Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:37:21Z",
+                  "completedAt": "2026-11-26T22:37:21Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:37:21Z",
+                  "completedAt": "2026-11-26T22:37:21Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:37:21Z",
+                  "completedAt": "2026-11-26T22:37:21Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795732376091000,
+                "vm_booted": 1795732384000000,
+                "container_started": 1795732400600000,
+                "job_started": 1795732400786897,
+                "runner_listening": 1795732402535576,
+                "job_received": 1795732404439674,
+                "hook_done": 1795732404441020
+              },
+              "cache": ["backmesh cache: auto the cache token came at +22.4 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "ripgrep": {
+              "id": 140201074003,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45905482834/job/140201074003",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-meb47zv9",
+              "createdAt": "2026-11-26T22:32:53Z",
+              "startedAt": "2026-11-26T22:33:34Z",
+              "completedAt": "2026-11-26T22:33:56Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:33:34Z",
+                  "completedAt": "2026-11-26T22:33:34Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:33:34Z",
+                  "completedAt": "2026-11-26T22:33:34Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:33:34Z",
+                  "completedAt": "2026-11-26T22:33:34Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:33:34Z",
+                  "completedAt": "2026-11-26T22:33:35Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:33:35Z",
+                  "completedAt": "2026-11-26T22:33:35Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:33:35Z",
+                  "completedAt": "2026-11-26T22:33:35Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:33:35Z",
+                  "completedAt": "2026-11-26T22:33:54Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:33:54Z",
+                  "completedAt": "2026-11-26T22:33:54Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:33:54Z",
+                  "completedAt": "2026-11-26T22:33:54Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:33:54Z",
+                  "completedAt": "2026-11-26T22:33:54Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:33:54Z",
+                  "completedAt": "2026-11-26T22:33:54Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:33:54Z",
+                  "completedAt": "2026-11-26T22:33:54Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795732375198000,
+                "vm_booted": 1795732383000000,
+                "container_started": 1795732399800000,
+                "job_started": 1795732399922382,
+                "runner_listening": 1795732413084430,
+                "job_received": 1795732414899058,
+                "hook_done": 1795732414900424
+              },
+              "cache": ["backmesh cache: auto the cache token came at +11.9 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        }
+      },
+      {
+        "round": 5,
+        "branch": "builds/backmesh-ubuntu-2404-4vcpu/rust/1795732648375",
+        "cold": {
+          "runId": 45905982514,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45905982514",
+          "jobs": {
+            "ripgrep": {
+              "id": 140202672377,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45905982514/job/140202672377",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-zlusa0en",
+              "createdAt": "2026-11-26T22:37:31Z",
+              "startedAt": "2026-11-26T22:38:01Z",
+              "completedAt": "2026-11-26T22:38:24Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:38:02Z",
+                  "completedAt": "2026-11-26T22:38:03Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:38:03Z",
+                  "completedAt": "2026-11-26T22:38:03Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:38:03Z",
+                  "completedAt": "2026-11-26T22:38:03Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:38:03Z",
+                  "completedAt": "2026-11-26T22:38:03Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:38:03Z",
+                  "completedAt": "2026-11-26T22:38:03Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:38:03Z",
+                  "completedAt": "2026-11-26T22:38:03Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:38:03Z",
+                  "completedAt": "2026-11-26T22:38:22Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:38:22Z",
+                  "completedAt": "2026-11-26T22:38:22Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:38:22Z",
+                  "completedAt": "2026-11-26T22:38:22Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:38:22Z",
+                  "completedAt": "2026-11-26T22:38:23Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:38:23Z",
+                  "completedAt": "2026-11-26T22:38:23Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:38:23Z",
+                  "completedAt": "2026-11-26T22:38:23Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795732652978000,
+                "vm_booted": 1795732662000000,
+                "container_started": 1795732678400000,
+                "job_started": 1795732678624711,
+                "runner_listening": 1795732680254093,
+                "job_received": 1795732683145632,
+                "hook_done": 1795732683146936
+              },
+              "cache": [],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "nushell": {
+              "id": 140202672579,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45905982514/job/140202672579",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-1eu2tbhl",
+              "createdAt": "2026-11-26T22:37:31Z",
+              "startedAt": "2026-11-26T22:38:01Z",
+              "completedAt": "2026-11-26T22:41:57Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:38:02Z",
+                  "completedAt": "2026-11-26T22:38:02Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:38:02Z",
+                  "completedAt": "2026-11-26T22:38:02Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:38:02Z",
+                  "completedAt": "2026-11-26T22:38:02Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:38:02Z",
+                  "completedAt": "2026-11-26T22:38:02Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:38:02Z",
+                  "completedAt": "2026-11-26T22:38:04Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T22:38:04Z",
+                  "completedAt": "2026-11-26T22:38:18Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:38:18Z",
+                  "completedAt": "2026-11-26T22:38:18Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:38:18Z",
+                  "completedAt": "2026-11-26T22:41:55Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:41:55Z",
+                  "completedAt": "2026-11-26T22:41:55Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:41:55Z",
+                  "completedAt": "2026-11-26T22:41:56Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:41:56Z",
+                  "completedAt": "2026-11-26T22:41:56Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:41:56Z",
+                  "completedAt": "2026-11-26T22:41:56Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:41:56Z",
+                  "completedAt": "2026-11-26T22:41:56Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795732653014000,
+                "vm_booted": 1795732662000000,
+                "container_started": 1795732678220000,
+                "job_started": 1795732678794056,
+                "runner_listening": 1795732680660018,
+                "job_received": 1795732682466875,
+                "hook_done": 1795732682468263
+              },
+              "cache": [
+                "backmesh cache: auto the cache token came at +22.4 s",
+                "backmesh cache: auto found no record of this job yet: its save writes one"
+              ],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        },
+        "warm": {
+          "runId": 45906546873,
+          "url": "https://github.com/backmesh/benchmarks/actions/runs/45906546873",
+          "jobs": {
+            "ripgrep": {
+              "id": 140204539175,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45906546873/job/140204539175",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-rgpa6f2q",
+              "createdAt": "2026-11-26T22:43:06Z",
+              "startedAt": "2026-11-26T22:43:36Z",
+              "completedAt": "2026-11-26T22:43:58Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:43:36Z",
+                  "completedAt": "2026-11-26T22:43:37Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:43:37Z",
+                  "completedAt": "2026-11-26T22:43:37Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:43:37Z",
+                  "completedAt": "2026-11-26T22:43:37Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:43:37Z",
+                  "completedAt": "2026-11-26T22:43:37Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:43:37Z",
+                  "completedAt": "2026-11-26T22:43:37Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:43:37Z",
+                  "completedAt": "2026-11-26T22:43:37Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:43:37Z",
+                  "completedAt": "2026-11-26T22:43:57Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:43:57Z",
+                  "completedAt": "2026-11-26T22:43:57Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:43:57Z",
+                  "completedAt": "2026-11-26T22:43:57Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:43:57Z",
+                  "completedAt": "2026-11-26T22:43:57Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:43:57Z",
+                  "completedAt": "2026-11-26T22:43:57Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:43:57Z",
+                  "completedAt": "2026-11-26T22:43:57Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795732987826000,
+                "vm_booted": 1795732996000000,
+                "container_started": 1795733013350000,
+                "job_started": 1795733013465867,
+                "runner_listening": 1795733015210873,
+                "job_received": 1795733017204643,
+                "hook_done": 1795733017206065
+              },
+              "cache": [],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            },
+            "nushell": {
+              "id": 140204539476,
+              "url": "https://github.com/backmesh/benchmarks/actions/runs/45906546873/job/140204539476",
+              "conclusion": "success",
+              "runner": "bm8ot2o-a4-h9mk38l1",
+              "createdAt": "2026-11-26T22:43:06Z",
+              "startedAt": "2026-11-26T22:43:37Z",
+              "completedAt": "2026-11-26T22:47:33Z",
+              "steps": [
+                {
+                  "name": "Set up job",
+                  "startedAt": "2026-11-26T22:43:38Z",
+                  "completedAt": "2026-11-26T22:43:38Z"
+                },
+                {
+                  "name": "Set up runner",
+                  "startedAt": "2026-11-26T22:43:38Z",
+                  "completedAt": "2026-11-26T22:43:38Z"
+                },
+                {
+                  "name": "Marks",
+                  "startedAt": "2026-11-26T22:43:38Z",
+                  "completedAt": "2026-11-26T22:43:38Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:43:38Z",
+                  "completedAt": "2026-11-26T22:43:38Z"
+                },
+                {
+                  "name": "Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:43:38Z",
+                  "completedAt": "2026-11-26T22:43:40Z"
+                },
+                {
+                  "name": "Toolchain",
+                  "startedAt": "2026-11-26T22:43:40Z",
+                  "completedAt": "2026-11-26T22:43:54Z"
+                },
+                {
+                  "name": "Start sccache",
+                  "startedAt": "2026-11-26T22:43:54Z",
+                  "completedAt": "2026-11-26T22:43:54Z"
+                },
+                {
+                  "name": "Build",
+                  "startedAt": "2026-11-26T22:43:54Z",
+                  "completedAt": "2026-11-26T22:47:32Z"
+                },
+                {
+                  "name": "sccache stats",
+                  "startedAt": "2026-11-26T22:47:32Z",
+                  "completedAt": "2026-11-26T22:47:32Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:47:32Z",
+                  "completedAt": "2026-11-26T22:47:32Z"
+                },
+                {
+                  "name": "Post Run actions/checkout@v5",
+                  "startedAt": "2026-11-26T22:47:32Z",
+                  "completedAt": "2026-11-26T22:47:32Z"
+                },
+                {
+                  "name": "Complete runner",
+                  "startedAt": "2026-11-26T22:47:32Z",
+                  "completedAt": "2026-11-26T22:47:32Z"
+                },
+                {
+                  "name": "Complete job",
+                  "startedAt": "2026-11-26T22:47:32Z",
+                  "completedAt": "2026-11-26T22:47:32Z"
+                }
+              ],
+              "marks": {
+                "submitted": 1795732988075000,
+                "vm_booted": 1795732996000000,
+                "container_started": 1795733014080000,
+                "job_started": 1795733014779572,
+                "runner_listening": 1795733016736187,
+                "job_received": 1795733018561452,
+                "hook_done": 1795733018562888
+              },
+              "cache": ["backmesh cache: auto the cache token came at +20.7 s"],
+              "nproc": 4,
+              "cpu": "AMD EPYC 9R45",
+              "region": "aws us-east-1",
+              "vm": "m8a.xlarge",
+              "hits": {},
+              "dockerCached": 0
+            }
+          }
+        }
+      }
+    ]
+  }
+}

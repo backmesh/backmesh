@@ -33,6 +33,10 @@ export interface Job {
   // build's CACHED steps.
   hits?: Record<string, string>;
   dockerCached?: number;
+  // bench-sccache.yml's `/sccache` arm: sccache's counts, and the proxy's
+  // (experiments/sccache).
+  sccache?: Record<string, number>;
+  proxy?: Record<string, unknown>;
   // On backmesh's AWS runners: `aws <region>` and the VM type.
   region: string | null;
   vm: string | null;

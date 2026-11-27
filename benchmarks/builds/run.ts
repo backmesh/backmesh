@@ -50,7 +50,9 @@ const commit = (
 const templates = {
   plain: await readFile(join(here, 'bench.yml'), 'utf8'),
   cache: await readFile(join(here, 'bench-cache.yml'), 'utf8'),
+  sccache: await readFile(join(here, 'bench-sccache.yml'), 'utf8'),
 };
+const proxy = join(here, '../../experiments/sccache/dist/proxy.mjs');
 
 const results: Results = {
   date,
@@ -91,13 +93,14 @@ async function checkout() {
 async function completed(sha: string) {
   const deadline = Date.now() + RUN_WAIT_MS;
   while (Date.now() < deadline) {
-    await sleep(15_000);
-    const { data } = await octokit.actions.listWorkflowRunsForRepo({
-      owner,
-      repo,
-      head_sha: sha,
-    });
-    const found = data.workflow_runs[0];
+    await sleep(30_000);
+    // A token shared with other work can run out of its hourly requests:
+    // poll on until the deadline.
+    const data = await octokit.actions
+      .listWorkflowRunsForRepo({ owner, repo, head_sha: sha })
+      .then((r) => r.data)
+      .catch((e: unknown) => console.log(`polling ${sha}: ${String(e)}`));
+    const found = data?.workflow_runs[0];
     if (found?.status === 'completed') return found;
   }
   throw new Error(`no completed run for ${sha} within 45 min`);
@@ -114,6 +117,8 @@ function parseLog(log: string) {
   let dockerCached = 0;
   let region: string | null = null;
   let vm: string | null = null;
+  const sccache: Record<string, number> = {};
+  let proxy: Record<string, unknown> | undefined;
   for (const line of log.split('\n')) {
     const text = line.replace(/^\S+Z /, '').trimEnd();
     const mark = /^([a-z_]+) (\d{13,})$/.exec(text);
@@ -127,8 +132,21 @@ function parseLog(log: string) {
     if (text.startsWith('region ')) region = text.slice(7);
     if (text.startsWith('vm ')) vm = text.slice(3);
     if (text.startsWith('backmesh cache: auto ')) cache.push(text);
+    const stat = /^sccache-stat (\S+) (\d+)$/.exec(text);
+    if (stat) sccache[stat[1]!] = Number(stat[2]);
+    if (text.startsWith('sccache-proxy {')) proxy = JSON.parse(text.slice(14));
   }
-  return { marks, cache, nproc, cpu, region, vm, hits, dockerCached };
+  return {
+    marks,
+    cache,
+    nproc,
+    cpu,
+    region,
+    vm,
+    hits,
+    dockerCached,
+    ...(proxy && { sccache, proxy }),
+  };
 }
 
 async function collect(runId: number): Promise<Run> {
@@ -167,15 +185,24 @@ async function collect(runId: number): Promise<Run> {
   };
 }
 
-// `<label>` runs bench.yml on the label, `<label>/cache` bench-cache.yml.
+// `<label>` runs bench.yml on the label, `<label>/cache` bench-cache.yml,
+// and `<label>/sccache` and `<label>/rust` bench-sccache.yml with sccache on
+// and off.
 async function benchmark(arm: string) {
-  const [label, cache] = arm.split('/') as [string, string?];
+  const [label, kind] = arm.split('/') as [string, string?];
   const { dir, git, push: pushRef } = await checkout();
   await mkdir(join(dir, '.github/workflows'), { recursive: true });
+  const rust = kind === 'sccache' || kind === 'rust';
   await writeFile(
     join(dir, '.github/workflows/bench.yml'),
-    templates[cache ? 'cache' : 'plain'].replaceAll('__LABEL__', label),
+    templates[rust ? 'sccache' : kind ? 'cache' : 'plain']
+      .replaceAll('__LABEL__', label)
+      .replaceAll('__SCCACHE__', kind === 'sccache' ? 'on' : 'off'),
   );
+  if (rust) {
+    await mkdir(join(dir, 'sccache'));
+    await writeFile(join(dir, 'sccache/proxy.mjs'), await readFile(proxy));
+  }
   for (let round = 1; round <= rounds; round++) {
     // A new branch has no caches of its own, and the default branch none of
     // this workflow's, so its first run is cold.

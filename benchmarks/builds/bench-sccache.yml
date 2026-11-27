@@ -1,0 +1,87 @@
+name: builds
+on:
+  push:
+    branches: ['builds/**']
+permissions:
+  contents: read
+# The sccache spike's Rust builds (experiments/sccache): run.ts writes this
+# file for a `<label>/sccache` arm with sccache as rustc's wrapper, through
+# the loopback WebDAV proxy over the job's cache token, and for a
+# `<label>/rust` arm without, with the label for runs-on. run.ts also writes
+# the proxy's bundle, sccache/proxy.mjs.
+defaults:
+  run:
+    working-directory: project
+env:
+  SCCACHE: __SCCACHE__
+jobs:
+  ripgrep:
+    runs-on: __LABEL__
+    steps:
+      - &marks
+        name: Marks
+        working-directory: .
+        run: |
+          cat "${BACKMESH_JOB_MARKS:-/dev/null}"; echo "nproc $(nproc)"
+          echo "cpu $(lscpu | sed -n 's/^Model name: *//p')"
+          imds=http://169.254.169.254/latest
+          [[ -n ${BACKMESH_JOB_MARKS:-} ]] || exit 0
+          t=$(curl -sfm 2 -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' $imds/api/token) || exit 0
+          echo "region aws $(curl -sfm 2 -H "X-aws-ec2-metadata-token: $t" $imds/meta-data/placement/region)"
+          echo "vm $(curl -sfm 2 -H "X-aws-ec2-metadata-token: $t" $imds/meta-data/instance-type)"
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with: { repository: BurntSushi/ripgrep, ref: 14.1.1, path: project }
+      - &start
+        name: Start sccache
+        if: env.SCCACHE == 'on'
+        working-directory: .
+        run: |
+          v=v0.20.1 sum=c9f6c5a3ae84d9da0956b28c357a365827bda33f3383647fc0b67484c74a5ea9
+          f=sccache-$v-x86_64-unknown-linux-musl
+          curl -sSfL -o "$RUNNER_TEMP/$f.tar.gz" "https://github.com/mozilla/sccache/releases/download/$v/$f.tar.gz"
+          echo "$sum $RUNNER_TEMP/$f.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$f.tar.gz" -C "$RUNNER_TEMP" "$f/sccache"
+          nohup node sccache/proxy.mjs 4230 "$RUNNER_TEMP/proxy.json" >"$RUNNER_TEMP/proxy.log" 2>&1 &
+          echo $! >"$RUNNER_TEMP/proxy.pid"
+          # sccache fails the build when its storage check can't reach the proxy.
+          for _ in $(seq 50); do curl -s -o /dev/null http://127.0.0.1:4230/ && break; sleep 0.2; done
+          curl -s -o /dev/null http://127.0.0.1:4230/ || { cat "$RUNNER_TEMP/proxy.log"; echo "::error::the proxy isn't listening"; exit 1; }
+          { echo "RUSTC_WRAPPER=$RUNNER_TEMP/$f/sccache"
+            echo SCCACHE_WEBDAV_ENDPOINT=http://127.0.0.1:4230
+            echo SCCACHE_IDLE_TIMEOUT=0; } >>"$GITHUB_ENV"
+      - name: Build
+        run: cargo build --release --locked
+      - &stats
+        name: sccache stats
+        if: always() && env.SCCACHE == 'on'
+        working-directory: .
+        run: |
+          "$RUSTC_WRAPPER" --show-stats --stats-format=json >"$RUNNER_TEMP/stats.json" || true
+          "$RUSTC_WRAPPER" --show-stats || true
+          jq -r '.stats | "sccache-stat requests \(.compile_requests)",
+            "sccache-stat hits \([.cache_hits.counts[]] | add // 0)",
+            "sccache-stat misses \([.cache_misses.counts[]] | add // 0)",
+            "sccache-stat errors \(.cache_errors.counts | [.[]] | add // 0)",
+            "sccache-stat write-errors \(.cache_write_errors)",
+            "sccache-stat writes \(.cache_writes)",
+            "sccache-stat not-cacheable \(.requests_not_cacheable)"' \
+            "$RUNNER_TEMP/stats.json" || true
+          kill "$(cat "$RUNNER_TEMP/proxy.pid")" && sleep 2 || true
+          cat "$RUNNER_TEMP/proxy.log"
+          echo "sccache-proxy $(jq -c . "$RUNNER_TEMP/proxy.json")"
+  nushell:
+    runs-on: __LABEL__
+    steps:
+      - *marks
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with: { repository: nushell/nushell, ref: 0.116.1, path: project }
+      # nushell pins its toolchain (rust-toolchain.toml): installed before
+      # the build in both arms, so the Build step is the compile alone.
+      - name: Toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - *start
+      - name: Build
+        run: cargo build --release --locked
+      - *stats

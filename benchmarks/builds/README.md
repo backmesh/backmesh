@@ -34,6 +34,12 @@ On GitHub's runners it uses GitHub's cache, through `actions/cache` (which
 hits step prints whether each job's cache hit, and the Docker build prints its
 `CACHED` steps.
 
+[`bench-sccache.yml`](bench-sccache.yml) is the sccache spike's
+([experiments/sccache](../../experiments/sccache/README.md)): ripgrep and
+nushell 0.116.1 `cargo build --release --locked`, with sccache as rustc's
+wrapper through the spike's proxy for a `<label>/sccache` arm, and without for
+a `<label>/rust` arm. Its jobs print sccache's counts and the proxy's.
+
 ## Running it
 
 [`run.ts`](run.ts) runs rounds in a repository in an org with a backmesh
