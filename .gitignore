@@ -9,3 +9,4 @@ binaries/
 !/cache/dist/
 !/runner/dist/
 !/experiments/sccache/dist/
+!/experiments/docker-cache/dist/

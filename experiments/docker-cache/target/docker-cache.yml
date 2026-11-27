@@ -1,0 +1,87 @@
+# The Docker layer cache spike's per-cloud check (experiments/docker-cache):
+# clouds.ts pushes this, with the label and branch, to a branch of the test
+# org's e2e repository from each e2e.yml leg, with setup.sh, the shim and the
+# proxy's bundle in docker-cache/. One job, ROUNDS rounds of healthchecks'
+# image, each in a random order of: `off`, today's `docker build`; and
+# through the cache, on a new cache tag, `cold`, `warm` and `changed` (after
+# a small source change). Each build starts with the VM's Docker's build
+# cache and images cleared, as on a new VM. The job writes its row to the
+# results branch, where clouds.ts reads it over git.
+name: docker-cache
+
+on:
+  push:
+    branches: [__BRANCH__]
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  docker-cache:
+    runs-on: __LABEL__
+    timeout-minutes: 90
+    permissions:
+      contents: write # the row, to the results branch
+    env:
+      ROUNDS: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: healthchecks/healthchecks
+          ref: v5.0.3
+          path: project
+          persist-credentials: false
+      - name: Setup
+        run: docker-cache/setup.sh "$RUNNER_TEMP/docker-cache"
+
+      - name: Builds
+        working-directory: project
+        run: |
+          w=$RUNNER_TEMP/docker-cache
+          # A new VM's Docker: no build cache and no images.
+          fresh() {
+            docker image rm -f bench >/dev/null 2>&1 || true
+            docker builder prune -af >/dev/null
+            docker image prune -af >/dev/null
+          }
+          build() { # <round> <arm> <state>
+            git checkout -q -- . && [[ $3 != changed ]] || echo "# round $1" >>hc/api/views.py
+            start=$(date +%s%3N)
+            code=0
+            BACKMESH_DOCKER_CACHE_TAG=r$1 docker build -f docker/Dockerfile -t bench . >"$w/build.log" 2>&1 || code=$?
+            jq -nc --argjson round "$1" --arg arm "$2" --arg state "$3" --argjson code $code \
+              --argjson ms $(($(date +%s%3N) - start)) --argjson cached "$(grep -c '^#[0-9]* CACHED$' "$w/build.log")" \
+              '{round: $round, arm: $arm, state: $state, code: $code, ms: $ms, cached: $cached}' | tee -a "$w/builds.jsonl"
+            [[ $code == 0 ]] || { tail -n 30 "$w/build.log"; return 1; }
+          }
+          for round in $(seq "$ROUNDS"); do
+            for arm in $(printf 'off\non\n' | shuf); do
+              if [[ $arm == off ]]; then
+                fresh && BACKMESH_DOCKER_CACHE=off build "$round" off cold
+              else
+                for state in cold warm changed; do fresh && build "$round" on "$state"; done
+              fi
+            done
+          done
+
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          w=$RUNNER_TEMP/docker-cache
+          kill "$(cat "$w/proxy.pid")" && sleep 1 || true
+          cat "$w/proxy.log" "$w/builder.log" || true
+          jq -n --arg sha "$GITHUB_SHA" --arg conclusion "${{ job.status }}" \
+            --arg bucket "$(jq -r '.bucket' "/run/anycloud-secrets/_bm-cache-$RUNNER_NAME/BACKMESH_CACHE" 2>/dev/null)" \
+            --argjson builds "$(jq -sc . "$w/builds.jsonl" 2>/dev/null || echo '[]')" \
+            --argjson proxy "$(cat "$w/proxy.json" 2>/dev/null || echo null)" \
+            '{sha: $sha, conclusion: $conclusion, bucket: $bucket, builds: $builds, proxy: $proxy}' | tee "$w/row.json"
+          gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/results/$GITHUB_SHA.json" -f message="docker-cache $GITHUB_SHA" \
+            -f branch=results -f content="$(base64 -w0 "$w/row.json")" >/dev/null

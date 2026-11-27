@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# The spike's `docker`, first on the job's PATH (setup.sh): a build the job
+# didn't give a builder or a cache of its own gets BuildKit's registry cache
+# on the loopback proxy (proxy.ts), on the VM's Docker or, where setup.sh
+# made one, its docker-container builder. Anything else is the next
+# `docker` on the PATH, unchanged.
+set -euo pipefail
+here=$(dirname "$(readlink -f "$0")")
+real=$(PATH=$(tr : '\n' <<<"$PATH" | grep -vxF "$here" | paste -sd :) command -v docker)
+
+case "${1-} ${2-}" in
+  'build '* | 'buildx build' | 'image build' | 'builder build') ;;
+  *) exec "$real" "$@" ;;
+esac
+all=("$@")
+[[ $1 == build ]] && shift || shift 2
+# Steps aside: the job's own builder or cache, the legacy builder, the
+# opt-out, or a setup that didn't finish.
+mode=${BACKMESH_DOCKER_CACHE:-on} skip=
+[[ $mode == off || ${DOCKER_BUILDKIT:-1} == 0 || ${BACKMESH_AUTO_CACHE:-} == false || -n ${BUILDX_BUILDER:-} ]] && skip=1
+[[ -f $here/ready ]] || skip=1
+file=Dockerfile target=
+for ((i = 1; i <= $#; i++)); do
+  a=${!i} n=$((i + 1))
+  case $a in
+    --builder | --builder=* | --cache-from* | --cache-to*) skip=1 ;;
+    -f | --file) file=${!n-} ;;
+    --file=*) file=${a#*=} ;;
+    --target) target=${!n-} ;;
+    --target=*) target=${a#*=} ;;
+  esac
+done
+[[ -n $skip ]] && exec "$real" "${all[@]}"
+# One cache image a build: the job, the directory and the Dockerfile.
+tag=$(printf '%s\n' "${GITHUB_JOB-}" "$PWD" "$file" "$target" "${BACKMESH_DOCKER_CACHE_TAG-}" | sha256sum | cut -c1-32)
+ref=127.0.0.1:4231/backmesh-cache:$tag
+builder=$(cat "$here/builder" 2>/dev/null) || true
+BUILDX_BUILDER=${builder:-default} exec "$real" buildx build \
+  --cache-from "type=registry,ref=$ref" \
+  --cache-to "type=registry,ref=$ref,mode=max,ignore-error=true" "$@"
