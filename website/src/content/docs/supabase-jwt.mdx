@@ -1,0 +1,35 @@
+---
+title: Supabase JWT generator
+description: Sign in a Supabase test user with email and password and get its access token (JWT), decoded. Runs in your browser; your keys and password go only to your Supabase project.
+lastUpdated: 2026-11-27
+head:
+  - tag: title
+    content: 'Supabase JWT generator: get a test user’s access token | backmesh'
+---
+
+import JwtTool from '../../components/JwtTool.astro';
+
+Get a signed-in user's access token from your Supabase project, to call an API
+that checks Supabase JWTs with `curl` or a test, as
+`Authorization: Bearer <token>`. The tool signs in with email and password
+through your project's `/auth/v1/token` endpoint and shows the token with its
+header and payload decoded.
+
+Your browser sends the project key, email and password straight to your
+Supabase project and nothing to backmesh. The page has no server code, and its
+source is
+[JwtTool.astro](https://github.com/backmesh/backmesh/blob/main/website/src/components/JwtTool.astro).
+Use a test user, not a real person's account.
+
+<JwtTool provider="supabase" />
+
+## Where to find the values
+
+- **Project URL** and **key**: your project's **Connect** dialog, or
+  **Project Settings → API Keys**. Use the publishable key (`sb_publishable_…`)
+  or the legacy `anon` key, never a secret or `service_role` key.
+- The user must exist and have confirmed their email, and the Email provider
+  must be on under **Authentication → Sign In / Providers**.
+
+The token expires after the project's JWT expiry, an hour by default. Using
+Firebase instead? See the [Firebase JWT generator](/firebase-jwt/).

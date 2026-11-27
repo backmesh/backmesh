@@ -18,6 +18,8 @@ const PAGES = new Set([
   '/blog/',
   '/blog/tags/cost/',
   '/blog/tags/showcase/',
+  '/firebase-jwt/',
+  '/supabase-jwt/',
   ...POSTS,
 ]);
 
@@ -54,6 +56,13 @@ describe('the site Worker', () => {
     }
   });
 
+  it.each(['/firebase-jwt/', '/supabase-jwt/'])(
+    'serves the JWT tool at %s',
+    async (path) => {
+      expect((await get(path)).status).toBe(200);
+    },
+  );
+
   it.each([
     '/docs/selfhost',
     '/docs/Tutorials/supabase+openai',
@@ -61,8 +70,6 @@ describe('the site Worker', () => {
     '/blog/archive',
     '/blog/tags/llm',
     '/app',
-    '/firebase-jwt',
-    '/supabase-jwt',
   ])('retires the old site’s %s with a 410', async (path) => {
     const res = await get(path);
     expect(res.status).toBe(410);
@@ -78,6 +85,7 @@ describe('the site Worker', () => {
       '/blog/backmesh-vs-runs-on',
       'https://backmesh.com/blog/backmesh-vs-runs-on/',
     ],
+    ['/supabase-jwt', 'https://backmesh.com/supabase-jwt/'],
     ['/pricing', 'https://backmesh.com/#pricing'],
     ['/docs', 'https://backmesh.com/install/'],
     ['/docs/', 'https://backmesh.com/install/'],

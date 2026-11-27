@@ -3,7 +3,7 @@
 // old docs' index to the install guide, serve install.sh as text so a browser shows it, and retire the old site's
 // other paths: a 410 where this site has no page, so search engines drop
 // them. This site's own pages there, such as the blog, are served first.
-const RETIRED = /^\/(docs|blog|app|firebase-jwt|supabase-jwt)(\/|$)/;
+const RETIRED = /^\/(docs|blog|app)(\/|$)/;
 
 export interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
