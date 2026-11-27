@@ -2,9 +2,10 @@ name: Rust preinstall benchmark
 
 # What preinstalling Rust in the runner image (#160) costs every job's pull
 # (benchmarks/rust-preinstall/README.md). Builds #160's image as v0.7.2's
-# runner image plus its Rust layer into the private package
+# runner image plus its Rust layer into the package
 # ghcr.io/backmesh/backmesh-runner-bench, then on fresh runner VMs of our CI
-# installation, on AWS and GCP, pulls both images in a random order, each
+# installation, on AWS (amd64) and GCP (arm64), pulls both images in a
+# random order, each
 # into an empty dockerd, and times Rust's first use on today's image. The
 # figures are in the summary and the results artifact.
 on:
@@ -28,13 +29,14 @@ env:
 
 jobs:
   image:
-    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 20
     permissions:
       contents: read
       packages: write
-    outputs:
-      rust: ${{ env.BENCH }}@${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -47,21 +49,22 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: benchmarks/rust-preinstall
-          platforms: linux/amd64
+          platforms: linux/${{ matrix.arch }}
           build-args: BASE=${{ env.TODAY }}
-          outputs: type=image,name=${{ env.BENCH }}:pr160,push=true,oci-mediatypes=true,compression=zstd,compression-level=3
+          outputs: type=image,name=${{ env.BENCH }}:pr160-${{ matrix.arch }},push=true,oci-mediatypes=true,compression=zstd,compression-level=3
       - name: Compressed sizes
         env:
           RUST: ${{ env.BENCH }}@${{ steps.build.outputs.digest }}
+          ARCH: ${{ matrix.arch }}
         run: |
           size() {
             local raw; raw=$(docker buildx imagetools inspect --raw "$1")
             if jq -e .manifests <<<"$raw" >/dev/null; then
-              raw=$(docker buildx imagetools inspect --raw "${1%@*}@$(jq -r '.manifests[] | select(.platform.architecture == "amd64") | .digest' <<<"$raw")")
+              raw=$(docker buildx imagetools inspect --raw "${1%@*}@$(jq -r '.manifests[] | select(.platform.architecture == env.ARCH) | .digest' <<<"$raw")")
             fi
             jq '[.layers[].size] | add / 1e6 | round' <<<"$raw"
           }
-          echo "Compressed: today $(size "$TODAY") MB, #160 $(size "$RUST") MB" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Compressed, $ARCH: today $(size "$TODAY") MB, #160 $(size "$RUST") MB" | tee -a "$GITHUB_STEP_SUMMARY"
 
   probe:
     needs: [image]
@@ -95,10 +98,13 @@ jobs:
             20,
           ]
         include:
+          # Our CI installation's only GCP label is arm64.
           - cloud: aws
             label: backmesh-ubuntu-2404-4vcpu
+            arch: amd64
           - cloud: gcp
-            label: backmesh-gcp-ubuntu-2404-4vcpu
+            label: backmesh-gcp-ubuntu-2404-arm-4vcpu
+            arch: arm64
     runs-on: ${{ matrix.label }}
     timeout-minutes: 15
     permissions:
@@ -110,7 +116,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Probe
         env:
-          RUST: ${{ needs.image.outputs.rust }}
+          RUST: ${{ env.BENCH }}:pr160-${{ matrix.arch }}
           GHCR_TOKEN: ${{ github.token }}
           CLOUD: ${{ matrix.cloud }}
           INDEX: ${{ matrix.index }}
