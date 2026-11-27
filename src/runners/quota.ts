@@ -73,28 +73,59 @@ export function quotaKinds(
 }
 
 /**
- * Azure's high-memory types' families (`HIGHMEM_TYPES`): an on-demand one
- * counts against its family's vCPUs as well as the regional ones, which
- * `quotaCheck` reads alone, and a new subscription's are often 0 or 10.
+ * The families of Azure's high-memory and arm64 types (`HIGHMEM_TYPES`,
+ * `ARM_TYPES`, `ARM_HIGHMEM_TYPES`): an on-demand one counts against its
+ * family's vCPUs as well as the regional ones, which `quotaCheck` reads
+ * alone, and a new subscription's are often 0 or 10.
  */
-const HIGHMEM_FAMILIES = [
-  '"Standard EADSv5 Family vCPUs"',
-  '"Standard EASv5 Family vCPUs"',
-  '"Standard ESv5 Family vCPUs"',
+const FAMILIES = [
+  {
+    runners: 'high-memory',
+    series: 'E-series',
+    of: (c: { highmem?: true; arm?: true }) => !!c.highmem && !c.arm,
+    families: [
+      '"Standard EADSv5 Family vCPUs"',
+      '"Standard EASv5 Family vCPUs"',
+      '"Standard ESv5 Family vCPUs"',
+    ],
+  },
+  {
+    runners: 'arm64',
+    series: 'Cobalt or Ampere',
+    of: (c: { highmem?: true; arm?: true }) => !!c.arm && !c.highmem,
+    families: [
+      '"Standard DPSv6 Family vCPUs"',
+      '"Standard DPSv5 Family vCPUs"',
+    ],
+  },
+  {
+    runners: 'arm64 high-memory',
+    series: 'Cobalt',
+    of: (c: { highmem?: true; arm?: true }) => !!c.arm && !!c.highmem,
+    families: ['"Standard EPSv6 Family vCPUs"'],
+  },
 ];
 
-/** The plan's warning for Azure's on-demand high-memory labels, if any. */
-export const highmemFamilyLine = (
+/** The plan's warnings for Azure's on-demand high-memory and arm64 labels, if any. */
+export const familyLines = (
   cloud: Cloud,
-  classes: readonly { label: string; spot: boolean; highmem?: true }[],
-) => {
-  const labels = classes.filter((c) => c.highmem && !c.spot);
-  return cloud === 'azure' && labels.length
-    ? [
-        `azure's on-demand high-memory runners (${labels.map((c) => c.label).join(', ')}) also need their E-series family's vCPU quota in a region, not only its regional vCPUs: raise one of ${HIGHMEM_FAMILIES.join(', ')} to the vCPUs they should run at once.`,
-      ]
+  classes: readonly {
+    label: string;
+    spot: boolean;
+    highmem?: true;
+    arm?: true;
+  }[],
+) =>
+  cloud === 'azure'
+    ? FAMILIES.flatMap(({ runners, series, of, families }) => {
+        const labels = classes.filter((c) => of(c) && !c.spot);
+        return labels.length
+          ? [
+              `azure's on-demand ${runners} runners (${labels.map((c) => c.label).join(', ')}) also need their ${series} family's vCPU quota in a region, not only its regional vCPUs: raise ${families.length > 1 ? 'one of ' : ''}${families.join(', ')} to the vCPUs they should run at once.`,
+            ]
+          : [];
+      })
     : [];
-};
 
 /** A quota kind as plans and status name it. */
 export const KIND_NAME: Record<QuotaKind, string> = {

@@ -206,6 +206,7 @@ function setUp({
           'role-apply': undefined,
           c28: undefined,
           arm64: undefined,
+          'azure-arm64': undefined,
         },
       }),
   };
