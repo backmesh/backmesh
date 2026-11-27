@@ -73,10 +73,10 @@ was, and after the cost how many times cheaper.
 - **Caches.** Each cold run is on a new branch, with no caches. No step
   caches anything: `setup-node`'s, `setup-go`'s and `setup-uv`'s own caches
   are off.
-- **Toolchains.** `ubuntu-latest` has Rust preinstalled. backmesh's image
-  doesn't: it installs Rust from a pinned release when the job first calls
-  it, inside the measured time
-  ([backmesh#124](https://github.com/backmesh/backmesh/pull/124)).
+- **Toolchains.** `ubuntu-latest` has Rust preinstalled. In these runs,
+  backmesh's image installed Rust from a pinned release when the job first
+  called it, inside the measured time; the image has it preinstalled since
+  [backmesh#160](https://github.com/backmesh/backmesh/pull/160).
 
 ## The workflow
 
