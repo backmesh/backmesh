@@ -1,0 +1,146 @@
+name: Rust preinstall benchmark
+
+# What preinstalling Rust in the runner image (#160) costs every job's pull
+# (benchmarks/rust-preinstall/README.md). Builds #160's image as v0.7.2's
+# runner image plus its Rust layer into the private package
+# ghcr.io/backmesh/backmesh-runner-bench, then on fresh runner VMs of our CI
+# installation, on AWS and GCP, pulls both images in a random order, each
+# into an empty dockerd, and times Rust's first use on today's image. The
+# figures are in the summary and the results artifact.
+on:
+  workflow_dispatch:
+  push:
+    branches: [bench/rust-preinstall]
+
+permissions: {}
+
+concurrency:
+  group: rust-preinstall-benchmark
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  TODAY: ghcr.io/backmesh/backmesh-runner@sha256:c4604e52d1d26bbf359a2b59aa39547e60f983deb7c912387977801258a1a918
+  BENCH: ghcr.io/backmesh/backmesh-runner-bench
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      rust: ${{ env.BENCH }}@${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      # zstd -3 as image.yml pushes; the base's layers are already, so
+      # only the Rust layer is compressed here.
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: benchmarks/rust-preinstall
+          platforms: linux/amd64
+          build-args: BASE=${{ env.TODAY }}
+          outputs: type=image,name=${{ env.BENCH }}:pr160,push=true,oci-mediatypes=true,compression=zstd,compression-level=3
+      - name: Compressed sizes
+        env:
+          RUST: ${{ env.BENCH }}@${{ steps.build.outputs.digest }}
+        run: |
+          size() {
+            local raw; raw=$(docker buildx imagetools inspect --raw "$1")
+            if jq -e .manifests <<<"$raw" >/dev/null; then
+              raw=$(docker buildx imagetools inspect --raw "${1%@*}@$(jq -r '.manifests[] | select(.platform.architecture == "amd64") | .digest' <<<"$raw")")
+            fi
+            jq '[.layers[].size] | add / 1e6 | round' <<<"$raw"
+          }
+          echo "Compressed: today $(size "$TODAY") MB, #160 $(size "$RUST") MB" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  probe:
+    needs: [image]
+    name: probe ${{ matrix.cloud }} ${{ matrix.index }}
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        cloud: [aws, gcp]
+        index:
+          [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+          ]
+        include:
+          - cloud: aws
+            label: backmesh-ubuntu-2404-4vcpu
+          - cloud: gcp
+            label: backmesh-gcp-ubuntu-2404-4vcpu
+    runs-on: ${{ matrix.label }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Marker
+        run: cat "${BACKMESH_JOB_MARKS:-/dev/null}"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Probe
+        env:
+          RUST: ${{ needs.image.outputs.rust }}
+          GHCR_TOKEN: ${{ github.token }}
+          CLOUD: ${{ matrix.cloud }}
+          INDEX: ${{ matrix.index }}
+          OUT: ${{ runner.temp }}/probe.json
+        run: bash benchmarks/rust-preinstall/probe.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: probe-${{ matrix.cloud }}-${{ matrix.index }}
+          path: ${{ runner.temp }}/probe.json
+
+  report:
+    needs: [probe]
+    if: always() && needs.probe.result != 'skipped'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: probe-*
+          path: probes
+      - env:
+          IN_DIR: probes
+          OUT_FILE: results.json
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node benchmarks/rust-preinstall/report.ts | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: results
+          path: results.json
