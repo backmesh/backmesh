@@ -13,6 +13,7 @@
   "routes": [
     { "pattern": "backmesh.com", "custom_domain": true },
     { "pattern": "www.backmesh.com", "custom_domain": true },
+    { "pattern": "llmcomp.backmesh.com", "custom_domain": true },
   ],
   "workers_dev": false,
 }

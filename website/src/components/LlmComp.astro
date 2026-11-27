@@ -86,7 +86,8 @@
       (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!,
     );
 
-  // The current chat models: LiteLLM's undated names, without fine-tunes.
+  // The current chat models: LiteLLM's undated names, without fine-tunes,
+  // special-purpose models or ones past their deprecation date.
   const models = (): Model[] =>
     Object.entries(TOKEN_COSTS)
       .filter(
@@ -95,7 +96,8 @@
           c.litellm_provider! in PROVIDERS &&
           c.input_cost_per_token > 0 &&
           c.output_cost_per_token > 0 &&
-          !/^ft:|\d{4}-?\d{2}-?\d{2}|-\d{4}$|audio|search|tts|computer-use|robotics|research|exp/.test(
+          !(c.deprecation_date && new Date(c.deprecation_date) < new Date()) &&
+          !/^ft:|\d{4}-?\d{2}-?\d{2}|-\d{4}$|-0\d\d$|-\d\d-\d\d|audio|search|tts|computer-use|robotics|research|exp/.test(
             id,
           ),
       )
@@ -290,7 +292,6 @@
     width: 100%;
     border-collapse: collapse;
     font-size: var(--sl-text-sm);
-    font-variant-numeric: tabular-nums;
   }
   th {
     position: sticky;

@@ -18,6 +18,7 @@ const PAGES = new Set([
   '/blog/',
   '/blog/tags/cost/',
   '/blog/tags/showcase/',
+  '/llmcomp/',
   ...POSTS,
 ]);
 
@@ -86,6 +87,25 @@ describe('the site Worker', () => {
     const res = await get(path);
     expect([res.status, res.headers.get('location')]).toEqual([301, location]);
   });
+
+  it('serves LLMcomp', async () => {
+    expect((await get('/llmcomp/')).status).toBe(200);
+  });
+
+  it.each([
+    ['/', 'https://backmesh.com/llmcomp/'],
+    ['/?prompt=hi', 'https://backmesh.com/llmcomp/?prompt=hi'],
+    ['/anything', 'https://backmesh.com/llmcomp/'],
+  ])(
+    'sends llmcomp.backmesh.com%s to %s with a 301',
+    async (path, location) => {
+      const res = await get(path, 'llmcomp.backmesh.com');
+      expect([res.status, res.headers.get('location')]).toEqual([
+        301,
+        location,
+      ]);
+    },
+  );
 
   it('sends www to the apex with a 301', async () => {
     const res = await get('/blog/', 'www.backmesh.com');

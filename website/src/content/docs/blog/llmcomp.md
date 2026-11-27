@@ -22,7 +22,7 @@ backmesh now [runs GitHub Actions runners](/) in your own cloud._
 I often want a quick comparison of different LLMs to see the result, price and
 latency of the same task or prompt.
 
-So I put together LLMcomp, a small site that sends one prompt to a few popular
+So I put together [LLMcomp](/llmcomp/), a small site that sends one prompt to a few popular
 LLMs and shows, for each one, its answer, the prompt and completion token
 counts, the cost and how long it took. It had Claude Sonnet, DeepSeek and
 GPT-4o, the ones I compare most.
@@ -33,4 +33,5 @@ AgentOps' [tokencost](https://github.com/AgentOps-AI/tokencost) that runs in
 the browser. It counts tokens and prices them from a table of each model's
 per-token prices. The site is about 400 lines, and its code is in the
 repository's [`demo/`](https://github.com/backmesh/tokencost/tree/main/demo)
-folder. llmcomp.backmesh.com went offline with the old product.
+folder. LLMcomp now lives at [/llmcomp/](/llmcomp/), with current
+models, and runs the prompt with your own OpenAI or Anthropic key.
