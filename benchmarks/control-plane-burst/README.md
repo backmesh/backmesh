@@ -24,6 +24,12 @@ Figures, in the leg's summary and its `burst-<cloud>` artifact:
 - **The control plane VM**, from its cloud's metrics: on AWS, CPU and CPU
   credit balance; on GCP, memory (`balloon/ram_used` of `ram_size`) and CPU.
   anycloud's API has no figure for its pods' memory or restarts.
+- **Cache tokens**: the listener's log through the burst
+  (`listener.log`), its `cache token ready`, `cache job mismatch` and
+  `job start reads` lines (`cache-tokens.log`), and the tokens' count by
+  where the listener heard of the start. With `burst-hold=<s>`, each job
+  sleeps that long after `Marker`, so a token later than the short job
+  still lands and its log's Complete runner step says when.
 
 On a timeout or a cancel, `run.ts` pushes `burst-cancel/<nonce>`, whose
 workflow cancels the burst's run. Otherwise its queued jobs would wait for
