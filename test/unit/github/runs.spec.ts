@@ -4,9 +4,11 @@ import {
   gateGitHub,
   recentRuns,
   runBranch,
+  runJobs,
   workflowFiles,
   workflowRuns,
 } from '../../../src/github/runs.js';
+import { retryingFetch } from '../../../src/github/retry.js';
 import { fakeGitHub, json, octokitFor } from './fake-github.js';
 
 const RUNS = 'https://api.github.com/repos/acme/app/actions/runs/7';
@@ -276,5 +278,83 @@ describe('gateGitHub', () => {
       'queued',
       'in_progress',
     ]);
+  });
+});
+
+describe('runJobs', () => {
+  const job = (name: string, runner = '') => ({
+    name,
+    labels: ['backmesh-4'],
+    runner_name: runner,
+    status: runner ? 'in_progress' : 'queued',
+    started_at: runner ? '2026-11-22T15:49:15Z' : null,
+    run_attempt: 2,
+    head_sha: 'abc',
+  });
+  const limit = {
+    'x-ratelimit-remaining': '4000',
+    'x-ratelimit-limit': '5000',
+    'x-ratelimit-reset': '1800000000',
+  };
+  const rate = { remaining: 4000, limit: 5000, reset: 1_800_000_000_000 };
+
+  it("reads a run's jobs on its last ETag, with the rate limit, and a run past one page with none", async () => {
+    const { fetch, calls } = fakeGitHub({
+      [`GET ${RUNS}/jobs`]: [
+        json(
+          200,
+          { total_count: 1, jobs: [job('a')] },
+          { etag: '"e1"', ...limit },
+        ),
+        () => new Response(null, { status: 304, headers: limit }),
+        json(
+          200,
+          { total_count: 101, jobs: [job('a', 'bmabc12-a4-00000001')] },
+          { etag: '"e2"' },
+        ),
+      ],
+    });
+    const read = runJobs(octokitFor(fetch), fetch);
+
+    expect(await read(RUN)).toEqual({
+      etag: '"e1"',
+      jobs: [
+        {
+          name: 'a',
+          labels: ['backmesh-4'],
+          runnerName: '',
+          startedAt: null,
+          done: false,
+          attempt: '2:abc',
+        },
+      ],
+      rate,
+    });
+    expect(calls[0]!.headers.get('if-none-match')).toBeNull();
+    expect(await read(RUN, '"e1"')).toEqual({
+      etag: '"e1"',
+      jobs: undefined,
+      rate,
+    });
+    expect(calls[1]!.headers.get('if-none-match')).toBe('"e1"');
+    // The first page's ETag can't say the second didn't change.
+    const paged = await read(RUN, '"e1"');
+    expect(paged.etag).toBeUndefined();
+    expect(paged.jobs!.map((j) => [j.name, j.startedAt])).toEqual([
+      ['a', Date.parse('2026-11-22T15:49:15Z')],
+    ]);
+    expect(calls).toHaveLength(3);
+  });
+
+  it("gives a 429 to the caller at once, past the octokit's retrying fetch", async () => {
+    const { fetch, calls } = fakeGitHub({
+      [`GET ${RUNS}/jobs`]: json(429, {}, { 'retry-after': '30' }),
+    });
+    const octokit = octokitFor(retryingFetch(fetch, { sleep: async () => {} }));
+    await expect(runJobs(octokit, fetch)(RUN)).rejects.toMatchObject({
+      status: 429,
+      response: { headers: { 'retry-after': '30' } },
+    });
+    expect(calls).toHaveLength(1);
   });
 });

@@ -342,7 +342,74 @@ describe('CacheTokens', () => {
     expect(flaky.mints).toHaveLength(3);
     expect(
       flaky.logs.filter((entry) => entry.msg === 'cache token ready'),
-    ).toEqual([{ msg: 'cache token ready', runner: name, ms: 30_000 }]);
+    ).toEqual([
+      {
+        msg: 'cache token ready',
+        runner: name,
+        ms: 30_000,
+        source: 'JobStarted',
+        heard: null,
+      },
+    ]);
+  });
+
+  it('mints once for a start from the jobs list and its later JobStarted, and logs which came first', async () => {
+    const t = tokens();
+    await t.cache.prepare(name);
+    expect(t.cache.waiting(name)).toBe(true);
+    t.clock.set(5_000);
+    t.cache.started(route, started(name), 3_000);
+    expect(t.cache.waiting(name)).toBe(false);
+    t.cache.started(route, started(name));
+    await t.settle();
+    expect(t.mints).toHaveLength(1);
+    expect(t.logs.filter((e) => e.msg === 'cache token ready')).toEqual([
+      {
+        msg: 'cache token ready',
+        runner: name,
+        ms: 0,
+        source: 'jobs list',
+        heard: 2_000,
+      },
+    ]);
+    expect(t.cache.waiting('bmabc12-a4-00000009')).toBe(false);
+    // A JobStarted naming another job than the list's is logged, not minted.
+    t.cache.started(route, { ...started(name), jobId: 'other' });
+    expect(t.mints).toHaveLength(1);
+    expect(t.logs.at(-1)).toMatchObject({
+      msg: 'cache job mismatch',
+      runner: name,
+      started: 'other',
+    });
+  });
+
+  it("reads a run's facts once for its burst's runners, and again after a failed read", async () => {
+    const reads: number[] = [];
+    let fail = true;
+    const fake = fakeApi();
+    const cache = new CacheTokens({
+      api: fake.api,
+      install: 'abc12',
+      buckets: [],
+      run: async (_, __, runId) => {
+        reads.push(runId);
+        if (fail) throw new Error('502');
+        return run();
+      },
+      region: async () => 'us-east-2',
+      log: () => {},
+      now: fake.clock.get,
+    });
+    const names = [1, 2, 3].map((i) => `bmabc12-a4-0000000${i}`);
+    for (const n of names) await cache.prepare(n);
+    cache.started(route, started(names[0]!));
+    await new Promise((r) => setTimeout(r, 10));
+    fail = false;
+    cache.started(route, started(names[1]!));
+    cache.started(route, started(names[2]!));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(reads).toEqual([99, 99]);
+    expect(fake.mints).toHaveLength(2);
   });
 
   it('keeps a Secret deleted when its Job ends during a mint', async () => {
