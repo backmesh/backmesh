@@ -12,7 +12,8 @@
     "@fontsource-variable/schibsted-grotesk": "5.3.0",
     "@fontsource/fragment-mono": "5.3.0",
     "astro": "7.4.6",
-    "starlight-blog": "0.30.2"
+    "starlight-blog": "0.30.2",
+    "tokencost-js": "1.0.1"
   },
   "devDependencies": {
     "@resvg/resvg-js": "2.6.2",

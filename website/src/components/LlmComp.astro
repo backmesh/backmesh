@@ -1,0 +1,359 @@
+---
+// LLMcomp: one prompt's estimated cost on each current chat model, from
+// tokencost-js and LiteLLM's price list, and, with the visitor's own OpenAI
+// or Anthropic key, each model's answer, tokens, cost and time. Everything
+// runs in the browser: the keys go only to api.openai.com and
+// api.anthropic.com, and nothing goes to backmesh.
+---
+
+<form class="llmcomp not-content" autocomplete="off">
+  <label>
+    <span>Prompt</span>
+    <textarea name="prompt" rows="6" required
+      >Explain in two sentences why the sky is blue.</textarea
+    >
+  </label>
+  <div class="fields">
+    <label>
+      <span>Expected answer length, tokens</span>
+      <input name="output" type="number" min="0" step="100" value="500" />
+    </label>
+    <label>
+      <span>Filter models</span>
+      <input name="filter" type="search" placeholder="sonnet, gpt-5, flash…" />
+    </label>
+  </div>
+  <p class="note prices">Loading LiteLLM's prices…</p>
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Run</th>
+          <th>Model</th>
+          <th>Input / output per 1M tokens</th>
+          <th>Estimated cost</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <details>
+    <summary>Run the ticked models with your own API keys</summary>
+    <p class="note">
+      Your browser sends the prompt and each key straight to OpenAI or Anthropic
+      and nothing to backmesh. The keys stay in this tab and are gone when you
+      leave the page. Each run is billed to your account.
+    </p>
+    <div class="fields">
+      <label>
+        <span>OpenAI API key</span>
+        <input name="openai" type="password" spellcheck="false" />
+      </label>
+      <label>
+        <span>Anthropic API key</span>
+        <input name="anthropic" type="password" spellcheck="false" />
+      </label>
+    </div>
+    <button type="submit">Run</button>
+  </details>
+  <div class="results"></div>
+</form>
+
+<script>
+  import {
+    TOKEN_COSTS,
+    calculateCostByTokens,
+    countStringTokens,
+    updateTokenCosts,
+  } from 'tokencost-js';
+
+  type Model = { id: string; name: string; provider: string };
+  const PROVIDERS: Record<string, string> = {
+    openai: 'OpenAI',
+    anthropic: 'Anthropic',
+    gemini: 'Google',
+    deepseek: 'DeepSeek',
+  };
+  const RUNS = new Set(['openai', 'anthropic']);
+
+  const money = (v: number) =>
+    v >= 0.01 ? `$${v.toFixed(2)}` : v > 0 ? `$${v.toPrecision(2)}` : '$0';
+  const perMillion = (id: string, type: 'input' | 'output') =>
+    `$${+calculateCostByTokens(1e6, id, type).toFixed(2)}`;
+  const escape = (s: string) =>
+    s.replace(
+      /[&<>"]/g,
+      (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!,
+    );
+
+  // The current chat models: LiteLLM's undated names, without fine-tunes.
+  const models = (): Model[] =>
+    Object.entries(TOKEN_COSTS)
+      .filter(
+        ([id, c]) =>
+          c.mode === 'chat' &&
+          c.litellm_provider! in PROVIDERS &&
+          c.input_cost_per_token > 0 &&
+          c.output_cost_per_token > 0 &&
+          !/^ft:|\d{4}-?\d{2}-?\d{2}|-\d{4}$|audio|search|tts|computer-use|robotics|research|exp/.test(
+            id,
+          ),
+      )
+      .map(([id, c]) => ({
+        id,
+        name: id.replace(/^[a-z]+\//, ''),
+        provider: c.litellm_provider!,
+      }))
+      .filter((m, i, all) => all.findIndex((n) => n.name === m.name) === i);
+
+  // The page's one call into an LLM API, in the provider's own shape.
+  const run = async (m: Model, prompt: string, key: string) => {
+    const start = performance.now();
+    const res =
+      m.provider === 'openai'
+        ? await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              authorization: `Bearer ${key}`,
+            },
+            body: JSON.stringify({
+              model: m.name,
+              messages: [{ role: 'user', content: prompt }],
+            }),
+          })
+        : await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-api-key': key,
+              'anthropic-version': '2023-06-01',
+              'anthropic-dangerous-direct-browser-access': 'true',
+            },
+            body: JSON.stringify({
+              model: m.name,
+              max_tokens: 4096,
+              messages: [{ role: 'user', content: prompt }],
+            }),
+          });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message ?? res.statusText);
+    const seconds = (performance.now() - start) / 1000;
+    const [answer, input, output] =
+      m.provider === 'openai'
+        ? [
+            data.choices[0].message.content,
+            data.usage.prompt_tokens,
+            data.usage.completion_tokens,
+          ]
+        : [
+            data.content
+              .filter((b: { type: string }) => b.type === 'text')
+              .map((b: { text: string }) => b.text)
+              .join(''),
+            data.usage.input_tokens,
+            data.usage.output_tokens,
+          ];
+    const cost =
+      calculateCostByTokens(input, m.id, 'input') +
+      calculateCostByTokens(output, m.id, 'output');
+    return { answer, input, output, cost, seconds };
+  };
+
+  for (const form of document.querySelectorAll<HTMLFormElement>('.llmcomp')) {
+    const field = (name: string) =>
+      form.elements.namedItem(name) as HTMLInputElement;
+    const body = form.querySelector('tbody')!;
+    const results = form.querySelector<HTMLElement>('.results')!;
+    const ticked = new Set(['gpt-5-mini', 'claude-haiku-4-5']);
+    let all: Model[] = [];
+
+    const render = () => {
+      // One count with OpenAI's o200k tokenizer prices every model.
+      const input = countStringTokens(field('prompt').value, 'gpt-4o');
+      const output = Math.max(0, Number(field('output').value) || 0);
+      const filter = field('filter').value.trim().toLowerCase();
+      body.innerHTML = all
+        .filter((m) => `${m.provider} ${m.name}`.includes(filter))
+        .map((m) => ({
+          ...m,
+          cost:
+            calculateCostByTokens(input, m.id, 'input') +
+            calculateCostByTokens(output, m.id, 'output'),
+        }))
+        .sort((a, b) => a.cost - b.cost)
+        .map(
+          (m) =>
+            `<tr><td>${RUNS.has(m.provider) ? `<input type="checkbox" value="${escape(m.id)}" aria-label="Run ${escape(m.name)}"${ticked.has(m.id) ? ' checked' : ''}>` : ''}</td>` +
+            `<td>${escape(m.name)} <small>${PROVIDERS[m.provider]}</small></td>` +
+            `<td>${perMillion(m.id, 'input')} / ${perMillion(m.id, 'output')}</td>` +
+            `<td>${money(m.cost)}</td></tr>`,
+        )
+        .join('');
+    };
+
+    body.addEventListener('change', (e) => {
+      const box = e.target as HTMLInputElement;
+      if (box.checked) ticked.add(box.value);
+      else ticked.delete(box.value);
+    });
+    for (const name of ['prompt', 'output', 'filter']) {
+      field(name).addEventListener('input', render);
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const prompt = field('prompt').value;
+      const chosen = all.filter((m) => ticked.has(m.id));
+      if (!chosen.length) {
+        results.innerHTML = '<p class="error">Tick a model to run.</p>';
+        return;
+      }
+      results.innerHTML = chosen
+        .map(
+          (m) =>
+            `<section data-id="${escape(m.id)}"><h3>${escape(m.name)}</h3><p class="note">Running…</p></section>`,
+        )
+        .join('');
+      await Promise.all(
+        chosen.map(async (m) => {
+          const out = results.querySelector(`[data-id="${CSS.escape(m.id)}"]`)!;
+          const key = field(m.provider).value.trim();
+          try {
+            if (!key) throw new Error(`Add your ${PROVIDERS[m.provider]} key.`);
+            const r = await run(m, prompt, key);
+            out.innerHTML =
+              `<h3>${escape(m.name)}</h3>` +
+              `<p class="note">${r.input.toLocaleString('en-US')} input and ${r.output.toLocaleString('en-US')} output tokens · ${money(r.cost)} · ${r.seconds.toFixed(1)} s</p>` +
+              `<pre>${escape(r.answer)}</pre>`;
+          } catch (err) {
+            out.innerHTML = `<h3>${escape(m.name)}</h3><p class="error">${escape((err as Error).message)}</p>`;
+          }
+        }),
+      );
+    });
+
+    const prices = form.querySelector<HTMLElement>('.prices')!;
+    updateTokenCosts()
+      .then(() => {
+        prices.textContent =
+          "Prices: LiteLLM's current price list, fetched from GitHub just now.";
+      })
+      .catch(() => {
+        prices.textContent =
+          "Couldn't fetch LiteLLM's current prices; these are tokencost-js's built-in ones from early 2025.";
+      })
+      .finally(() => {
+        all = models();
+        render();
+      });
+  }
+</script>
+
+<style>
+  .llmcomp {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+  .fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 2rem;
+  }
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: var(--sl-text-sm);
+  }
+  input:not([type='checkbox']),
+  textarea {
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--bm-line);
+    border-radius: 4px;
+    background: var(--sl-color-bg);
+    color: var(--sl-color-white);
+    font: inherit;
+  }
+  .fields input {
+    width: 16rem;
+    max-width: 100%;
+  }
+  .scroll {
+    max-height: 28rem;
+    overflow: auto;
+    border-bottom: 1px solid var(--sl-color-hairline);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--sl-text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+  th {
+    position: sticky;
+    top: 0;
+    background: var(--sl-color-bg);
+  }
+  th,
+  td {
+    padding: 0.45rem 0.75rem 0.45rem 0;
+    border-bottom: 1px solid var(--sl-color-hairline);
+    text-align: left;
+  }
+  td small,
+  .note {
+    color: var(--sl-color-gray-3);
+  }
+  .note {
+    margin: 0;
+    font-size: var(--sl-text-sm);
+  }
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+  details[open] {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  button {
+    align-self: flex-start;
+    padding: 0.55rem 1.1rem;
+    border: 0;
+    border-radius: 4px;
+    background: var(--bm-accent);
+    color: var(--bm-on-accent);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover {
+    background: var(--bm-accent-hover);
+  }
+  .results :global(h3) {
+    margin: 1rem 0 0.35rem;
+    font-size: var(--sl-text-base);
+  }
+  .results :global(pre) {
+    margin: 0.5rem 0 0;
+    padding: 0.75rem;
+    border: 1px solid var(--bm-hair);
+    border-radius: 4px;
+    background: var(--sl-color-gray-6);
+    font-family: var(--bm-sans);
+    font-size: var(--sl-text-sm);
+    white-space: pre-wrap;
+  }
+  .error,
+  .results :global(.error) {
+    margin: 0;
+    color: #c62828;
+  }
+  :global([data-theme='dark']) .results :global(.error) {
+    color: #ff8a80;
+  }
+</style>

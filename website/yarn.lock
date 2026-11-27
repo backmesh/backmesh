@@ -2,6 +2,11 @@
 # yarn lockfile v1
 
 
+"@anthropic-ai/sdk@^0.34.0-alpha.0":
+  version "0.34.0-alpha.0"
+  resolved "https://registry.yarnpkg.com/@anthropic-ai/sdk/-/sdk-0.34.0-alpha.0.tgz#12967d22ef4fac2895d002332e2d3a253e1caebf"
+  integrity sha512-OyWJmqO5F3vggXeHXAlWGR3lCOxFuVDbOlFr+s5eVM67xn3WF4rf/LO/QHn9+8cZSL1BgR9e2a3ajtaAXy97FA==
+
 "@astrojs/compiler-binding-android-arm64@0.5.2":
   version "0.5.2"
   resolved "https://registry.yarnpkg.com/@astrojs/compiler-binding-android-arm64/-/compiler-binding-android-arm64-0.5.2.tgz#1726f1574102b76c1956b4525ce59aaac0179235"
@@ -1462,7 +1467,7 @@ bail@^2.0.0:
   resolved "https://registry.yarnpkg.com/bail/-/bail-2.0.2.tgz#d26f5cd8fe5d6f832a31517b9f7c356040ba6d5d"
   integrity sha512-0xO6mYd7JB2YesxDKplafRpsiOzPt9V02ddPCLbY1xYGPOX24NTyN50qnUxgCPcSoYMhKpAuBTjQoRZCAkUDRw==
 
-base64-js@^1.1.2, base64-js@^1.3.0:
+base64-js@^1.1.2, base64-js@^1.3.0, base64-js@^1.5.1:
   version "1.5.1"
   resolved "https://registry.yarnpkg.com/base64-js/-/base64-js-1.5.1.tgz#1b1b440160a5bf7ad40b650f095963481903930a"
   integrity sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==
@@ -2317,6 +2322,13 @@ is-unsafe@^2.0.3:
   version "2.0.3"
   resolved "https://registry.yarnpkg.com/is-unsafe/-/is-unsafe-2.0.3.tgz#c8bc72c9d354dc9483dab9c26ff69bf5ec68d7b0"
   integrity sha512-ZBllczCCO267vgdFb6Tq3pv+LhHaCiGMdr+ZsuL+OopruAg7S+3ZDs1vD0RPC0uSrkjzbraxaGjtX1YBxjPeFQ==
+
+js-tiktoken@^1.0.19:
+  version "1.0.21"
+  resolved "https://registry.yarnpkg.com/js-tiktoken/-/js-tiktoken-1.0.21.tgz#368a9957591a30a62997dd0c4cf30866f00f8221"
+  integrity sha512-biOj/6M5qdgx5TKjDnFT1ymSpM5tbd3ylwDtrQvFQSu0Z7bBYko2dF+W/aUkXUPuk6IVpRxk/3Q2sHOzGlS36g==
+  dependencies:
+    base64-js "^1.5.1"
 
 jsonc-parser@^3.3.1:
   version "3.3.1"
@@ -3813,6 +3825,14 @@ tinyps@^0.5.1:
   version "0.5.1"
   resolved "https://registry.yarnpkg.com/tinyps/-/tinyps-0.5.1.tgz#2a1e313067badcdf8d5cb86f734514178e57147f"
   integrity sha512-B6Ykif5HflC3AdDkS4Zst/2muYVfeXoVMy+KorqH80s/1x4vunIORpNySH681X7fjj+dFM9MDKD6/Hsccjb87Q==
+
+tokencost-js@1.0.1:
+  version "1.0.1"
+  resolved "https://registry.yarnpkg.com/tokencost-js/-/tokencost-js-1.0.1.tgz#adda929a7a82d7c4e69bed317308eb75c760b0e8"
+  integrity sha512-Wz+huT9oBrn2Jj0OBCxEy3Mn99hN4bc/L5NJlcspBOKlLThrMbh3OIprmTghPn99UYyEWtON/cYcjld41FfQ1g==
+  dependencies:
+    "@anthropic-ai/sdk" "^0.34.0-alpha.0"
+    js-tiktoken "^1.0.19"
 
 trim-lines@^3.0.0:
   version "3.0.1"

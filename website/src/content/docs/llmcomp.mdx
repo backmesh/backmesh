@@ -1,0 +1,37 @@
+---
+title: 'LLMcomp: compare LLM prices on one prompt'
+description: Paste a prompt to see what it costs on each current OpenAI, Anthropic, Google and DeepSeek model, and, with your own API keys, compare their answers, tokens, cost and speed. Runs in your browser.
+lastUpdated: 2026-11-27
+head:
+  - tag: title
+    content: 'LLMcomp: compare LLM API prices and answers for the same prompt | backmesh'
+---
+
+import LlmComp from '../../components/LlmComp.astro';
+
+Paste a prompt to see what it costs on each current chat model from OpenAI,
+Anthropic, Google and DeepSeek, cheapest first. To compare the answers too,
+tick models and run them with your own OpenAI or Anthropic API key. Each
+answer shows its tokens, cost and how long it took.
+
+The page runs in your browser and sends nothing to backmesh. It fetches the
+prices from GitHub. With your keys, it sends the prompt straight to OpenAI and
+Anthropic.
+
+<LlmComp />
+
+## How the estimate works
+
+The prices are [LiteLLM's](https://github.com/BerriAI/litellm) per-token list,
+fetched through [tokencost-js](https://github.com/backmesh/tokencost), our
+JavaScript port of AgentOps' [tokencost](https://github.com/AgentOps-AI/tokencost).
+The prompt's tokens are counted once, with OpenAI's o200k tokenizer, and the
+answer is the length you enter. Other providers' tokenizers count the same text
+somewhat differently, so treat their rows as estimates. A run uses the tokens
+the API reports. Reasoning tokens count as output and can make a run cost more
+than the estimate.
+
+The page's source is
+[LlmComp.astro](https://github.com/backmesh/backmesh/blob/main/website/src/components/LlmComp.astro).
+It replaces llmcomp.backmesh.com, from our
+[2025 post](/blog/llmcomp/).
