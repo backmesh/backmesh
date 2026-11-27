@@ -906,8 +906,16 @@ jobs:
           if [[ $ROLE_GUARD != failure ]]; then
             [[ $(az group exists --name anycloud-role) == false ]] || left+=(resource-group:anycloud-role)
             left+=($(az deployment sub list --query "[?name == 'anycloud-role'].name" --output tsv | named deployment:))
-            left+=($(az role definition list --name "Anycloud role connection $AZURE_SUBSCRIPTION_ID" \
-              --scope "/subscriptions/$AZURE_SUBSCRIPTION_ID" --query '[].name' --output tsv | named role-definition:))
+            # Azure still lists a role definition for a while after the
+            # cleanup's delete (about 90 s in run 45910991653), so it's left
+            # only if it's still there 5 minutes on.
+            for tries in {1..20}; do
+              definitions=$(az role definition list --name "Anycloud role connection $AZURE_SUBSCRIPTION_ID" \
+                --scope "/subscriptions/$AZURE_SUBSCRIPTION_ID" --query '[].name' --output tsv)
+              [[ -n ${definitions//[[:space:]]/} && $tries -lt 20 ]] || break
+              sleep 15
+            done
+            left+=($(named role-definition: <<<"$definitions"))
           fi
           left=($(printf '%s\n' "${left[@]}" | sort -u))
           if ((${#left[@]})); then
