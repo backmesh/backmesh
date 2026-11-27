@@ -667,8 +667,8 @@ jobs:
       # label: the proxy on this cloud's per-job token, across a renewal.
       - name: sccache on the test org's runners
         id: sccache
-        if: ${{ inputs.sccache }}
-        timeout-minutes: 110
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && inputs.sccache }}
+        timeout-minutes: 55
         env:
           DEPLOY_KEY: ${{ secrets.E2E_TEST_ORG_DEPLOY_KEY }}
           TARGET_REPO: ${{ inputs.org }}/e2e
@@ -696,8 +696,8 @@ jobs:
       # the leg's first label: the proxy on this cloud's per-job token.
       - name: Docker cache on the test org's runners
         id: docker-cache
-        if: ${{ inputs.dockercache }}
-        timeout-minutes: 110
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && inputs.dockercache }}
+        timeout-minutes: 50
         env:
           DEPLOY_KEY: ${{ secrets.E2E_TEST_ORG_DEPLOY_KEY }}
           TARGET_REPO: ${{ inputs.org }}/e2e

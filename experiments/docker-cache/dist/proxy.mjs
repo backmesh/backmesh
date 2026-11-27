@@ -232,7 +232,7 @@ var used, tokens = async () => {
   if (used = await current(), !used)
     throw Error("no token yet");
   return used;
-}, local = process.env.DOCKER_CACHE_LOCAL_STORE, store = local ? {
+}, local = process.env.DOCKER_CACHE_LOCAL_STORE, open = (signal) => local ? {
   async list(prefix) {
     await tokens();
     let dir = join2(local, prefix);
@@ -248,13 +248,13 @@ var used, tokens = async () => {
   async put(k, body) {
     await tokens(), await mkdir(dirname(join2(local, k)), { recursive: !0 }), await writeFile2(join2(local, k), Buffer.from(await body.arrayBuffer()));
   }
-} : openStore(tokens), status = (e) => Number(/: (\d{3}) /.exec(String(e.message))?.[1] ?? 0), key = (ref) => ref.replace(":", "-"), refs = (file, own = !1) => file ? [
+} : openStore(tokens, globalThis.fetch, signal), store = open(), status = (e) => Number(/: (\d{3}) /.exec(String(e.message))?.[1] ?? 0), key = (ref) => ref.replace(":", "-"), refs = (file, own = !1) => file ? [
   ...new Set((own ? [file.prefixes.own] : [file.prefixes.own, file.prefixes.base, file.prefixes.default]).filter((p) => !!p))
 ] : [];
-async function find(at, name) {
+async function find(s, at, name) {
   for (let ref of at)
     try {
-      let res = await store.get(`${ref}${DIR}${name}`);
+      let res = await s.get(`${ref}${DIR}${name}`);
       return noteToken(used).ok++, res;
     } catch (e) {
       if (status(e) !== 404 && status(e) !== 403)
@@ -263,15 +263,20 @@ async function find(at, name) {
     }
   return;
 }
-var within = (ms, p) => Promise.race([p, sleep2(ms).then(() => {
-  return;
-})]);
-async function findManifest(at, name) {
+async function within(ms, lookup) {
+  let ac = new AbortController, late = sleep2(ms).then(() => {
+    return;
+  }), found = await Promise.race([lookup(open(ac.signal)), late]);
+  if (found === void 0)
+    ac.abort();
+  return found;
+}
+async function findManifest(s, at, name) {
   for (let ref of at) {
-    let res = await find([ref], name);
+    let res = await find(s, [ref], name);
     if (!res)
       continue;
-    let body = Buffer.from(await res.arrayBuffer()), m = JSON.parse(body.toString()), blobs = new Set(await store.list(`${ref}${DIR}blobs/`)), missing = [m.config, ...m.layers ?? []].filter((d) => !d || !blobs.has(`${ref}${DIR}blobs/${key(d.digest)}`)).length;
+    let body = Buffer.from(await res.arrayBuffer()), m = JSON.parse(body.toString()), blobs = new Set(await s.list(`${ref}${DIR}blobs/`)), missing = [m.config, ...m.layers ?? []].filter((d) => !d || !blobs.has(`${ref}${DIR}blobs/${key(d.digest)}`)).length;
     if (!missing)
       return { body, type: m.mediaType };
     stats.incomplete++, log({ msg: "incomplete manifest", ref, missing });
@@ -291,7 +296,7 @@ createServer(async (req, res) => {
       return res.writeHead(200, { "docker-distribution-api-version": "registry/2.0" }), res.end();
     if ((m = BLOB.exec(path)) && (req.method === "GET" || req.method === "HEAD")) {
       stats.reads++;
-      let found = await within(LOOKUP_MS, find(refs(file, req.method === "HEAD"), `blobs/${key(m[2])}`));
+      let digest = m[2], found = await within(LOOKUP_MS, (st) => find(st, refs(file, req.method === "HEAD"), `blobs/${key(digest)}`));
       if (!found)
         return stats.misses++, res.writeHead(404), res.end();
       stats.hits++;
@@ -346,7 +351,7 @@ createServer(async (req, res) => {
       }
       if (req.method === "GET" || req.method === "HEAD") {
         stats.reads++;
-        let ready = file ?? await current(MANIFEST_WAIT_MS), found = await within(LOOKUP_MS, findManifest(refs(ready), `manifests/${key(ref)}`));
+        let ready = file ?? await current(MANIFEST_WAIT_MS), found = await within(LOOKUP_MS, (st) => findManifest(st, refs(ready), `manifests/${key(ref)}`));
         if (!found)
           return stats.misses++, res.writeHead(404), res.end();
         stats.hits++;

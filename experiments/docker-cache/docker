@@ -37,4 +37,4 @@ ref=127.0.0.1:4231/backmesh-cache:$tag
 builder=$(cat "$here/builder" 2>/dev/null) || true
 BUILDX_BUILDER=${builder:-default} exec "$real" buildx build \
   --cache-from "type=registry,ref=$ref" \
-  --cache-to "type=registry,ref=$ref,mode=max,ignore-error=true" "$@"
+  --cache-to "type=registry,ref=$ref,mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true" "$@"

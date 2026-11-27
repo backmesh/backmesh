@@ -33,7 +33,7 @@ const env = (name: string) => {
 const repo = env('TARGET_REPO');
 const label = env('LABEL');
 const out = env('OUTPUT_DIR');
-const RESULT_WAIT_MS = 100 * 60_000;
+const RESULT_WAIT_MS = 45 * 60_000;
 const here = new URL('.', import.meta.url).pathname;
 const nonce = randomUUID();
 const BRANCH = `docker-cache/${nonce}`;

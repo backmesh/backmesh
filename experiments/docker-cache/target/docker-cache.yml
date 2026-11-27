@@ -22,7 +22,7 @@ defaults:
 jobs:
   docker-cache:
     runs-on: __LABEL__
-    timeout-minutes: 90
+    timeout-minutes: 40
     permissions:
       contents: write # the row, to the results branch
     env:

@@ -20,7 +20,7 @@ defaults:
 jobs:
   sccache:
     runs-on: __LABEL__
-    timeout-minutes: 90
+    timeout-minutes: 45
     permissions:
       contents: write # the row, to the results branch
     env:

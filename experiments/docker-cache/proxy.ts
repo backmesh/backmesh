@@ -109,26 +109,32 @@ const tokens = async () => {
 // A local directory in place of the bucket, to try the proxy without a
 // cloud: DOCKER_CACHE_LOCAL_STORE=<dir>, with any ready token file.
 const local = process.env.DOCKER_CACHE_LOCAL_STORE;
-const store: Store = local
-  ? {
-      async list(prefix) {
-        await tokens();
-        const dir = join(local, prefix);
-        if (!(await exists(dir))) return [];
-        return (await readdir(dir)).map((f) => `${prefix}${f}`);
-      },
-      async get(k) {
-        await tokens();
-        if (!(await exists(join(local, k)))) throw new Error(`GET ${k}: 404 `);
-        return new Response(await readFile(join(local, k)));
-      },
-      async put(k, body) {
-        await tokens();
-        await mkdir(dirname(join(local, k)), { recursive: true });
-        await writeFile(join(local, k), Buffer.from(await body.arrayBuffer()));
-      },
-    }
-  : openStore(tokens);
+const open = (signal?: AbortSignal): Store =>
+  local
+    ? {
+        async list(prefix) {
+          await tokens();
+          const dir = join(local, prefix);
+          if (!(await exists(dir))) return [];
+          return (await readdir(dir)).map((f) => `${prefix}${f}`);
+        },
+        async get(k) {
+          await tokens();
+          if (!(await exists(join(local, k))))
+            throw new Error(`GET ${k}: 404 `);
+          return new Response(await readFile(join(local, k)));
+        },
+        async put(k, body) {
+          await tokens();
+          await mkdir(dirname(join(local, k)), { recursive: true });
+          await writeFile(
+            join(local, k),
+            Buffer.from(await body.arrayBuffer()),
+          );
+        },
+      }
+    : openStore(tokens, globalThis.fetch, signal);
+const store = open();
 const status = (e: unknown) =>
   Number(/: (\d{3}) /.exec(String((e as Error).message))?.[1] ?? 0);
 const key = (ref: string) => ref.replace(':', '-');
@@ -146,10 +152,10 @@ const refs = (file: ReadyFile | undefined, own = false) =>
       ]
     : [];
 // The object under the first of `at` that has it, or undefined.
-async function find(at: string[], name: string) {
+async function find(s: Store, at: string[], name: string) {
   for (const ref of at)
     try {
-      const res = await store.get(`${ref}${DIR}${name}`);
+      const res = await s.get(`${ref}${DIR}${name}`);
       noteToken(used!).ok++;
       return res;
     } catch (e) {
@@ -160,15 +166,20 @@ async function find(at: string[], name: string) {
   return undefined;
 }
 // BuildKit waits on a registry that doesn't answer, so a lookup that takes
-// longer than this is a miss.
-const within = <T>(ms: number, p: Promise<T>) =>
-  Promise.race([p, sleep(ms).then(() => undefined)]);
+// longer than this is a miss, and its requests end.
+async function within<T>(ms: number, lookup: (s: Store) => Promise<T>) {
+  const ac = new AbortController();
+  const late = sleep(ms).then(() => undefined);
+  const found = await Promise.race([lookup(open(ac.signal)), late]);
+  if (found === undefined) ac.abort();
+  return found;
+}
 // The first ref's manifest whose blobs are all there: BuildKit fails the
 // build when an imported manifest's blob is missing, as one swept before its
 // manifest would be.
-async function findManifest(at: string[], name: string) {
+async function findManifest(s: Store, at: string[], name: string) {
   for (const ref of at) {
-    const res = await find([ref], name);
+    const res = await find(s, [ref], name);
     if (!res) continue;
     const body = Buffer.from(await res.arrayBuffer());
     const m = JSON.parse(body.toString()) as {
@@ -176,7 +187,7 @@ async function findManifest(at: string[], name: string) {
       config?: { digest: string };
       layers?: { digest: string }[];
     };
-    const blobs = new Set(await store.list(`${ref}${DIR}blobs/`));
+    const blobs = new Set(await s.list(`${ref}${DIR}blobs/`));
     const missing = [m.config, ...(m.layers ?? [])].filter(
       (d) => !d || !blobs.has(`${ref}${DIR}blobs/${key(d.digest)}`),
     ).length;
@@ -216,11 +227,11 @@ createServer(async (req, res) => {
       (req.method === 'GET' || req.method === 'HEAD')
     ) {
       stats.reads++;
+      const digest = m[2]!;
       // An export's HEAD before its upload counts own's copy only, so own's
       // manifests never need another ref's blobs.
-      const found = await within(
-        LOOKUP_MS,
-        find(refs(file, req.method === 'HEAD'), `blobs/${key(m[2]!)}`),
+      const found = await within(LOOKUP_MS, (st) =>
+        find(st, refs(file, req.method === 'HEAD'), `blobs/${key(digest)}`),
       );
       if (!found) {
         stats.misses++;
@@ -303,9 +314,8 @@ createServer(async (req, res) => {
         // A build's import reads its manifest first, once: a miss there
         // makes the whole build cold, so it waits for a pending token.
         const ready = file ?? (await current(MANIFEST_WAIT_MS));
-        const found = await within(
-          LOOKUP_MS,
-          findManifest(refs(ready), `manifests/${key(ref)}`),
+        const found = await within(LOOKUP_MS, (st) =>
+          findManifest(st, refs(ready), `manifests/${key(ref)}`),
         );
         if (!found) {
           stats.misses++;
