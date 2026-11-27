@@ -98,6 +98,15 @@ on:
           (experiments/sccache), in the summary and the sccache-<cloud> artifact
         type: boolean
         default: false
+      dockercache:
+        description: >-
+          with `version`, the Docker layer cache spike's check on each leg's
+          first label after sccache's: healthchecks' image off and through the
+          loopback registry on the job's cache token, cold, warm and changed
+          (experiments/docker-cache), in the summary and the
+          docker-cache-<cloud> artifact
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -276,7 +285,8 @@ jobs:
     # Holds the legs' secrets, and is the subject each cloud's OIDC trust
     # names (see the header).
     environment: e2e
-    timeout-minutes: 240
+    # The spike checks' steps can take up to 105 min more.
+    timeout-minutes: ${{ (inputs.sccache || inputs.dockercache) && 300 || 240 }}
     permissions:
       contents: read # the release's assets
       id-token: write # the clouds' OIDC sign-ins
@@ -658,8 +668,8 @@ jobs:
       # label: the proxy on this cloud's per-job token, across a renewal.
       - name: sccache on the test org's runners
         id: sccache
-        if: ${{ inputs.sccache }}
-        timeout-minutes: 110
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && inputs.sccache }}
+        timeout-minutes: 55
         env:
           DEPLOY_KEY: ${{ secrets.E2E_TEST_ORG_DEPLOY_KEY }}
           TARGET_REPO: ${{ inputs.org }}/e2e
@@ -681,6 +691,35 @@ jobs:
         with:
           name: sccache-${{ matrix.cloud }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/sccache-${{ matrix.cloud }}/
+          if-no-files-found: warn
+
+      # The Docker layer cache spike's check (experiments/docker-cache), on
+      # the leg's first label: the proxy on this cloud's per-job token.
+      - name: Docker cache on the test org's runners
+        id: docker-cache
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && inputs.dockercache }}
+        timeout-minutes: 50
+        env:
+          DEPLOY_KEY: ${{ secrets.E2E_TEST_ORG_DEPLOY_KEY }}
+          TARGET_REPO: ${{ inputs.org }}/e2e
+        run: |
+          export OUTPUT_DIR=$RUNNER_TEMP/docker-cache-$CLOUD LABEL=$(jq -r '.include[0].label' <<<"$LABEL_MATRIX")
+          key=$RUNNER_TEMP/docker-cache-key
+          install -m 600 /dev/null "$key"
+          printf '%s\n' "$DEPLOY_KEY" >"$key"
+          trap 'rm -f "$key"' EXIT
+          # A cancel cancels the check's run and deletes its branch.
+          GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes" node experiments/docker-cache/clouds.ts &
+          pid=$!
+          trap 'kill -INT $pid; wait $pid' INT TERM
+          wait $pid
+
+      - name: Keep the Docker cache check's figures
+        if: ${{ always() && steps.docker-cache.outcome != 'skipped' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: docker-cache-${{ matrix.cloud }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/docker-cache-${{ matrix.cloud }}/
           if-no-files-found: warn
 
       # Always, after anything that may have made something, cancelled too:
