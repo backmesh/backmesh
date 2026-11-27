@@ -13,7 +13,13 @@ const POSTS = readdirSync(
 )
   .filter((f) => f.endsWith('.md'))
   .map((f) => `/blog/${f.slice(0, -3)}/`);
-const PAGES = new Set(['/', '/blog/', '/blog/tags/cost/', ...POSTS]);
+const PAGES = new Set([
+  '/',
+  '/blog/',
+  '/blog/tags/cost/',
+  '/blog/tags/showcase/',
+  ...POSTS,
+]);
 
 // Cloudflare's assets with not_found_handling "404-page": a page's address
 // without its trailing slash gets a 307, anything else not built a 404.
@@ -37,19 +43,21 @@ const get = (path: string, host = 'backmesh.com') =>
 describe('the site Worker', () => {
   it('serves every blog post', async () => {
     expect(POSTS.length).toBeGreaterThan(0);
-    for (const path of ['/blog/', '/blog/tags/cost/', ...POSTS]) {
+    for (const path of [
+      '/blog/',
+      '/blog/tags/cost/',
+      '/blog/tags/showcase/',
+      ...POSTS,
+    ]) {
       const res = await get(path);
       expect([path, res.status]).toEqual([path, 200]);
     }
   });
 
   it.each([
-    '/docs',
-    '/docs/',
     '/docs/selfhost',
     '/docs/Tutorials/supabase+openai',
     '/blog/opensource',
-    '/blog/llmcomp/',
     '/blog/archive',
     '/blog/tags/llm',
     '/app',
@@ -71,6 +79,8 @@ describe('the site Worker', () => {
       'https://backmesh.com/blog/backmesh-vs-runs-on/',
     ],
     ['/pricing', 'https://backmesh.com/#pricing'],
+    ['/docs', 'https://backmesh.com/install/'],
+    ['/docs/', 'https://backmesh.com/install/'],
     ['/sitemap.xml', 'https://backmesh.com/sitemap-index.xml'],
   ])('sends %s to %s with a 301', async (path, location) => {
     const res = await get(path);
