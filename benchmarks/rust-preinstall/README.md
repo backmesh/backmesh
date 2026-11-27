@@ -6,10 +6,11 @@ image pull, against what it saves a Rust job. #160 was closed on an estimate,
 +2.6–6.1 s of pull a job, from scaling the whole image's pull time by its
 size. This measures it.
 
-[`rust-preinstall-benchmark.yml`](../../.github/workflows/rust-preinstall-benchmark.yml)
-builds #160's image as v0.7.2's runner image plus #160's Rust layer
-([`Dockerfile`](Dockerfile)), pushes it to the package
-`ghcr.io/backmesh/backmesh-runner-bench`, then runs 20 probe jobs at once on
+A one-off workflow, `rust-preinstall-benchmark.yml` (runs 45952939485 and
+45954685910 from the `bench/rust-preinstall` branch, at commit 4b019955 in
+this PR's history; not kept on main, since it publishes a package), built #160's image as v0.7.2's runner image plus #160's Rust layer
+([`Dockerfile`](Dockerfile)), pushed it to the package
+`ghcr.io/backmesh/backmesh-runner-bench` (deleted after), then ran 20 probe jobs at once on
 `backmesh-ubuntu-2404-4vcpu` (AWS) in our CI installation. Each job is a
 fresh runner VM.
 [`probe.sh`](probe.sh) pulls both images in a random order, each into its
