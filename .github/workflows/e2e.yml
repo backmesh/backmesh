@@ -19,7 +19,7 @@ name: E2E
 # release) runs that tag's commit, and the `test-org` job, signed in through
 # that same Worker, installs that release fresh for `org`,
 # the test org (backmesh-dryrun), once per leg: on AWS, running the label
-# member; on Azure, in our Azure CI subscription, with the control plane
+# member; on Azure, in our Azure e2e subscription, with the control plane
 # in centralus, running one job; and on GCP, in our GCP CI project, with the
 # control plane in us-central1, running one job and one on arm64. Each installs as a customer does, with a
 # role connection to its cloud. Each leg then uninstalls it, deletes the
@@ -41,11 +41,10 @@ name: E2E
 # Contributor and Storage Blob Data Contributor (anycloud's
 # seed/azure-template.json, and the roleAssignments/write right
 # seed/accounts.ts:138 checks, at v0.1.79), and the role connection's setup
-# writes a custom role definition and assigns it. Our Azure CI subscription
-# also holds our production control plane, so this identity can write there,
-# grant roles included: an accepted risk, kept to the e2e environment's
-# reviewers; so is GCP's, in a project that holds production's GCP setup
-# too. The owner's
+# writes a custom role definition and assigns it. The subscription is e2e's
+# alone, apart from production's. GCP's project holds production's GCP setup
+# too, so its identity can write there: an accepted risk, kept to the e2e
+# environment's reviewers. The owner's
 # one-time setup is, in `e2e`, E2E_TEST_ORG_DEPLOY_KEY (a write deploy key
 # on the test org's e2e repository), AWS_ROLE_ARN, the identity's
 # AZURE_CLIENT_ID, AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID, the service
@@ -261,7 +260,7 @@ jobs:
             placement: --runners azure
             # Both control-plane sizes are offered here in our subscription.
             control-plane-region: centralus
-            # Our Azure CI subscription has 3 spot vCPUs per region: back to 4 vCPUs once its quota is raised.
+            # Our Azure e2e subscription has 3 spot vCPUs per region: back to 4 vCPUs once its quota is raised.
             label: backmesh-ubuntu-2404-2vcpu
           - cloud: gcp
             placement: --runners gcp
@@ -291,7 +290,7 @@ jobs:
       # Every sign-in, and the listener install makes, use the Worker the
       # `worker` job checks.
       BACKMESH_API_URL: ${{ needs.plan.outputs.api-url }}
-      # Our Azure CI subscription (131eed90-…).
+      # Our Azure e2e subscription (ee1e6fe6-…).
       AZURE_SUBSCRIPTION_ID: ${{ matrix.cloud == 'azure' && secrets.AZURE_SUBSCRIPTION_ID || '' }}
       # The GCP leg's role connection, by the IDs anycloud's setup script
       # reads: a pool and service account of the run's own, as GCP keeps a
