@@ -101,7 +101,7 @@ const GPU_CODES = [5, 6];
  * A high-memory class's second character: its vCPUs, as the general
  * class's base-36 digit is, under a first character shared with the
  * general class of its cloud and spot-ness. Few first characters are left
- * (36, less the 25 above), so a memory variant takes none of them, and an
+ * (36, less the 27 above), so a memory variant takes none of them, and an
  * arm64 high-memory class can pair these with the arm64 letters. No base-36
  * vCPU digit is one of these, since 17 to 20 vCPUs is no class's size.
  */
