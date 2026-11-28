@@ -1,0 +1,203 @@
+---
+// Signs a test user in with email and password and shows the JWT the auth
+// service returns, decoded. The browser calls the user's own Supabase project
+// or Firebase's Identity Toolkit directly; nothing goes to backmesh.
+interface Props {
+  provider: 'supabase' | 'firebase';
+}
+const { provider } = Astro.props;
+---
+
+<form class="jwt not-content" data-provider={provider} autocomplete="off">
+  {
+    provider === 'supabase' && (
+      <label>
+        <span>Project URL</span>
+        <input
+          name="url"
+          type="url"
+          required
+          placeholder="https://xxxx.supabase.co"
+        />
+      </label>
+    )
+  }
+  <label>
+    <span>
+      {
+        provider === 'supabase'
+          ? 'Publishable or anon key'
+          : 'Web API key (apiKey in your Firebase config)'
+      }
+    </span>
+    <input name="key" required spellcheck="false" />
+  </label>
+  <label>
+    <span>Email</span>
+    <input name="email" type="email" required />
+  </label>
+  <label>
+    <span>Password</span>
+    <input name="password" type="password" required />
+  </label>
+  <button type="submit">Get JWT</button>
+  <p class="error" role="alert" hidden></p>
+  <div class="result" hidden>
+    <h3>JWT <button type="button" class="copy">Copy</button></h3>
+    <pre class="token"></pre>
+    <h3>Header</h3>
+    <pre class="header"></pre>
+    <h3>Payload</h3>
+    <pre class="payload"></pre>
+  </div>
+</form>
+
+<script>
+  const decode = (part: string) =>
+    JSON.stringify(
+      JSON.parse(
+        new TextDecoder().decode(
+          Uint8Array.from(
+            atob(part.replace(/-/g, '+').replace(/_/g, '/')),
+            (c) => c.charCodeAt(0),
+          ),
+        ),
+      ),
+      null,
+      2,
+    );
+
+  // The token request: Supabase's password grant, or the Identity Toolkit's
+  // signInWithPassword that the Firebase Auth SDK uses.
+  const signIn = async (provider: string, f: Record<string, string>) => {
+    const body = { email: f.email, password: f.password };
+    if (provider === 'supabase') {
+      const base = f.url.replace(/\/+$/, '');
+      const res = await fetch(`${base}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', apikey: f.key },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error_description ?? data.msg ?? data.error);
+      }
+      return data.access_token as string;
+    }
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(f.key)}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...body, returnSecureToken: true }),
+      },
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message);
+    return data.idToken as string;
+  };
+
+  for (const form of document.querySelectorAll<HTMLFormElement>('.jwt')) {
+    const $ = (s: string) => form.querySelector<HTMLElement>(s)!;
+    const button = $('[type=submit]') as HTMLButtonElement;
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const fields = Object.fromEntries(new FormData(form)) as Record<
+        string,
+        string
+      >;
+      $('.error').hidden = true;
+      $('.result').hidden = true;
+      button.disabled = true;
+      try {
+        const token = await signIn(form.dataset.provider!, fields);
+        const [header, payload] = token.split('.');
+        $('.token').textContent = token;
+        $('.header').textContent = decode(header);
+        $('.payload').textContent = decode(payload);
+        $('.result').hidden = false;
+      } catch (err) {
+        $('.error').textContent =
+          `Sign-in failed: ${(err as Error).message || 'no reason given'}`;
+        $('.error').hidden = false;
+      } finally {
+        button.disabled = false;
+      }
+    });
+    $('.copy').addEventListener('click', () =>
+      navigator.clipboard.writeText($('.token').textContent!),
+    );
+  }
+</script>
+
+<style>
+  .jwt {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    max-width: 36rem;
+  }
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: var(--sl-text-sm);
+  }
+  input {
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--bm-line);
+    border-radius: 4px;
+    background: var(--sl-color-bg);
+    color: var(--sl-color-white);
+    font: inherit;
+  }
+  button {
+    border: 0;
+    border-radius: 4px;
+    background: var(--bm-accent);
+    color: var(--bm-on-accent);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  [type='submit'] {
+    align-self: flex-start;
+    padding: 0.55rem 1.1rem;
+  }
+  button:hover {
+    background: var(--bm-accent-hover);
+  }
+  button:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
+  .copy {
+    margin-left: 0.5rem;
+    padding: 0.15rem 0.6rem;
+    font-size: var(--sl-text-xs);
+    vertical-align: middle;
+  }
+  .error {
+    margin: 0;
+    color: #c62828;
+  }
+  :global([data-theme='dark']) .error {
+    color: #ff8a80;
+  }
+  h3 {
+    margin: 1rem 0 0.5rem;
+    font-size: var(--sl-text-base);
+  }
+  pre {
+    margin: 0;
+    padding: 0.75rem;
+    border: 1px solid var(--bm-hair);
+    border-radius: 4px;
+    background: var(--sl-color-gray-6);
+    font-family: var(--bm-mono);
+    font-size: var(--sl-text-xs);
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+</style>

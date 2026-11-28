@@ -1,0 +1,35 @@
+---
+title: Firebase JWT generator
+description: Sign in a Firebase Authentication test user with email and password and get its ID token (JWT), decoded. Runs in your browser; your key and password go only to Google's Identity Toolkit.
+lastUpdated: 2026-11-27
+head:
+  - tag: title
+    content: 'Firebase JWT generator: get a test user’s ID token | backmesh'
+---
+
+import JwtTool from '../../components/JwtTool.astro';
+
+Get a signed-in user's ID token from Firebase Authentication, to call an API
+that checks Firebase JWTs with `curl` or a test, as
+`Authorization: Bearer <token>`. The tool signs in with email and password
+through the Identity Toolkit's `accounts:signInWithPassword`, the endpoint the
+Firebase Auth SDK uses, and shows the token with its header and payload
+decoded.
+
+Your browser sends the API key, email and password straight to Google's
+Identity Toolkit for your Firebase project and nothing to backmesh. The page
+has no server code, and its source is
+[JwtTool.astro](https://github.com/backmesh/backmesh/blob/main/website/src/components/JwtTool.astro).
+Use a test user, not a real person's account.
+
+<JwtTool provider="firebase" />
+
+## Where to find the values
+
+- **Web API key**: **Project settings → General**, or `apiKey` in your web
+  app's Firebase config. It identifies the project and isn't a secret.
+- The user must exist, and the Email/Password provider must be on under
+  **Authentication → Sign-in method**.
+
+ID tokens expire after an hour. Using Supabase instead? See the
+[Supabase JWT generator](/supabase-jwt/).
