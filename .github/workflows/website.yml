@@ -87,16 +87,18 @@ jobs:
       - if: steps.token.outputs.ready == 'true'
         name: Check the live site
         run: |
-          redirects() {
-            [[ $(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "$1") == "301 $2" ]]
+          answers() {
+            [[ $(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "$1") == "$2" ]]
           }
+          redirects() { answers "$1" "301 $2"; }
           check() {
             curl -fsS https://backmesh.com/ | grep -q '<title>backmesh: ' &&
               redirects https://www.backmesh.com/ https://backmesh.com/ &&
-              redirects https://backmesh.com/docs/ https://backmesh.com/ &&
+              answers https://backmesh.com/blog/ '200 ' &&
+              answers https://backmesh.com/app/ '410 ' &&
               redirects https://backmesh.com/pricing https://backmesh.com/#pricing &&
               redirects https://backmesh.com/sitemap.xml https://backmesh.com/sitemap-index.xml
           }
           for _ in {1..20}; do check && exit 0; sleep 30; done
-          echo "::error::https://backmesh.com/ doesn't serve the new site, www doesn't redirect to it, /docs/ doesn't redirect to /, /pricing to /#pricing or /sitemap.xml to /sitemap-index.xml."
+          echo "::error::https://backmesh.com/ doesn't serve the new site, www doesn't redirect to it, /blog/ doesn't serve, /app/ isn't 410, /pricing doesn't redirect to /#pricing or /sitemap.xml to /sitemap-index.xml."
           exit 1
