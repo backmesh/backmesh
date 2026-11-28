@@ -1,0 +1,59 @@
+name: LLMcomp
+
+# Sends /llmcomp/'s sample prompts to its models (ci/llmcomp/run.ts) and
+# opens a pull request with the new website/public/llmcomp/results.json,
+# replacing the last run's. Each provider's key is a repository secret, and a
+# provider without one is left out. By hand only until the keys exist; then
+# monthly. GitHub starts no workflows for a pull request this token opens:
+# close and reopen it to run CI before merging.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: llmcomp
+
+jobs:
+  refresh:
+    runs-on: ${{ vars.BACKMESH_RUNS_ON || 'backmesh-ubuntu-2404-2vcpu' }}
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+
+      # The runner image has no yarn (ci.yml).
+      - run: npm install --global yarn@1.22.22 && yarn install --frozen-lockfile
+
+      - name: Run the samples
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: node ci/llmcomp/run.ts
+
+      # Each run is a new branch from main and a new pull request; deleting
+      # the last one's branch closes its pull request.
+      - name: Open a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet; then echo 'Nothing ran.'; exit 0; fi
+          branch=llmcomp-results-$(date -u +%Y-%m-%d)-$GITHUB_RUN_ID
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$branch"
+          git commit -am "/llmcomp/: the samples' answers on $(date -u +%Y-%m-%d)"
+          git push origin "HEAD:refs/heads/$branch"
+          for old in $(git ls-remote --heads origin 'llmcomp-results-*' | sed 's|.*refs/heads/||'); do
+            [[ $old == "$branch" ]] || git push origin --delete "$old"
+          done
+          gh pr create --head "$branch" --title "/llmcomp/: the samples' answers on $(date -u +%Y-%m-%d)" --body "Fresh answers from ci/llmcomp/run.ts. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. GitHub starts no CI for a pull request this workflow's token opens: close and reopen this one to run CI before merging."

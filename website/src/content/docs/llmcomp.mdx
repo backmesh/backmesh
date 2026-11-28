@@ -1,0 +1,59 @@
+---
+title: 'LLMcomp: compare LLM prices on one prompt'
+description: Paste a prompt to see what it costs on each current OpenAI, Anthropic, Google and DeepSeek model, cheapest first, with each model's price per 1M tokens.
+lastUpdated: 2026-11-28
+head:
+  - tag: title
+    content: 'LLMcomp: compare LLM API prices for the same prompt | backmesh'
+---
+
+import LlmComp from '../../components/LlmComp.astro';
+import LlmCompSampled from '../../components/LlmCompSampled.astro';
+
+Paste a prompt to see what it costs on each current chat model from OpenAI,
+Anthropic, Google and DeepSeek, cheapest first.
+
+<LlmCompSampled>
+
+To compare answers too, pick a sample prompt: we send each sample to 13
+models, from the cheapest to the frontier, and the page shows what each one
+answered, with its tokens, cost and time.
+
+</LlmCompSampled>
+
+The page needs no API key and sends nothing to backmesh or the providers. It
+fetches the prices from GitHub.
+
+<LlmComp />
+
+## How it works
+
+The prices are [LiteLLM's](https://github.com/BerriAI/litellm) per-token
+list, the same one [tokencost-js](https://github.com/backmesh/tokencost) reads.
+That's our JavaScript port of AgentOps'
+[tokencost](https://github.com/AgentOps-AI/tokencost), which the old LLMcomp
+was built on.
+The prompt's tokens are counted once, with OpenAI's o200k tokenizer, and the
+answer is the length you enter. Other providers' tokenizers count the same text
+somewhat differently, so treat their rows as estimates.
+
+<LlmCompSampled>
+
+For the sample answers, a
+[workflow](https://github.com/backmesh/backmesh/blob/main/.github/workflows/llmcomp.yml)
+runs [ci/llmcomp/run.ts](https://github.com/backmesh/backmesh/blob/main/ci/llmcomp/run.ts),
+which sends each sample once to each model with its default settings and
+records the tokens the API reports. Reasoning tokens count as output, so a
+model that thinks first costs more than its answer's length suggests. The cost
+is those tokens at LiteLLM's prices that day. The time is the whole answer,
+measured from a backmesh runner in GitHub Actions, and output tokens per second
+is the output tokens over that time, so it includes the wait for the first
+token. The table shows each model's median over the samples. One run per
+sample is a small test: read the speeds as rough.
+
+</LlmCompSampled>
+
+The page's source is
+[LlmComp.astro](https://github.com/backmesh/backmesh/blob/main/website/src/components/LlmComp.astro).
+It replaces llmcomp.backmesh.com, from our
+[2025 post](/blog/llmcomp/).

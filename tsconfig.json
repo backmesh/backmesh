@@ -20,6 +20,7 @@
     "scripts/**/*.ts",
     "benchmarks/**/*.ts",
     "experiments/**/*.ts",
+    "ci/**/*.ts",
     "test/**/*",
     "*.config.mts"
   ]

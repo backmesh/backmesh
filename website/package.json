@@ -12,6 +12,7 @@
     "@fontsource-variable/schibsted-grotesk": "5.3.0",
     "@fontsource/fragment-mono": "5.3.0",
     "astro": "7.4.6",
+    "js-tiktoken": "1.0.21",
     "starlight-blog": "0.30.2"
   },
   "devDependencies": {

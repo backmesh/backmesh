@@ -1,0 +1,348 @@
+---
+// LLMcomp: one prompt's estimated cost on each current chat model, from
+// LiteLLM's price list as tokencost-js does it, and the real answers, tokens,
+// cost and time of a curated set of models on sample prompts. The answers
+// are /llmcomp/results.json, which ci/llmcomp/run.ts writes; the page itself
+// calls no LLM API. Until a run has answers, the page has only the estimates.
+import { sampled } from './llmcomp.ts';
+---
+
+<div class="llmcomp not-content">
+  {
+    sampled && (
+      <label>
+        <span>Sample prompt</span>
+        <select name="sample">
+          <option value="">Your own prompt</option>
+        </select>
+      </label>
+    )
+  }
+  <label>
+    <span>Prompt</span>
+    <textarea name="prompt" rows="6"
+      >Explain in two sentences why the sky is blue.</textarea
+    >
+  </label>
+  <div class="fields">
+    <label>
+      <span>Expected answer length, tokens</span>
+      <input name="output" type="number" min="0" step="100" value="500" />
+    </label>
+    <label>
+      <span>Filter models</span>
+      <input name="filter" type="search" placeholder="sonnet, gpt-6, flash…" />
+    </label>
+  </div>
+  <p class="note prices">Loading LiteLLM's prices…</p>
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Input / output per 1M tokens</th>
+          <th>Estimated cost</th>
+          <th class="speed" hidden>Median answer time</th>
+          <th class="speed" hidden>Output tokens/s</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  {sampled && <div class="answers" aria-live="polite" />}
+</div>
+
+<script>
+  import type { Results, Run } from '../../../ci/llmcomp/run.ts';
+
+  type Price = {
+    mode?: string;
+    litellm_provider?: string;
+    input_cost_per_token: number;
+    output_cost_per_token: number;
+    deprecation_date?: string;
+  };
+  type Model = { id: string; name: string; provider: string };
+  type Answer = Extract<Run, { answer: string }>;
+  const PRICES_URL =
+    'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
+  let prices: Record<string, Price> = {};
+  // OpenAI's o200k tokenizer; its 1 MB of ranks load after the page.
+  const tokenizer = Promise.all([
+    import('js-tiktoken/lite'),
+    import('js-tiktoken/ranks/o200k_base'),
+  ]).then(([{ Tiktoken }, { default: ranks }]) => new Tiktoken(ranks));
+  let count = (text: string) => Math.ceil(text.length / 4);
+  const cost = (id: string, input: number, output: number) =>
+    input * prices[id].input_cost_per_token +
+    output * prices[id].output_cost_per_token;
+  const PROVIDERS: Record<string, string> = {
+    openai: 'OpenAI',
+    anthropic: 'Anthropic',
+    gemini: 'Google',
+    deepseek: 'DeepSeek',
+  };
+
+  const money = (v: number) =>
+    v >= 0.01 ? `$${v.toFixed(2)}` : v > 0 ? `$${v.toPrecision(2)}` : '$0';
+  const perMillion = (per: number) => `$${+(per * 1e6).toFixed(2)}`;
+  const name = (id: string) => id.replace(/^[a-z]+\//, '');
+  const provider = (id: string) =>
+    PROVIDERS[prices[id]?.litellm_provider ?? ''] ?? '';
+  const escape = (s: string) =>
+    s.replace(
+      /[&<>"]/g,
+      (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!,
+    );
+  const median = (xs: number[]) => {
+    const s = [...xs].sort((a, b) => a - b);
+    const m = s.length >> 1;
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  };
+
+  // The current chat models: LiteLLM's undated names, without fine-tunes,
+  // special-purpose models or ones past their deprecation date.
+  const models = (): Model[] =>
+    Object.entries(prices)
+      .filter(
+        ([id, c]) =>
+          c.mode === 'chat' &&
+          c.litellm_provider! in PROVIDERS &&
+          c.input_cost_per_token > 0 &&
+          c.output_cost_per_token > 0 &&
+          !(c.deprecation_date && new Date(c.deprecation_date) < new Date()) &&
+          !/^ft:|\d{4}-?\d{2}-?\d{2}|-\d{4}$|-0\d\d$|-\d\d-\d\d|audio|search|tts|computer-use|robotics|research|exp/.test(
+            id,
+          ),
+      )
+      .map(([id, c]) => ({ id, name: name(id), provider: c.litellm_provider! }))
+      .filter((m, i, all) => all.findIndex((n) => n.name === m.name) === i);
+
+  for (const root of document.querySelectorAll<HTMLElement>('.llmcomp')) {
+    const field = (name: string) =>
+      root.querySelector<HTMLInputElement>(`[name="${name}"]`)!;
+    const body = root.querySelector('tbody')!;
+    let all: Model[] = [];
+    // Each run model's median time and output speed over the samples.
+    let speed = new Map<string, { seconds: number; rate: number }>();
+
+    const render = () => {
+      // One count with OpenAI's o200k tokenizer prices every model.
+      const input = count(field('prompt').value);
+      const output = Math.max(0, Number(field('output').value) || 0);
+      const filter = field('filter').value.trim().toLowerCase();
+      const speedCells = (id: string) => {
+        if (!speed.size) return '';
+        const s = speed.get(id);
+        return s
+          ? `<td>${s.seconds.toFixed(1)} s</td><td>${Math.round(s.rate)}</td>`
+          : '<td></td><td></td>';
+      };
+      body.innerHTML = all
+        .filter((m) => `${m.provider} ${m.name}`.includes(filter))
+        .map((m) => ({ ...m, cost: cost(m.id, input, output) }))
+        .sort((a, b) => a.cost - b.cost)
+        .map(
+          (m) =>
+            `<tr><td>${escape(m.name)} <small>${provider(m.id)}</small></td>` +
+            `<td>${perMillion(prices[m.id].input_cost_per_token)} / ${perMillion(prices[m.id].output_cost_per_token)}</td>` +
+            `<td>${money(m.cost)}</td>${speedCells(m.id)}</tr>`,
+        )
+        .join('');
+    };
+
+    for (const name of ['prompt', 'output', 'filter']) {
+      field(name).addEventListener('input', render);
+    }
+
+    const status = root.querySelector<HTMLElement>('.prices')!;
+    const priced = fetch(PRICES_URL)
+      .then((res) => res.json())
+      .then((json) => {
+        prices = json;
+        all = models();
+        status.textContent =
+          "Prices: LiteLLM's current price list, fetched from GitHub just now.";
+        render();
+      })
+      .catch(() => {
+        status.textContent =
+          "Couldn't fetch LiteLLM's price list from GitHub. Reload to try again.";
+      });
+    // The sample prompts, there once a run has answers.
+    const sample = root.querySelector('select');
+    const answers = root.querySelector<HTMLElement>('.answers');
+    if (sample && answers) {
+      let results: Results = { date: null, samples: [] };
+      // The chosen sample's answers, cheapest first, side by side.
+      const show = () => {
+        const s = results.samples.find((s) => s.id === sample.value);
+        if (!s) {
+          answers.innerHTML = '';
+          return;
+        }
+        const ok = s.runs.filter((r): r is Answer => 'answer' in r);
+        const failed = s.runs.filter((r) => 'error' in r);
+        answers.innerHTML =
+          `<p class="note">Real answers from ${results.date}, cheapest first. Times are the whole answer, from a backmesh runner in GitHub Actions.</p>` +
+          '<div class="grid">' +
+          ok
+            .sort((a, b) => a.cost - b.cost)
+            .map(
+              (r) =>
+                `<section><h3>${escape(name(r.model))} <small>${provider(r.model)}</small></h3>` +
+                `<p class="note">${r.input.toLocaleString('en-US')} in, ${r.output.toLocaleString('en-US')} out · ${money(r.cost)} · ${r.seconds.toFixed(1)} s</p>` +
+                `<pre>${escape(r.answer)}</pre></section>`,
+            )
+            .join('') +
+          '</div>' +
+          (failed.length
+            ? `<p class="note">No answer that day from ${failed.map((r) => escape(name(r.model))).join(', ')}.</p>`
+            : '');
+      };
+
+      sample.addEventListener('change', () => {
+        const s = results.samples.find((s) => s.id === sample.value);
+        if (s) field('prompt').value = s.prompt;
+        show();
+        render();
+      });
+      field('prompt').addEventListener('input', () => {
+        if (sample.value) {
+          sample.value = '';
+          show();
+        }
+      });
+      fetch('/llmcomp/results.json')
+        .then((res) => res.json())
+        .then((json: Results) => {
+          results = json;
+          sample.insertAdjacentHTML(
+            'beforeend',
+            json.samples
+              .map(
+                (s) =>
+                  `<option value="${escape(s.id)}">${escape(s.title)}</option>`,
+              )
+              .join(''),
+          );
+          const runs = new Map<string, Answer[]>();
+          for (const r of json.samples.flatMap((s) => s.runs)) {
+            if ('answer' in r) {
+              runs.set(r.model, [...(runs.get(r.model) ?? []), r]);
+            }
+          }
+          speed = new Map(
+            [...runs].map(([id, rs]) => [
+              id,
+              {
+                seconds: median(rs.map((r) => r.seconds)),
+                rate: median(rs.map((r) => r.output / r.seconds)),
+              },
+            ]),
+          );
+          for (const th of root.querySelectorAll<HTMLElement>('.speed')) {
+            th.hidden = !speed.size;
+          }
+          render();
+        });
+      priced.then(show);
+    }
+    tokenizer.then((t) => {
+      count = (text) => t.encode(text).length;
+      render();
+    });
+  }
+</script>
+<style>
+  .llmcomp {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+  .fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 2rem;
+  }
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: var(--sl-text-sm);
+  }
+  input,
+  select,
+  textarea {
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--bm-line);
+    border-radius: 4px;
+    background: var(--sl-color-bg);
+    color: var(--sl-color-white);
+    font: inherit;
+  }
+  .fields input,
+  select {
+    width: 16rem;
+    max-width: 100%;
+  }
+  .scroll {
+    max-height: 28rem;
+    overflow: auto;
+    border-bottom: 1px solid var(--sl-color-hairline);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--sl-text-sm);
+  }
+  th {
+    position: sticky;
+    top: 0;
+    background: var(--sl-color-bg);
+  }
+  th,
+  tbody :global(td) {
+    padding: 0.45rem 0.75rem 0.45rem 0;
+    border-bottom: 1px solid var(--sl-color-hairline);
+    text-align: left;
+  }
+  tbody :global(small),
+  .answers :global(small),
+  .note,
+  .answers :global(.note) {
+    color: var(--sl-color-gray-3);
+  }
+  .note,
+  .answers :global(.note) {
+    margin: 0;
+    font-size: var(--sl-text-sm);
+  }
+  .answers :global(h3) {
+    margin: 1rem 0 0.35rem;
+    font-size: var(--sl-text-base);
+  }
+  .answers :global(pre) {
+    margin: 0.5rem 0 0;
+    padding: 0.75rem;
+    border: 1px solid var(--bm-hair);
+    border-radius: 4px;
+    background: var(--sl-color-gray-6);
+    font-family: var(--bm-sans);
+    font-size: var(--sl-text-sm);
+    max-height: 24rem;
+    overflow: auto;
+    white-space: pre-wrap;
+  }
+  .answers {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .answers :global(.grid) {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+    gap: 0 1.25rem;
+  }
+</style>
