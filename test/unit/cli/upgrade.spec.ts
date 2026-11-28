@@ -407,6 +407,7 @@ function setUp({
       'service-tokens': '0.1.0',
       c28: undefined,
       arm64: '0.1.0',
+      'azure-arm64': '0.1.0',
     },
   };
   return {
@@ -1506,7 +1507,7 @@ describe('upgrade', () => {
       );
     });
 
-    // One behind, as 0.1.83 to 0.1.84: the old listener is in the new API's
+    // One behind, as 0.1.84 to 0.1.85: the old listener is in the new API's
     // window, so nothing pauses.
     it('moves an API one release behind without a pause', async () => {
       const { deps, calls, lines } = setUp({
@@ -1523,17 +1524,17 @@ describe('upgrade', () => {
     // A regenerated contract moves ANYCLOUD_PREVIOUS_VERSION: decide OLDEST
     // again, as the release that backmesh last pinned.
     it('starts from the release backmesh v0.5.7 pinned, under the real constants', async () => {
-      expect(ANYCLOUD_PREVIOUS_VERSION).toBe('0.1.83');
+      expect(ANYCLOUD_PREVIOUS_VERSION).toBe('0.1.84');
       expect(OLDEST).toBe('0.1.80');
       const at = (version: string) => {
         const { deps, calls, lines } = setUp({ version, listener: 'down' });
         delete deps.oldest;
         delete deps.previous;
-        deps.release = async () => ({ ...RELEASE, anycloud: '0.1.84' });
+        deps.release = async () => ({ ...RELEASE, anycloud: '0.1.85' });
         return { deps, calls, lines };
       };
-      // backmesh v0.7.1's control plane is in 0.1.84's window: no pause.
-      const last = at('0.1.83');
+      // backmesh v0.7.2's control plane is in 0.1.85's window: no pause.
+      const last = at('0.1.84');
       await expect(upgrade(last.deps)).rejects.toThrow(
         new RegExp(`^acme's listener didn't start on ${VM.acme}\\.$`),
       );

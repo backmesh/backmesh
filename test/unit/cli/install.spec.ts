@@ -55,6 +55,7 @@ const RELEASED: FeatureTable = {
   'vm-job-regions': undefined,
   'service-tokens': '0.1.0',
   arm64: '0.1.0',
+  'azure-arm64': '0.1.0',
 };
 const OVERRIDE = { BACKMESH_UNSUPPORTED_CI_OVERRIDE: 'anycloud-ci' };
 const images = {
@@ -314,21 +315,6 @@ function setUp(
           })),
         ]);
       }
-      // The new management VM at anycloud 0.1.78's 8,000 IOPS.
-      if (args[0] === 'aws' && args[1] === 'ec2') {
-        return {
-          'describe-instances': JSON.stringify(['vol-api']),
-          'describe-volumes': JSON.stringify([
-            {
-              VolumeId: 'vol-api',
-              VolumeType: 'gp3',
-              Iops: 8000,
-              Throughput: 125,
-            },
-          ]),
-          'modify-volume': '{}',
-        }[args[2]!]!;
-      }
       if (args[0] === 'aws') return JSON.stringify({ Account: account.aws });
       if (args.join(' ') === 'az account show --output json') {
         return JSON.stringify({ id: account.azure });
@@ -394,52 +380,6 @@ const tokenFor = (login: string) =>
   });
 
 describe('install', () => {
-  it("finishes when the AWS CLI can't read the management VM's disk, and says so", async () => {
-    const { deps, commands, lines } = setUp();
-    const command = deps.command;
-    deps.command = async (args) => {
-      if (args[2] === 'describe-instances')
-        throw new Error('UnauthorizedOperation');
-      return command(args);
-    };
-    const result = await install(asked, deps);
-
-    expect(result).toMatchObject({ apiUrl: HOSTED });
-    expect(commands.some((c) => c.includes('modify-volume'))).toBe(false);
-    expect(lines).toContain(
-      "Couldn't read the management VM's disk with the AWS CLI, so it keeps its speed; lower its root volume to 3000 IOPS and 125 MiB/s in the EC2 console.",
-    );
-  });
-
-  it('names the account to sign in to when it finds no management VM', async () => {
-    const { deps, commands, lines } = setUp();
-    const command = deps.command;
-    deps.command = async (args) =>
-      args[2] === 'describe-instances' ? '[]' : command(args);
-    const result = await install(asked, deps);
-
-    expect(result).toMatchObject({ apiUrl: HOSTED });
-    expect(commands.some((c) => c.includes('describe-volumes'))).toBe(false);
-    expect(lines).toContain(
-      'Found no management VM for c1 in this AWS account and us-east-2, so its disk keeps its speed; sign in to AWS account 123456789012 and lower its root volume to 3000 IOPS and 125 MiB/s in the EC2 console.',
-    );
-  });
-
-  it("finishes when EC2 refuses to lower the management VM's disk, and says so", async () => {
-    const { deps, lines } = setUp();
-    const command = deps.command;
-    deps.command = async (args) => {
-      if (args[2] === 'modify-volume') throw new Error('UnauthorizedOperation');
-      return command(args);
-    };
-    const result = await install(asked, deps);
-
-    expect(result).toMatchObject({ apiUrl: HOSTED });
-    expect(lines).toContain(
-      "Couldn't lower vol-api from 8000 IOPS and 125 MiB/s; lower it to 3000 IOPS and 125 MiB/s in the EC2 console.",
-    );
-  });
-
   it("hands the listener --cache-cap in its Secret, each repository's cache in GB", async () => {
     const { deps, requests } = setUp();
     await install({ ...asked, cacheCapGb: 25 }, deps);
@@ -468,16 +408,8 @@ describe('install', () => {
   });
 
   it("runs install's steps in order, making each cloud's role through its CLI", async () => {
-    const {
-      deps,
-      calls,
-      commands,
-      execs,
-      requests,
-      lines,
-      tokens,
-      refreshable,
-    } = setUp();
+    const { deps, calls, execs, requests, lines, tokens, refreshable } =
+      setUp();
     // The VM's create, its Secret saved before it, and each exec, in order.
     const steps: string[] = [];
     const saved = () =>
@@ -577,17 +509,6 @@ describe('install', () => {
         "Always on: acme's listener VM (t3.small) on aws us-east-2, about $17 a month with its disk and address.",
         ON_DEMAND_FALLBACK_LINE,
       ]),
-    );
-    // ...which the new control plane's disks then are.
-    expect(commands.filter((c) => c.startsWith('aws ec2'))).toEqual([
-      'aws ec2 describe-instances --filters Name=tag:Name,Values=anycloud-cluster-c1 Name=instance-state-name,Values=pending,running,stopping,stopped --query Reservations[].Instances[].BlockDeviceMappings[?DeviceName==`/dev/sda1`].Ebs.VolumeId[] --region us-east-2 --output json',
-      expect.stringMatching(
-        /^aws ec2 describe-volumes --volume-ids vol-api --query /,
-      ),
-      'aws ec2 modify-volume --volume-id vol-api --iops 3000 --throughput 125 --region us-east-2 --output json',
-    ]);
-    expect(lines).toContain(
-      'Lowered vol-api from 8000 IOPS and 125 MiB/s to 3000 IOPS and 125 MiB/s.',
     );
     expect(lines.slice(-2)).toEqual([
       'Labels for runs-on: backmesh-ubuntu-2404-2vcpu, backmesh-ubuntu-2404-4vcpu, backmesh-ubuntu-2404-8vcpu, backmesh-ubuntu-2404-16vcpu, backmesh-ubuntu-2404-od-2vcpu, backmesh-ubuntu-2404-od-4vcpu, backmesh-ubuntu-2404-od-8vcpu, backmesh-ubuntu-2404-od-16vcpu, backmesh-ubuntu-2404-kvm-2vcpu, backmesh-ubuntu-2404-kvm-4vcpu, backmesh-ubuntu-2404-kvm-8vcpu, backmesh-ubuntu-2404-kvm-16vcpu, backmesh-ubuntu-2404-kvm-od-2vcpu, backmesh-ubuntu-2404-kvm-od-4vcpu, backmesh-ubuntu-2404-kvm-od-8vcpu, backmesh-ubuntu-2404-kvm-od-16vcpu, backmesh-ubuntu-2404-gpu-t4, backmesh-ubuntu-2404-gpu-od-t4, backmesh-ubuntu-2404-highmem-2vcpu, backmesh-ubuntu-2404-highmem-4vcpu, backmesh-ubuntu-2404-highmem-8vcpu, backmesh-ubuntu-2404-highmem-16vcpu, backmesh-ubuntu-2404-highmem-od-2vcpu, backmesh-ubuntu-2404-highmem-od-4vcpu, backmesh-ubuntu-2404-highmem-od-8vcpu, backmesh-ubuntu-2404-highmem-od-16vcpu, backmesh-ubuntu-2404-arm-2vcpu, backmesh-ubuntu-2404-arm-4vcpu, backmesh-ubuntu-2404-arm-8vcpu, backmesh-ubuntu-2404-arm-16vcpu, backmesh-ubuntu-2404-arm-od-2vcpu, backmesh-ubuntu-2404-arm-od-4vcpu, backmesh-ubuntu-2404-arm-od-8vcpu, backmesh-ubuntu-2404-arm-od-16vcpu, backmesh-ubuntu-2404-arm-highmem-2vcpu, backmesh-ubuntu-2404-arm-highmem-4vcpu, backmesh-ubuntu-2404-arm-highmem-8vcpu, backmesh-ubuntu-2404-arm-highmem-16vcpu, backmesh-ubuntu-2404-arm-highmem-od-2vcpu, backmesh-ubuntu-2404-arm-highmem-od-4vcpu, backmesh-ubuntu-2404-arm-highmem-od-8vcpu, backmesh-ubuntu-2404-arm-highmem-od-16vcpu (aws\'s carry no "aws-": it runs the control plane).',
@@ -2273,8 +2194,12 @@ describe('install', () => {
     });
 
     it('plans arm64 classes only on an anycloud that boots arm64, 0.1.84 on', async () => {
-      expect(takesArm('0.1.83')).toBe(false);
-      expect(takesArm('0.1.84')).toBe(true);
+      expect(takesArm('0.1.83')).toEqual([]);
+      expect(takesArm('0.1.84')).toEqual(['aws', 'gcp']);
+      // Azure's Cobalt and Ampere from the version that has azure-arm64.
+      expect(
+        takesArm('0.1.85', { ...RELEASED, 'azure-arm64': '0.1.85' }),
+      ).toEqual(['aws', 'gcp', 'azure']);
       const arm = async (features: FeatureTable) =>
         (await planned(setUp({ features }).deps)).classes
           .map((c) => c.label)
@@ -3676,6 +3601,12 @@ describe("install's arm64 line", () => {
       'gcp us-east4 and us-east1 offer no c4a or t2a, so gcp gets no arm64 labels.',
     );
     expect(noArmLine({ ...target, cloud: 'azure' }, ['eastus'])).toBe(
+      'azure eastus offers no Standard_D4ps_v6 or Standard_D4ps_v5, so azure gets no arm64 labels.',
+    );
+    // A pinned anycloud from before azure-arm64.
+    expect(
+      noArmLine({ ...target, cloud: 'azure' }, ['eastus'], ['aws', 'gcp']),
+    ).toBe(
       'azure gets no arm64 labels: anycloud boots its arm64 image on AWS and GCP only.',
     );
   });

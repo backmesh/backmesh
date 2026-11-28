@@ -618,13 +618,13 @@ describe('runner classes', () => {
       highmem: true,
       arm: true,
     });
-    // anycloud boots the arm64 image on AWS and GCP only, and the
-    // fixture's GCP catalog has t2a but no c4a, as one from before the
-    // catalog's arch column: t2a would boot the amd64 image, so GCP gets
-    // none (c4a's below).
+    // The fixture's Azure catalog has no Dpsv6 or Dpsv5 (below), and its
+    // GCP catalog has t2a but no c4a, as one from before the catalog's arch
+    // column: t2a would boot the amd64 image, so GCP gets none (c4a's
+    // below).
     expect(noArm).toEqual([AZURE, GCP]);
     // An anycloud without arm64 boots gets no arm64 class, and no line.
-    const older = planClasses([AWS, GCP], catalog, 'gcp', false, false);
+    const older = planClasses([AWS, GCP], catalog, 'gcp', false, []);
     expect(older.classes.some((c) => c.arm)).toBe(false);
     expect(older.noArm).toEqual([]);
     // Every code is unique, and another listener's arm64 runner holds its
@@ -701,6 +701,70 @@ describe('runner classes', () => {
       vmTypes: ['c4a-highmem-16'],
       regions: ['europe-west4', 'europe-west1'],
     });
+  });
+
+  it("gives Azure's arm64 classes Cobalt then Ampere, and Cobalt Epsv6 for high memory, on an anycloud that boots them", () => {
+    const arm = (series: string, gib: number) =>
+      [2, 4, 8, 16].map((n) => ({
+        vmType: `Standard_${series.replace('#', String(n))}`,
+        vCPUs: n,
+        memoryGiB: n * gib,
+        accelerators: [],
+        capabilities: { nestedVirtualization: false },
+        regions: [{ region: 'westus2', spotPricePerHour: null }],
+      }));
+    const withArm = catalogs({
+      azure: [
+        ...CATALOG.azure,
+        ...arm('D#ps_v6', 4),
+        ...arm('D#ps_v5', 4),
+        ...arm('E#ps_v6', 8),
+      ],
+    });
+    const { classes, noArm } = planClasses([AZURE], withArm, 'azure');
+    expect(noArm).toEqual([]);
+    expect(
+      classes
+        .filter((c) => c.arm && c.vcpus === 4)
+        .map(({ label, code, spot, vmTypes }) => [label, code, spot, vmTypes]),
+    ).toEqual([
+      [
+        'backmesh-ubuntu-2404-arm-4vcpu',
+        's4',
+        true,
+        ['Standard_D4ps_v6', 'Standard_D4ps_v5'],
+      ],
+      [
+        'backmesh-ubuntu-2404-arm-od-4vcpu',
+        '04',
+        false,
+        ['Standard_D4ps_v6', 'Standard_D4ps_v5'],
+      ],
+      [
+        'backmesh-ubuntu-2404-arm-highmem-4vcpu',
+        'si',
+        true,
+        ['Standard_E4ps_v6'],
+      ],
+      [
+        'backmesh-ubuntu-2404-arm-highmem-od-4vcpu',
+        '0i',
+        false,
+        ['Standard_E4ps_v6'],
+      ],
+    ]);
+    expect(codeClass('0g')).toEqual({
+      cloud: 'azure',
+      spot: false,
+      vcpus: 16,
+      gpu: false,
+    });
+    const codes = classes.map((c) => c.code);
+    expect(new Set(codes).size).toBe(codes.length);
+    // A pinned anycloud from before azure-arm64 boots AWS's and GCP's only.
+    const older = planClasses([AZURE], withArm, 'azure', false, ['aws', 'gcp']);
+    expect(older.classes.some((c) => c.arm)).toBe(false);
+    expect(older.noArm).toEqual([AZURE]);
   });
 
   it('keeps an arm64 class to the regions that offer Graviton, and drops it, unblocked, without any', () => {

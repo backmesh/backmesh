@@ -150,8 +150,8 @@ arithmetic, not measured.
   ([docs.github.com](https://docs.github.com/en/actions/reference/runners/github-hosted-runners),
   read 2026-11-24). It's free in a public repository.
 - **backmesh:** the catalog's prices on 2026-11-24 in AWS's `us-east-2`, and
-  on 2026-11-25 in GCP's `us-central1`, spot in the lowest zone. Azure has no
-  arm64 labels.
+  on 2026-11-25 in GCP's `us-central1`, spot in the lowest zone. Azure's arm64 labels, from
+  backmesh v0.7.3, aren't priced here yet.
 - **GCP's `c4a` disk:** `c4a` takes no pd-ssd, so its runner's 100 GB disk is
   Hyperdisk Balanced
   ([anycloud#50](https://github.com/anycloud-sh/anycloud/pull/50)), which
