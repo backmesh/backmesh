@@ -116,6 +116,13 @@ on:
           docker-cache-<cloud> artifact
         type: boolean
         default: false
+      azure-arm:
+        description: >-
+          with `version`, also an arm64 job on the Azure leg, on
+          backmesh-ubuntu-2404-arm-od-2vcpu: for a version whose anycloud
+          boots Azure's arm64 types (backmesh v0.7.3 on)
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -281,6 +288,9 @@ jobs:
             control-plane-region: centralus
             # Our Azure e2e subscription has 3 spot vCPUs per region: back to 4 vCPUs once the requested quota lands.
             label: backmesh-ubuntu-2404-2vcpu
+            # With `azure-arm`, an arm64 job, on Cobalt (then Ampere), on
+            # demand, as the spot vCPUs go to the label above.
+            arm-label: backmesh-ubuntu-2404-arm-od-2vcpu
           - cloud: gcp
             placement: --runners gcp
             # anycloud finds a GCP cluster by name in the whole project (see
@@ -503,7 +513,7 @@ jobs:
           ISSUE_TOKEN: ${{ github.token }}
           PLACEMENT: ${{ matrix.placement }}
           LABEL: ${{ matrix.label }}
-          ARM_LABEL: ${{ matrix.arm-label }}
+          ARM_LABEL: ${{ (matrix.cloud != 'azure' || inputs.azure-arm) && matrix.arm-label || '' }}
           MATRIX: ${{ needs.plan.outputs.matrix }}
         run: |
           t=$ISSUE_TOKEN
@@ -566,8 +576,9 @@ jobs:
           echo "CLUSTER_ID=$id" >>"$GITHUB_ENV"
 
       # The label member, through the test org's own repository, whose
-      # runners these are: `labels`' AWS ones on AWS, one job on the leg's
-      # label on Azure, and on GCP one on its label and one on its arm64 label.
+      # runners these are: `labels`' AWS ones on AWS, and on Azure and GCP
+      # one job on the leg's label and one on its arm64 label (on Azure only
+      # with `azure-arm`).
       # Its
       # write deploy key pushes the run's branch, which starts its labels.yml.
       - name: The label member on the test org's runners
