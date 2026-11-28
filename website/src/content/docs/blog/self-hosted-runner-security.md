@@ -339,7 +339,7 @@ contributors" setting for any org that turns this on.
 
 ### Limits that come with it
 
-backmesh runs Linux x86-64 and arm64 jobs (arm64 on AWS and GCP), with no
+backmesh runs Linux x86-64 and arm64 jobs, with no
 macOS or Windows runners. Each job waits about 40 s for its VM to boot, about 10 s when cued; the
 [benchmarks](/benchmarks/) carry the latest median wait. A spot VM can be reclaimed, which fails the job; when
 reclaims were a run's only failures, backmesh reruns them, preferring an
