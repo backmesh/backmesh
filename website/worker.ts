@@ -1,6 +1,6 @@
 // Serves the static site. It runs before the assets, so it can send
-// www.backmesh.com to the apex, /pricing to the landing page's pricing,
-// serve install.sh as text so a browser shows it, and retire the old site's
+// www.backmesh.com to the apex, /pricing to the landing page's pricing, the
+// old docs' index to the install guide, serve install.sh as text so a browser shows it, and retire the old site's
 // other paths: a 410 where this site has no page, so search engines drop
 // them. This site's own pages there, such as the blog, are served first.
 const RETIRED = /^\/(docs|blog|app|firebase-jwt|supabase-jwt)(\/|$)/;
@@ -23,6 +23,9 @@ export default {
     }
     if (/^\/pricing(\/|$)/.test(url.pathname)) {
       return Response.redirect(new URL('/#pricing', url).href, 301);
+    }
+    if (/^\/docs\/?$/.test(url.pathname)) {
+      return Response.redirect(new URL('/install/', url).href, 301);
     }
     const response = await env.ASSETS.fetch(request);
     // The assets add a page's trailing slash with a 307; a 301 tells search
