@@ -37,14 +37,15 @@ const renamed = (r: Results): Results => ({
 export const GITHUB = BASE;
 
 // One label's figures for one build: its time is the cold jobs' first step to
-// done, its wait their queueing to first step, and its cost the median over
-// its cold and warm jobs (results.ts's `cost`), as the build benchmark's
-// README gives them.
+// done, its wait their queueing to first step, its total their queueing to
+// done, and its cost the median over its cold and warm jobs (results.ts's
+// `cost`), as the build benchmark's README gives them.
 function figuresOf(r: Results, label: string, build: string) {
   const cold = jobs(r, label, 'cold', build);
   return {
     secs: med(cold, (f) => f.build)!,
     wait: med(cold, (f) => f.wait)!,
+    total: med(cold, (f) => f.total)!,
     jobs: cold.length,
     cost: median(
       [...cold, ...jobs(r, label, 'warm', build)]
@@ -91,7 +92,6 @@ export function published(recorded: Results, recordedOd: Results) {
       { id: b.id, label: ON_DEMAND, ...b.od },
     ])
     .sort((a, b) => b.faster - a.faster);
-  const top = fastest.filter((b) => b.label === fastest[0]!.label).slice(0, 2);
   const spotCheaper = range(rows.map((b) => b.spot.cheaper));
   return {
     date: release.date,
@@ -101,9 +101,8 @@ export function published(recorded: Results, recordedOd: Results) {
     // The median wait over every build's cold jobs on spot.
     wait: med(jobs(release, SPOT, 'cold'), (f) => f.wait)!,
     rows,
-    top,
-    spotCheaper,
-    odCheaper: range(rows.map((b) => b.od.cheaper)),
+    fastest: fastest[0]!,
+    cheapest: rows.reduce((a, b) => (b.spot.cheaper > a.spot.cheaper ? b : a)),
     // The VM families each label's jobs landed on, and how many jobs each.
     spotFamilies: families(release, SPOT),
     odFamilies: families(od, ON_DEMAND),
@@ -121,7 +120,6 @@ export function published(recorded: Results, recordedOd: Results) {
       round(fastest[0]!.faster) > 1
         ? `Up to ${round(fastest[0]!.faster)}× faster builds, up to ${round(spotCheaper[1])}× cheaper`
         : `Up to ${round(spotCheaper[1])}× cheaper builds`,
-    spotFastest: Math.max(...rows.map((b) => b.spot.faster)),
   };
 }
 export type Published = ReturnType<typeof published>;
@@ -166,19 +164,39 @@ export const brief = (
 ) =>
   `Build steps vs GitHub's 4-core runner, same vCPU count. Jobs still wait ~${Math.round(p.wait / 10) * 10}\u00a0s for a VM. ${link('How we measured →')}`;
 
-// The conditions in full, a sentence each, for the benchmarks page's method;
-// `code` marks a label or VM type up.
-export const conditions = (p: Published, code = (c: string) => `\`${c}\``) => [
-  `We time builds' own steps, first step to done, on AWS VMs with the 4 vCPUs of GitHub's 4-core runner; an ${code('m8a')} VM's vCPUs are full cores.`,
-  `On ${p.top[0]!.label === ON_DEMAND ? `an on-demand ${code(ON_DEMAND)} (${p.odFamilies.map(([f]) => code(f)).join(', ')})` : `a spot ${code(SPOT)}`}, ${p.top.map((b, i) => `${b.id}'s build ran ${times(b.faster)}${i ? '' : ' faster'} (${b.jobs} jobs)`).join(' and ')}.`,
-  `Each job still waits a median ${seconds(p.wait)} for its VM.`,
-  `Spot ${code(SPOT)} builds cost ${ratios(p.spotCheaper)} less than on GitHub's 4-core runner, on-demand ones ${ratios(p.odCheaper)}; backmesh's always-on VMs are extra.`,
-  ...(p.top[0]!.label === SPOT
-    ? []
-    : [
-        `No one label gets both: the speed is on demand's and the price spot's, whose fastest build ran ${times(p.spotFastest)} faster, while on demand's cheapest cost ${times(p.odCheaper[1])} less.`,
+// What each headline figure measures, a [figure, basis] pair each, for the
+// benchmarks page, with its queued-to-done figure beside it; `code` marks a
+// label up.
+export const basis = (p: Published, code = (c: string) => `\`${c}\``) => {
+  const arm = (label: string) =>
+    label === SPOT ? `spot ${code(SPOT)}` : `on-demand ${code(ON_DEMAND)}`;
+  const vs = (l: Figures, g: Figures, faster: number) =>
+    `cold runs, first step to done (${l.jobs} jobs): ${seconds(l.secs)} against ${seconds(g.secs)} on ${code(GITHUB)}, ${speed(faster)}. Queued to done: ${seconds(l.total)} against ${seconds(g.total)}, ${speed(g.total / l.total)}.`;
+  const f = p.fastest;
+  const fRow = p.rows.find((b) => b.id === f.id)!;
+  const c = p.cheapest;
+  return [
+    ...(round(f.faster) > 1
+      ? [
+          [
+            `Up to ${round(f.faster)}× faster`,
+            `${fRow.workload} on ${arm(f.label)}, ${vs(f, fRow.github, f.faster)}`,
+          ],
+        ]
+      : []),
+    [
+      `Up to ${round(c.spot.cheaper)}× cheaper`,
+      `${c.workload} on ${arm(SPOT)}, median compute cost of its cold and warm jobs: ${dollars(c.spot.cost)} against ${dollars(c.github.cost)} on a private repository's 4-vCPU GitHub runner, ${times(c.spot.cheaper)} cheaper. It leaves out backmesh's always-on control plane.${f.label === SPOT ? '' : ` The ${round(f.faster)}× is on demand's; on spot, the fastest build was ${times(Math.max(...p.rows.map((b) => b.spot.faster)))} faster.`}`,
+    ],
+    ...p.rows
+      .filter((b) => FEATURED.includes(b.id))
+      .map((b) => [
+        `Landing page chart, ${b.workload}`,
+        `${arm(SPOT)}, ${vs(b.spot, b.github, b.spot.faster)}`,
       ]),
-];
+  ] as [string, string][];
+};
+type Figures = ReturnType<typeof figuresOf>;
 
 // The builds the landing page and the README compare; /benchmarks/ and
 // benchmarks/builds/README.md have every build.
@@ -218,6 +236,3 @@ export const speed = (faster: number) =>
       : `${times(faster)} faster`;
 // A ratio as "1.4×", to one decimal, as the build benchmark's README gives it.
 export const times = (v: number) => `${v.toFixed(1)}×`;
-// A range of ratios, such as "7.0–11.8×".
-const ratios = ([low, high]: readonly [number, number]) =>
-  `${low.toFixed(1)}–${times(high)}`;

@@ -7,7 +7,7 @@ sidebar:
 
 import BenchTable from '../../components/BenchTable.astro';
 import { bench } from '../../bench';
-import { conditions } from '../../benchmarks';
+import { basis } from '../../benchmarks';
 import {
   AWS_DISK_PER_HOUR,
   AWS_ON_DEMAND_XLARGE,
@@ -33,18 +33,32 @@ The [build benchmark](https://github.com/backmesh/backmesh/tree/main/benchmarks/
 has every result since 2026-11-22, the warm runs, each label's VM types,
 Mann-Whitney p for each speed, and where the wait goes.
 
+## What the headline figures measure
+
+On GitHub, the time a job takes is queued to done: its wait for a runner, then
+its steps. The headline's speed figures time the steps alone, first step to
+done, so each has its queued-to-done figure beside it.
+
+<ul>
+  {basis(bench, (c) => `<code>${c}</code>`).map(([figure, text]) => (
+    <li>
+      <strong>{figure}</strong>: <span set:html={text} />
+    </li>
+  ))}
+</ul>
+
 ## Results
 
-Each cell gives the build's time and the wait before it, medians of the cold
-runs, and its cost, the median over the cold and warm runs. On backmesh, the ×
-after the time is how many times faster or slower than `ubuntu-latest` it
+Each cell gives the build's time, its cost, the wait before the build, and
+queued to done, the wait and the build together. Times are medians of the cold
+runs, the cost the median over the cold and warm runs. On backmesh, the ×
+after a time is how many times faster or slower than `ubuntu-latest` it
 was, and after the cost how many times cheaper.
 
 <BenchTable />
 
 ## Method
 
-- **The headline**, {bench.headline.toLowerCase()}: <span set:html={conditions(bench, (c) => `<code>${c}</code>`).join(' ')} />
 - **Time** is a job's first step to its end, as GitHub records them.
 - **Wait** is a job's queueing to its first step. backmesh's runners started
   without a cue, so each job waited for its VM to boot. With
@@ -68,8 +82,8 @@ was, and after the cost how many times cheaper.
   are full cores; an `m8i`'s are hyperthreads. The
   [build benchmark](https://github.com/backmesh/backmesh/tree/main/benchmarks/builds#results)
   lists them, and `ubuntu-latest`'s CPUs.
-- **Ratios** compare the unrounded medians, to one decimal; the headline
-  rounds the largest down to one significant figure.
+- **Ratios** compare the unrounded medians, to one decimal, and within 10%
+  read as fast; the headline rounds the largest down to one significant figure.
 - **Caches.** Each cold run is on a new branch, with no caches. No step
   caches anything: `setup-node`'s, `setup-go`'s and `setup-uv`'s own caches
   are off.

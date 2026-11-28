@@ -29,6 +29,8 @@ import { dollars, seconds, speed, times } from '../benchmarks';
             {dollars(b.github.cost)}
             <br />
             {seconds(b.github.wait)} wait
+            <br />
+            {seconds(b.github.total)} queued to done
           </td>
           {[b.spot, b.od].map((l) => (
             <td>
@@ -37,6 +39,8 @@ import { dollars, seconds, speed, times } from '../benchmarks';
               {dollars(l.cost)} · {times(l.cheaper)} cheaper
               <br />
               {seconds(l.wait)} wait
+              <br />
+              {seconds(l.total)} queued to done · {speed(b.github.total / l.total)}
             </td>
           ))}
         </tr>
