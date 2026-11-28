@@ -30,7 +30,7 @@ GitHub Actions runners.
 **How does backmesh compare with GitHub-hosted runners?** A workflow changes
 only its `runs-on`. Its jobs run on spot VMs in your accounts. In our [build
 benchmarks](/benchmarks/), most builds ran faster and every one cheaper, and your cloud credits apply. Each job waits for its VM to boot, and only
-Linux jobs can use the runners, x86-64 and arm64 (arm64 on AWS and GCP), in private repositories unless you
+Linux jobs can use the runners, x86-64 and arm64, in private repositories unless you
 turn on [public repositories](/public-repos/).
 
 **Which clouds does backmesh run on?** AWS, Google Cloud (GCP) and Azure. One installation can use
@@ -40,7 +40,7 @@ the control plane's, `backmesh-gcp-ubuntu-2404-4vcpu` in GCP.
 ## Will it work?
 
 **Which platforms does backmesh support?** Linux x86-64, and Linux arm64 on
-AWS Graviton and GCP's Axion and Ampere with the [arm64 labels](/labels/#arm64). There are no macOS or
+AWS Graviton, GCP's Axion and Ampere, and Azure's Cobalt and Ampere with the [arm64 labels](/labels/#arm64). There are no macOS or
 Windows runners. Jobs that need `/dev/kvm` use the
 [KVM labels](/labels/#kvm), and jobs that need an NVIDIA GPU the
 [GPU labels](/labels/#gpu) on AWS and Azure.
