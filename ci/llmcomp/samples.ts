@@ -1,5 +1,5 @@
 // The sample prompts /llmcomp/ shows real answers for: one of each kind of
-// everyday task, short enough that a monthly run of every model costs cents.
+// everyday task, short enough that a run of every model costs cents.
 export const SAMPLES: { id: string; title: string; prompt: string }[] = [
   {
     id: 'summarize',

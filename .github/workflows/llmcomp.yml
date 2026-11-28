@@ -1,13 +1,12 @@
 name: LLMcomp
 
-# Monthly: sends /llmcomp/'s sample prompts to its models (ci/llmcomp/run.ts)
-# and opens a pull request with the new website/public/llmcomp/results.json,
-# replacing the last month's. Each provider's key is a repository secret, and
-# a provider without one is left out. GitHub starts no workflows for a pull
-# request this token opens: close and reopen it to run CI before merging.
+# Sends /llmcomp/'s sample prompts to its models (ci/llmcomp/run.ts) and
+# opens a pull request with the new website/public/llmcomp/results.json,
+# replacing the last run's. Each provider's key is a repository secret, and a
+# provider without one is left out. By hand only until the keys exist; then
+# monthly. GitHub starts no workflows for a pull request this token opens:
+# close and reopen it to run CI before merging.
 on:
-  schedule:
-    - cron: '17 6 1 * *'
   workflow_dispatch:
 
 permissions:

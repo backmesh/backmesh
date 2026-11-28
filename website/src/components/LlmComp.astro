@@ -2,17 +2,22 @@
 // LLMcomp: one prompt's estimated cost on each current chat model, from
 // LiteLLM's price list as tokencost-js does it, and the real answers, tokens,
 // cost and time of a curated set of models on sample prompts. The answers
-// are /llmcomp/results.json, which ci/llmcomp/run.ts writes monthly; the page
-// itself calls no LLM API.
+// are /llmcomp/results.json, which ci/llmcomp/run.ts writes; the page itself
+// calls no LLM API. Until a run has answers, the page has only the estimates.
+import { sampled } from './llmcomp.ts';
 ---
 
 <div class="llmcomp not-content">
-  <label>
-    <span>Sample prompt</span>
-    <select name="sample">
-      <option value="">Your own prompt</option>
-    </select>
-  </label>
+  {
+    sampled && (
+      <label>
+        <span>Sample prompt</span>
+        <select name="sample">
+          <option value="">Your own prompt</option>
+        </select>
+      </label>
+    )
+  }
   <label>
     <span>Prompt</span>
     <textarea name="prompt" rows="6"
@@ -44,7 +49,7 @@
       <tbody></tbody>
     </table>
   </div>
-  <div class="answers" aria-live="polite"></div>
+  {sampled && <div class="answers" aria-live="polite" />}
 </div>
 
 <script>
@@ -116,11 +121,8 @@
   for (const root of document.querySelectorAll<HTMLElement>('.llmcomp')) {
     const field = (name: string) =>
       root.querySelector<HTMLInputElement>(`[name="${name}"]`)!;
-    const sample = root.querySelector('select')!;
     const body = root.querySelector('tbody')!;
-    const answers = root.querySelector<HTMLElement>('.answers')!;
     let all: Model[] = [];
-    let results: Results = { date: null, samples: [] };
     // Each run model's median time and output speed over the samples.
     let speed = new Map<string, { seconds: number; rate: number }>();
 
@@ -149,57 +151,12 @@
         .join('');
     };
 
-    // The chosen sample's answers, cheapest first, side by side.
-    const show = () => {
-      const s = results.samples.find((s) => s.id === sample.value);
-      if (!s) {
-        answers.innerHTML = '';
-        return;
-      }
-      if (!results.date) {
-        answers.innerHTML =
-          '<p class="note">No answers yet: the monthly run that sends the samples to each model hasn’t run with API keys. The table above estimates this prompt.</p>';
-        return;
-      }
-      const ok = s.runs.filter((r): r is Answer => 'answer' in r);
-      const failed = s.runs.filter((r) => 'error' in r);
-      answers.innerHTML =
-        `<p class="note">Real answers from ${results.date}, cheapest first. Times are the whole answer, from a backmesh runner in GitHub Actions.</p>` +
-        '<div class="grid">' +
-        ok
-          .sort((a, b) => a.cost - b.cost)
-          .map(
-            (r) =>
-              `<section><h3>${escape(name(r.model))} <small>${provider(r.model)}</small></h3>` +
-              `<p class="note">${r.input.toLocaleString('en-US')} in, ${r.output.toLocaleString('en-US')} out · ${money(r.cost)} · ${r.seconds.toFixed(1)} s</p>` +
-              `<pre>${escape(r.answer)}</pre></section>`,
-          )
-          .join('') +
-        '</div>' +
-        (failed.length
-          ? `<p class="note">No answer that day from ${failed.map((r) => escape(name(r.model))).join(', ')}.</p>`
-          : '');
-    };
-
-    sample.addEventListener('change', () => {
-      const s = results.samples.find((s) => s.id === sample.value);
-      if (s) field('prompt').value = s.prompt;
-      show();
-      render();
-    });
-    field('prompt').addEventListener('input', () => {
-      if (sample.value) {
-        sample.value = '';
-        show();
-      }
-      render();
-    });
-    for (const name of ['output', 'filter']) {
+    for (const name of ['prompt', 'output', 'filter']) {
       field(name).addEventListener('input', render);
     }
 
     const status = root.querySelector<HTMLElement>('.prices')!;
-    fetch(PRICES_URL)
+    const priced = fetch(PRICES_URL)
       .then((res) => res.json())
       .then((json) => {
         prices = json;
@@ -207,43 +164,90 @@
         status.textContent =
           "Prices: LiteLLM's current price list, fetched from GitHub just now.";
         render();
-        show();
       })
       .catch(() => {
         status.textContent =
           "Couldn't fetch LiteLLM's price list from GitHub. Reload to try again.";
       });
-    fetch('/llmcomp/results.json')
-      .then((res) => res.json())
-      .then((json: Results) => {
-        results = json;
-        sample.insertAdjacentHTML(
-          'beforeend',
-          json.samples
+    // The sample prompts, there once a run has answers.
+    const sample = root.querySelector('select');
+    const answers = root.querySelector<HTMLElement>('.answers');
+    if (sample && answers) {
+      let results: Results = { date: null, samples: [] };
+      // The chosen sample's answers, cheapest first, side by side.
+      const show = () => {
+        const s = results.samples.find((s) => s.id === sample.value);
+        if (!s) {
+          answers.innerHTML = '';
+          return;
+        }
+        const ok = s.runs.filter((r): r is Answer => 'answer' in r);
+        const failed = s.runs.filter((r) => 'error' in r);
+        answers.innerHTML =
+          `<p class="note">Real answers from ${results.date}, cheapest first. Times are the whole answer, from a backmesh runner in GitHub Actions.</p>` +
+          '<div class="grid">' +
+          ok
+            .sort((a, b) => a.cost - b.cost)
             .map(
-              (s) =>
-                `<option value="${escape(s.id)}">${escape(s.title)}</option>`,
+              (r) =>
+                `<section><h3>${escape(name(r.model))} <small>${provider(r.model)}</small></h3>` +
+                `<p class="note">${r.input.toLocaleString('en-US')} in, ${r.output.toLocaleString('en-US')} out · ${money(r.cost)} · ${r.seconds.toFixed(1)} s</p>` +
+                `<pre>${escape(r.answer)}</pre></section>`,
             )
-            .join(''),
-        );
-        const runs = new Map<string, Answer[]>();
-        for (const r of json.samples.flatMap((s) => s.runs)) {
-          if ('answer' in r) runs.set(r.model, [...(runs.get(r.model) ?? []), r]);
-        }
-        speed = new Map(
-          [...runs].map(([id, rs]) => [
-            id,
-            {
-              seconds: median(rs.map((r) => r.seconds)),
-              rate: median(rs.map((r) => r.output / r.seconds)),
-            },
-          ]),
-        );
-        for (const th of root.querySelectorAll<HTMLElement>('.speed')) {
-          th.hidden = !speed.size;
-        }
+            .join('') +
+          '</div>' +
+          (failed.length
+            ? `<p class="note">No answer that day from ${failed.map((r) => escape(name(r.model))).join(', ')}.</p>`
+            : '');
+      };
+
+      sample.addEventListener('change', () => {
+        const s = results.samples.find((s) => s.id === sample.value);
+        if (s) field('prompt').value = s.prompt;
+        show();
         render();
       });
+      field('prompt').addEventListener('input', () => {
+        if (sample.value) {
+          sample.value = '';
+          show();
+        }
+      });
+      fetch('/llmcomp/results.json')
+        .then((res) => res.json())
+        .then((json: Results) => {
+          results = json;
+          sample.insertAdjacentHTML(
+            'beforeend',
+            json.samples
+              .map(
+                (s) =>
+                  `<option value="${escape(s.id)}">${escape(s.title)}</option>`,
+              )
+              .join(''),
+          );
+          const runs = new Map<string, Answer[]>();
+          for (const r of json.samples.flatMap((s) => s.runs)) {
+            if ('answer' in r) {
+              runs.set(r.model, [...(runs.get(r.model) ?? []), r]);
+            }
+          }
+          speed = new Map(
+            [...runs].map(([id, rs]) => [
+              id,
+              {
+                seconds: median(rs.map((r) => r.seconds)),
+                rate: median(rs.map((r) => r.output / r.seconds)),
+              },
+            ]),
+          );
+          for (const th of root.querySelectorAll<HTMLElement>('.speed')) {
+            th.hidden = !speed.size;
+          }
+          render();
+        });
+      priced.then(show);
+    }
     tokenizer.then((t) => {
       count = (text) => t.encode(text).length;
       render();

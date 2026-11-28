@@ -1,7 +1,7 @@
 // Sends each of /llmcomp/'s sample prompts (samples.ts) to each model below
 // and writes the answers, tokens, cost and time to
 // website/public/llmcomp/results.json, which the page loads.
-// .github/workflows/llmcomp.yml runs it monthly with the providers' keys. A
+// .github/workflows/llmcomp.yml runs it with the providers' keys. A
 // provider without a key is left out, so with no key at all the file has the
 // samples and no runs.
 //
