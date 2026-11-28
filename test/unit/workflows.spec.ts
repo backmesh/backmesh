@@ -521,13 +521,16 @@ describe("e2e.yml's Worker and Azure checks", () => {
 
   // The install step's own script, for a leg, up to the sign-in: backmesh
   // stubbed to print a plan with Azure's runner regions.
-  const labelMatrix = (cloud: string) => {
+  const labelMatrix = (cloud: string, azureArm = false) => {
     const job = e2e.jobs['test-org']!;
     const leg = (
       job.strategy!.matrix!.include as Record<string, string | undefined>[]
     ).find((l) => l.cloud === cloud)!;
     const step = job.steps!.find((s) => s.id === 'install')!;
     expect(step.env!.LABEL).toBe('${{ matrix.label }}');
+    expect(step.env!.ARM_LABEL).toBe(
+      "${{ (matrix.cloud != 'azure' || inputs.azure-arm) && matrix.arm-label || '' }}",
+    );
     expect(step.env!.GH_TOKEN).toBe('${{ github.token }}');
     const dir = mkdtempSync(join(tmpdir(), 'install-'));
     const env = join(dir, 'env');
@@ -563,7 +566,8 @@ describe("e2e.yml's Worker and Azure checks", () => {
         CLOUD: cloud,
         PLACEMENT: leg.placement!,
         LABEL: leg.label ?? '',
-        ARM_LABEL: leg['arm-label'] ?? '',
+        ARM_LABEL:
+          cloud !== 'azure' || azureArm ? (leg['arm-label'] ?? '') : '',
         CONTROL_PLANE_REGION: leg['control-plane-region'] ?? '',
         MATRIX: JSON.stringify(matrix),
         GITHUB_ENV: env,
@@ -597,6 +601,21 @@ describe("e2e.yml's Worker and Azure checks", () => {
     ]);
     const aws = labelMatrix('aws');
     expect(aws.got.include).toEqual([aws.matrix.include[0]]);
+  });
+
+  it("adds the Azure leg's on-demand arm64 job with azure-arm", () => {
+    expect(labelMatrix('azure', true).got.include).toEqual([
+      expect.objectContaining({
+        label: 'backmesh-ubuntu-2404-2vcpu',
+        arm: false,
+      }),
+      expect.objectContaining({
+        label: 'backmesh-ubuntu-2404-arm-od-2vcpu',
+        cloud: 'azure',
+        regions: ['eastus'],
+        arm: true,
+      }),
+    ]);
   });
 
   // GCP's control plane makes it the home cloud, whose labels are plain.
