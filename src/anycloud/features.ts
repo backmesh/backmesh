@@ -29,7 +29,7 @@ export const FEATURES = {
   // (anycloud#47, #50): backmesh plans no arm64 class before it.
   arm64: '0.1.84',
   // And on Azure, Cobalt 100 and Ampere (anycloud#64, in 0.1.85).
-  'azure-arm64': undefined,
+  'azure-arm64': '0.1.85',
 } satisfies Record<string, string | undefined>;
 
 export type Feature = keyof typeof FEATURES;
